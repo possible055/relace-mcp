@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from relace_mcp.config import RelaceConfig
+from relace_mcp.config import RELACE_ENDPOINT, RELACE_MODEL, TIMEOUT_SECONDS, RelaceConfig
 from relace_mcp.relace_client import RelaceClient
 
 
@@ -109,7 +109,7 @@ class TestRelaceClientPayload:
 
         assert payload["initial_code"] == "initial"
         assert payload["edit_snippet"] == "edit"
-        assert payload["model"] == mock_config.model
+        assert payload["model"] == RELACE_MODEL
         assert payload["stream"] is False
 
     def test_authorization_header(
@@ -129,7 +129,7 @@ class TestRelaceClientPayload:
         assert headers["Authorization"] == f"Bearer {mock_config.api_key}"
         assert headers["Content-Type"] == "application/json"
 
-    def test_uses_config_endpoint(
+    def test_uses_constant_endpoint(
         self, mock_config: RelaceConfig, mock_httpx_success: MagicMock
     ) -> None:
         """Should call the configured endpoint."""
@@ -143,7 +143,7 @@ class TestRelaceClientPayload:
 
         call_args = mock_httpx_success.post.call_args
         endpoint = call_args.args[0] if call_args.args else call_args[0][0]
-        assert endpoint == mock_config.endpoint
+        assert endpoint == RELACE_ENDPOINT
 
 
 class TestRelaceClientErrors:
@@ -184,6 +184,7 @@ class TestRelaceClientErrors:
 
         mock_response = MagicMock()
         mock_response.status_code = 200
+        mock_response.is_server_error = False
         mock_response.json.side_effect = ValueError("Invalid JSON")
 
         mock_client = MagicMock()
@@ -199,12 +200,13 @@ class TestRelaceClientErrors:
 class TestRelaceClientTimeout:
     """Test timeout configuration."""
 
-    def test_uses_config_timeout(self, mock_config: RelaceConfig) -> None:
+    def test_uses_constant_timeout(self, mock_config: RelaceConfig) -> None:
         """Should use timeout from config."""
         client = RelaceClient(mock_config)
 
         mock_response = MagicMock()
         mock_response.status_code = 200
+        mock_response.is_server_error = False
         mock_response.json.return_value = {"mergedCode": "code", "usage": {}}
 
         with patch("relace_mcp.relace_client.httpx.Client") as mock_client_class:
@@ -217,4 +219,4 @@ class TestRelaceClientTimeout:
             client.apply(initial_code="code", edit_snippet="snippet")
 
             # 驗證 Client 建立時使用了正確的 timeout
-            mock_client_class.assert_called_once_with(timeout=mock_config.timeout)
+            mock_client_class.assert_called_once_with(timeout=TIMEOUT_SECONDS)

@@ -8,7 +8,7 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from .config import MAX_LOG_SIZE_BYTES, RelaceConfig
+from .config import LOG_PATH, MAX_LOG_SIZE_BYTES, RelaceConfig
 from .relace_client import RelaceClient
 
 logger = logging.getLogger(__name__)
@@ -17,24 +17,22 @@ logger = logging.getLogger(__name__)
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
 
-def _rotate_log_if_needed(log_path: str) -> None:
+def _rotate_log_if_needed() -> None:
     """若 log 檔案超過大小上限，進行 rotation。"""
     try:
-        log_file = Path(log_path)
-        if log_file.exists() and log_file.stat().st_size > MAX_LOG_SIZE_BYTES:
-            rotated_path = log_file.with_suffix(
+        if LOG_PATH.exists() and LOG_PATH.stat().st_size > MAX_LOG_SIZE_BYTES:
+            rotated_path = LOG_PATH.with_suffix(
                 f".{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.log"
             )
-            log_file.rename(rotated_path)
+            LOG_PATH.rename(rotated_path)
             logger.info("Rotated log file to %s", rotated_path)
     except Exception as exc:
         logger.warning("Failed to rotate log file: %s", exc)
 
 
-def log_interaction(log_path: str, event: dict[str, Any]) -> None:
+def _log_event(event: dict[str, Any]) -> None:
     """將單筆 JSON event 寫入本地 log，失敗時不影響主流程。"""
     try:
-        # 確保必要欄位
         if "timestamp" not in event:
             event["timestamp"] = datetime.now(UTC).isoformat()
         if "trace_id" not in event:
@@ -42,17 +40,14 @@ def log_interaction(log_path: str, event: dict[str, Any]) -> None:
         if "level" not in event:
             event["level"] = "info" if event.get("kind", "").endswith("success") else "error"
 
-        # 確保父目錄存在
-        log_file = Path(log_path)
-        if log_file.is_dir():
-            logger.warning("Log path is a directory, skipping log write: %s", log_path)
+        if LOG_PATH.is_dir():
+            logger.warning("Log path is a directory, skipping log write: %s", LOG_PATH)
             return
-        log_file.parent.mkdir(parents=True, exist_ok=True)
+        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-        # 檢查並執行 rotation
-        _rotate_log_if_needed(log_path)
+        _rotate_log_if_needed()
 
-        with open(log_path, "a", encoding="utf-8") as f:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(event, ensure_ascii=False) + "\n")
     except Exception as exc:
         logger.warning("Failed to write Relace log: %s", exc)
@@ -91,21 +86,18 @@ def _validate_file_path(file_path: str, base_dir: str) -> Path:
     return resolved
 
 
-def apply_file_logic(
+def _apply_file_logic(
     client: RelaceClient,
-    log_path: str,
     file_path: str,
     edit_snippet: str,
     instruction: str | None,
     base_dir: str,
     dry_run: bool = False,
-    stream: bool = False,
 ) -> dict[str, Any]:
     """relace_apply_file 的核心邏輯（可獨立測試）。
 
     Args:
         client: Relace API 客戶端。
-        log_path: Log 檔案路徑。
         file_path: 要修改的檔案路徑。
         edit_snippet: 要套用的程式碼片段，需使用省略註解格式（例如 `// ... keep existing code ...`）。
         instruction: 可選的自然語言說明。
@@ -162,7 +154,7 @@ def apply_file_logic(
             edit_snippet=edit_snippet,
             instruction=instruction,
             relace_metadata=relace_metadata,
-            stream=stream,
+            stream=False,
         )
 
         merged_code = result.get("mergedCode")
@@ -185,20 +177,21 @@ def apply_file_logic(
             except OSError as exc:
                 raise RuntimeError(f"Failed to write merged code to {file_path}: {exc}") from exc
 
-        event = {
-            "kind": "apply_success",
-            "level": "info",
-            "trace_id": trace_id,
-            "started_at": started_at.isoformat(),
-            "latency_ms": latency_ms,
-            "file_path": str(resolved_path),
-            "file_size_bytes": file_size,
-            "instruction": instruction,
-            "edit_snippet_preview": edit_snippet[:200],
-            "usage": usage,
-            "dry_run": dry_run,
-        }
-        log_interaction(log_path, event)
+        _log_event(
+            {
+                "kind": "apply_success",
+                "level": "info",
+                "trace_id": trace_id,
+                "started_at": started_at.isoformat(),
+                "latency_ms": latency_ms,
+                "file_path": str(resolved_path),
+                "file_size_bytes": file_size,
+                "instruction": instruction,
+                "edit_snippet_preview": edit_snippet[:200],
+                "usage": usage,
+                "dry_run": dry_run,
+            }
+        )
         logger.info(
             "[%s] Applied Relace edit to %s (latency=%dms, dry_run=%s)",
             trace_id,
@@ -218,18 +211,19 @@ def apply_file_logic(
 
     except Exception as exc:
         latency_ms = int((datetime.now(UTC) - started_at).total_seconds() * 1000)
-        error_event = {
-            "kind": "apply_error",
-            "level": "error",
-            "trace_id": trace_id,
-            "started_at": started_at.isoformat(),
-            "latency_ms": latency_ms,
-            "file_path": file_path,
-            "instruction": instruction,
-            "edit_snippet_preview": (edit_snippet or "")[:200],
-            "error": str(exc),
-        }
-        log_interaction(log_path, error_event)
+        _log_event(
+            {
+                "kind": "apply_error",
+                "level": "error",
+                "trace_id": trace_id,
+                "started_at": started_at.isoformat(),
+                "latency_ms": latency_ms,
+                "file_path": file_path,
+                "instruction": instruction,
+                "edit_snippet_preview": (edit_snippet or "")[:200],
+                "error": str(exc),
+            }
+        )
         logger.error("[%s] Relace apply failed for %s: %s", trace_id, file_path, exc)
         raise
 
@@ -244,29 +238,25 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         edit_snippet: str,
         instruction: str | None = None,
         dry_run: bool = False,
-        stream: bool = False,
     ) -> dict[str, Any]:
         """Apply a Relace Instant Apply diff to a local source file.
 
         Args:
             file_path: 要修改的檔案路徑（UTF-8）。
-            edit_snippet: 要 merge 進檔案的程式碼片段，需使用省略註解格式（例如 `// ... keep existing code ...`）。
+            edit_snippet: 要 merge 進檔案的程式碼片段。
             instruction: 可選的自然語言說明，用來消歧義 edit 行為。
             dry_run: 若為 True，只回傳 preview 不實際寫入檔案。
-            stream: 是否要求串流回應；目前僅支援 False。
 
         Returns:
             包含 merged_code_preview、usage 及修改 metadata 的 dict。
         """
-        return apply_file_logic(
+        return _apply_file_logic(
             client=client,
-            log_path=config.log_path,
             file_path=file_path,
             edit_snippet=edit_snippet,
             instruction=instruction,
             base_dir=config.base_dir,
             dry_run=dry_run,
-            stream=stream,
         )
 
     _ = relace_apply_file

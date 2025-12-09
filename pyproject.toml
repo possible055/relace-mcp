@@ -4,15 +4,32 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "relace-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "Relace Instant Apply MCP Server - Fast code merging via Relace API"
+authors = [{ name = "Relace MCP Team", email = "contact@relace.run" }]
+readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.12"
 keywords = ["mcp", "relace", "code-apply", "instant-apply"]
-
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = ["fastmcp>=2.0.0", "httpx>=0.28.0", "python-dotenv>=1.0.0"]
 
+[project.urls]
+Homepage = "https://www.relace.ai/"
+Repository = "https://github.com/possible055/relace-mcp"
+Documentation = "https://github.com/possible055/relace-mcp#readme"
+Issues = "https://github.com/possible055/relace-mcp/issues"
+
 [project.optional-dependencies]
-dev = ["pytest>=8.4.1"]
+dev = ["pytest>=8.4.1", "pytest-asyncio>=1.3.0"]
 
 [project.scripts]
 relace-mcp = "relace_mcp.server:main"
@@ -27,9 +44,6 @@ exclude = ["tests*"]
 
 [tool.bandit]
 exclude_dirs = ["tests"]
-
-[dependency-groups]
-dev = ["pytest-asyncio>=1.3.0"]
 
 [tool.mypy]
 python_version = "3.12"
