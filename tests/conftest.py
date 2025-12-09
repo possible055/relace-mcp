@@ -140,3 +140,11 @@ def mock_client_with_response(
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for var in ["RELACE_API_KEY", "RELACE_BASE_DIR"]:
         monkeypatch.delenv(var, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def mock_log_path(tmp_path: Path) -> Generator[Path, None, None]:
+    """Auto-mock LOG_PATH for all tests to avoid writing to real log."""
+    log_file = tmp_path / "test.log"
+    with patch("relace_mcp.tools.LOG_PATH", log_file):
+        yield log_file

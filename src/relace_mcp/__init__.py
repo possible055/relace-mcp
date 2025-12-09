@@ -1,4 +1,4 @@
-__version__ = "0.1.2.dev1"
+__version__ = "0.1.3"
 
 from .config import RelaceConfig
 from .relace_client import RelaceClient

@@ -4,8 +4,9 @@ MCP server for [Relace Instant Apply](https://www.relace.ai/) — AI-powered cod
 
 ## Features
 
-- **High-speed merging** — Apply LLM-generated diffs to local files instantly
-- **Dry-run mode** — Preview changes before writing
+- **High-speed merging** — Apply LLM-generated diffs to local files at 10,000+ tok/s
+- **Create new files** — Directly write new files without API call
+- **UDiff output** — Returns unified diff for agent verification
 - **Path security** — Configurable base directory to prevent path traversal
 - **Auto-retry** — Handles transient API errors gracefully
 
@@ -35,21 +36,30 @@ Add to your MCP config (`~/.codeium/windsurf/mcp_config.json` for Windsurf):
 
 ## Tools
 
-### relace_apply_file
+### fast_apply
 
-Apply a code diff to a local source file.
+Apply a code edit to an existing file or create a new file.
 
 **Inputs:**
-- `file_path` (string): Target file path (UTF-8)
+- `file_path` (string): Absolute path to target file (UTF-8)
 - `edit_snippet` (string): Code to merge, using `// ... existing code ...` placeholders
-- `instruction` (string, optional): Natural language hint for disambiguation
-- `dry_run` (boolean, optional): Preview without writing
+- `instruction` (string, optional): Single sentence hint for disambiguation
 
 **Returns:**
-- `file_path`: Resolved path
-- `merged_code_preview`: First 4000 chars of result
-- `usage`: Token usage stats
-- `dry_run`: Whether changes were applied
+- **Existing file**: UDiff showing changes made (for agent verification)
+- **New file**: `Created {path} ({size} bytes)`
+- **No changes**: `No changes made`
+
+**Example edit_snippet:**
+```javascript
+// ... existing code ...
+
+function newFeature() {
+  console.log("Added by fast_apply");
+}
+
+// ... existing code ...
+```
 
 ## Development
 
