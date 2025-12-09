@@ -1,0 +1,31 @@
+# Python Basic
+__pycache__/
+*.pyc
+
+# Build / Distribution
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Testing / Coverage
+.pytest_cache/
+
+# Linter / formatter cache
+.pylint.d/
+ruff_cache/
+
+# IDE editor settings
+.github/
+.vscode/
+.cursor/
+.kilocode/
+.kiro/
+
+# Logs / Env
+*.log
+.env
+
+# --- project-specific rules ---
+/docs/
+relace_apply.log

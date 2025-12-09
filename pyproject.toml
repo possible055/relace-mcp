@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "relace-mcp"
+version = "0.1.0"
+description = "Relace Instant Apply MCP Server - Fast code merging via Relace API"
+requires-python = ">=3.12"
+keywords = ["mcp", "relace", "code-apply", "instant-apply"]
+
+dependencies = ["fastmcp>=2.0.0", "httpx>=0.28.0", "python-dotenv>=1.0.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.4.1"]
+
+[project.scripts]
+relace-mcp = "relace_mcp.server:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["relace_mcp*"]
+exclude = ["tests*"]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+
+[dependency-groups]
+dev = ["pytest-asyncio>=1.3.0"]
+
+[tool.mypy]
+python_version = "3.12"

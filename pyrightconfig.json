@@ -1,0 +1,29 @@
+{
+    "typeCheckingMode": "standard",
+    "include": [
+        "src"
+    ],
+    "exclude": [
+        "**/tests",
+        "**/test_*.py",
+        "**/.pytest_cache",
+        "**/.ruff_cache",
+        "**/build",
+        "**/dist",
+        "**/*.egg-info",
+        "docs",
+        ".vscode",
+        ".github"
+    ],
+    "ignore": [
+        "**/__pycache__",
+        "**/node_modules"
+    ],
+    "pythonVersion": "3.12",
+    "reportMissingTypeStubs": "none",
+    "reportUnusedImport": "none",
+    "reportUnusedVariable": "none",
+    "reportUnusedParameter": "none",
+    "reportUnusedExpression": "none",
+    "reportDuplicateImport": "none"
+}

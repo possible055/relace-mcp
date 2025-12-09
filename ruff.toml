@@ -1,0 +1,24 @@
+line-length = 100
+target-version = "py312"
+
+exclude = [".eggs", ".git", ".ruff_cache", "__pypackages__", "dist"]
+
+[lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = [
+    "E501",  # 行長度檢查（交給 formatter 處理）
+]
+
+[lint.per-file-ignores]
+"**/test_*.py" = []
+
+unfixable = ["F841"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[lint.pydocstyle]
+convention = "google"
