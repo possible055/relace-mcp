@@ -35,27 +35,27 @@ class TestServerToolRegistration:
     """Test that tools are properly registered."""
 
     @pytest.mark.asyncio
-    async def test_relace_apply_file_registered(self, mock_config: RelaceConfig) -> None:
+    async def test_fast_apply_registered(self, mock_config: RelaceConfig) -> None:
         """透過公開 API Client.list_tools() 驗證 tool 註冊。"""
         server = build_server(config=mock_config)
 
         async with Client(server) as client:
             tools = await client.list_tools()
             tool_names = [t.name for t in tools]
-            assert "relace_apply_file" in tool_names
+            assert "fast_apply" in tool_names
 
 
 class TestServerToolExecution:
     """Test tool execution via server."""
 
     @pytest.mark.asyncio
-    async def test_relace_apply_file_success(
+    async def test_fast_apply_success(
         self,
         mock_config: RelaceConfig,
         temp_source_file: Path,
         successful_api_response: dict[str, Any],
     ) -> None:
-        """Should execute relace_apply_file tool successfully."""
+        """Should execute fast_apply tool successfully."""
         # Mock the RelaceClient.apply method
         with patch("relace_mcp.tools.RelaceClient") as mock_client_cls:
             mock_client = MagicMock()
@@ -66,7 +66,7 @@ class TestServerToolExecution:
 
             async with Client(server) as client:
                 result = await client.call_tool(
-                    "relace_apply_file",
+                    "fast_apply",
                     {
                         "file_path": str(temp_source_file),
                         "edit_snippet": "// new code",
@@ -78,27 +78,29 @@ class TestServerToolExecution:
                 assert result is not None
 
     @pytest.mark.asyncio
-    async def test_relace_apply_file_with_invalid_path(
+    async def test_fast_apply_creates_new_file(
         self, mock_config: RelaceConfig, tmp_path: Path
     ) -> None:
-        """Should return error for non-existent file."""
+        """Should create new file directly without calling API."""
         server = build_server(config=mock_config)
+        new_file = tmp_path / "new_file.py"
+        content = "print('hello')"
 
         async with Client(server) as client:
-            # Use call_tool_mcp to get raw MCP result with isError
-            result = await client.call_tool_mcp(
-                "relace_apply_file",
+            result = await client.call_tool(
+                "fast_apply",
                 {
-                    "file_path": str(tmp_path / "nonexistent.py"),
-                    "edit_snippet": "// edit",
+                    "file_path": str(new_file),
+                    "edit_snippet": content,
                 },
             )
 
-            # Tool should return error
-            assert result.isError is True
+            assert "Created" in str(result)
+            assert new_file.exists()
+            assert new_file.read_text() == content
 
     @pytest.mark.asyncio
-    async def test_relace_apply_file_empty_snippet(
+    async def test_fast_apply_empty_snippet(
         self, mock_config: RelaceConfig, temp_source_file: Path
     ) -> None:
         """Should return error for empty edit_snippet."""
@@ -106,7 +108,7 @@ class TestServerToolExecution:
 
         async with Client(server) as client:
             result = await client.call_tool_mcp(
-                "relace_apply_file",
+                "fast_apply",
                 {
                     "file_path": str(temp_source_file),
                     "edit_snippet": "",
@@ -128,17 +130,17 @@ class TestServerIntegration:
             tools = await client.list_tools()
 
             tool_names = [t.name for t in tools]
-            assert "relace_apply_file" in tool_names
+            assert "fast_apply" in tool_names
 
     @pytest.mark.asyncio
     async def test_tool_has_correct_schema(self, mock_config: RelaceConfig) -> None:
-        """Should have correct input schema for relace_apply_file."""
+        """Should have correct input schema for fast_apply."""
         server = build_server(config=mock_config)
 
         async with Client(server) as client:
             tools = await client.list_tools()
 
-            relace_tool = next((t for t in tools if t.name == "relace_apply_file"), None)
+            relace_tool = next((t for t in tools if t.name == "fast_apply"), None)
             assert relace_tool is not None
 
             # 驗證必要參數
@@ -179,7 +181,7 @@ class TestServerIntegration:
 
                 # Step 2: Call tool
                 result = await client.call_tool(
-                    "relace_apply_file",
+                    "fast_apply",
                     {
                         "file_path": str(temp_source_file),
                         "edit_snippet": "def hello(): print('Modified!')",
