@@ -1,3 +1,4 @@
+import difflib
 import json
 import logging
 import os
@@ -92,59 +93,64 @@ def _apply_file_logic(
     edit_snippet: str,
     instruction: str | None,
     base_dir: str,
-    dry_run: bool = False,
-) -> dict[str, Any]:
-    """relace_apply_file 的核心邏輯（可獨立測試）。
+) -> str:
+    """Core logic for fast_apply (testable independently).
 
     Args:
-        client: Relace API 客戶端。
-        file_path: 要修改的檔案路徑。
-        edit_snippet: 要套用的程式碼片段，需使用省略註解格式（例如 `// ... keep existing code ...`）。
-        instruction: 可選的自然語言說明。
-        base_dir: 基礎目錄限制。
-        dry_run: 若為 True，只回傳 preview 不實際寫入。
-        stream: 是否要求串流回應；目前僅支援 False。
+        client: Relace API client.
+        file_path: Target file path.
+        edit_snippet: Code snippet to apply, using abbreviation comments.
+        instruction: Optional natural language instruction.
+        base_dir: Base directory restriction.
 
     Returns:
-        包含 merged_code_preview、usage 及修改 metadata 的 dict。
+        A message with UDiff showing changes made.
     """
     started_at = datetime.now(UTC)
     trace_id = str(uuid.uuid4())[:8]
 
-    # 輸入驗證
     if not edit_snippet or not edit_snippet.strip():
         raise RuntimeError("edit_snippet cannot be empty")
 
     try:
         resolved_path = _validate_file_path(file_path, base_dir)
 
-        # 檢查檔案大小
-        try:
-            file_size = resolved_path.stat().st_size
-            if file_size > MAX_FILE_SIZE_BYTES:
-                raise RuntimeError(
-                    f"File too large ({file_size} bytes). Maximum allowed: {MAX_FILE_SIZE_BYTES} bytes"
-                )
-        except FileNotFoundError as exc:
-            raise RuntimeError(f"File not found: {file_path}") from exc
+        # New file: write directly without calling API
+        if not resolved_path.exists():
+            resolved_path.parent.mkdir(parents=True, exist_ok=True)
+            resolved_path.write_text(edit_snippet, encoding="utf-8")
 
-        # 讀取檔案，處理編碼錯誤
+            _log_event(
+                {
+                    "kind": "create_success",
+                    "level": "info",
+                    "trace_id": trace_id,
+                    "file_path": str(resolved_path),
+                    "file_size_bytes": resolved_path.stat().st_size,
+                }
+            )
+            logger.info("[%s] Created new file %s", trace_id, resolved_path)
+            return f"Created {resolved_path} ({resolved_path.stat().st_size} bytes)"
+
+        # Existing file: check size and read
+        file_size = resolved_path.stat().st_size
+        if file_size > MAX_FILE_SIZE_BYTES:
+            raise RuntimeError(
+                f"File too large ({file_size} bytes). Maximum allowed: {MAX_FILE_SIZE_BYTES} bytes"
+            )
+
         try:
-            with open(resolved_path, encoding="utf-8") as f:
-                initial_code = f.read()
+            initial_code = resolved_path.read_text(encoding="utf-8")
         except UnicodeDecodeError as exc:
             raise RuntimeError(
                 f"File is not valid UTF-8 encoding: {file_path}. "
                 "Only UTF-8 encoded text files are supported."
             ) from exc
-        except FileNotFoundError as exc:
-            raise RuntimeError(f"File not found: {file_path}") from exc
-        except OSError as exc:
-            raise RuntimeError(f"Failed to read file {file_path}: {exc}") from exc
 
+        # Call Relace API
         relace_metadata = {
             "source": "fastmcp",
-            "tool": "relace_apply_file",
+            "tool": "fast_apply",
             "file_path": str(resolved_path),
             "trace_id": trace_id,
         }
@@ -163,19 +169,28 @@ def _apply_file_logic(
         if not isinstance(merged_code, str):
             raise RuntimeError("Relace API did not return 'mergedCode'")
 
-        # 計算 latency
+        # Generate UDiff for agent verification
+        diff = "".join(
+            difflib.unified_diff(
+                initial_code.splitlines(keepends=True),
+                merged_code.splitlines(keepends=True),
+                fromfile="before",
+                tofile="after",
+            )
+        )
+
         latency_ms = int((datetime.now(UTC) - started_at).total_seconds() * 1000)
 
-        # dry_run 模式不寫入檔案
-        if not dry_run:
-            if resolved_path.exists() and not os.access(resolved_path, os.W_OK):
-                raise RuntimeError(f"File is not writable: {file_path}")
+        # No changes detected
+        if not diff:
+            logger.info("[%s] No changes made to %s", trace_id, resolved_path)
+            return "No changes made"
 
-            try:
-                with open(resolved_path, "w", encoding="utf-8") as f:
-                    f.write(merged_code)
-            except OSError as exc:
-                raise RuntimeError(f"Failed to write merged code to {file_path}: {exc}") from exc
+        # Write merged code
+        if not os.access(resolved_path, os.W_OK):
+            raise RuntimeError(f"File is not writable: {file_path}")
+
+        resolved_path.write_text(merged_code, encoding="utf-8")
 
         _log_event(
             {
@@ -189,25 +204,16 @@ def _apply_file_logic(
                 "instruction": instruction,
                 "edit_snippet_preview": edit_snippet[:200],
                 "usage": usage,
-                "dry_run": dry_run,
             }
         )
         logger.info(
-            "[%s] Applied Relace edit to %s (latency=%dms, dry_run=%s)",
+            "[%s] Applied Relace edit to %s (latency=%dms)",
             trace_id,
             resolved_path,
             latency_ms,
-            dry_run,
         )
 
-        preview = merged_code[:4000]
-        return {
-            "file_path": str(resolved_path),
-            "instruction": instruction,
-            "usage": usage,
-            "merged_code_preview": preview,
-            "dry_run": dry_run,
-        }
+        return f"Applied code changes using Relace API.\n\nChanges made:\n{diff}"
 
     except Exception as exc:
         latency_ms = int((datetime.now(UTC) - started_at).total_seconds() * 1000)
@@ -233,15 +239,13 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     client = RelaceClient(config)
 
     @mcp.tool
-    def relace_apply_file(
+    def fast_apply(
         file_path: str,
         edit_snippet: str,
         instruction: str | None = None,
-        dry_run: bool = False,
-    ) -> dict[str, Any]:
-        """Apply a Relace Instant Apply diff to a local source file.
+    ) -> str:
+        """Use this tool to propose an edit to an existing file or create a new file.
 
-        Use this tool to propose an edit to an existing file or create a new file.
         If you are performing an edit follow these formatting rules:
         - Abbreviate sections of the code in your response that will remain the same
           by replacing those sections with a comment like "// ... rest of code ...",
@@ -279,15 +283,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 Use first person perspective and focus on clarifying any ambiguous
                 aspects of the edit. Keep it brief and avoid repeating information
                 from previous messages.
-            dry_run: Preview changes without applying them.
-
-        Returns:
-            A dict containing:
-            - file_path: The resolved absolute path of the modified file.
-            - instruction: The instruction provided (if any).
-            - usage: Token usage statistics from the Relace API.
-            - merged_code_preview: Preview of the merged code (truncated to 4000 chars).
-            - dry_run: Whether this was a dry run.
         """
         return _apply_file_logic(
             client=client,
@@ -295,7 +290,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             edit_snippet=edit_snippet,
             instruction=instruction,
             base_dir=config.base_dir,
-            dry_run=dry_run,
         )
 
-    _ = relace_apply_file
+    _ = fast_apply
