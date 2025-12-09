@@ -229,7 +229,7 @@ def _apply_file_logic(
 
 
 def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
-    """向 FastMCP 實例註冊 Relace 相關 tools。"""
+    """Register Relace tools to the FastMCP instance."""
     client = RelaceClient(config)
 
     @mcp.tool
@@ -241,14 +241,53 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     ) -> dict[str, Any]:
         """Apply a Relace Instant Apply diff to a local source file.
 
+        Use this tool to propose an edit to an existing file or create a new file.
+        If you are performing an edit follow these formatting rules:
+        - Abbreviate sections of the code in your response that will remain the same
+          by replacing those sections with a comment like "// ... rest of code ...",
+          "// ... keep existing code ...", "// ... code remains the same".
+        - Be precise with the location of these comments within your edit snippet.
+          A less intelligent model will use the context clues you provide to accurately
+          merge your edit snippet.
+        - If applicable, it can help to include some concise information about the
+          specific code segments you wish to retain "// ... keep calculateTotalFunction ...".
+        - If you plan on deleting a section, you must provide the context to delete it.
+          Some options:
+          1. If the initial code is `Block 1 / Block 2 / Block 3`, and you want to remove
+             Block 2, you would output `// ... keep existing code ... / Block 1 / Block 3 /
+             // ... rest of code ...`.
+          2. If the initial code is `code / Block / code`, and you want to remove Block,
+             you can also specify `// ... keep existing code ... / // remove Block /
+             // ... rest of code ...`.
+        - You must use the comment format applicable to the specific code provided to
+          express these truncations.
+        - Preserve the indentation and code structure of exactly how you believe the
+          final code will look (do not output lines that will not be in the final code
+          after they are merged).
+        - Be as length efficient as possible without omitting key context.
+
+        To create a new file, simply specify the content of the file in the `edit_snippet` field.
+
         Args:
-            file_path: 要修改的檔案路徑（UTF-8）。
-            edit_snippet: 要 merge 進檔案的程式碼片段。
-            instruction: 可選的自然語言說明，用來消歧義 edit 行為。
-            dry_run: 若為 True，只回傳 preview 不實際寫入檔案。
+            file_path: The target file to modify. You must use an absolute path (UTF-8).
+            edit_snippet: Only include the exact code lines that need modification.
+                Do not include any code that stays the same - those sections should be
+                marked with comments appropriate for the language, like:
+                `// ... existing code ...`
+            instruction: A single sentence instruction describing the edit to be made.
+                This helps guide the apply model in merging the changes correctly.
+                Use first person perspective and focus on clarifying any ambiguous
+                aspects of the edit. Keep it brief and avoid repeating information
+                from previous messages.
+            dry_run: Preview changes without applying them.
 
         Returns:
-            包含 merged_code_preview、usage 及修改 metadata 的 dict。
+            A dict containing:
+            - file_path: The resolved absolute path of the modified file.
+            - instruction: The instruction provided (if any).
+            - usage: Token usage statistics from the Relace API.
+            - merged_code_preview: Preview of the merged code (truncated to 4000 chars).
+            - dry_run: Whether this was a dry run.
         """
         return _apply_file_logic(
             client=client,
