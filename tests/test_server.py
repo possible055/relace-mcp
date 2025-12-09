@@ -152,20 +152,12 @@ class TestServerIntegration:
         self,
         mock_config: RelaceConfig,
         temp_source_file: Path,
-        temp_log_file: Path,
         tmp_path: Path,
     ) -> None:
         """Test complete workflow: list tools -> call tool -> verify result."""
         config = RelaceConfig(
             api_key=mock_config.api_key,
-            endpoint=mock_config.endpoint,
-            model=mock_config.model,
-            log_path=str(temp_log_file),
-            timeout=mock_config.timeout,
             base_dir=str(tmp_path),
-            strict_mode=False,
-            max_retries=3,
-            retry_base_delay=1.0,
         )
 
         merged_code = "def hello():\n    print('Modified!')\n"

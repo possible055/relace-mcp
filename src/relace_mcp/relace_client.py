@@ -5,7 +5,14 @@ from typing import Any
 
 import httpx
 
-from .config import RelaceConfig
+from .config import (
+    MAX_RETRIES,
+    RELACE_ENDPOINT,
+    RELACE_MODEL,
+    RETRY_BASE_DELAY,
+    TIMEOUT_SECONDS,
+    RelaceConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +48,7 @@ class RelaceClient:
         payload: dict[str, Any] = {
             "initial_code": initial_code,
             "edit_snippet": edit_snippet,
-            "model": self._config.model,
+            "model": RELACE_MODEL,
             "stream": stream,
         }
         if instruction:
@@ -55,15 +62,13 @@ class RelaceClient:
         }
 
         trace_id = relace_metadata.get("trace_id", "unknown") if relace_metadata else "unknown"
-        max_retries = self._config.max_retries
-        base_delay = self._config.retry_base_delay
         last_exc: Exception | None = None
 
-        for attempt in range(max_retries + 1):
+        for attempt in range(MAX_RETRIES + 1):
             try:
                 started_at = time.monotonic()
-                with httpx.Client(timeout=self._config.timeout) as client:
-                    resp = client.post(self._config.endpoint, json=payload, headers=headers)
+                with httpx.Client(timeout=TIMEOUT_SECONDS) as client:
+                    resp = client.post(RELACE_ENDPOINT, json=payload, headers=headers)
                 latency_ms = int((time.monotonic() - started_at) * 1000)
 
                 # 4xx: fail-fast，不 retry
@@ -84,10 +89,10 @@ class RelaceClient:
                         resp.status_code,
                         latency_ms,
                         attempt + 1,
-                        max_retries + 1,
+                        MAX_RETRIES + 1,
                     )
-                    if attempt < max_retries:
-                        delay = base_delay * (2**attempt) + random.uniform(0, 0.5)  # nosec B311
+                    if attempt < MAX_RETRIES:
+                        delay = RETRY_BASE_DELAY * (2**attempt) + random.uniform(0, 0.5)  # nosec B311
                         time.sleep(delay)
                         continue
                     raise RuntimeError(f"Relace API error (status {resp.status_code}): {resp.text}")
@@ -110,17 +115,16 @@ class RelaceClient:
                 logger.warning(
                     "[%s] Relace API timeout after %.1fs (attempt=%d/%d)",
                     trace_id,
-                    self._config.timeout,
+                    TIMEOUT_SECONDS,
                     attempt + 1,
-                    max_retries + 1,
+                    MAX_RETRIES + 1,
                 )
-                if attempt < max_retries:
-                    delay = base_delay * (2**attempt) + random.uniform(0, 0.5)  # nosec B311
+                if attempt < MAX_RETRIES:
+                    delay = RETRY_BASE_DELAY * (2**attempt) + random.uniform(0, 0.5)  # nosec B311
                     time.sleep(delay)
                     continue
                 raise RuntimeError(
-                    f"Relace API request timed out after {self._config.timeout}s. "
-                    "Consider increasing RELACE_TIMEOUT for large files."
+                    f"Relace API request timed out after {TIMEOUT_SECONDS}s."
                 ) from exc
 
             except httpx.RequestError as exc:
@@ -130,14 +134,14 @@ class RelaceClient:
                     trace_id,
                     exc,
                     attempt + 1,
-                    max_retries + 1,
+                    MAX_RETRIES + 1,
                 )
-                if attempt < max_retries:
-                    delay = base_delay * (2**attempt) + random.uniform(0, 0.5)  # nosec B311
+                if attempt < MAX_RETRIES:
+                    delay = RETRY_BASE_DELAY * (2**attempt) + random.uniform(0, 0.5)  # nosec B311
                     time.sleep(delay)
                     continue
                 raise RuntimeError(f"Failed to call Relace API: {exc}") from exc
 
         raise RuntimeError(
-            f"Failed to call Relace API after {max_retries + 1} attempts"
+            f"Failed to call Relace API after {MAX_RETRIES + 1} attempts"
         ) from last_exc
