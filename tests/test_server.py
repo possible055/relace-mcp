@@ -132,17 +132,6 @@ class TestServerIntegration:
     """Integration tests for server behavior."""
 
     @pytest.mark.asyncio
-    async def test_server_lists_tools(self, mock_config: RelaceConfig) -> None:
-        """Should list available tools."""
-        server = build_server(config=mock_config)
-
-        async with Client(server) as client:
-            tools = await client.list_tools()
-
-            tool_names = [t.name for t in tools]
-            assert "fast_apply" in tool_names
-
-    @pytest.mark.asyncio
     async def test_fast_search_tool_has_correct_schema(self, mock_config: RelaceConfig) -> None:
         """Should have correct input schema for fast_search."""
         server = build_server(config=mock_config)

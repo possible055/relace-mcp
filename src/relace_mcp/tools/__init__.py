@@ -7,6 +7,8 @@ from ..config import RelaceConfig
 from .apply import apply_file_logic
 from .search import FastAgenticSearchHarness
 
+__all__ = ["register_tools"]
+
 
 def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     """Register Relace tools to the FastMCP instance."""

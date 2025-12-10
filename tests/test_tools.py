@@ -100,12 +100,10 @@ class TestLogEvent:
         assert logged["timestamp"] == "2024-01-01T00:00:00Z"
 
     def test_handles_log_failure_gracefully(self, tmp_path: Path) -> None:
-        """Should not raise on log write failure."""
+        """Should not raise on log write failure (e.g., path is a directory)."""
         # 使用目錄作為 log 路徑會失敗，但不應拋出例外
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
-            _log_event({"test": True})
-        # 不應拋出例外
+        with patch("relace_mcp.tools.apply.LOG_PATH", tmp_path):  # tmp_path 是目錄
+            _log_event({"test": True})  # 不應拋出例外
 
 
 class TestApplyFileLogicSuccess:
@@ -194,38 +192,22 @@ class TestApplyFileLogicSuccess:
 class TestApplyFileLogicValidation:
     """Test apply_file_logic input validation."""
 
-    def test_empty_edit_snippet_raises(
+    @pytest.mark.parametrize("snippet", ["", "   \n\t  "])
+    def test_empty_or_whitespace_edit_snippet_raises(
         self,
         mock_config: RelaceConfig,
         temp_source_file: Path,
         tmp_path: Path,
+        snippet: str,
     ) -> None:
-        """Should raise on empty edit_snippet."""
+        """Should raise on empty or whitespace-only edit_snippet."""
         mock_client = MagicMock(spec=RelaceClient)
 
         with pytest.raises(RuntimeError, match="edit_snippet cannot be empty"):
             apply_file_logic(
                 client=mock_client,
                 file_path=str(temp_source_file),
-                edit_snippet="",
-                instruction=None,
-                base_dir=str(tmp_path),
-            )
-
-    def test_whitespace_edit_snippet_raises(
-        self,
-        mock_config: RelaceConfig,
-        temp_source_file: Path,
-        tmp_path: Path,
-    ) -> None:
-        """Should raise on whitespace-only edit_snippet."""
-        mock_client = MagicMock(spec=RelaceClient)
-
-        with pytest.raises(RuntimeError, match="edit_snippet cannot be empty"):
-            apply_file_logic(
-                client=mock_client,
-                file_path=str(temp_source_file),
-                edit_snippet="   \n\t  ",
+                edit_snippet=snippet,
                 instruction=None,
                 base_dir=str(tmp_path),
             )

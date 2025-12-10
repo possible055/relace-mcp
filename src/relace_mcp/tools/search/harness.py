@@ -1,6 +1,7 @@
 import json
 import logging
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from ...clients import RelaceSearchClient
@@ -19,6 +20,12 @@ logger = logging.getLogger(__name__)
 
 # Context 截斷：總 messages 字元數上限（約 100k tokens）
 MAX_TOTAL_CONTEXT_CHARS = 400000
+
+# 可安全並行執行的 read-only 工具
+PARALLEL_SAFE_TOOLS = frozenset({"view_file", "view_directory", "grep_search"})
+
+# 並行執行的最大 worker 數（官方建議 4-12 tool calls per turn）
+MAX_PARALLEL_WORKERS = 12
 
 
 class FastAgenticSearchHarness:
@@ -102,34 +109,8 @@ class FastAgenticSearchHarness:
             # 將 assistant message（含 tool_calls）加入 messages
             messages.append(message)
 
-            # P0 修復：先處理所有 tool calls，收集 results，最後再判斷 report_back
-            tool_results: list[tuple[str, str, str | dict[str, Any]]] = []
-            report_back_result: dict[str, Any] | None = None
-
-            for tc in tool_calls:
-                tc_id = tc.get("id", "")
-                function = tc.get("function", {})
-                func_name = function.get("name", "")
-                func_args_str = function.get("arguments", "{}")
-
-                # P1 修復：JSON decode 失敗時返回錯誤
-                try:
-                    func_args = json.loads(func_args_str)
-                except json.JSONDecodeError as exc:
-                    logger.error("[%s] Invalid JSON in tool call %s: %s", trace_id, func_name, exc)
-                    tool_results.append((tc_id, func_name, f"Error: Invalid JSON arguments: {exc}"))
-                    continue
-
-                logger.debug("[%s] Tool call: %s(%s)", trace_id, func_name, list(func_args.keys()))
-
-                # Dispatch tool
-                tool_result = self._dispatch_tool(func_name, func_args)
-
-                # 收集 report_back 結果，但不立即返回
-                if func_name == "report_back" and isinstance(tool_result, dict):
-                    report_back_result = tool_result
-
-                tool_results.append((tc_id, func_name, tool_result))
+            # 並行執行 tool calls 並收集結果
+            tool_results, report_back_result = self._execute_tools_parallel(tool_calls, trace_id)
 
             # 將所有 tool results 加入 messages（符合 OpenAI 協議）
             for tc_id, _func_name, result in tool_results:
@@ -168,8 +149,101 @@ class FastAgenticSearchHarness:
             return messages
         return messages[:2] + messages[-6:]
 
+    def _execute_tools_parallel(
+        self, tool_calls: list[dict[str, Any]], trace_id: str
+    ) -> tuple[list[tuple[str, str, str | dict[str, Any]]], dict[str, Any] | None]:
+        """並行執行 read-only 工具，順序執行其他工具。
+
+        Args:
+            tool_calls: API 回傳的 tool_calls 列表。
+            trace_id: 追蹤 ID。
+
+        Returns:
+            (tool_results, report_back_result) tuple。
+        """
+        # 先解析所有 tool calls
+        parsed_calls: list[tuple[str, str, str, dict[str, Any] | None]] = []
+        for tc in tool_calls:
+            tc_id = tc.get("id", "")
+            function = tc.get("function", {})
+            func_name = function.get("name", "")
+            func_args_str = function.get("arguments", "{}")
+
+            try:
+                func_args = json.loads(func_args_str)
+            except json.JSONDecodeError as exc:
+                logger.error("[%s] Invalid JSON in tool call %s: %s", trace_id, func_name, exc)
+                parsed_calls.append(
+                    (tc_id, func_name, f"Error: Invalid JSON arguments: {exc}", None)
+                )
+                continue
+
+            parsed_calls.append((tc_id, func_name, "", func_args))
+
+        # 分類：可並行 vs 需順序執行
+        parallel_calls = []
+        sequential_calls = []
+        for item in parsed_calls:
+            tc_id, func_name, error, func_args = item
+            if error:  # JSON 解析失敗
+                sequential_calls.append(item)
+            elif func_name in PARALLEL_SAFE_TOOLS:
+                parallel_calls.append(item)
+            else:
+                sequential_calls.append(item)
+
+        tool_results: list[tuple[str, str, str | dict[str, Any]]] = []
+        report_back_result: dict[str, Any] | None = None
+
+        # 並行執行 read-only 工具
+        if parallel_calls:
+            logger.debug("[%s] Executing %d tools in parallel", trace_id, len(parallel_calls))
+            with ThreadPoolExecutor(max_workers=MAX_PARALLEL_WORKERS) as executor:
+                futures = {}
+                for tc_id, func_name, _, func_args in parallel_calls:
+                    logger.debug("[%s] Tool call (parallel): %s", trace_id, func_name)
+                    future = executor.submit(self._dispatch_tool, func_name, func_args)
+                    futures[future] = (tc_id, func_name)
+
+                for future in as_completed(futures):
+                    tc_id, func_name = futures[future]
+                    try:
+                        result = future.result()
+                    except Exception as exc:
+                        logger.error("[%s] Tool %s raised exception: %s", trace_id, func_name, exc)
+                        result = f"Error: {exc}"
+                    tool_results.append((tc_id, func_name, result))
+
+        # 順序執行 report_back 和錯誤項目
+        for tc_id, func_name, error, func_args in sequential_calls:
+            if error:
+                tool_results.append((tc_id, func_name, error))
+                continue
+
+            logger.debug("[%s] Tool call (sequential): %s", trace_id, func_name)
+            try:
+                result = self._dispatch_tool(func_name, func_args)
+            except Exception as exc:
+                logger.error("[%s] Tool %s raised exception: %s", trace_id, func_name, exc)
+                result = f"Error: {exc}"
+
+            if func_name == "report_back" and isinstance(result, dict):
+                report_back_result = result
+
+            tool_results.append((tc_id, func_name, result))
+
+        # 按原始順序排序（維持 API 協議一致性）
+        original_order = {tc.get("id", ""): i for i, tc in enumerate(tool_calls)}
+        tool_results.sort(key=lambda x: original_order.get(x[0], 999))
+
+        return tool_results, report_back_result
+
     def _dispatch_tool(self, name: str, args: dict[str, Any]) -> str | dict[str, Any]:
         """分派 tool call 到對應的 handler。"""
+        # 防禦：若 args 不是 dict（例如模型回傳 "arguments": "\"oops\""）
+        if not isinstance(args, dict):
+            return f"Error: Invalid arguments type, expected dict but got {type(args).__name__}"
+
         base_dir = self._config.base_dir
 
         if name == "view_file":

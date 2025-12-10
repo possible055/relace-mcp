@@ -44,6 +44,7 @@ def api_error_response() -> dict[str, Any]:
 def mock_httpx_success(successful_api_response: dict[str, Any]):
     mock_response = MagicMock()
     mock_response.status_code = 200
+    mock_response.is_success = True
     mock_response.is_server_error = False
     mock_response.json.return_value = successful_api_response
     mock_response.text = json.dumps(successful_api_response)
@@ -61,8 +62,10 @@ def mock_httpx_success(successful_api_response: dict[str, Any]):
 def mock_httpx_error():
     mock_response = MagicMock()
     mock_response.status_code = 401
+    mock_response.is_success = False
     mock_response.is_server_error = False
-    mock_response.text = '{"error": {"message": "Invalid API key"}}'
+    mock_response.text = '{"code": "invalid_api_key", "message": "Invalid API key"}'
+    mock_response.headers = {}
 
     mock_client = MagicMock()
     mock_client.__enter__ = MagicMock(return_value=mock_client)
@@ -125,6 +128,7 @@ def mock_client_with_response(
 
     mock_response = MagicMock()
     mock_response.status_code = 200
+    mock_response.is_success = True
     mock_response.is_server_error = False
     mock_response.json.return_value = successful_api_response
 
