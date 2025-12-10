@@ -5,12 +5,15 @@ MCP server for [Relace Instant Apply](https://www.relace.ai/) — AI-powered cod
 ## Features
 
 - **High-speed merging** — Apply LLM-generated diffs to local files at 10,000+ tok/s
+- **Dual transport** — STDIO (default) for IDE integration, HTTP for remote deployment
 - **Create new files** — Directly write new files without API call
 - **UDiff output** — Returns unified diff for agent verification
 - **Path security** — Configurable base directory to prevent path traversal
 - **Auto-retry** — Handles transient API errors gracefully
 
 ## Installation
+
+### STDIO Mode (Default)
 
 Add to your MCP config (`~/.codeium/windsurf/mcp_config.json` for Windsurf):
 
@@ -28,6 +31,52 @@ Add to your MCP config (`~/.codeium/windsurf/mcp_config.json` for Windsurf):
   }
 }
 ```
+
+### HTTP Mode (Remote Deployment)
+
+```json
+{
+  "mcpServers": {
+    "relace": {
+      "command": "uvx",
+      "args": ["relace-mcp", "-t", "http", "-p", "8000"],
+      "env": {
+        "RELACE_API_KEY": "rlc-your-api-key",
+        "RELACE_BASE_DIR": "/path/to/project"
+      }
+    }
+  }
+}
+```
+
+Or connect directly to a running server:
+
+```json
+{
+  "mcpServers": {
+    "relace": {
+      "type": "streamable-http",
+      "url": "http://your-server:8000/mcp"
+    }
+  }
+}
+```
+
+## CLI Options
+
+```
+relace-mcp [OPTIONS]
+
+Options:
+  -t, --transport {stdio,http,streamable-http}
+                        Transport protocol (default: stdio)
+  --host HOST           Host to bind for HTTP mode (default: 0.0.0.0)
+  -p, --port PORT       Port to bind for HTTP mode (default: 8000)
+  --path PATH           MCP endpoint path for HTTP mode (default: /mcp)
+  -h, --help            Show help message
+```
+
+## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
