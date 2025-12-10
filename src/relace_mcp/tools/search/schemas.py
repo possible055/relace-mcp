@@ -48,6 +48,25 @@ A successful resolution means:
 
 <use_parallel_tool_calls>
 If you intend to call multiple tools and there are no dependencies between the tool calls, make all of the independent tool calls in parallel. Prioritize calling tools simultaneously whenever the actions can be done in parallel rather than sequentially. For example, when reading 3 files, run 3 tool calls in parallel to read all 3 files into context at the same time. Maximize use of parallel tool calls where possible to increase speed and efficiency. However, if some tool calls depend on previous calls to inform dependent values like the parameters, do NOT call these tools in parallel and instead call them sequentially. Never use placeholders or guess missing parameters in tool calls.
+
+Parallel tool calls can be made using the following schema:
+<tool_call>
+<function=example_function_name_1>
+<parameter=example_parameter_1>
+value_1
+</parameter>
+<parameter=example_parameter_2>
+</parameter>
+</function>
+<function=example_function_name_2>
+<parameter=example_parameter_1>
+value_1
+</parameter>
+<parameter=example_parameter_2>
+</parameter>
+</function>
+</tool_call>
+Where you can place as many <function=...>...</function> tags as you want within the <tool_call>...</tool_call> tags for parallel tool calls.
 </use_parallel_tool_calls>"""
 
 TOOL_SCHEMAS: list[dict[str, Any]] = [
@@ -76,6 +95,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "view_range": {
                         "type": "array",
                         "items": {"type": "integer"},
+                        "default": [1, 100],
                         "description": (
                             "Range of file lines to view. If not specified, the first 100 lines of the file are shown. "
                             "If provided, the file will be shown in the indicated line number range, e.g. [11, 12] will show lines 11 and 12. "
@@ -114,6 +134,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     },
                     "include_hidden": {
                         "type": "boolean",
+                        "default": False,
                         "description": "If true, include hidden files in the output (false by default).",
                     },
                 },
@@ -143,6 +164,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     },
                     "case_sensitive": {
                         "type": "boolean",
+                        "default": True,
                         "description": "Whether the search should be case sensitive (default: true)",
                     },
                     "exclude_pattern": {

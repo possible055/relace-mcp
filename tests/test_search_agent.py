@@ -427,18 +427,22 @@ class TestToolSchemas:
         names = {t["function"]["name"] for t in TOOL_SCHEMAS}
         assert "bash" not in names
 
-    def test_schema_no_default_in_required(self) -> None:
-        """Strict mode: required properties should not have default values."""
-        for tool in TOOL_SCHEMAS:
-            params = tool["function"]["parameters"]
-            required = set(params.get("required", []))
-            props = params.get("properties", {})
-            for prop_name, prop_def in props.items():
-                if prop_name in required:
-                    # default 在 strict mode 會被忽略，確認已移除
-                    assert "default" not in prop_def, (
-                        f"{tool['function']['name']}.{prop_name} has default"
-                    )
+    def test_schema_has_default_per_official_docs(self) -> None:
+        """Per Relace official docs, certain params should have default values."""
+        # view_file.view_range should have default [1, 100]
+        view_file = next(t for t in TOOL_SCHEMAS if t["function"]["name"] == "view_file")
+        view_range = view_file["function"]["parameters"]["properties"]["view_range"]
+        assert view_range.get("default") == [1, 100]
+
+        # view_directory.include_hidden should have default False
+        view_dir = next(t for t in TOOL_SCHEMAS if t["function"]["name"] == "view_directory")
+        include_hidden = view_dir["function"]["parameters"]["properties"]["include_hidden"]
+        assert include_hidden.get("default") is False
+
+        # grep_search.case_sensitive should have default True
+        grep = next(t for t in TOOL_SCHEMAS if t["function"]["name"] == "grep_search")
+        case_sensitive = grep["function"]["parameters"]["properties"]["case_sensitive"]
+        assert case_sensitive.get("default") is True
 
 
 class TestParallelToolCallsFix:
