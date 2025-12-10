@@ -49,6 +49,8 @@ class RelaceSearchClient:
             "tool_choice": "auto",
             "temperature": 1.0,
             "top_p": 0.95,
+            "top_k": 100,
+            "repetition_penalty": 1.0,
         }
 
         headers = {

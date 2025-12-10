@@ -1,4 +1,4 @@
-__version__ = "0.1.4.dev1"
+__version__ = "0.1.4.dev2"
 
 from .server import build_server, main
 
