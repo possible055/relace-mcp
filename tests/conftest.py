@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from relace_mcp.clients import RelaceClient
 from relace_mcp.config import RelaceConfig
-from relace_mcp.relace_client import RelaceClient
 
 
 @pytest.fixture
@@ -53,7 +53,7 @@ def mock_httpx_success(successful_api_response: dict[str, Any]):
     mock_client.__exit__ = MagicMock(return_value=False)
     mock_client.post.return_value = mock_response
 
-    with patch("relace_mcp.relace_client.httpx.Client", return_value=mock_client):
+    with patch("relace_mcp.clients.relace.httpx.Client", return_value=mock_client):
         yield mock_client
 
 
@@ -69,7 +69,7 @@ def mock_httpx_error():
     mock_client.__exit__ = MagicMock(return_value=False)
     mock_client.post.return_value = mock_response
 
-    with patch("relace_mcp.relace_client.httpx.Client", return_value=mock_client):
+    with patch("relace_mcp.clients.relace.httpx.Client", return_value=mock_client):
         yield mock_client
 
 
@@ -82,7 +82,7 @@ def mock_httpx_timeout():
     mock_client.__exit__ = MagicMock(return_value=False)
     mock_client.post.side_effect = httpx.TimeoutException("Connection timed out")
 
-    with patch("relace_mcp.relace_client.httpx.Client", return_value=mock_client):
+    with patch("relace_mcp.clients.relace.httpx.Client", return_value=mock_client):
         yield mock_client
 
 
@@ -133,7 +133,7 @@ def mock_client_with_response(
     mock_http.__exit__ = MagicMock(return_value=False)
     mock_http.post.return_value = mock_response
 
-    with patch("relace_mcp.relace_client.httpx.Client", return_value=mock_http):
+    with patch("relace_mcp.clients.relace.httpx.Client", return_value=mock_http):
         yield client
 
 
@@ -147,5 +147,5 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def mock_log_path(tmp_path: Path) -> Generator[Path, None, None]:
     """Auto-mock LOG_PATH for all tests to avoid writing to real log."""
     log_file = tmp_path / "test.log"
-    with patch("relace_mcp.tools.LOG_PATH", log_file):
+    with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
         yield log_file

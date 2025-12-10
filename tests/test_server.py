@@ -44,6 +44,16 @@ class TestServerToolRegistration:
             tool_names = [t.name for t in tools]
             assert "fast_apply" in tool_names
 
+    @pytest.mark.asyncio
+    async def test_fast_search_registered(self, mock_config: RelaceConfig) -> None:
+        """透過公開 API Client.list_tools() 驗證 fast_search 註冊。"""
+        server = build_server(config=mock_config)
+
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            tool_names = [t.name for t in tools]
+            assert "fast_search" in tool_names
+
 
 class TestServerToolExecution:
     """Test tool execution via server."""
@@ -131,6 +141,20 @@ class TestServerIntegration:
 
             tool_names = [t.name for t in tools]
             assert "fast_apply" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_fast_search_tool_has_correct_schema(self, mock_config: RelaceConfig) -> None:
+        """Should have correct input schema for fast_search."""
+        server = build_server(config=mock_config)
+
+        async with Client(server) as client:
+            tools = await client.list_tools()
+
+            search_tool = next((t for t in tools if t.name == "fast_search"), None)
+            assert search_tool is not None
+
+            schema = search_tool.inputSchema
+            assert "query" in schema.get("properties", {})
 
     @pytest.mark.asyncio
     async def test_tool_has_correct_schema(self, mock_config: RelaceConfig) -> None:

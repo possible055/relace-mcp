@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from .config import (
+from ..config import (
     MAX_RETRIES,
     RELACE_ENDPOINT,
     RELACE_MODEL,

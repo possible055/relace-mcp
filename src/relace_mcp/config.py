@@ -5,12 +5,29 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-RELACE_ENDPOINT = "https://instantapply.endpoint.relace.run/v1/code/apply"
-RELACE_MODEL = "relace-apply-3"
-TIMEOUT_SECONDS = 60.0
-MAX_RETRIES = 3
-RETRY_BASE_DELAY = 1.0
+# Instant Apply endpoint（支援 env 覆寫）
+RELACE_ENDPOINT = os.getenv(
+    "RELACE_ENDPOINT",
+    "https://instantapply.endpoint.relace.run/v1/code/apply",
+)
+RELACE_MODEL = os.getenv("RELACE_MODEL", "relace-apply-3")
+TIMEOUT_SECONDS = float(os.getenv("RELACE_TIMEOUT_SECONDS", "60.0"))
+MAX_RETRIES = int(os.getenv("RELACE_MAX_RETRIES", "3"))
+RETRY_BASE_DELAY = float(os.getenv("RELACE_RETRY_BASE_DELAY", "1.0"))
 
+# Fast Agentic Search endpoint
+RELACE_SEARCH_ENDPOINT = os.getenv(
+    "RELACE_SEARCH_ENDPOINT",
+    "https://search.endpoint.relace.run/v1/search/chat/completions",
+)
+RELACE_SEARCH_MODEL = os.getenv("RELACE_SEARCH_MODEL", "relace-search")
+SEARCH_TIMEOUT_SECONDS = float(os.getenv("RELACE_SEARCH_TIMEOUT_SECONDS", "120.0"))
+SEARCH_MAX_TURNS = int(os.getenv("RELACE_SEARCH_MAX_TURNS", "10"))
+
+# Strict mode：強制安全設定
+RELACE_STRICT_MODE = os.getenv("RELACE_STRICT_MODE", "0") == "1"
+
+# Logging
 LOG_DIR = Path(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state"))) / "relace"
 LOG_PATH = LOG_DIR / "relace_apply.log"
 MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024
@@ -30,6 +47,11 @@ class RelaceConfig:
         base_dir = os.getenv("RELACE_BASE_DIR")
         if base_dir:
             base_dir = os.path.abspath(base_dir)
+        elif RELACE_STRICT_MODE:
+            raise RuntimeError(
+                "RELACE_STRICT_MODE is enabled but RELACE_BASE_DIR is not set. "
+                "Explicitly set RELACE_BASE_DIR to restrict file access."
+            )
         else:
             base_dir = os.getcwd()
             logger.warning(
