@@ -6,15 +6,15 @@ import pytest
 
 from relace_mcp.clients import RelaceSearchClient
 from relace_mcp.config import RelaceConfig
-from relace_mcp.tools.search import (
-    TOOL_SCHEMAS,
-    FastAgenticSearchHarness,
+from relace_mcp.tools.search import FastAgenticSearchHarness
+from relace_mcp.tools.search.handlers import (
     grep_search_handler,
     map_repo_path,
     validate_path,
     view_directory_handler,
     view_file_handler,
 )
+from relace_mcp.tools.search.schemas import TOOL_SCHEMAS
 
 
 class TestMapRepoPath:
@@ -578,6 +578,63 @@ class TestParallelToolCallsFix:
         assert result["explanation"] == "Done"
         assert mock_client.chat.call_count == 2
 
+    def test_non_dict_arguments_returns_error(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Valid JSON but non-dict arguments should return error, not crash."""
+        mock_client.chat.side_effect = [
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [
+                                {
+                                    "id": "call_1",
+                                    "function": {
+                                        "name": "report_back",
+                                        # Valid JSON but string, not dict
+                                        "arguments": '"oops"',
+                                    },
+                                },
+                            ]
+                        }
+                    }
+                ]
+            },
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [
+                                {
+                                    "id": "call_2",
+                                    "function": {
+                                        "name": "report_back",
+                                        "arguments": json.dumps(
+                                            {
+                                                "explanation": "Recovered",
+                                                "files": {},
+                                            }
+                                        ),
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+        ]
+
+        harness = FastAgenticSearchHarness(mock_config, mock_client)
+        result = harness.run("Test non-dict args")
+
+        # Should complete without crash, recovered in turn 2
+        assert result["explanation"] == "Recovered"
+        assert mock_client.chat.call_count == 2
+
 
 class TestViewDirectoryBFS:
     """Test P2 fix: BFS-like directory listing order."""
@@ -650,7 +707,7 @@ class TestContextTruncation:
 
     def test_truncate_for_context_short_text(self) -> None:
         """Short text should not be truncated."""
-        from relace_mcp.tools.search import truncate_for_context
+        from relace_mcp.tools.search.handlers import truncate_for_context
 
         short = "Hello world"
         result = truncate_for_context(short)
@@ -659,8 +716,7 @@ class TestContextTruncation:
 
     def test_truncate_for_context_long_text(self) -> None:
         """Long text should be truncated with message."""
-        from relace_mcp.tools.search import truncate_for_context
-        from relace_mcp.tools.search.handlers import MAX_TOOL_RESULT_CHARS
+        from relace_mcp.tools.search.handlers import MAX_TOOL_RESULT_CHARS, truncate_for_context
 
         long_text = "x" * (MAX_TOOL_RESULT_CHARS + 1000)
         result = truncate_for_context(long_text)
@@ -673,7 +729,7 @@ class TestContextTruncation:
         """Should estimate message context size."""
         from typing import Any
 
-        from relace_mcp.tools.search import estimate_context_size
+        from relace_mcp.tools.search.handlers import estimate_context_size
 
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": "Hello"},

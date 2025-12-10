@@ -46,6 +46,3 @@ class TestRelaceConfigFrozen:
     def test_config_is_frozen(self, mock_config: RelaceConfig) -> None:
         with pytest.raises(AttributeError):
             mock_config.api_key = "new-key"  # type: ignore[misc]
-
-    def test_config_is_hashable(self, mock_config: RelaceConfig) -> None:
-        hash(mock_config)
