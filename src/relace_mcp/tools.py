@@ -17,6 +17,43 @@ logger = logging.getLogger(__name__)
 # 限制檔案大小為 10MB，避免記憶體耗盡
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
+# 優先嘗試的編碼（覆蓋 99% 使用場景）
+_PREFERRED_ENCODINGS = ("utf-8", "gbk")
+
+
+def _read_text_with_fallback(path: Path) -> tuple[str, str]:
+    """讀取文字檔案，自動偵測編碼。
+
+    優先嘗試 UTF-8 和 GBK（覆蓋絕大多數場景），
+    失敗時使用 charset_normalizer 自動偵測。
+
+    Args:
+        path: 檔案路徑。
+
+    Returns:
+        (內容, 編碼) 元組。
+
+    Raises:
+        RuntimeError: 若無法偵測編碼或檔案非文字檔。
+    """
+    raw = path.read_bytes()
+
+    # 優先嘗試常用編碼（快速且準確）
+    for enc in _PREFERRED_ENCODINGS:
+        try:
+            return raw.decode(enc), enc
+        except (UnicodeDecodeError, LookupError):
+            continue
+
+    # Fallback：自動偵測
+    from charset_normalizer import from_bytes
+
+    result = from_bytes(raw)
+    best = result.best()
+    if best is None or best.coherence < 0.5:
+        raise RuntimeError(f"Cannot detect encoding for file: {path}")
+    return str(best), best.encoding
+
 
 def _rotate_log_if_needed() -> None:
     """若 log 檔案超過大小上限，進行 rotation。"""
@@ -139,13 +176,7 @@ def _apply_file_logic(
                 f"File too large ({file_size} bytes). Maximum allowed: {MAX_FILE_SIZE_BYTES} bytes"
             )
 
-        try:
-            initial_code = resolved_path.read_text(encoding="utf-8")
-        except UnicodeDecodeError as exc:
-            raise RuntimeError(
-                f"File is not valid UTF-8 encoding: {file_path}. "
-                "Only UTF-8 encoded text files are supported."
-            ) from exc
+        initial_code, detected_encoding = _read_text_with_fallback(resolved_path)
 
         # Call Relace API
         relace_metadata = {
@@ -190,7 +221,7 @@ def _apply_file_logic(
         if not os.access(resolved_path, os.W_OK):
             raise RuntimeError(f"File is not writable: {file_path}")
 
-        resolved_path.write_text(merged_code, encoding="utf-8")
+        resolved_path.write_text(merged_code, encoding=detected_encoding)
 
         _log_event(
             {

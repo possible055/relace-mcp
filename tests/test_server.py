@@ -193,3 +193,108 @@ class TestServerIntegration:
                 # Step 3: Verify file was modified
                 file_content = temp_source_file.read_text()
                 assert file_content == merged_code
+
+
+class TestMain:
+    """Test main() function with CLI arguments."""
+
+    def test_main_stdio_mode(
+        self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """STDIO 模式（預設）呼叫 server.run() 不帶參數。"""
+        import sys
+
+        from relace_mcp.server import main
+
+        monkeypatch.setenv("RELACE_API_KEY", "rlc-test")
+        monkeypatch.setenv("RELACE_BASE_DIR", str(tmp_path))
+        monkeypatch.setattr(sys, "argv", ["relace-mcp"])
+
+        with patch("relace_mcp.server.build_server") as mock_build:
+            mock_server = MagicMock()
+            mock_build.return_value = mock_server
+
+            main()
+
+            mock_server.run.assert_called_once_with()
+
+    def test_main_http_mode(
+        self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """HTTP 模式透過 CLI 參數呼叫 server.run() 帶正確參數。"""
+        import sys
+
+        from relace_mcp.server import main
+
+        monkeypatch.setenv("RELACE_API_KEY", "rlc-test")
+        monkeypatch.setenv("RELACE_BASE_DIR", str(tmp_path))
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "relace-mcp",
+                "--transport",
+                "http",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "9000",
+                "--path",
+                "/api/mcp",
+            ],
+        )
+
+        with patch("relace_mcp.server.build_server") as mock_build:
+            mock_server = MagicMock()
+            mock_build.return_value = mock_server
+
+            main()
+
+            mock_server.run.assert_called_once_with(
+                transport="http",
+                host="127.0.0.1",
+                port=9000,
+                path="/api/mcp",
+            )
+
+    def test_main_streamable_http_mode(
+        self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """streamable-http 模式透過 -t 短參數。"""
+        import sys
+
+        from relace_mcp.server import main
+
+        monkeypatch.setenv("RELACE_API_KEY", "rlc-test")
+        monkeypatch.setenv("RELACE_BASE_DIR", str(tmp_path))
+        monkeypatch.setattr(sys, "argv", ["relace-mcp", "-t", "streamable-http", "-p", "8080"])
+
+        with patch("relace_mcp.server.build_server") as mock_build:
+            mock_server = MagicMock()
+            mock_build.return_value = mock_server
+
+            main()
+
+            mock_server.run.assert_called_once_with(
+                transport="streamable-http",
+                host="0.0.0.0",
+                port=8080,
+                path="/mcp",
+            )
+
+    def test_main_invalid_transport(
+        self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """非法 transport 值會被 argparse 拒絕。"""
+        import sys
+
+        from relace_mcp.server import main
+
+        monkeypatch.setenv("RELACE_API_KEY", "rlc-test")
+        monkeypatch.setenv("RELACE_BASE_DIR", str(tmp_path))
+        monkeypatch.setattr(sys, "argv", ["relace-mcp", "-t", "invalid"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 2  # argparse error exit code

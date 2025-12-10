@@ -1,3 +1,4 @@
+import argparse
 import logging
 import os
 from pathlib import Path
@@ -62,6 +63,36 @@ def build_server(config: RelaceConfig | None = None, run_health_check: bool = Tr
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        prog="relace-mcp",
+        description="Relace MCP Server - Fast code merging via Relace API",
+    )
+    parser.add_argument(
+        "-t",
+        "--transport",
+        choices=["stdio", "http", "streamable-http"],
+        default="stdio",
+        help="Transport protocol (default: stdio)",
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",  # nosec B104
+        help="Host to bind for HTTP mode (default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "-p",
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to bind for HTTP mode (default: 8000)",
+    )
+    parser.add_argument(
+        "--path",
+        default="/mcp",
+        help="MCP endpoint path for HTTP mode (default: /mcp)",
+    )
+    args = parser.parse_args()
+
     try:
         from dotenv import load_dotenv
 
@@ -74,9 +105,40 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
     )
 
-    logger.info("Starting Relace MCP Server")
-    server = build_server()
-    server.run()
+    # Deprecation warning for legacy environment variables
+    deprecated_vars = [
+        "RELACE_MCP_TRANSPORT",
+        "RELACE_MCP_HOST",
+        "RELACE_MCP_PORT",
+        "RELACE_MCP_PATH",
+    ]
+    for var in deprecated_vars:
+        if os.getenv(var):
+            logger.warning(
+                "Environment variable %s is deprecated and ignored. "
+                "Use CLI arguments instead: relace-mcp --help",
+                var,
+            )
+
+    config = RelaceConfig.from_env()
+    server = build_server(config)
+
+    if args.transport in ("http", "streamable-http"):
+        logger.info(
+            "Starting Relace MCP Server (HTTP) on %s:%d%s",
+            args.host,
+            args.port,
+            args.path,
+        )
+        server.run(
+            transport=args.transport,
+            host=args.host,
+            port=args.port,
+            path=args.path,
+        )
+    else:
+        logger.info("Starting Relace MCP Server (STDIO)")
+        server.run()
 
 
 if __name__ == "__main__":

@@ -314,7 +314,7 @@ class TestApplyFileLogicEncoding:
         """Should raise on non-UTF-8 encoded files."""
         mock_client = MagicMock(spec=RelaceClient)
 
-        with pytest.raises(RuntimeError, match="not valid UTF-8"):
+        with pytest.raises(RuntimeError, match="Cannot detect encoding"):
             _apply_file_logic(
                 client=mock_client,
                 file_path=str(temp_binary_file),
@@ -322,6 +322,35 @@ class TestApplyFileLogicEncoding:
                 instruction=None,
                 base_dir=str(tmp_path),
             )
+
+    def test_gbk_file_supported(
+        self,
+        mock_config: RelaceConfig,
+        tmp_path: Path,
+    ) -> None:
+        """Should successfully read and write GBK encoded files."""
+        mock_client = MagicMock(spec=RelaceClient)
+        gbk_file = tmp_path / "gbk_file.py"
+        # 寫入 GBK 編碼的中文內容
+        gbk_content = "# 这是简体中文注释\nprint('你好')\n"
+        gbk_file.write_bytes(gbk_content.encode("gbk"))
+
+        merged_code = "# 这是简体中文注释\nprint('你好世界')\n"
+        mock_client.apply.return_value = {"mergedCode": merged_code, "usage": {}}
+
+        log_file = tmp_path / "test.log"
+        with patch("relace_mcp.tools.LOG_PATH", log_file):
+            result = _apply_file_logic(
+                client=mock_client,
+                file_path=str(gbk_file),
+                edit_snippet="// edit",
+                instruction=None,
+                base_dir=str(tmp_path),
+            )
+
+        assert "Applied code changes" in result
+        # 確認寫回的檔案仍為 GBK 編碼
+        assert gbk_file.read_bytes().decode("gbk") == merged_code
 
 
 class TestApplyFileLogicBaseDirSecurity:
