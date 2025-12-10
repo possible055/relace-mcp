@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
+from relace_mcp.clients import RelaceClient
 from relace_mcp.config import RELACE_ENDPOINT, RELACE_MODEL, TIMEOUT_SECONDS, RelaceConfig
-from relace_mcp.relace_client import RelaceClient
 
 
 class TestRelaceClientApply:
@@ -174,7 +174,7 @@ class TestRelaceClientErrors:
         mock_client.__exit__ = MagicMock(return_value=False)
         mock_client.post.side_effect = httpx.ConnectError("Connection refused")
 
-        with patch("relace_mcp.relace_client.httpx.Client", return_value=mock_client):
+        with patch("relace_mcp.clients.relace.httpx.Client", return_value=mock_client):
             with pytest.raises(RuntimeError, match="Failed to call Relace API"):
                 client.apply(initial_code="code", edit_snippet="snippet")
 
@@ -192,7 +192,7 @@ class TestRelaceClientErrors:
         mock_client.__exit__ = MagicMock(return_value=False)
         mock_client.post.return_value = mock_response
 
-        with patch("relace_mcp.relace_client.httpx.Client", return_value=mock_client):
+        with patch("relace_mcp.clients.relace.httpx.Client", return_value=mock_client):
             with pytest.raises(RuntimeError, match="non-JSON response"):
                 client.apply(initial_code="code", edit_snippet="snippet")
 
@@ -209,7 +209,7 @@ class TestRelaceClientTimeout:
         mock_response.is_server_error = False
         mock_response.json.return_value = {"mergedCode": "code", "usage": {}}
 
-        with patch("relace_mcp.relace_client.httpx.Client") as mock_client_class:
+        with patch("relace_mcp.clients.relace.httpx.Client") as mock_client_class:
             mock_instance = MagicMock()
             mock_instance.__enter__ = MagicMock(return_value=mock_instance)
             mock_instance.__exit__ = MagicMock(return_value=False)

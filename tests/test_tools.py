@@ -5,13 +5,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from relace_mcp.clients import RelaceClient
 from relace_mcp.config import RelaceConfig
-from relace_mcp.relace_client import RelaceClient
-from relace_mcp.tools import (
+from relace_mcp.tools.apply import (
     MAX_FILE_SIZE_BYTES,
-    _apply_file_logic,
     _log_event,
     _validate_file_path,
+    apply_file_logic,
 )
 
 
@@ -66,7 +66,7 @@ class TestLogEvent:
     def test_writes_json_line(self, tmp_path: Path) -> None:
         """Should write JSON event to log file."""
         log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.LOG_PATH", log_file):
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
             _log_event({"kind": "test", "message": "hello"})
         content = log_file.read_text()
         logged = json.loads(content.strip())
@@ -77,7 +77,7 @@ class TestLogEvent:
     def test_appends_to_existing_log(self, tmp_path: Path) -> None:
         """Should append to existing log file."""
         log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.LOG_PATH", log_file):
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
             _log_event({"event": 1})
             _log_event({"event": 2})
 
@@ -87,14 +87,14 @@ class TestLogEvent:
     def test_creates_parent_directories(self, tmp_path: Path) -> None:
         """Should create parent directories if needed."""
         log_path = tmp_path / "deep" / "nested" / "dir" / "log.json"
-        with patch("relace_mcp.tools.LOG_PATH", log_path):
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_path):
             _log_event({"test": True})
         assert log_path.exists()
 
     def test_preserves_existing_timestamp(self, tmp_path: Path) -> None:
         """Should not overwrite existing timestamp."""
         log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.LOG_PATH", log_file):
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
             _log_event({"kind": "test", "timestamp": "2024-01-01T00:00:00Z"})
         logged = json.loads(log_file.read_text().strip())
         assert logged["timestamp"] == "2024-01-01T00:00:00Z"
@@ -103,7 +103,7 @@ class TestLogEvent:
         """Should not raise on log write failure."""
         # 使用目錄作為 log 路徑會失敗，但不應拋出例外
         log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.LOG_PATH", log_file):
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
             _log_event({"test": True})
         # 不應拋出例外
 
@@ -123,8 +123,8 @@ class TestApplyFileLogicSuccess:
         mock_client.apply.return_value = successful_api_response
 
         log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.LOG_PATH", log_file):
-            result = _apply_file_logic(
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
+            result = apply_file_logic(
                 client=mock_client,
                 file_path=str(temp_source_file),
                 edit_snippet="// new code",
@@ -152,8 +152,8 @@ class TestApplyFileLogicSuccess:
         mock_client.apply.return_value = successful_api_response
 
         log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.LOG_PATH", log_file):
-            _apply_file_logic(
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
+            apply_file_logic(
                 client=mock_client,
                 file_path=str(temp_source_file),
                 edit_snippet="// edit",
@@ -175,8 +175,8 @@ class TestApplyFileLogicSuccess:
         content = "def hello():\n    print('Hello')\n"
 
         log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.LOG_PATH", log_file):
-            result = _apply_file_logic(
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
+            result = apply_file_logic(
                 client=mock_client,
                 file_path=str(new_file),
                 edit_snippet=content,
@@ -204,7 +204,7 @@ class TestApplyFileLogicValidation:
         mock_client = MagicMock(spec=RelaceClient)
 
         with pytest.raises(RuntimeError, match="edit_snippet cannot be empty"):
-            _apply_file_logic(
+            apply_file_logic(
                 client=mock_client,
                 file_path=str(temp_source_file),
                 edit_snippet="",
@@ -222,7 +222,7 @@ class TestApplyFileLogicValidation:
         mock_client = MagicMock(spec=RelaceClient)
 
         with pytest.raises(RuntimeError, match="edit_snippet cannot be empty"):
-            _apply_file_logic(
+            apply_file_logic(
                 client=mock_client,
                 file_path=str(temp_source_file),
                 edit_snippet="   \n\t  ",
@@ -242,8 +242,8 @@ class TestApplyFileLogicValidation:
         mock_client.apply.return_value = {"mergedCode": original, "usage": {}}
 
         log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.LOG_PATH", log_file):
-            result = _apply_file_logic(
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
+            result = apply_file_logic(
                 client=mock_client,
                 file_path=str(temp_source_file),
                 edit_snippet="// edit",
@@ -267,7 +267,7 @@ class TestApplyFileLogicFileSize:
         mock_client = MagicMock(spec=RelaceClient)
 
         with pytest.raises(RuntimeError, match="File too large"):
-            _apply_file_logic(
+            apply_file_logic(
                 client=mock_client,
                 file_path=str(temp_large_file),
                 edit_snippet="// edit",
@@ -291,8 +291,8 @@ class TestApplyFileLogicFileSize:
 
         # Should not raise
         log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.LOG_PATH", log_file):
-            result = _apply_file_logic(
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
+            result = apply_file_logic(
                 client=mock_client,
                 file_path=str(limit_file),
                 edit_snippet="// edit",
@@ -315,7 +315,7 @@ class TestApplyFileLogicEncoding:
         mock_client = MagicMock(spec=RelaceClient)
 
         with pytest.raises(RuntimeError, match="Cannot detect encoding"):
-            _apply_file_logic(
+            apply_file_logic(
                 client=mock_client,
                 file_path=str(temp_binary_file),
                 edit_snippet="// edit",
@@ -339,8 +339,8 @@ class TestApplyFileLogicEncoding:
         mock_client.apply.return_value = {"mergedCode": merged_code, "usage": {}}
 
         log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.LOG_PATH", log_file):
-            result = _apply_file_logic(
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
+            result = apply_file_logic(
                 client=mock_client,
                 file_path=str(gbk_file),
                 edit_snippet="// edit",
@@ -370,7 +370,7 @@ class TestApplyFileLogicBaseDirSecurity:
 
         try:
             with pytest.raises(RuntimeError, match="outside allowed directory"):
-                _apply_file_logic(
+                apply_file_logic(
                     client=mock_client,
                     file_path=str(outside_file),
                     edit_snippet="// edit",
@@ -395,9 +395,9 @@ class TestApplyFileLogicApiErrors:
         mock_client.apply.side_effect = RuntimeError("API Error")
 
         log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.LOG_PATH", log_file):
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
             with pytest.raises(RuntimeError):
-                _apply_file_logic(
+                apply_file_logic(
                     client=mock_client,
                     file_path=str(temp_source_file),
                     edit_snippet="// edit",
@@ -420,9 +420,9 @@ class TestApplyFileLogicApiErrors:
         mock_client.apply.return_value = {"usage": {}}  # No mergedCode
 
         log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.LOG_PATH", log_file):
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
             with pytest.raises(RuntimeError, match="did not return 'mergedCode'"):
-                _apply_file_logic(
+                apply_file_logic(
                     client=mock_client,
                     file_path=str(temp_source_file),
                     edit_snippet="// edit",
@@ -441,9 +441,9 @@ class TestApplyFileLogicApiErrors:
         mock_client.apply.return_value = {"mergedCode": None, "usage": {}}
 
         log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.LOG_PATH", log_file):
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
             with pytest.raises(RuntimeError, match="did not return 'mergedCode'"):
-                _apply_file_logic(
+                apply_file_logic(
                     client=mock_client,
                     file_path=str(temp_source_file),
                     edit_snippet="// edit",
@@ -469,8 +469,8 @@ class TestApplyFileLogicSnippetPreview:
         long_snippet = "x" * 500
 
         log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.LOG_PATH", log_file):
-            _apply_file_logic(
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
+            apply_file_logic(
                 client=mock_client,
                 file_path=str(temp_source_file),
                 edit_snippet=long_snippet,

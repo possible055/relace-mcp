@@ -7,10 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastmcp import FastMCP
-
-from .config import LOG_PATH, MAX_LOG_SIZE_BYTES, RelaceConfig
-from .relace_client import RelaceClient
+from ..clients import RelaceClient
+from ..config import LOG_PATH, MAX_LOG_SIZE_BYTES
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +122,7 @@ def _validate_file_path(file_path: str, base_dir: str) -> Path:
     return resolved
 
 
-def _apply_file_logic(
+def apply_file_logic(
     client: RelaceClient,
     file_path: str,
     edit_snippet: str,
@@ -263,64 +261,3 @@ def _apply_file_logic(
         )
         logger.error("[%s] Relace apply failed for %s: %s", trace_id, file_path, exc)
         raise
-
-
-def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
-    """Register Relace tools to the FastMCP instance."""
-    client = RelaceClient(config)
-
-    @mcp.tool
-    def fast_apply(
-        file_path: str,
-        edit_snippet: str,
-        instruction: str | None = None,
-    ) -> str:
-        """Use this tool to propose an edit to an existing file or create a new file.
-
-        If you are performing an edit follow these formatting rules:
-        - Abbreviate sections of the code in your response that will remain the same
-          by replacing those sections with a comment like "// ... rest of code ...",
-          "// ... keep existing code ...", "// ... code remains the same".
-        - Be precise with the location of these comments within your edit snippet.
-          A less intelligent model will use the context clues you provide to accurately
-          merge your edit snippet.
-        - If applicable, it can help to include some concise information about the
-          specific code segments you wish to retain "// ... keep calculateTotalFunction ...".
-        - If you plan on deleting a section, you must provide the context to delete it.
-          Some options:
-          1. If the initial code is `Block 1 / Block 2 / Block 3`, and you want to remove
-             Block 2, you would output `// ... keep existing code ... / Block 1 / Block 3 /
-             // ... rest of code ...`.
-          2. If the initial code is `code / Block / code`, and you want to remove Block,
-             you can also specify `// ... keep existing code ... / // remove Block /
-             // ... rest of code ...`.
-        - You must use the comment format applicable to the specific code provided to
-          express these truncations.
-        - Preserve the indentation and code structure of exactly how you believe the
-          final code will look (do not output lines that will not be in the final code
-          after they are merged).
-        - Be as length efficient as possible without omitting key context.
-
-        To create a new file, simply specify the content of the file in the `edit_snippet` field.
-
-        Args:
-            file_path: The target file to modify. You must use an absolute path (UTF-8).
-            edit_snippet: Only include the exact code lines that need modification.
-                Do not include any code that stays the same - those sections should be
-                marked with comments appropriate for the language, like:
-                `// ... existing code ...`
-            instruction: A single sentence instruction describing the edit to be made.
-                This helps guide the apply model in merging the changes correctly.
-                Use first person perspective and focus on clarifying any ambiguous
-                aspects of the edit. Keep it brief and avoid repeating information
-                from previous messages.
-        """
-        return _apply_file_logic(
-            client=client,
-            file_path=file_path,
-            edit_snippet=edit_snippet,
-            instruction=instruction,
-            base_dir=config.base_dir,
-        )
-
-    _ = fast_apply

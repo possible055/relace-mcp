@@ -1,10 +1,11 @@
 # Relace MCP Server
 
-MCP server for [Relace Instant Apply](https://www.relace.ai/) — AI-powered code merging at 10,000+ tokens/sec.
+MCP server for [Relace](https://www.relace.ai/) — AI-powered code merging and search.
 
 ## Features
 
-- **High-speed merging** — Apply LLM-generated diffs to local files at 10,000+ tok/s
+- **Fast Apply** — Apply LLM-generated diffs to local files at 10,000+ tok/s
+- **Fast Search** — Agentic codebase search using Relace Search model
 - **Dual transport** — STDIO (default) for IDE integration, HTTP for remote deployment
 - **Create new files** — Directly write new files without API call
 - **UDiff output** — Returns unified diff for agent verification
@@ -82,6 +83,19 @@ Options:
 |----------|----------|-------------|
 | `RELACE_API_KEY` | ✅ | API key from [relace](https://app.relace.ai/settings/billing) |
 | `RELACE_BASE_DIR` | ⚠️ | Restrict file access to this directory (defaults to cwd) |
+| `RELACE_STRICT_MODE` | ❌ | Set to `1` to require explicit `RELACE_BASE_DIR` |
+
+### Advanced Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RELACE_ENDPOINT` | `https://instantapply.endpoint.relace.run/v1/code/apply` | Apply API endpoint |
+| `RELACE_MODEL` | `relace-apply-3` | Apply model name |
+| `RELACE_SEARCH_ENDPOINT` | `https://search.endpoint.relace.run/v1/search/chat/completions` | Search API endpoint |
+| `RELACE_SEARCH_MODEL` | `relace-search` | Search model name |
+| `RELACE_TIMEOUT_SECONDS` | `60` | Apply request timeout |
+| `RELACE_SEARCH_TIMEOUT_SECONDS` | `120` | Search request timeout |
+| `RELACE_SEARCH_MAX_TURNS` | `10` | Max agent turns for search |
 
 ## Tools
 
@@ -110,6 +124,31 @@ function newFeature() {
 // ... existing code ...
 ```
 
+### fast_search
+
+Run Fast Agentic Search to explore and understand the codebase.
+
+**Inputs:**
+- `query` (string): Natural language query describing what to find or understand
+
+**Returns:**
+```json
+{
+  "query": "How is authentication implemented?",
+  "explanation": "Authentication logic is in src/auth/...",
+  "files": {
+    "src/auth/login.py": [[10, 80], [120, 150]],
+    "src/middleware/jwt.py": [[1, 45]]
+  },
+  "turns_used": 4
+}
+```
+
+**Typical workflow:**
+1. Use `fast_search` to find relevant files
+2. Review the returned file paths and line ranges
+3. Use `fast_apply` to make changes
+
 ## Development
 
 ```bash
@@ -122,3 +161,7 @@ uv run relace-mcp
 # Run tests
 uv run pytest
 ```
+
+## Design Documentation
+
+See [docs/design/fast_agentic_search.md](docs/design/fast_agentic_search.md) for architecture details.

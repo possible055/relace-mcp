@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "relace-mcp"
-version = "0.1.3"
+version = "0.1.4.dev0"
 description = "Unofficial Relace MCP Server - Fast code merging via Relace API"
 readme = "README.md"
 license = { text = "MIT" }
@@ -21,7 +21,7 @@ classifiers = [
     "Framework :: FastAPI",
     "Environment :: Plugins",
 ]
-dependencies = ["fastmcp>=2.0.0", "httpx>=0.28.0", "python-dotenv>=1.0.0"]
+dependencies = ["fastmcp>=2.0.0", "httpx>=0.28.0", "python-dotenv>=1.0.0", "charset-normalizer>=3.0.0"]
 
 [project.urls]
 Repository = "https://github.com/possible055/relace-mcp"

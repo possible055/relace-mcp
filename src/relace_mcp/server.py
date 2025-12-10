@@ -20,6 +20,8 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
         errors.append(f"base_dir does not exist: {config.base_dir}")
     elif not os.access(base_dir, os.R_OK):
         errors.append(f"base_dir is not readable: {config.base_dir}")
+    elif not os.access(base_dir, os.W_OK):
+        errors.append(f"base_dir is not writable: {config.base_dir}")
     else:
         results["base_dir"] = "ok"
 
