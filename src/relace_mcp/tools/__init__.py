@@ -47,18 +47,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         - Be as length efficient as possible without omitting key context.
 
         To create a new file, simply specify the content of the file in the `edit_snippet` field.
-
-        Args:
-            file_path: The target file to modify. You must use an absolute path (UTF-8).
-            edit_snippet: Only include the exact code lines that need modification.
-                Do not include any code that stays the same - those sections should be
-                marked with comments appropriate for the language, like:
-                `// ... existing code ...`
-            instruction: A single sentence instruction describing the edit to be made.
-                This helps guide the apply model in merging the changes correctly.
-                Use first person perspective and focus on clarifying any ambiguous
-                aspects of the edit. Keep it brief and avoid repeating information
-                from previous messages.
         """
         return apply_file_logic(
             client=client,
@@ -82,18 +70,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         This is useful before using fast_apply to understand which files
         need to be modified and how they relate to each other.
-
-        Args:
-            query: Natural language query describing what you want to find
-                or understand in the codebase. Be specific about the feature,
-                bug, or code pattern you're looking for.
-
-        Returns:
-            A dictionary containing:
-            - query: The original query
-            - explanation: Detailed reasoning about the relevant files
-            - files: Dictionary mapping file paths to relevant line ranges
-            - turns_used: Number of agent turns used
         """
         return search_harness.run(query=query)
 
