@@ -7,6 +7,7 @@ from typing import Any
 from ...clients import RelaceSearchClient
 from ...config import SEARCH_MAX_TURNS, RelaceConfig
 from .handlers import (
+    bash_handler,
     estimate_context_size,
     grep_search_handler,
     report_back_handler,
@@ -270,6 +271,11 @@ class FastAgenticSearchHarness:
             return report_back_handler(
                 explanation=args.get("explanation", ""),
                 files=args.get("files", {}),
+            )
+        elif name == "bash":
+            return bash_handler(
+                command=args.get("command", ""),
+                base_dir=base_dir,
             )
         else:
             return f"Error: Unknown tool '{name}'"

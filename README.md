@@ -1,22 +1,36 @@
 # Relace MCP Server
 
-MCP server for [Relace](https://www.relace.ai/) — AI-powered code merging and search.
+[![PyPI](https://img.shields.io/pypi/v/relace-mcp.svg)](https://pypi.org/project/relace-mcp/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+> **Unofficial** — Personal project, not affiliated with Relace.
+>
+> **Built with AI** — Developed entirely with AI assistance (Antigravity, Cursor, Github Copilot, Windsurf).
+
+MCP server for [Relace](https://www.relace.ai/) — AI-powered instant code merging and agentic codebase search.
 
 ## Features
 
-- **Fast Apply** — Apply LLM-generated diffs to local files at 10,000+ tok/s
-- **Fast Search** — Agentic codebase search using Relace Search model
-- **Dual transport** — STDIO (default) for IDE integration, HTTP for remote deployment
-- **Create new files** — Directly write new files without API call
-- **UDiff output** — Returns unified diff for agent verification
-- **Path security** — Configurable base directory to prevent path traversal
-- **Auto-retry** — Handles transient API errors gracefully
+- **Fast Apply** — Apply code edits at 10,000+ tokens/sec via Relace API
+- **Fast Search** — Agentic codebase exploration with natural language queries
+- **Dual Transport** — STDIO for IDEs, HTTP for remote deployment
 
 ## Installation
 
-### STDIO Mode (Default)
+```bash
+uvx relace-mcp
+```
 
-Add to your MCP config (`~/.codeium/windsurf/mcp_config.json` for Windsurf):
+Or with pip:
+
+```bash
+pip install relace-mcp
+```
+
+## Quick Start
+
+Add to your MCP config:
 
 ```json
 {
@@ -33,24 +47,83 @@ Add to your MCP config (`~/.codeium/windsurf/mcp_config.json` for Windsurf):
 }
 ```
 
-### HTTP Mode (Remote Deployment)
+Config locations:
+- **Windsurf**: `~/.codeium/windsurf/mcp_config.json`
+- **Cursor**: `~/.cursor/mcp.json`
+
+## Tools
+
+### `fast_apply`
+
+Apply code edits using `// ... existing code ...` placeholders:
+
+```javascript
+// ... existing code ...
+
+function newFeature() {
+  console.log("Added by fast_apply");
+}
+
+// ... existing code ...
+```
+
+**Parameters:**
+- `file_path` — Absolute path to target file
+- `edit_snippet` — Code with abbreviation placeholders
+- `instruction` (optional) — Hint for disambiguation
+
+**Returns:** UDiff of changes, or confirmation for new files.
+
+### `fast_search`
+
+Find relevant code with natural language:
 
 ```json
 {
-  "mcpServers": {
-    "relace": {
-      "command": "uvx",
-      "args": ["relace-mcp", "-t", "http", "-p", "8000"],
-      "env": {
-        "RELACE_API_KEY": "rlc-your-api-key",
-        "RELACE_BASE_DIR": "/path/to/project"
-      }
-    }
-  }
+  "query": "How is authentication implemented?",
+  "explanation": "Auth logic is in src/auth/...",
+  "files": {
+    "src/auth/login.py": [[10, 80], [120, 150]]
+  },
+  "turns_used": 4
 }
 ```
 
-Or connect directly to a running server:
+**Parameters:**
+- `query` — Natural language search query
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `RELACE_API_KEY` | ✅ | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
+| `RELACE_BASE_DIR` | ⚠️ | Restrict file access (defaults to cwd) |
+| `RELACE_STRICT_MODE` | ❌ | Set `1` to require explicit base dir |
+
+<details>
+<summary>Advanced Settings</summary>
+
+| Variable | Default |
+|----------|---------|
+| `RELACE_ENDPOINT` | `https://instantapply.endpoint.relace.run/v1/code/apply` |
+| `RELACE_MODEL` | `relace-apply-3` |
+| `RELACE_TIMEOUT_SECONDS` | `60` |
+| `RELACE_SEARCH_ENDPOINT` | `https://search.endpoint.relace.run/v1/search/chat/completions` |
+| `RELACE_SEARCH_MODEL` | `relace-search` |
+| `RELACE_SEARCH_TIMEOUT_SECONDS` | `120` |
+| `RELACE_SEARCH_MAX_TURNS` | `10` |
+
+</details>
+
+## HTTP Mode
+
+For remote deployment:
+
+```bash
+relace-mcp -t http -p 8000
+```
+
+Connect via:
 
 ```json
 {
@@ -63,105 +136,11 @@ Or connect directly to a running server:
 }
 ```
 
-## CLI Options
-
-```
-relace-mcp [OPTIONS]
-
-Options:
-  -t, --transport {stdio,http,streamable-http}
-                        Transport protocol (default: stdio)
-  --host HOST           Host to bind for HTTP mode (default: 0.0.0.0)
-  -p, --port PORT       Port to bind for HTTP mode (default: 8000)
-  --path PATH           MCP endpoint path for HTTP mode (default: /mcp)
-  -h, --help            Show help message
-```
-
-## Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `RELACE_API_KEY` | ✅ | API key from [relace](https://app.relace.ai/settings/billing) |
-| `RELACE_BASE_DIR` | ⚠️ | Restrict file access to this directory (defaults to cwd) |
-| `RELACE_STRICT_MODE` | ❌ | Set to `1` to require explicit `RELACE_BASE_DIR` |
-
-### Advanced Settings
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RELACE_ENDPOINT` | `https://instantapply.endpoint.relace.run/v1/code/apply` | Apply API endpoint |
-| `RELACE_MODEL` | `relace-apply-3` | Apply model name |
-| `RELACE_SEARCH_ENDPOINT` | `https://search.endpoint.relace.run/v1/search/chat/completions` | Search API endpoint |
-| `RELACE_SEARCH_MODEL` | `relace-search` | Search model name |
-| `RELACE_TIMEOUT_SECONDS` | `60` | Apply request timeout |
-| `RELACE_SEARCH_TIMEOUT_SECONDS` | `120` | Search request timeout |
-| `RELACE_SEARCH_MAX_TURNS` | `10` | Max agent turns for search |
-
-## Tools
-
-### fast_apply
-
-Apply a code edit to an existing file or create a new file.
-
-**Inputs:**
-- `file_path` (string): Absolute path to target file (UTF-8)
-- `edit_snippet` (string): Code to merge, using `// ... existing code ...` placeholders
-- `instruction` (string, optional): Single sentence hint for disambiguation
-
-**Returns:**
-- **Existing file**: UDiff showing changes made (for agent verification)
-- **New file**: `Created {path} ({size} bytes)`
-- **No changes**: `No changes made`
-
-**Example edit_snippet:**
-```javascript
-// ... existing code ...
-
-function newFeature() {
-  console.log("Added by fast_apply");
-}
-
-// ... existing code ...
-```
-
-### fast_search
-
-Run Fast Agentic Search to explore and understand the codebase.
-
-**Inputs:**
-- `query` (string): Natural language query describing what to find or understand
-
-**Returns:**
-```json
-{
-  "query": "How is authentication implemented?",
-  "explanation": "Authentication logic is in src/auth/...",
-  "files": {
-    "src/auth/login.py": [[10, 80], [120, 150]],
-    "src/middleware/jwt.py": [[1, 45]]
-  },
-  "turns_used": 4
-}
-```
-
-**Typical workflow:**
-1. Use `fast_search` to find relevant files
-2. Review the returned file paths and line ranges
-3. Use `fast_apply` to make changes
-
 ## Development
 
 ```bash
-# Install dev dependencies
+git clone https://github.com/possible055/relace-mcp.git
+cd relace-mcp
 uv sync
-
-# Run locally
-uv run relace-mcp
-
-# Run tests
 uv run pytest
 ```
-
-## Design Documentation
-
-See [docs/design/fast_agentic_search.md](docs/design/fast_agentic_search.md) for architecture details.

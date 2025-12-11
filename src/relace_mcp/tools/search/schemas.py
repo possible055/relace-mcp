@@ -218,4 +218,38 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "bash",
+            "strict": True,
+            "description": (
+                "Execute a read-only bash command for code exploration.\n\n"
+                "Use cases:\n"
+                "- Find files with specific patterns (find, locate)\n"
+                "- List directory trees (tree, ls -la)\n"
+                "- Check file types and encodings (file, head, tail, wc)\n"
+                "- Run static analysis tools (read-only)\n"
+                "- Inspect git history (git log, git show, git diff)\n\n"
+                "Restrictions:\n"
+                "- Commands run in the repository root (/repo)\n"
+                "- Timeout: 30 seconds\n"
+                "- No file modifications allowed (rm, mv, cp, etc.)\n"
+                "- No network access (curl, wget, ssh, etc.)\n"
+                "- No privilege escalation (sudo, su)\n"
+                "- Output capped at 50000 characters"
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["command"],
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The bash command to execute (read-only operations only).",
+                    },
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
