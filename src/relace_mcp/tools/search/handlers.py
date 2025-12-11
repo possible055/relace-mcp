@@ -375,3 +375,380 @@ def estimate_context_size(messages: list[dict[str, Any]]) -> int:
             func = tc.get("function", {})
             total += len(func.get("arguments", ""))
     return total
+
+
+# === Bash Tool ===
+
+BASH_TIMEOUT_SECONDS = 30
+BASH_MAX_OUTPUT_CHARS = 50000
+
+BASH_ALLOWED_COMMANDS = frozenset(
+    {
+        "ls",
+        "find",
+        "cat",
+        "head",
+        "tail",
+        "wc",
+        "file",
+        "stat",
+        "tree",
+        "du",
+        "df",
+        "grep",
+        "egrep",
+        "fgrep",
+        "rg",
+        "ag",
+        "awk",
+        "sed",
+        "sort",
+        "uniq",
+        "cut",
+        "tr",
+        "column",
+        "xargs",
+        "basename",
+        "dirname",
+        "realpath",
+        "readlink",
+        "date",
+        "echo",
+        "printf",
+        "true",
+        "false",
+        "test",
+        "[",
+        "diff",
+        "comm",
+        "git",
+        "python",
+        "python3",
+    }
+)
+
+BASH_BLOCKED_COMMANDS = frozenset(
+    {
+        "rm",
+        "rmdir",
+        "unlink",
+        "shred",
+        "mv",
+        "cp",
+        "install",
+        "mkdir",
+        "chmod",
+        "chown",
+        "chgrp",
+        "wget",
+        "curl",
+        "fetch",
+        "aria2c",
+        "ssh",
+        "scp",
+        "rsync",
+        "sftp",
+        "ftp",
+        "telnet",
+        "nc",
+        "netcat",
+        "ncat",
+        "socat",
+        "sudo",
+        "su",
+        "doas",
+        "pkexec",
+        "pkill",
+        "kill",
+        "killall",
+        "skill",
+        "dd",
+        "mkfs",
+        "fdisk",
+        "mount",
+        "umount",
+        "losetup",
+        "reboot",
+        "shutdown",
+        "halt",
+        "poweroff",
+        "init",
+        "useradd",
+        "userdel",
+        "usermod",
+        "passwd",
+        "chpasswd",
+        "crontab",
+        "at",
+        "batch",
+        "nohup",
+        "disown",
+        "setsid",
+        "exec",
+        "eval",
+        "source",
+        "touch",
+        "tee",
+        "truncate",
+        "fallocate",
+        "ln",
+        "link",
+        "mkfifo",
+        "mknod",
+        "tar",
+        "zip",
+        "unzip",
+        "gzip",
+        "gunzip",
+        "bzip2",
+        "xz",
+        "make",
+        "cmake",
+        "ninja",
+        "cargo",
+        "npm",
+        "pip",
+        "pip3",
+    }
+)
+
+GIT_BLOCKED_SUBCOMMANDS = frozenset(
+    {
+        "clone",
+        "fetch",
+        "pull",
+        "push",
+        "checkout",
+        "reset",
+        "revert",
+        "restore",
+        "clean",
+        "stash",
+        "merge",
+        "rebase",
+        "cherry-pick",
+        "commit",
+        "add",
+        "rm",
+        "mv",
+        "init",
+        "remote",
+        "submodule",
+        "config",
+        "gc",
+        "prune",
+        "fsck",
+        "reflog",
+    }
+)
+
+GIT_ALLOWED_SUBCOMMANDS = frozenset(
+    {
+        "log",
+        "show",
+        "diff",
+        "status",
+        "branch",
+        "blame",
+        "annotate",
+        "shortlog",
+        "ls-files",
+        "ls-tree",
+        "cat-file",
+        "rev-parse",
+        "rev-list",
+        "describe",
+        "name-rev",
+        "for-each-ref",
+        "grep",
+        "tag",
+    }
+)
+
+PYTHON_BLOCKED_PATTERNS = [
+    r"open\s*\(",
+    r"write\s*\(",
+    r"requests\.",
+    r"urllib",
+    r"socket",
+    r"subprocess",
+    r"os\.system",
+    r"os\.popen",
+    r"eval\s*\(",
+    r"exec\s*\(",
+    r"compile\s*\(",
+    r"__import__",
+    r"importlib",
+]
+
+BASH_BLOCKED_PATTERNS = [
+    r">\s*[^&]",
+    r">>\s*",
+    r"\s\|\s",
+    r"^\|",
+    r"\|$",
+    r"`",
+    r"\$\(",
+    r"\$\{",
+    r";\s*\w",
+    r"&&",
+    r"\|\|",
+    r"-exec\b",
+    r"-execdir\b",
+    r"-ok\b",
+    r"-delete\b",
+    r"xargs.*\brm\b",
+    r"xargs.*\brmdir\b",
+    r"\bsed\b.*-i",
+    r"\bperl\b.*-[pi]",
+]
+
+
+def _contains_absolute_path_outside_repo(command: str) -> tuple[bool, str]:
+    import shlex
+
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        tokens = command.split()
+
+    for token in tokens:
+        if token.startswith("/"):
+            if token == "/repo" or token.startswith("/repo/"):  # nosec B105
+                continue
+            if token == "/":  # nosec B105
+                return True, "Root path '/' not allowed"
+            return True, f"Absolute path outside /repo not allowed: {token}"
+
+    return False, ""
+
+
+def _is_blocked_git_command(tokens: list[str]) -> tuple[bool, str]:
+    git_idx = -1
+    for i, t in enumerate(tokens):
+        if os.path.basename(t) == "git":
+            git_idx = i
+            break
+
+    if git_idx == -1:
+        return False, ""
+
+    for t in tokens[git_idx + 1 :]:
+        if t.startswith("-"):
+            continue
+        if t in GIT_BLOCKED_SUBCOMMANDS:
+            return True, f"Blocked git subcommand: {t}"
+        if t in GIT_ALLOWED_SUBCOMMANDS:
+            return False, ""
+        return True, f"Unknown git subcommand not in allowlist: {t}"
+
+    return False, ""
+
+
+def _is_blocked_python_command(command: str) -> tuple[bool, str]:
+    if "python" not in command.lower():
+        return False, ""
+
+    if "-c" not in command:
+        return True, "Python without -c is not allowed (may execute files)"
+
+    for pattern in PYTHON_BLOCKED_PATTERNS:
+        if re.search(pattern, command, re.IGNORECASE):
+            return True, f"Blocked Python pattern: {pattern}"
+
+    return False, ""
+
+
+def _is_blocked_command(command: str) -> tuple[bool, str]:
+    import shlex
+
+    command_stripped = command.strip()
+    if not command_stripped:
+        return True, "Empty command"
+
+    for pattern in BASH_BLOCKED_PATTERNS:
+        if re.search(pattern, command):
+            return True, f"Blocked pattern detected: {pattern}"
+
+    has_abs_path, reason = _contains_absolute_path_outside_repo(command)
+    if has_abs_path:
+        return True, reason
+
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        tokens = command.split()
+
+    if not tokens:
+        return True, "Empty command after parsing"
+
+    base_cmd = os.path.basename(tokens[0])
+
+    if base_cmd in BASH_BLOCKED_COMMANDS:
+        return True, f"Blocked command: {base_cmd}"
+
+    if base_cmd not in BASH_ALLOWED_COMMANDS:
+        return True, f"Command not in allowlist: {base_cmd}"
+
+    for token in tokens[1:]:
+        if token.startswith("-"):
+            continue
+        token_base = os.path.basename(token)
+        if token_base in BASH_BLOCKED_COMMANDS:
+            return True, f"Blocked command in arguments: {token_base}"
+
+    if base_cmd == "git":
+        blocked, reason = _is_blocked_git_command(tokens)
+        if blocked:
+            return True, reason
+
+    if base_cmd in ("python", "python3"):
+        blocked, reason = _is_blocked_python_command(command)
+        if blocked:
+            return True, reason
+
+    return False, ""
+
+
+def bash_handler(command: str, base_dir: str) -> str:
+    blocked, reason = _is_blocked_command(command)
+    if blocked:
+        return f"Error: Command blocked for security reasons. {reason}"
+
+    try:
+        result = subprocess.run(  # nosec B603 B602 B607
+            ["bash", "-c", command],
+            cwd=base_dir,
+            capture_output=True,
+            text=True,
+            timeout=BASH_TIMEOUT_SECONDS,
+            env={
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                "HOME": base_dir,
+                "LANG": "C.UTF-8",
+                "LC_ALL": "C.UTF-8",
+            },
+            check=False,
+        )
+
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+
+        if result.returncode != 0 and stderr:
+            output = f"Exit code: {result.returncode}\n"
+            if stdout:
+                output += f"stdout:\n{stdout}\n"
+            output += f"stderr:\n{stderr}"
+        else:
+            output = stdout + stderr
+
+        if len(output) > BASH_MAX_OUTPUT_CHARS:
+            output = output[:BASH_MAX_OUTPUT_CHARS]
+            output += f"\n... output capped at {BASH_MAX_OUTPUT_CHARS} chars ..."
+
+        return output.strip() if output.strip() else "(no output)"
+
+    except subprocess.TimeoutExpired:
+        return f"Error: Command timed out after {BASH_TIMEOUT_SECONDS}s"
+    except Exception as exc:
+        return f"Error executing command: {exc}"

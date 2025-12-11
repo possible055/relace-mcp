@@ -8,6 +8,8 @@ from relace_mcp.clients import RelaceSearchClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.tools.search import FastAgenticSearchHarness
 from relace_mcp.tools.search.handlers import (
+    _is_blocked_command,
+    bash_handler,
     grep_search_handler,
     map_repo_path,
     validate_path,
@@ -413,19 +415,19 @@ class TestFastAgenticSearchHarness:
 class TestToolSchemas:
     """Test tool schema definitions."""
 
-    def test_has_four_tools(self) -> None:
-        """Should have exactly 4 tools (no bash)."""
-        assert len(TOOL_SCHEMAS) == 4
+    def test_has_five_tools(self) -> None:
+        """Should have exactly 5 tools (including bash)."""
+        assert len(TOOL_SCHEMAS) == 5
 
     def test_tool_names(self) -> None:
         """Should have correct tool names."""
         names = {t["function"]["name"] for t in TOOL_SCHEMAS}
-        assert names == {"view_file", "view_directory", "grep_search", "report_back"}
+        assert names == {"view_file", "view_directory", "grep_search", "report_back", "bash"}
 
-    def test_no_bash_tool(self) -> None:
-        """Should not include bash tool (security)."""
+    def test_bash_tool_exists(self) -> None:
+        """Should include bash tool for code exploration."""
         names = {t["function"]["name"] for t in TOOL_SCHEMAS}
-        assert "bash" not in names
+        assert "bash" in names
 
     def test_schema_has_default_per_official_docs(self) -> None:
         """Per Relace official docs, certain params should have default values."""
@@ -743,3 +745,397 @@ class TestContextTruncation:
         size = estimate_context_size(messages)
         # "Hello" + "World" + '{"key": "value"}' = 5 + 5 + 16 = 26
         assert size == 26
+
+
+class TestBashHandler:
+    """Test bash tool handler and security."""
+
+    def test_executes_safe_command(self, tmp_path: Path) -> None:
+        """Should execute safe read-only commands."""
+        (tmp_path / "test.py").write_text("print('hello')\n")
+
+        result = bash_handler("ls -la", str(tmp_path))
+        assert "test.py" in result
+
+    def test_executes_find_command(self, tmp_path: Path) -> None:
+        """Should allow find command for file discovery."""
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "main.py").write_text("code")
+
+        result = bash_handler("find . -name '*.py'", str(tmp_path))
+        assert "main.py" in result
+
+    def test_executes_head_tail(self, tmp_path: Path) -> None:
+        """Should allow head/tail for file inspection."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("line1\nline2\nline3\n")
+
+        result = bash_handler("head -n 2 test.txt", str(tmp_path))
+        assert "line1" in result
+        assert "line2" in result
+
+    def test_executes_wc_command(self, tmp_path: Path) -> None:
+        """Should allow wc for counting lines."""
+        (tmp_path / "test.py").write_text("a\nb\nc\n")
+
+        result = bash_handler("wc -l test.py", str(tmp_path))
+        assert "3" in result
+
+    def test_blocks_rm_command(self, tmp_path: Path) -> None:
+        """Should block rm command."""
+        result = bash_handler("rm file.txt", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_blocks_sudo(self, tmp_path: Path) -> None:
+        """Should block sudo command."""
+        result = bash_handler("sudo ls", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_blocks_curl(self, tmp_path: Path) -> None:
+        """Should block curl command."""
+        result = bash_handler("curl http://example.com", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_blocks_wget(self, tmp_path: Path) -> None:
+        """Should block wget command."""
+        result = bash_handler("wget http://example.com", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_blocks_pipe(self, tmp_path: Path) -> None:
+        """Should block pipe operator."""
+        result = bash_handler("ls | cat", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_blocks_redirect(self, tmp_path: Path) -> None:
+        """Should block output redirection."""
+        result = bash_handler("echo test > file.txt", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_blocks_command_substitution(self, tmp_path: Path) -> None:
+        """Should block command substitution."""
+        result = bash_handler("echo $(whoami)", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_blocks_backtick_substitution(self, tmp_path: Path) -> None:
+        """Should block backtick command substitution."""
+        result = bash_handler("echo `whoami`", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_returns_no_output_message(self, tmp_path: Path) -> None:
+        """Should return message for empty output."""
+        result = bash_handler("true", str(tmp_path))
+        assert result == "(no output)"
+
+    def test_returns_exit_code_on_error(self, tmp_path: Path) -> None:
+        """Should include exit code when command fails."""
+        result = bash_handler("ls nonexistent_file_xyz", str(tmp_path))
+        assert "Exit code" in result or "No such file" in result
+
+
+class TestIsBlockedCommand:
+    """Test command blocking logic."""
+
+    def test_blocks_rm(self) -> None:
+        blocked, _ = _is_blocked_command("rm file.txt")
+        assert blocked
+
+    def test_blocks_rm_rf(self) -> None:
+        blocked, _ = _is_blocked_command("rm -rf /")
+        assert blocked
+
+    def test_blocks_full_path_rm(self) -> None:
+        blocked, _ = _is_blocked_command("/bin/rm file.txt")
+        assert blocked
+
+    def test_allows_ls(self) -> None:
+        blocked, _ = _is_blocked_command("ls -la")
+        assert not blocked
+
+    def test_allows_cat(self) -> None:
+        blocked, _ = _is_blocked_command("cat file.txt")
+        assert not blocked
+
+    def test_allows_grep(self) -> None:
+        blocked, _ = _is_blocked_command("grep pattern file.txt")
+        assert not blocked
+
+    def test_allows_find(self) -> None:
+        blocked, _ = _is_blocked_command("find . -name '*.py'")
+        assert not blocked
+
+    def test_allows_git_log(self) -> None:
+        blocked, _ = _is_blocked_command("git log -n 10")
+        assert not blocked
+
+    def test_blocks_pipe(self) -> None:
+        blocked, _ = _is_blocked_command("cat file | grep pattern")
+        assert blocked
+
+    def test_blocks_redirect_to_file(self) -> None:
+        blocked, _ = _is_blocked_command("echo test > output.txt")
+        assert blocked
+
+    def test_blocks_append_redirect(self) -> None:
+        blocked, _ = _is_blocked_command("echo test >> output.txt")
+        assert blocked
+
+    def test_blocks_empty_command(self) -> None:
+        blocked, _ = _is_blocked_command("")
+        assert blocked
+
+    def test_blocks_semicolon_rm(self) -> None:
+        blocked, _ = _is_blocked_command("ls; rm file.txt")
+        assert blocked
+
+    def test_blocks_and_rm(self) -> None:
+        blocked, _ = _is_blocked_command("ls && rm file.txt")
+        assert blocked
+
+
+class TestAbsolutePathBlocking:
+    """Test absolute path sandbox enforcement."""
+
+    def test_blocks_cat_etc_passwd(self) -> None:
+        """Should block reading /etc/passwd."""
+        blocked, reason = _is_blocked_command("cat /etc/passwd")
+        assert blocked
+        assert "/etc/passwd" in reason or "Absolute path" in reason
+
+    def test_blocks_cat_etc_shadow(self) -> None:
+        """Should block reading /etc/shadow."""
+        blocked, reason = _is_blocked_command("cat /etc/shadow")
+        assert blocked
+
+    def test_blocks_find_root(self) -> None:
+        """Should block find starting from root."""
+        blocked, reason = _is_blocked_command("find / -name '*.py'")
+        assert blocked
+
+    def test_blocks_ls_home(self) -> None:
+        """Should block listing home directory."""
+        blocked, reason = _is_blocked_command("ls /home")
+        assert blocked
+
+    def test_blocks_head_var_log(self) -> None:
+        """Should block reading system logs."""
+        blocked, reason = _is_blocked_command("head /var/log/syslog")
+        assert blocked
+
+    def test_allows_repo_path(self) -> None:
+        """Should allow /repo paths."""
+        blocked, _ = _is_blocked_command("cat /repo/file.txt")
+        assert not blocked
+
+    def test_allows_repo_subpath(self) -> None:
+        """Should allow /repo/subdir paths."""
+        blocked, _ = _is_blocked_command("ls /repo/src/")
+        assert not blocked
+
+    def test_allows_relative_path(self) -> None:
+        """Should allow relative paths."""
+        blocked, _ = _is_blocked_command("cat ./file.txt")
+        assert not blocked
+
+
+class TestWriteOperationBlocking:
+    """Test blocking of write/modify operations."""
+
+    def test_blocks_touch(self) -> None:
+        """Should block touch command."""
+        blocked, _ = _is_blocked_command("touch newfile.txt")
+        assert blocked
+
+    def test_blocks_tee(self) -> None:
+        """Should block tee command."""
+        blocked, _ = _is_blocked_command("tee output.txt")
+        assert blocked
+
+    def test_blocks_sed_inplace(self) -> None:
+        """Should block sed -i (in-place edit)."""
+        blocked, _ = _is_blocked_command("sed -i 's/old/new/g' file.txt")
+        assert blocked
+
+    def test_blocks_mkdir(self) -> None:
+        """Should block mkdir command."""
+        blocked, _ = _is_blocked_command("mkdir newdir")
+        assert blocked
+
+    def test_blocks_ln(self) -> None:
+        """Should block ln (symlink creation)."""
+        blocked, _ = _is_blocked_command("ln -s target link")
+        assert blocked
+
+    def test_blocks_find_exec(self) -> None:
+        """Should block find -exec."""
+        blocked, _ = _is_blocked_command("find . -name '*.py' -exec rm {} \\;")
+        assert blocked
+
+    def test_blocks_find_delete(self) -> None:
+        """Should block find -delete."""
+        blocked, _ = _is_blocked_command("find . -name '*.pyc' -delete")
+        assert blocked
+
+    def test_blocks_xargs_rm(self) -> None:
+        """Should block xargs with rm."""
+        blocked, _ = _is_blocked_command("find . -name '*.tmp' | xargs rm")
+        assert blocked
+
+
+class TestGitSecurityBlocking:
+    """Test git subcommand security."""
+
+    def test_allows_git_log(self) -> None:
+        """Should allow git log."""
+        blocked, _ = _is_blocked_command("git log -n 10")
+        assert not blocked
+
+    def test_allows_git_show(self) -> None:
+        """Should allow git show."""
+        blocked, _ = _is_blocked_command("git show HEAD")
+        assert not blocked
+
+    def test_allows_git_diff(self) -> None:
+        """Should allow git diff."""
+        blocked, _ = _is_blocked_command("git diff HEAD~1")
+        assert not blocked
+
+    def test_allows_git_status(self) -> None:
+        """Should allow git status."""
+        blocked, _ = _is_blocked_command("git status")
+        assert not blocked
+
+    def test_allows_git_blame(self) -> None:
+        """Should allow git blame."""
+        blocked, _ = _is_blocked_command("git blame file.py")
+        assert not blocked
+
+    def test_blocks_git_clone(self) -> None:
+        """Should block git clone (network operation)."""
+        blocked, _ = _is_blocked_command("git clone https://github.com/user/repo")
+        assert blocked
+
+    def test_blocks_git_fetch(self) -> None:
+        """Should block git fetch (network operation)."""
+        blocked, _ = _is_blocked_command("git fetch origin")
+        assert blocked
+
+    def test_blocks_git_pull(self) -> None:
+        """Should block git pull (network operation)."""
+        blocked, _ = _is_blocked_command("git pull origin main")
+        assert blocked
+
+    def test_blocks_git_push(self) -> None:
+        """Should block git push (network operation)."""
+        blocked, _ = _is_blocked_command("git push origin main")
+        assert blocked
+
+    def test_blocks_git_checkout(self) -> None:
+        """Should block git checkout (modifies working tree)."""
+        blocked, _ = _is_blocked_command("git checkout -- .")
+        assert blocked
+
+    def test_blocks_git_reset(self) -> None:
+        """Should block git reset (modifies repo state)."""
+        blocked, _ = _is_blocked_command("git reset --hard HEAD")
+        assert blocked
+
+    def test_blocks_git_clean(self) -> None:
+        """Should block git clean (deletes files)."""
+        blocked, _ = _is_blocked_command("git clean -fd")
+        assert blocked
+
+    def test_blocks_git_commit(self) -> None:
+        """Should block git commit (modifies repo)."""
+        blocked, _ = _is_blocked_command("git commit -m 'msg'")
+        assert blocked
+
+
+class TestPythonSecurityBlocking:
+    """Test Python command security."""
+
+    def test_blocks_python_file_write(self) -> None:
+        """Should block Python file write operations."""
+        blocked, _ = _is_blocked_command("python -c \"open('f','w').write('x')\"")
+        assert blocked
+
+    def test_blocks_python_requests(self) -> None:
+        """Should block Python requests (network)."""
+        blocked, _ = _is_blocked_command("python -c \"import requests; requests.get('http://x')\"")
+        assert blocked
+
+    def test_blocks_python_urllib(self) -> None:
+        """Should block Python urllib (network)."""
+        blocked, _ = _is_blocked_command('python -c "import urllib.request"')
+        assert blocked
+
+    def test_blocks_python_subprocess(self) -> None:
+        """Should block Python subprocess."""
+        blocked, _ = _is_blocked_command('python -c "import subprocess"')
+        assert blocked
+
+    def test_blocks_python_os_system(self) -> None:
+        """Should block Python os.system."""
+        blocked, _ = _is_blocked_command("python -c \"import os; os.system('rm -rf /')\"")
+        assert blocked
+
+    def test_blocks_python_script_execution(self) -> None:
+        """Should block Python script file execution."""
+        blocked, _ = _is_blocked_command("python script.py")
+        assert blocked
+
+    def test_blocks_python3_script_execution(self) -> None:
+        """Should block Python3 script file execution."""
+        blocked, _ = _is_blocked_command("python3 script.py")
+        assert blocked
+
+
+class TestPipeAllowedInQuotes:
+    """Test that pipe in quoted strings (grep patterns) is allowed."""
+
+    def test_allows_grep_e_with_pipe_pattern(self) -> None:
+        """Should allow grep -E 'foo|bar' pattern."""
+        blocked, _ = _is_blocked_command("grep -E 'foo|bar' file.txt")
+        assert not blocked
+
+    def test_allows_egrep_with_pipe_pattern(self) -> None:
+        """Should allow egrep 'foo|bar' pattern."""
+        blocked, _ = _is_blocked_command("egrep 'foo|bar' file.txt")
+        assert not blocked
+
+    def test_blocks_actual_pipe_operator(self) -> None:
+        """Should still block actual pipe operator with spaces."""
+        blocked, _ = _is_blocked_command("cat file | grep pattern")
+        assert blocked
+
+
+class TestCommandNotInAllowlist:
+    """Test that unknown commands are blocked."""
+
+    def test_blocks_unknown_command(self) -> None:
+        """Should block commands not in allowlist."""
+        blocked, reason = _is_blocked_command("someunknowncommand arg")
+        assert blocked
+        assert "allowlist" in reason.lower()
+
+    def test_blocks_make(self) -> None:
+        """Should block make (build tool)."""
+        blocked, _ = _is_blocked_command("make all")
+        assert blocked
+
+    def test_blocks_npm(self) -> None:
+        """Should block npm."""
+        blocked, _ = _is_blocked_command("npm install")
+        assert blocked
+
+    def test_blocks_pip(self) -> None:
+        """Should block pip."""
+        blocked, _ = _is_blocked_command("pip install requests")
+        assert blocked
