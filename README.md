@@ -108,6 +108,8 @@ Find relevant code with natural language:
 | `RELACE_ENDPOINT` | `https://instantapply.endpoint.relace.run/v1/code/apply` |
 | `RELACE_MODEL` | `relace-apply-3` |
 | `RELACE_TIMEOUT_SECONDS` | `60` |
+| `RELACE_MAX_RETRIES` | `3` |
+| `RELACE_RETRY_BASE_DELAY` | `1.0` |
 | `RELACE_SEARCH_ENDPOINT` | `https://search.endpoint.relace.run/v1/search/chat/completions` |
 | `RELACE_SEARCH_MODEL` | `relace-search` |
 | `RELACE_SEARCH_TIMEOUT_SECONDS` | `120` |

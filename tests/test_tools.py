@@ -10,31 +10,31 @@ from relace_mcp.config import RelaceConfig
 from relace_mcp.tools.apply import (
     MAX_FILE_SIZE_BYTES,
     _log_event,
-    _validate_file_path,
     apply_file_logic,
 )
+from relace_mcp.utils import validate_file_path
 
 
 class TestValidateFilePath:
-    """Test _validate_file_path security function."""
+    """Test validate_file_path security function."""
 
     def test_valid_absolute_path(self, tmp_path: Path) -> None:
         """Should accept valid absolute paths within base_dir."""
         test_file = tmp_path / "test.py"
         test_file.write_text("content")
 
-        result = _validate_file_path(str(test_file), base_dir=str(tmp_path))
+        result = validate_file_path(str(test_file), base_dir=str(tmp_path))
         assert result == test_file.resolve()
 
     def test_empty_path_raises(self, tmp_path: Path) -> None:
         """Should reject empty paths."""
         with pytest.raises(RuntimeError, match="cannot be empty"):
-            _validate_file_path("", base_dir=str(tmp_path))
+            validate_file_path("", base_dir=str(tmp_path))
 
     def test_whitespace_only_path_raises(self, tmp_path: Path) -> None:
         """Should reject whitespace-only paths."""
         with pytest.raises(RuntimeError, match="cannot be empty"):
-            _validate_file_path("   ", base_dir=str(tmp_path))
+            validate_file_path("   ", base_dir=str(tmp_path))
 
     def test_path_within_base_dir(self, tmp_path: Path) -> None:
         """Should accept paths within base_dir."""
@@ -42,7 +42,7 @@ class TestValidateFilePath:
         test_file.parent.mkdir(parents=True, exist_ok=True)
         test_file.write_text("content")
 
-        result = _validate_file_path(str(test_file), base_dir=str(tmp_path))
+        result = validate_file_path(str(test_file), base_dir=str(tmp_path))
         assert result == test_file.resolve()
 
     def test_path_outside_base_dir_raises(self, tmp_path: Path) -> None:
@@ -50,14 +50,14 @@ class TestValidateFilePath:
         outside_path = tmp_path.parent / "outside.py"
 
         with pytest.raises(RuntimeError, match="outside allowed directory"):
-            _validate_file_path(str(outside_path), base_dir=str(tmp_path))
+            validate_file_path(str(outside_path), base_dir=str(tmp_path))
 
     def test_path_traversal_attempt_blocked(self, tmp_path: Path) -> None:
         """Should block path traversal attempts."""
         traversal_path = str(tmp_path / ".." / ".." / "etc" / "passwd")
 
         with pytest.raises(RuntimeError, match="outside allowed directory"):
-            _validate_file_path(traversal_path, base_dir=str(tmp_path))
+            validate_file_path(traversal_path, base_dir=str(tmp_path))
 
 
 class TestLogEvent:
