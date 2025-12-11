@@ -73,6 +73,7 @@ class FastAgenticSearchHarness:
 
             # 檢查 context 大小
             ctx_size = estimate_context_size(messages)
+
             if ctx_size > MAX_TOTAL_CONTEXT_CHARS:
                 logger.warning(
                     "[%s] Context size %d exceeds limit %d, truncating old messages",

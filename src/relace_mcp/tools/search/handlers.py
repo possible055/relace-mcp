@@ -5,6 +5,8 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
+from ...utils import validate_file_path
+
 # 檔案大小上限（10MB）
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 # 目錄列出上限
@@ -40,29 +42,11 @@ def map_repo_path(path: str, base_dir: str) -> str:
     return os.path.join(base_dir, rel)
 
 
-def validate_path(file_path: str, base_dir: str) -> Path:
-    """驗證路徑在 base_dir 內，防止 path traversal。"""
-    try:
-        resolved = Path(file_path).resolve()
-    except (OSError, ValueError) as exc:
-        raise RuntimeError(f"Invalid file path: {file_path}") from exc
-
-    base_resolved = Path(base_dir).resolve()
-    try:
-        resolved.relative_to(base_resolved)
-    except ValueError as exc:
-        raise RuntimeError(
-            f"Access denied: {file_path} is outside allowed directory {base_dir}"
-        ) from exc
-
-    return resolved
-
-
 def view_file_handler(path: str, view_range: list[int], base_dir: str) -> str:
     """view_file 工具實作。"""
     try:
         fs_path = map_repo_path(path, base_dir)
-        resolved = validate_path(fs_path, base_dir)
+        resolved = validate_file_path(fs_path, base_dir, allow_empty=True)
 
         if not resolved.exists():
             return f"Error: File not found: {path}"
@@ -109,7 +93,7 @@ def view_directory_handler(path: str, include_hidden: bool, base_dir: str) -> st
     """view_directory 工具實作（BFS-like 順序：先列當前層，再遞迴）。"""
     try:
         fs_path = map_repo_path(path, base_dir)
-        resolved = validate_path(fs_path, base_dir)
+        resolved = validate_file_path(fs_path, base_dir, allow_empty=True)
 
         if not resolved.exists():
             return f"Error: Directory not found: {path}"
@@ -378,57 +362,15 @@ def estimate_context_size(messages: list[dict[str, Any]]) -> int:
 
 
 # === Bash Tool ===
+# NOTE: Unix-only (requires bash shell, not available on Windows)
 
 BASH_TIMEOUT_SECONDS = 30
 BASH_MAX_OUTPUT_CHARS = 50000
 
-BASH_ALLOWED_COMMANDS = frozenset(
-    {
-        "ls",
-        "find",
-        "cat",
-        "head",
-        "tail",
-        "wc",
-        "file",
-        "stat",
-        "tree",
-        "du",
-        "df",
-        "grep",
-        "egrep",
-        "fgrep",
-        "rg",
-        "ag",
-        "awk",
-        "sed",
-        "sort",
-        "uniq",
-        "cut",
-        "tr",
-        "column",
-        "xargs",
-        "basename",
-        "dirname",
-        "realpath",
-        "readlink",
-        "date",
-        "echo",
-        "printf",
-        "true",
-        "false",
-        "test",
-        "[",
-        "diff",
-        "comm",
-        "git",
-        "python",
-        "python3",
-    }
-)
-
+# 阻止危險命令（黑名單）
 BASH_BLOCKED_COMMANDS = frozenset(
     {
+        # 檔案修改
         "rm",
         "rmdir",
         "unlink",
@@ -440,6 +382,12 @@ BASH_BLOCKED_COMMANDS = frozenset(
         "chmod",
         "chown",
         "chgrp",
+        "touch",
+        "tee",
+        "truncate",
+        "ln",
+        "mkfifo",
+        # 網路存取
         "wget",
         "curl",
         "fetch",
@@ -454,20 +402,16 @@ BASH_BLOCKED_COMMANDS = frozenset(
         "netcat",
         "ncat",
         "socat",
+        # 權限提升
         "sudo",
         "su",
         "doas",
         "pkexec",
-        "pkill",
+        # 程序控制
         "kill",
         "killall",
-        "skill",
-        "dd",
-        "mkfs",
-        "fdisk",
-        "mount",
-        "umount",
-        "losetup",
+        "pkill",
+        # 系統管理
         "reboot",
         "shutdown",
         "halt",
@@ -477,31 +421,13 @@ BASH_BLOCKED_COMMANDS = frozenset(
         "userdel",
         "usermod",
         "passwd",
-        "chpasswd",
         "crontab",
-        "at",
-        "batch",
-        "nohup",
-        "disown",
-        "setsid",
-        "exec",
+        # 危險工具
+        "dd",
         "eval",
+        "exec",
         "source",
-        "touch",
-        "tee",
-        "truncate",
-        "fallocate",
-        "ln",
-        "link",
-        "mkfifo",
-        "mknod",
-        "tar",
-        "zip",
-        "unzip",
-        "gzip",
-        "gunzip",
-        "bzip2",
-        "xz",
+        # 封裝管理（可能觸發網路/安裝）
         "make",
         "cmake",
         "ninja",
@@ -512,36 +438,22 @@ BASH_BLOCKED_COMMANDS = frozenset(
     }
 )
 
-GIT_BLOCKED_SUBCOMMANDS = frozenset(
-    {
-        "clone",
-        "fetch",
-        "pull",
-        "push",
-        "checkout",
-        "reset",
-        "revert",
-        "restore",
-        "clean",
-        "stash",
-        "merge",
-        "rebase",
-        "cherry-pick",
-        "commit",
-        "add",
-        "rm",
-        "mv",
-        "init",
-        "remote",
-        "submodule",
-        "config",
-        "gc",
-        "prune",
-        "fsck",
-        "reflog",
-    }
-)
+# 阻止危險模式（防止繞過）
+BASH_BLOCKED_PATTERNS = [
+    r">\s*[^&]",  # 重導向寫入
+    r">>\s*",  # 附加寫入
+    r"\|",  # 管道（可能繞過限制）
+    r"`",  # 命令替換
+    r"\$\(",  # 命令替換
+    r";\s*\w",  # 命令串接
+    r"&&",  # 條件執行
+    r"\|\|",  # 條件執行
+    r"-exec\b",  # find -exec（可能執行危險命令）
+    r"-delete\b",  # find -delete
+    r"\bsed\b.*-i",  # sed in-place 編輯
+]
 
+# Git 允許的 read-only 子命令（白名單策略）
 GIT_ALLOWED_SUBCOMMANDS = frozenset(
     {
         "log",
@@ -565,48 +477,78 @@ GIT_ALLOWED_SUBCOMMANDS = frozenset(
     }
 )
 
-PYTHON_BLOCKED_PATTERNS = [
-    r"open\s*\(",
-    r"write\s*\(",
-    r"requests\.",
-    r"urllib",
-    r"socket",
-    r"subprocess",
-    r"os\.system",
-    r"os\.popen",
-    r"eval\s*\(",
-    r"exec\s*\(",
-    r"compile\s*\(",
-    r"__import__",
-    r"importlib",
-]
+# 允許的讀取命令（白名單：用於阻止未知命令）
+BASH_SAFE_COMMANDS = frozenset(
+    {
+        "ls",
+        "find",
+        "cat",
+        "head",
+        "tail",
+        "wc",
+        "file",
+        "stat",
+        "tree",
+        "grep",
+        "egrep",
+        "fgrep",
+        "rg",
+        "ag",
+        "awk",
+        "sed",
+        "sort",
+        "uniq",
+        "cut",
+        "diff",
+        "git",
+        "python",
+        "python3",
+        "basename",
+        "dirname",
+        "realpath",
+        "readlink",
+        "date",
+        "echo",
+        "printf",
+        "true",
+        "false",
+        "test",
+        "[",
+    }
+)
 
-BASH_BLOCKED_PATTERNS = [
-    r">\s*[^&]",
-    r">>\s*",
-    r"\s\|\s",
-    r"^\|",
-    r"\|$",
-    r"`",
-    r"\$\(",
-    r"\$\{",
-    r";\s*\w",
-    r"&&",
-    r"\|\|",
-    r"-exec\b",
-    r"-execdir\b",
-    r"-ok\b",
-    r"-delete\b",
-    r"xargs.*\brm\b",
-    r"xargs.*\brmdir\b",
-    r"\bsed\b.*-i",
-    r"\bperl\b.*-[pi]",
-]
 
+def _is_blocked_command(command: str, base_dir: str) -> tuple[bool, str]:
+    """檢查命令是否違反安全規則。
 
-def _contains_absolute_path_outside_repo(command: str) -> tuple[bool, str]:
+    Args:
+        command: 待執行的 bash 命令。
+        base_dir: 命令執行的基準目錄。
+
+    Returns:
+        (is_blocked, reason) tuple。
+    """
     import shlex
 
+    command_stripped = command.strip()
+    if not command_stripped:
+        return True, "Empty command"
+
+    # 檢查危險模式
+    for pattern in BASH_BLOCKED_PATTERNS:
+        if re.search(pattern, command):
+            if pattern == r"\|":
+                return True, (
+                    "Blocked pattern: pipe operator. "
+                    "Use grep_search tool for pattern matching instead"
+                )
+            return True, f"Blocked pattern: {pattern}"
+
+    # 檢查路徑穿越
+    if "../" in command or "..\\" in command:
+        return True, "Path traversal pattern detected"
+
+    # 檢查絕對路徑（非 /repo）
     try:
         tokens = shlex.split(command)
     except ValueError:
@@ -616,80 +558,77 @@ def _contains_absolute_path_outside_repo(command: str) -> tuple[bool, str]:
         if token.startswith("/"):
             if token == "/repo" or token.startswith("/repo/"):  # nosec B105
                 continue
-            if token == "/":  # nosec B105
-                return True, "Root path '/' not allowed"
+            # 阻止存取系統目錄
             return True, f"Absolute path outside /repo not allowed: {token}"
-
-    return False, ""
-
-
-def _is_blocked_git_command(tokens: list[str]) -> tuple[bool, str]:
-    git_idx = -1
-    for i, t in enumerate(tokens):
-        if os.path.basename(t) == "git":
-            git_idx = i
-            break
-
-    if git_idx == -1:
-        return False, ""
-
-    for t in tokens[git_idx + 1 :]:
-        if t.startswith("-"):
-            continue
-        if t in GIT_BLOCKED_SUBCOMMANDS:
-            return True, f"Blocked git subcommand: {t}"
-        if t in GIT_ALLOWED_SUBCOMMANDS:
-            return False, ""
-        return True, f"Unknown git subcommand not in allowlist: {t}"
-
-    return False, ""
-
-
-def _is_blocked_python_command(command: str) -> tuple[bool, str]:
-    if "python" not in command.lower():
-        return False, ""
-
-    if "-c" not in command:
-        return True, "Python without -c is not allowed (may execute files)"
-
-    for pattern in PYTHON_BLOCKED_PATTERNS:
-        if re.search(pattern, command, re.IGNORECASE):
-            return True, f"Blocked Python pattern: {pattern}"
-
-    return False, ""
-
-
-def _is_blocked_command(command: str) -> tuple[bool, str]:
-    import shlex
-
-    command_stripped = command.strip()
-    if not command_stripped:
-        return True, "Empty command"
-
-    for pattern in BASH_BLOCKED_PATTERNS:
-        if re.search(pattern, command):
-            return True, f"Blocked pattern detected: {pattern}"
-
-    has_abs_path, reason = _contains_absolute_path_outside_repo(command)
-    if has_abs_path:
-        return True, reason
-
-    try:
-        tokens = shlex.split(command)
-    except ValueError:
-        tokens = command.split()
 
     if not tokens:
         return True, "Empty command after parsing"
 
     base_cmd = os.path.basename(tokens[0])
 
+    # 檢查黑名單命令
     if base_cmd in BASH_BLOCKED_COMMANDS:
         return True, f"Blocked command: {base_cmd}"
 
-    if base_cmd not in BASH_ALLOWED_COMMANDS:
+    # 檢查白名單（阻止未知命令）
+    if base_cmd not in BASH_SAFE_COMMANDS:
         return True, f"Command not in allowlist: {base_cmd}"
 
+    # 特殊處理 git（白名單策略：僅允許明確的 read-only 子命令）
+    if base_cmd == "git":
+        for token in tokens[1:]:
+            if token.startswith("-"):
+                continue
+            if token not in GIT_ALLOWED_SUBCOMMANDS:
+                return True, f"Git subcommand not in allowlist: {token}"
+            # 找到第一個非 flag 的 token 即為子命令，檢查完畢
+            break
+
+    # 特殊處理 python（僅允許 -c，且檢查危險模式）
+    if base_cmd in ("python", "python3"):
+        if len(tokens) < 3 or tokens[1] != "-c":
+            return True, "Python without -c flag is not allowed (prevents script execution)"
+        # 檢查 -c 中的危險模式（涵蓋所有可能的檔案修改與網路操作）
+        python_code = " ".join(tokens[2:])
+        dangerous_patterns = [
+            # 檔案操作
+            (r"open\s*\(", "file operations"),
+            (r"\bwrite\s*\(", "write operations"),
+            (r"\bremove\s*\(", "file removal"),
+            (r"\bunlink\s*\(", "file removal"),
+            (r"\brmdir\s*\(", "directory removal"),
+            (r"\brename\s*\(", "file rename"),
+            (r"\bmkdir\s*\(", "directory creation"),
+            (r"\bchmod\s*\(", "permission change"),
+            (r"\bchown\s*\(", "ownership change"),
+            # 模組匯入（危險）
+            (r"os\.remove", "os.remove"),
+            (r"os\.unlink", "os.unlink"),
+            (r"os\.rmdir", "os.rmdir"),
+            (r"os\.system", "os.system"),
+            (r"os\.popen", "os.popen"),
+            (r"shutil\.rmtree", "shutil.rmtree"),
+            (r"shutil\.move", "shutil.move"),
+            (r"shutil\.copy", "shutil.copy"),
+            (r"pathlib", "pathlib (file operations)"),
+            (r"subprocess", "subprocess execution"),
+            # 網路操作
+            (r"urllib", "network access"),
+            (r"requests\.", "network access"),
+            (r"http\.client", "network access"),
+            (r"http\.server", "network access"),
+            (r"socket", "network access"),
+            # 危險內建函式
+            (r"\beval\s*\(", "eval"),
+            (r"\bexec\s*\(", "exec"),
+            (r"__import__", "__import__"),
+            (r"compile\s*\(", "compile"),
+        ]
+        for pattern, desc in dangerous_patterns:
+            if re.search(pattern, python_code, re.IGNORECASE):
+                return True, f"Blocked Python pattern: {desc}"
+
+    # 檢查參數中是否藏有危險命令
     for token in tokens[1:]:
         if token.startswith("-"):
             continue
@@ -697,21 +636,24 @@ def _is_blocked_command(command: str) -> tuple[bool, str]:
         if token_base in BASH_BLOCKED_COMMANDS:
             return True, f"Blocked command in arguments: {token_base}"
 
-    if base_cmd == "git":
-        blocked, reason = _is_blocked_git_command(tokens)
-        if blocked:
-            return True, reason
-
-    if base_cmd in ("python", "python3"):
-        blocked, reason = _is_blocked_python_command(command)
-        if blocked:
-            return True, reason
-
     return False, ""
 
 
 def bash_handler(command: str, base_dir: str) -> str:
-    blocked, reason = _is_blocked_command(command)
+    """執行 read-only bash 命令（Unix-only）。
+
+    Platform:
+        Unix/Linux/macOS only. Windows 不支援（無 bash）。
+
+    Args:
+        command: 待執行的 bash 命令。
+        base_dir: 命令執行的工作目錄。
+
+    Returns:
+        命令輸出或錯誤訊息。
+    """
+    blocked, reason = _is_blocked_command(command, base_dir)
+
     if blocked:
         return f"Error: Command blocked for security reasons. {reason}"
 

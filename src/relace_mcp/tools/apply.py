@@ -9,11 +9,15 @@ from typing import Any
 
 from ..clients import RelaceClient
 from ..config import LOG_PATH, MAX_LOG_SIZE_BYTES
+from ..utils import validate_file_path
 
 logger = logging.getLogger(__name__)
 
 # 限制檔案大小為 10MB，避免記憶體耗盡
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
+
+# Log rotation：保留的舊 log 數量上限
+MAX_ROTATED_LOGS = 5
 
 # 優先嘗試的編碼（覆蓋 99% 使用場景）
 _PREFERRED_ENCODINGS = ("utf-8", "gbk")
@@ -54,7 +58,7 @@ def _read_text_with_fallback(path: Path) -> tuple[str, str]:
 
 
 def _rotate_log_if_needed() -> None:
-    """若 log 檔案超過大小上限，進行 rotation。"""
+    """若 log 檔案超過大小上限，進行 rotation 並清理舊檔案。"""
     try:
         if LOG_PATH.exists() and LOG_PATH.stat().st_size > MAX_LOG_SIZE_BYTES:
             rotated_path = LOG_PATH.with_suffix(
@@ -62,6 +66,12 @@ def _rotate_log_if_needed() -> None:
             )
             LOG_PATH.rename(rotated_path)
             logger.info("Rotated log file to %s", rotated_path)
+
+            # 清理超過上限的舊 log 檔案
+            rotated_logs = sorted(LOG_PATH.parent.glob("relace_apply.*.log"), reverse=True)
+            for old_log in rotated_logs[MAX_ROTATED_LOGS:]:
+                old_log.unlink(missing_ok=True)
+                logger.debug("Cleaned up old log file: %s", old_log)
     except Exception as exc:
         logger.warning("Failed to rotate log file: %s", exc)
 
@@ -87,39 +97,6 @@ def _log_event(event: dict[str, Any]) -> None:
             f.write(json.dumps(event, ensure_ascii=False) + "\n")
     except Exception as exc:
         logger.warning("Failed to write Relace log: %s", exc)
-
-
-def _validate_file_path(file_path: str, base_dir: str) -> Path:
-    """驗證並解析檔案路徑，防止路徑遍歷攻擊。
-
-    Args:
-        file_path: 要驗證的檔案路徑。
-        base_dir: 基礎目錄，限制存取範圍。
-
-    Returns:
-        解析後的 Path 物件。
-
-    Raises:
-        RuntimeError: 若路徑無效或超出允許範圍。
-    """
-    if not file_path or not file_path.strip():
-        raise RuntimeError("file_path cannot be empty")
-
-    try:
-        resolved = Path(file_path).resolve()
-    except (OSError, ValueError) as exc:
-        raise RuntimeError(f"Invalid file path: {file_path}") from exc
-
-    # 確保檔案在 base_dir 中
-    base_resolved = Path(base_dir).resolve()
-    try:
-        resolved.relative_to(base_resolved)
-    except ValueError as exc:
-        raise RuntimeError(
-            f"Access denied: {file_path} is outside allowed directory {base_dir}"
-        ) from exc
-
-    return resolved
 
 
 def apply_file_logic(
@@ -148,10 +125,12 @@ def apply_file_logic(
         raise RuntimeError("edit_snippet cannot be empty")
 
     try:
-        resolved_path = _validate_file_path(file_path, base_dir)
+        resolved_path = validate_file_path(file_path, base_dir)
+        file_exists = resolved_path.exists()
+        file_size = resolved_path.stat().st_size if file_exists else 0
 
         # New file: write directly without calling API
-        if not resolved_path.exists():
+        if not file_exists:
             resolved_path.parent.mkdir(parents=True, exist_ok=True)
             resolved_path.write_text(edit_snippet, encoding="utf-8")
 
@@ -162,13 +141,14 @@ def apply_file_logic(
                     "trace_id": trace_id,
                     "file_path": str(resolved_path),
                     "file_size_bytes": resolved_path.stat().st_size,
+                    "instruction": instruction,
+                    "edit_snippet_preview": edit_snippet[:200],
                 }
             )
             logger.info("[%s] Created new file %s", trace_id, resolved_path)
             return f"Created {resolved_path} ({resolved_path.stat().st_size} bytes)"
 
         # Existing file: check size and read
-        file_size = resolved_path.stat().st_size
         if file_size > MAX_FILE_SIZE_BYTES:
             raise RuntimeError(
                 f"File too large ({file_size} bytes). Maximum allowed: {MAX_FILE_SIZE_BYTES} bytes"
@@ -189,7 +169,6 @@ def apply_file_logic(
             edit_snippet=edit_snippet,
             instruction=instruction,
             relace_metadata=relace_metadata,
-            stream=False,
         )
 
         merged_code = result.get("mergedCode")

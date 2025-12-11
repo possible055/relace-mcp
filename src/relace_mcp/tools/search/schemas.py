@@ -225,6 +225,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "strict": True,
             "description": (
                 "Execute a read-only bash command for code exploration.\n\n"
+                "Platform: Unix/Linux/macOS only (requires bash shell).\n\n"
                 "Use cases:\n"
                 "- Find files with specific patterns (find, locate)\n"
                 "- List directory trees (tree, ls -la)\n"
@@ -237,6 +238,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "- No file modifications allowed (rm, mv, cp, etc.)\n"
                 "- No network access (curl, wget, ssh, etc.)\n"
                 "- No privilege escalation (sudo, su)\n"
+                "- No pipes or redirections (|, >, >>)\n"
                 "- Output capped at 50000 characters"
             ),
             "parameters": {
