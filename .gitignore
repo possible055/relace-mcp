@@ -16,7 +16,6 @@ dist/
 ruff_cache/
 
 # IDE editor settings
-.github/
 .vscode/
 .cursor/
 .kilocode/
