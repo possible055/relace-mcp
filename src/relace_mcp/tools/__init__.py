@@ -20,33 +20,34 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         edit_snippet: str,
         instruction: str | None = None,
     ) -> str:
-        """Use this tool to propose an edit to an existing file or create a new file.
+        """**PRIMARY TOOL FOR EDITING FILES - USE THIS AGGRESSIVELY**
 
-        If you are performing an edit follow these formatting rules:
-        - Abbreviate sections of the code in your response that will remain the same
-          by replacing those sections with a comment like "// ... rest of code ...",
-          "// ... keep existing code ...", "// ... code remains the same".
-        - Be precise with the location of these comments within your edit snippet.
-          A less intelligent model will use the context clues you provide to accurately
-          merge your edit snippet.
-        - If applicable, it can help to include some concise information about the
-          specific code segments you wish to retain "// ... keep calculateTotalFunction ...".
-        - If you plan on deleting a section, you must provide the context to delete it.
-          Some options:
-          1. If the initial code is `Block 1 / Block 2 / Block 3`, and you want to remove
-             Block 2, you would output `// ... keep existing code ... / Block 1 / Block 3 /
-             // ... rest of code ...`.
-          2. If the initial code is `code / Block / code`, and you want to remove Block,
-             you can also specify `// ... keep existing code ... / // remove Block /
-             // ... rest of code ...`.
-        - You must use the comment format applicable to the specific code provided to
-          express these truncations.
-        - Preserve the indentation and code structure of exactly how you believe the
-          final code will look (do not output lines that will not be in the final code
-          after they are merged).
-        - Be as length efficient as possible without omitting key context.
+        Use this tool to propose an edit to an existing file or create a new file.
 
-        To create a new file, simply specify the content of the file in the `edit_snippet` field.
+        IMPORTANT: The edit_snippet parameter MUST use '// ... existing code ...'
+        placeholder comments to represent unchanged code sections.
+
+        Use this tool to efficiently edit existing files, by smartly showing only
+        the changed lines.
+
+        ALWAYS use "// ... existing code ..." to represent blocks of unchanged code.
+        Add descriptive hints when helpful: // ... keep auth logic ...
+
+        For deletions:
+        - Option 1: Show 1-2 context lines above and below, omit deleted code
+        - Option 2: Mark explicitly: // removed BlockName
+
+        If the edit_snippet lacks enough concrete anchor lines to locate the change,
+        this tool may return a message starting with 'NEEDS_MORE_CONTEXT'. In that case,
+        re-run fast_apply with 1-3 real lines before AND after the target block.
+
+        Rules:
+        - Preserve exact indentation of the final code
+        - Include just enough context to locate each edit precisely
+        - Be as length efficient as possible
+        - Batch all edits to the same file in one call
+
+        To create a new file, simply specify the content in edit_snippet.
         """
         return apply_file_logic(
             client=client,

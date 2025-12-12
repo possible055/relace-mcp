@@ -4,6 +4,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastmcp.exceptions import ToolError
 
 from relace_mcp.clients import RelaceClient
 from relace_mcp.config import RelaceConfig
@@ -211,6 +212,46 @@ class TestApplyFileLogicValidation:
                 instruction=None,
                 base_dir=str(tmp_path),
             )
+
+    def test_placeholder_only_snippet_raises_tool_error(
+        self,
+        mock_config: RelaceConfig,
+        temp_source_file: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Should raise ToolError with NEEDS_MORE_CONTEXT when snippet has no anchors."""
+        mock_client = MagicMock(spec=RelaceClient)
+
+        with pytest.raises(ToolError, match="NEEDS_MORE_CONTEXT"):
+            apply_file_logic(
+                client=mock_client,
+                file_path=str(temp_source_file),
+                edit_snippet="// ... existing code ...\n// ... rest of code ...\n",
+                instruction=None,
+                base_dir=str(tmp_path),
+            )
+
+        mock_client.apply.assert_not_called()
+
+    def test_delete_like_with_insufficient_concrete_lines_raises_tool_error(
+        self,
+        mock_config: RelaceConfig,
+        temp_source_file: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Should raise ToolError with NEEDS_MORE_CONTEXT for delete with insufficient anchors."""
+        mock_client = MagicMock(spec=RelaceClient)
+
+        with pytest.raises(ToolError, match="NEEDS_MORE_CONTEXT"):
+            apply_file_logic(
+                client=mock_client,
+                file_path=str(temp_source_file),
+                edit_snippet="def foo():\n    pass\n// ... rest of code ...\n",
+                instruction="delete foo",
+                base_dir=str(tmp_path),
+            )
+
+        mock_client.apply.assert_not_called()
 
     def test_no_changes_returns_message(
         self,

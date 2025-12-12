@@ -38,14 +38,16 @@ Add to your MCP config:
     "relace": {
       "command": "uvx",
       "args": ["relace-mcp"],
+      "cwd": "${workspaceFolder}",
       "env": {
-        "RELACE_API_KEY": "rlc-your-api-key",
-        "RELACE_BASE_DIR": "/path/to/project"
+        "RELACE_API_KEY": "rlc-your-api-key"
       }
     }
   }
 }
 ```
+
+> **Note:** The `cwd` field sets the working directory. Most IDEs support `${workspaceFolder}` to auto-resolve the current project path. If your IDE doesn't support `cwd`, use `RELACE_BASE_DIR` in `env` instead.
 
 Config locations:
 - **Windsurf**: `~/.codeium/windsurf/mcp_config.json`
@@ -97,7 +99,7 @@ Find relevant code with natural language:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `RELACE_API_KEY` | ✅ | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
-| `RELACE_BASE_DIR` | ⚠️ | Restrict file access (defaults to cwd) |
+| `RELACE_BASE_DIR` | ⚠️ | Project root path (prefer `cwd` config; falls back to current directory) |
 | `RELACE_STRICT_MODE` | ❌ | Set `1` to require explicit base dir |
 
 <details>
