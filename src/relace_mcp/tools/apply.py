@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from fastmcp.exceptions import ToolError
+
 from ..clients import RelaceClient
 from ..config import LOG_PATH, MAX_LOG_SIZE_BYTES
 from ..utils import validate_file_path
@@ -21,6 +23,59 @@ MAX_ROTATED_LOGS = 5
 
 # 優先嘗試的編碼（覆蓋 99% 使用場景）
 _PREFERRED_ENCODINGS = ("utf-8", "gbk")
+
+
+def _is_placeholder_line(line: str) -> bool:
+    s = line.strip()
+    if not s:
+        return True
+
+    lower = s.lower()
+    if lower.startswith("// ...") or lower.startswith("# ..."):
+        return True
+    if lower.startswith("// remove") or lower.startswith("# remove"):
+        return True
+    if lower.startswith("// removed") or lower.startswith("# removed"):
+        return True
+    return False
+
+
+def _concrete_lines(text: str) -> list[str]:
+    return [line for line in text.splitlines() if not _is_placeholder_line(line)]
+
+
+def _count_concrete_groups(text: str) -> int:
+    in_group = False
+    groups = 0
+    for line in text.splitlines():
+        if _is_placeholder_line(line):
+            in_group = False
+            continue
+        if not in_group:
+            groups += 1
+            in_group = True
+    return groups
+
+
+def _is_delete_like(instruction: str | None, edit_snippet: str) -> bool:
+    haystack = "\n".join([instruction or "", edit_snippet]).lower()
+    return ("delete" in haystack) or ("remove" in haystack) or ("刪除" in haystack)
+
+
+def _needs_more_context_message(file_path: str, instruction: str | None) -> str:
+    instruction_part = instruction or ""
+    return (
+        "NEEDS_MORE_CONTEXT\n"
+        "Your edit_snippet does not include enough concrete anchor lines to locate the change safely.\n"
+        "Re-run fast_apply with 1-3 real lines before AND after the block you want to edit/delete.\n"
+        f"file_path: {file_path}\n"
+        f"instruction: {instruction_part}\n\n"
+        "TEMPLATE (example):\n"
+        "// ... existing code ...\n"
+        "<1-3 lines of real code BEFORE the target block>\n"
+        "<1-3 lines of real code AFTER the target block>\n"
+        "// ... rest of code ...\n"
+    )
 
 
 def _read_text_with_fallback(path: Path) -> tuple[str, str]:
@@ -147,6 +202,17 @@ def apply_file_logic(
             )
             logger.info("[%s] Created new file %s", trace_id, resolved_path)
             return f"Created {resolved_path} ({resolved_path.stat().st_size} bytes)"
+
+        concrete = _concrete_lines(edit_snippet)
+        if not concrete:
+            raise ToolError(
+                _needs_more_context_message(file_path=file_path, instruction=instruction)
+            )
+
+        if _is_delete_like(instruction, edit_snippet) and _count_concrete_groups(edit_snippet) < 2:
+            raise ToolError(
+                _needs_more_context_message(file_path=file_path, instruction=instruction)
+            )
 
         # Existing file: check size and read
         if file_size > MAX_FILE_SIZE_BYTES:
