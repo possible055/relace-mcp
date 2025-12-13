@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
@@ -44,6 +45,7 @@ class FastAgenticSearchHarness:
         self._config = config
         self._client = client
         self._observed_files: dict[str, list[list[int]]] = {}
+        self._view_line_re = re.compile(r"^(\d+)\s")
 
     def run(self, query: str) -> dict[str, Any]:
         """執行一次 Fast Agentic Search。
@@ -131,6 +133,8 @@ class FastAgenticSearchHarness:
                 raise RuntimeError("Relace Search API returned empty choices")
 
             message = choices[0].get("message", {})
+            # 防禦：部分 provider/mock 可能缺少 role，避免後續 block/repair 邏輯失效
+            message.setdefault("role", "assistant")
             tool_calls = message.get("tool_calls", [])
 
             # 若無 tool_calls，檢查是否有 content（模型可能直接回答）
@@ -252,6 +256,57 @@ class FastAgenticSearchHarness:
             merged[path] = merged_ranges[:max_ranges_per_file]
 
         return merged
+
+    def _extract_view_file_range(self, output: str) -> list[int] | None:
+        """從 view_file 的輸出解析實際輸出的行號範圍。
+
+        view_file_handler 的輸出每行以「<line_number> <content>」格式開始。
+        若無法解析（例如 view_range 超出檔案範圍導致沒有任何帶行號的行），回傳 None。
+        """
+        start: int | None = None
+        end: int | None = None
+        for line in output.splitlines():
+            match = self._view_line_re.match(line)
+            if not match:
+                continue
+            line_no = int(match.group(1))
+            if start is None:
+                start = line_no
+            end = line_no
+        if start is None or end is None:
+            return None
+        return [start, end]
+
+    def _normalize_view_path(self, raw_path: Any) -> str | None:
+        """將 view_file 的 path 轉為相對於 repo root 的路徑字串。"""
+        if not isinstance(raw_path, str):
+            return None
+        if raw_path in ("/repo", "/repo/"):
+            return None
+        path = raw_path.removeprefix("/repo/")
+        if path.startswith("./"):
+            path = path[2:]
+        return path or None
+
+    def _maybe_record_observed(
+        self, name: str, args: dict[str, Any], result: str | dict[str, Any]
+    ) -> None:
+        """根據 tool 的結果累積 observed_files（供 partial report 使用）。"""
+        if not isinstance(result, str) or result.startswith("Error:"):
+            return
+
+        if name == "view_file":
+            normalized_path = self._normalize_view_path(args.get("path"))
+            if not normalized_path:
+                return
+            line_range = self._extract_view_file_range(result)
+            if not line_range:
+                return
+            self._observed_files.setdefault(normalized_path, []).append(line_range)
+            return
+
+        if name == "grep_search":
+            self._record_grep_results(result)
 
     def _repair_tool_call_integrity(self, messages: list[dict[str, Any]], trace_id: str) -> None:
         """檢查並修復 tool_calls 與 tool results 的配對完整性。
@@ -503,15 +558,16 @@ class FastAgenticSearchHarness:
                         continue
                     logger.debug("[%s] Tool call (parallel): %s", trace_id, func_name)
                     future = executor.submit(self._dispatch_tool, func_name, func_args)
-                    futures[future] = (tc_id, func_name)
+                    futures[future] = (tc_id, func_name, func_args)
 
                 for future in as_completed(futures):
-                    tc_id, func_name = futures[future]
+                    tc_id, func_name, func_args = futures[future]
                     try:
                         result = future.result()
                     except Exception as exc:
                         logger.error("[%s] Tool %s raised exception: %s", trace_id, func_name, exc)
                         result = f"Error: {exc}"
+                    self._maybe_record_observed(func_name, func_args, result)
                     tool_results.append((tc_id, func_name, result))
 
         return tool_results
@@ -549,6 +605,8 @@ class FastAgenticSearchHarness:
                 logger.error("[%s] Tool %s raised exception: %s", trace_id, func_name, exc)
                 result = f"Error: {exc}"
 
+            self._maybe_record_observed(func_name, func_args, result)
+
             if func_name == "report_back" and isinstance(result, dict):
                 report_back_result = result
 
@@ -567,18 +625,11 @@ class FastAgenticSearchHarness:
         if name == "view_file":
             path = args.get("path", "")
             view_range = args.get("view_range", [1, 100])
-            result = view_file_handler(
+            return view_file_handler(
                 path=path,
                 view_range=view_range,
                 base_dir=base_dir,
             )
-            # 記錄 observed_files（去除 /repo/ 前綴）
-            if isinstance(result, str) and not result.startswith("Error:"):
-                normalized_path = path.removeprefix("/repo/")
-                if normalized_path not in self._observed_files:
-                    self._observed_files[normalized_path] = []
-                self._observed_files[normalized_path].append(view_range)
-            return result
         elif name == "view_directory":
             return view_directory_handler(
                 path=args.get("path", ""),
@@ -593,11 +644,8 @@ class FastAgenticSearchHarness:
                 include_pattern=args.get("include_pattern"),
                 base_dir=base_dir,
             )
-            result = grep_search_handler(params)
-            # 記錄 observed_files（解析 grep 輸出）
-            if isinstance(result, str) and not result.startswith("Error:"):
-                self._record_grep_results(result)
-            return result
+            return grep_search_handler(params)
+
         elif name == "report_back":
             return report_back_handler(
                 explanation=args.get("explanation", ""),

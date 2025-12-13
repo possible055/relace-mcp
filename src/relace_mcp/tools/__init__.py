@@ -64,7 +64,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
     # Fast Agentic Search
     search_client = RelaceSearchClient(config)
-    search_harness = FastAgenticSearchHarness(config, search_client)
 
     @mcp.tool
     def fast_search(query: str) -> dict[str, Any]:
@@ -77,7 +76,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         This is useful before using fast_apply to understand which files
         need to be modified and how they relate to each other.
         """
-        return search_harness.run(query=query)
+        # Avoid shared mutable state across concurrent calls.
+        return FastAgenticSearchHarness(config, search_client).run(query=query)
 
     _ = fast_apply
     _ = fast_search

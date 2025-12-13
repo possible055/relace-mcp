@@ -49,9 +49,147 @@ def _concrete_lines(text: str) -> list[str]:
     return [line for line in text.splitlines() if not _is_truncation_placeholder(line)]
 
 
+def _should_run_anchor_precheck(edit_snippet: str, instruction: str | None) -> bool:
+    """判斷是否應該執行 anchor precheck。
+
+    Precheck 只在特定情況下啟用，避免阻擋合法的使用場景（如依賴 instruction 的新增代碼）。
+
+    啟用條件：
+    1. snippet 包含省略標記（// ...），說明試圖修改現有代碼的一部分
+    2. snippet 較長（>= 5 行），說明不只是簡單的新增
+
+    Args:
+        edit_snippet: 編輯片段。
+        instruction: 可選的 instruction。
+
+    Returns:
+        是否應該執行 precheck。
+    """
+    # 檢查是否包含省略標記
+    has_placeholders = "// ..." in edit_snippet or "# ..." in edit_snippet
+
+    # 檢查行數
+    lines = edit_snippet.splitlines()
+    has_enough_lines = len(lines) >= 5
+
+    # 只在包含省略標記或行數足夠多時才做 precheck
+    return has_placeholders or (has_enough_lines and not instruction)
+
+
+def _anchor_precheck(concrete_lines: list[str], initial_code: str) -> bool:
+    """檢查 concrete lines 是否至少有足夠的 anchor 能在 initial_code 中定位。
+
+    使用寬鬆比對（strip() 後），避免因縮排/空白差異被誤判。
+    過濾太短的行（如 }、return）以避免誤判命中。
+
+    Args:
+        concrete_lines: 非 placeholder 的行。
+        initial_code: 原始檔案內容。
+
+    Returns:
+        若至少命中 2 行有效 anchor 則 True，否則 False。
+    """
+    if not concrete_lines:
+        return False
+
+    # 過濾掉純 directive 行（如 "// remove BlockName"）
+    # 這些行不應該用來定位 anchor
+    directive_patterns = ("// remove ", "# remove ")
+    anchor_lines = [
+        line
+        for line in concrete_lines
+        if not any(line.strip().startswith(pat) for pat in directive_patterns)
+    ]
+
+    if not anchor_lines:
+        # 只有 directive，沒有真實 anchor
+        return False
+
+    # 統計命中的有效 anchor 數量
+    MIN_ANCHOR_LENGTH = 10  # 最短有效 anchor 長度（避免 }、return 等短行誤判）
+    MIN_ANCHOR_HITS = 2  # 最少需要命中的 anchor 數量
+
+    hit_count = 0
+    for line in anchor_lines:
+        stripped = line.strip()
+        # 只計算足夠長的行，避免 }、return、pass 等短行誤判
+        if len(stripped) >= MIN_ANCHOR_LENGTH and stripped in initial_code:
+            hit_count += 1
+            if hit_count >= MIN_ANCHOR_HITS:
+                return True
+
+    # 如果只有一個有效 anchor 但它足夠特殊（長度 >= 20），也接受
+    if hit_count == 1:
+        for line in anchor_lines:
+            stripped = line.strip()
+            if len(stripped) >= 20 and stripped in initial_code:
+                return True
+
+    return False
+
+
 def _recoverable_error(error_code: str, message: str, path: str, instruction: str | None) -> str:
     """產生可恢復錯誤的回傳訊息。"""
     return f"{error_code}\n{message}\npath: {path}\ninstruction: {instruction or ''}\n"
+
+
+def _api_error_to_recoverable(exc: Exception, path: str, instruction: str | None) -> str:
+    """將 API 相關錯誤轉為可恢復訊息。
+
+    Args:
+        exc: API 相關例外（RelaceAPIError / RelaceNetworkError / RelaceTimeoutError）。
+        path: 檔案路徑。
+        instruction: 可選的 instruction。
+
+    Returns:
+        格式化的可恢復錯誤訊息。
+    """
+    from ..clients.exceptions import RelaceAPIError, RelaceNetworkError, RelaceTimeoutError
+
+    if isinstance(exc, RelaceAPIError):
+        # 區分 auth 錯誤和其他 API 錯誤
+        if exc.status_code in (401, 403):
+            error_code = "AUTH_ERROR"
+            message = "API 認證或權限錯誤。請檢查 API key 設定。"
+        else:
+            error_code = "API_ERROR"
+            message = "Relace API 錯誤。請簡化 edit_snippet 或增加更明確的 anchor lines。"
+
+        return (
+            f"{error_code}\n"
+            f"{message}\n"
+            f"path: {path}\n"
+            f"instruction: {instruction or ''}\n"
+            f"status: {exc.status_code}\n"
+            f"code: {exc.code}\n"
+            f"detail: {exc.message}\n"
+        )
+
+    if isinstance(exc, RelaceTimeoutError):
+        return (
+            f"TIMEOUT_ERROR\n"
+            f"請求逾時。請稍後重試。\n"
+            f"path: {path}\n"
+            f"instruction: {instruction or ''}\n"
+            f"detail: {str(exc)}\n"
+        )
+
+    if isinstance(exc, RelaceNetworkError):
+        return (
+            f"NETWORK_ERROR\n"
+            f"網路錯誤。請檢查網路連線後重試。\n"
+            f"path: {path}\n"
+            f"instruction: {instruction or ''}\n"
+            f"detail: {str(exc)}\n"
+        )
+
+    # 不應該到這裡，但作為 fallback
+    return _recoverable_error(
+        "UNKNOWN_ERROR",
+        f"未預期的錯誤：{type(exc).__name__}",
+        path,
+        instruction,
+    )
 
 
 def _read_text_with_fallback(path: Path) -> tuple[str, str]:
@@ -274,6 +412,16 @@ def _apply_to_existing_file(
 
     initial_code, detected_encoding = _read_text_with_fallback(resolved_path)
 
+    # Anchor precheck：只在特定情況下執行（避免阻擋合法使用場景）
+    if _should_run_anchor_precheck(edit_snippet, ctx.instruction):
+        if not _anchor_precheck(concrete, initial_code):
+            return _recoverable_error(
+                "NEEDS_MORE_CONTEXT",
+                "edit_snippet 中的 anchor lines 無法在檔案中定位。請確保包含 1-3 行真實存在的程式碼。",
+                ctx.file_path,
+                ctx.instruction,
+            )
+
     relace_metadata = {
         "source": "fastmcp",
         "tool": "fast_apply",
@@ -363,7 +511,23 @@ def apply_file_logic(
         if not file_exists:
             return _create_new_file(ctx, resolved_path, edit_snippet)
         return _apply_to_existing_file(ctx, client, resolved_path, edit_snippet, file_size)
-    except Exception as exc:
+    except (
+        Exception  # Import at top to avoid circular dependency
+    ) as exc:
+        # 捕捉特定 API/網路錯誤並轉為可恢復訊息
+        from ..clients.exceptions import RelaceAPIError, RelaceNetworkError, RelaceTimeoutError
+
+        if isinstance(exc, (RelaceAPIError, RelaceNetworkError, RelaceTimeoutError)):
+            _log_apply_error(ctx, edit_snippet, exc)
+            logger.warning(
+                "[%s] Relace apply recoverable error for %s: %s",
+                ctx.trace_id,
+                file_path,
+                exc,
+            )
+            return _api_error_to_recoverable(exc, file_path, instruction)
+
+        # 其他未預期錯誤仍然 raise（例如檔案系統錯誤、程式邏輯錯誤等）
         _log_apply_error(ctx, edit_snippet, exc)
         logger.error("[%s] Relace apply failed for %s: %s", ctx.trace_id, file_path, exc)
         raise

@@ -182,6 +182,45 @@ class TestFastAgenticSearchHarness:
         assert "did not complete" in result["explanation"]
         assert "test.py" in result["files"]
 
+    def test_partial_results_normalize_view_file_ranges(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Partial results should never contain invalid ranges like end=-1."""
+        import relace_mcp.tools.search.harness as harness_mod
+
+        monkeypatch.setattr(harness_mod, "SEARCH_MAX_TURNS", 2)
+        (tmp_path / "test.py").write_text("line1\nline2\nline3\n")
+
+        view_to_eof_call = {
+            "id": "call_1",
+            "function": {
+                "name": "view_file",
+                "arguments": json.dumps({"path": "/repo/test.py", "view_range": [1, -1]}),
+            },
+        }
+
+        mock_client.chat.return_value = {
+            "choices": [
+                {
+                    "message": {
+                        "tool_calls": [view_to_eof_call],
+                    }
+                }
+            ]
+        }
+
+        harness = FastAgenticSearchHarness(mock_config, mock_client)
+        result = harness.run("This will timeout")
+
+        ranges = result["files"]["test.py"]
+        assert ranges
+        assert all(r[0] > 0 and r[1] >= r[0] for r in ranges)
+        assert all(r[1] != -1 for r in ranges)
+
 
 class TestParallelToolCallsFix:
     """Test P0 fix: parallel tool calls with report_back not last."""

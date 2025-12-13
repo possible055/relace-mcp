@@ -275,14 +275,18 @@ class TestApplyFileLogicValidation:
         temp_source_file: Path,
         tmp_path: Path,
     ) -> None:
-        """Should allow delete with // remove directive (no longer blocked by gate)."""
-        mock_client.apply.return_value = {"mergedCode": "# modified\n", "usage": {}}
+        """Should allow delete with // remove directive when combined with valid anchors."""
+        mock_client.apply.return_value = {
+            "mergedCode": "def hello():\n    print('Hello')\n",
+            "usage": {},
+        }
 
+        # snippet 包含真實 anchor (def hello) 以及 remove directive
         result = apply_file_logic(
             client=mock_client,
             file_path=str(temp_source_file),
-            edit_snippet="// ... existing code ...\n// remove foo\n// ... rest of code ...\n",
-            instruction="delete foo",
+            edit_snippet="def hello():\n    print('Hello')\n\n// remove goodbye\n",
+            instruction="delete goodbye function",
             base_dir=str(tmp_path),
         )
 
@@ -577,3 +581,234 @@ class TestApplyFileLogicPathNormalization:
         assert "INVALID_PATH" in result
         assert "outside allowed directory" in result
         mock_client.apply.assert_not_called()
+
+
+class TestApplyFileLogicRecoverableErrors:
+    """Test recoverable error handling."""
+
+    def test_anchor_precheck_failure_returns_needs_more_context(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Should return NEEDS_MORE_CONTEXT when anchor lines don't match file content."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("def existing_function():\n    return 42\n")
+
+        # edit_snippet 包含省略標記（觸發 precheck）但 anchor 無法定位
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(test_file),
+            edit_snippet="// ... existing code ...\ndef totally_different_function():\n    return 999\n// ... more code ...\n",
+            instruction="Edit something",
+            base_dir=str(tmp_path),
+        )
+
+        assert "NEEDS_MORE_CONTEXT" in result
+        assert "無法在檔案中定位" in result
+        # API should NOT be called when precheck fails
+        mock_client.apply.assert_not_called()
+
+    def test_api_auth_error_returns_auth_error(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Should return AUTH_ERROR for 401/403 API errors."""
+        from relace_mcp.clients.exceptions import RelaceAPIError
+
+        test_file = tmp_path / "test.py"
+        test_file.write_text("def foo():\n    pass\n")
+
+        mock_client.apply.side_effect = RelaceAPIError(
+            status_code=401,
+            code="unauthorized",
+            message="Invalid API key",
+            retryable=False,
+        )
+
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(test_file),
+            edit_snippet="def foo():\n    pass\n",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
+
+        assert "AUTH_ERROR" in result
+        assert "API 認證或權限錯誤" in result
+        assert "status: 401" in result
+        assert "code: unauthorized" in result
+        assert "Invalid API key" in result
+
+    def test_api_403_error_returns_auth_error(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Should return AUTH_ERROR for 403 API errors."""
+        from relace_mcp.clients.exceptions import RelaceAPIError
+
+        test_file = tmp_path / "test.py"
+        test_file.write_text("def foo():\n    pass\n")
+
+        mock_client.apply.side_effect = RelaceAPIError(
+            status_code=403,
+            code="forbidden",
+            message="Access denied",
+            retryable=False,
+        )
+
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(test_file),
+            edit_snippet="def foo():\n    pass\n",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
+
+        assert "AUTH_ERROR" in result
+        assert "status: 403" in result
+
+    def test_api_other_4xx_returns_api_error(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Should return API_ERROR for other 4xx errors (e.g., anchor not found)."""
+        from relace_mcp.clients.exceptions import RelaceAPIError
+
+        test_file = tmp_path / "test.py"
+        test_file.write_text("def foo():\n    pass\n")
+
+        mock_client.apply.side_effect = RelaceAPIError(
+            status_code=400,
+            code="anchor_not_found",
+            message="Cannot locate anchor lines",
+            retryable=False,
+        )
+
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(test_file),
+            edit_snippet="def foo():\n    pass\n",
+            instruction="Edit function",
+            base_dir=str(tmp_path),
+        )
+
+        assert "API_ERROR" in result
+        assert "Relace API 錯誤" in result
+        assert "status: 400" in result
+        assert "code: anchor_not_found" in result
+        assert "Cannot locate anchor lines" in result
+
+    def test_network_error_returns_network_error(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Should return NETWORK_ERROR for network failures."""
+        from relace_mcp.clients.exceptions import RelaceNetworkError
+
+        test_file = tmp_path / "test.py"
+        test_file.write_text("def foo():\n    pass\n")
+
+        mock_client.apply.side_effect = RelaceNetworkError("Connection failed")
+
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(test_file),
+            edit_snippet="def foo():\n    pass\n",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
+
+        assert "NETWORK_ERROR" in result
+        assert "網路錯誤" in result
+        assert "Connection failed" in result
+
+    def test_timeout_error_returns_timeout_error(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Should return TIMEOUT_ERROR for timeout failures."""
+        from relace_mcp.clients.exceptions import RelaceTimeoutError
+
+        test_file = tmp_path / "test.py"
+        test_file.write_text("def foo():\n    pass\n")
+
+        mock_client.apply.side_effect = RelaceTimeoutError("Request timed out after 60s")
+
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(test_file),
+            edit_snippet="def foo():\n    pass\n",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
+
+        assert "TIMEOUT_ERROR" in result
+        assert "請求逾時" in result
+        assert "Request timed out" in result
+
+    def test_anchor_precheck_allows_remove_directives(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Should allow snippets with remove directives if they have valid anchors."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("def foo():\n    pass\n\ndef bar():\n    pass\n")
+
+        mock_client.apply.return_value = {
+            "mergedCode": "def foo():\n    pass\n",
+            "usage": {},
+        }
+
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(test_file),
+            edit_snippet="def foo():\n    pass\n\n// remove bar\n",
+            instruction="Remove bar function",
+            base_dir=str(tmp_path),
+        )
+
+        # Should call API, not return NEEDS_MORE_CONTEXT
+        mock_client.apply.assert_called_once()
+        assert "Applied code changes" in result or "No changes made" in result
+
+    def test_anchor_precheck_with_indentation_difference(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Should use strip() for lenient matching despite indentation differences."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("def foo():\n    return True\n")
+
+        mock_client.apply.return_value = {
+            "mergedCode": "def foo():\n    return False\n",
+            "usage": {},
+        }
+
+        # edit_snippet 的縮排與原檔案不同，但 strip() 後應能匹配
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(test_file),
+            edit_snippet="def foo():\nreturn False\n",  # 縮排不同
+            instruction="Change return value",
+            base_dir=str(tmp_path),
+        )
+
+        # Should pass precheck and call API
+        mock_client.apply.assert_called_once()
+        assert "Applied code changes" in result or "No changes made" in result
