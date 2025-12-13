@@ -10,31 +10,16 @@
 
 MCP server for [Relace](https://www.relace.ai/) — AI-powered instant code merging and agentic codebase search.
 
-## Requirements
-
-- Python 3.12 or higher
-- [Relace API Key](https://app.relace.ai/settings/billing)
-
 ## Features
 
 - **Fast Apply** — Apply code edits at 10,000+ tokens/sec via Relace API
 - **Fast Search** — Agentic codebase exploration with natural language queries
 
-## Installation
-
-```bash
-uvx relace-mcp
-```
-
-Or with pip:
-
-```bash
-pip install relace-mcp
-```
-
 ## Quick Start
 
-Add to your MCP config:
+1. Get your API key from [Relace Dashboard](https://app.relace.ai/settings/billing)
+
+2. Add to your MCP config:
 
 ```json
 {
@@ -42,20 +27,33 @@ Add to your MCP config:
     "relace": {
       "command": "uvx",
       "args": ["relace-mcp"],
-      "cwd": "${workspaceFolder}",
       "env": {
-        "RELACE_API_KEY": "rlc-your-api-key"
+        "RELACE_API_KEY": "rlc-your-api-key",
+        "RELACE_BASE_DIR": "/absolute/path/to/your/project"
       }
     }
   }
 }
 ```
 
-> **Note:** The `cwd` field sets the working directory. Most IDEs support `${workspaceFolder}` to auto-resolve the current project path. If your IDE doesn't support `cwd`, use `RELACE_BASE_DIR` in `env` instead.
+> **Important:** `RELACE_BASE_DIR` must be set to your project's absolute path. This restricts file access scope and ensures correct operation. Without it, the server defaults to the MCP host's startup directory (not your workspace).
+
+> **Note:** Requires Python 3.12+. The IDE runs `uvx relace-mcp` automatically—no manual installation needed.
 
 Config locations:
-- **Windsurf**: `~/.codeium/windsurf/mcp_config.json`
 - **Cursor**: `~/.cursor/mcp.json`
+- **Windsurf**: `~/.codeium/windsurf/mcp_config.json`
+
+<details>
+<summary>Why is RELACE_BASE_DIR required?</summary>
+
+MCP servers run as separate processes spawned by the IDE. Due to current limitations:
+- **Cursor** does not pass workspace directory to MCP servers via `cwd` or `roots/list`
+- The server's `os.getcwd()` returns the IDE's startup directory, not your project
+
+Setting `RELACE_BASE_DIR` explicitly ensures the server operates on the correct directory.
+
+</details>
 
 ## Tools
 
@@ -116,7 +114,7 @@ Find relevant code with natural language:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `RELACE_API_KEY` | ✅ | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
-| `RELACE_BASE_DIR` | ⚠️ | Project root path (prefer `cwd` config; falls back to current directory) |
+| `RELACE_BASE_DIR` | ✅ | Absolute path to project root (required for Cursor and most MCP clients) |
 | `RELACE_STRICT_MODE` | ❌ | Set `1` to require explicit base dir (recommended for production) |
 
 <details>
@@ -193,6 +191,14 @@ Ensure the API key is exported in your environment or set in the MCP config's `e
 
 The specified base directory path doesn't exist or isn't accessible. Verify the path and permissions.
 
+### `RELACE_BASE_DIR not set` (Warning)
+
+The server is using its startup directory as base. This is likely incorrect for your project. Set `RELACE_BASE_DIR` to your project's absolute path in the MCP config.
+
+### `INVALID_PATH: Access denied`
+
+The target file is outside `RELACE_BASE_DIR`. Ensure the file path is within your configured project directory.
+
 ### `API key does not start with 'rlc-'`
 
 Your API key may be invalid. Get a valid key from [Relace Dashboard](https://app.relace.ai/settings/billing).
@@ -211,7 +217,3 @@ cd relace-mcp
 uv sync
 uv run pytest
 ```
-
-## License
-
-[MIT](LICENSE)
