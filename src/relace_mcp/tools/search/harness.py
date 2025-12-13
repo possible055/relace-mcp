@@ -7,6 +7,10 @@ from typing import Any
 from ...clients import RelaceSearchClient
 from ...config import SEARCH_MAX_TURNS, RelaceConfig
 from .handlers import (
+    MAX_BASH_CHARS,
+    MAX_GREP_SEARCH_CHARS,
+    MAX_VIEW_DIRECTORY_CHARS,
+    MAX_VIEW_FILE_CHARS,
     bash_handler,
     estimate_context_size,
     grep_search_handler,
@@ -15,7 +19,7 @@ from .handlers import (
     view_directory_handler,
     view_file_handler,
 )
-from .schemas import SYSTEM_PROMPT, TOOL_SCHEMAS, USER_PROMPT_TEMPLATE
+from .schemas import SYSTEM_PROMPT, TOOL_SCHEMAS, USER_PROMPT_TEMPLATE, GrepSearchParams
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +43,7 @@ class FastAgenticSearchHarness:
     def __init__(self, config: RelaceConfig, client: RelaceSearchClient) -> None:
         self._config = config
         self._client = client
+        self._observed_files: dict[str, list[list[int]]] = {}
 
     def run(self, query: str) -> dict[str, Any]:
         """執行一次 Fast Agentic Search。
@@ -53,16 +58,38 @@ class FastAgenticSearchHarness:
                 "explanation": str,
                 "files": {path: [[start, end], ...]},
                 "turns_used": int,
+                "partial": bool,  # optional, True when error or max turns exceeded
+                "error": str,  # optional, present when error occurred
             }
 
-        Raises:
-            RuntimeError: Agent 未在 max turns 內完成。
+        Note:
+            此方法永遠回傳 dict，不會拋出異常。
+            當發生錯誤時，會回傳包含 error 欄位的 partial report。
         """
         trace_id = str(uuid.uuid4())[:8]
         # 安全截斷 query（避免在多字節字符中間截斷）
         query_preview = query[:100] if len(query) <= 100 else query[:97] + "..."
         logger.info("[%s] Starting Fast Agentic Search: %s", trace_id, query_preview)
 
+        # 重置 observed_files（用於累積已探索的檔案）
+        self._observed_files = {}
+
+        try:
+            return self._run_search_loop(query, trace_id)
+        except Exception as exc:
+            logger.error("[%s] Search failed with error: %s", trace_id, exc)
+            merged_files = self._merge_observed_ranges()
+            return {
+                "query": query,
+                "explanation": f"[ERROR] Search failed: {exc}",
+                "files": merged_files,
+                "turns_used": 0,
+                "partial": True,
+                "error": str(exc),
+            }
+
+    def _run_search_loop(self, query: str, trace_id: str) -> dict[str, Any]:
+        """執行 search loop 的內部方法。"""
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": USER_PROMPT_TEMPLATE.format(query=query)},
@@ -70,6 +97,15 @@ class FastAgenticSearchHarness:
 
         for turn in range(SEARCH_MAX_TURNS):
             logger.debug("[%s] Turn %d/%d", trace_id, turn + 1, SEARCH_MAX_TURNS)
+
+            # 強制收斂機制：最後 2 turn 注入提示
+            if turn >= SEARCH_MAX_TURNS - 2:
+                convergence_hint = (
+                    "剩餘回合有限，請立即使用 report_back 回報目前發現，"
+                    "不要追求完整覆蓋。請基於已收集的資訊做出判斷。"
+                )
+                messages.append({"role": "user", "content": convergence_hint})
+                logger.info("[%s] Injected convergence hint at turn %d", trace_id, turn + 1)
 
             # 檢查 context 大小
             ctx_size = estimate_context_size(messages)
@@ -83,6 +119,9 @@ class FastAgenticSearchHarness:
                 )
                 # 保留 system + user + 最近 6 條 messages
                 messages = self._truncate_messages(messages)
+
+            # 確保 tool_calls 與 tool results 配對完整
+            self._repair_tool_call_integrity(messages, trace_id)
 
             response = self._client.chat(messages, tools=TOOL_SCHEMAS, trace_id=trace_id)
 
@@ -132,14 +171,195 @@ class FastAgenticSearchHarness:
                     "turns_used": turn + 1,
                 }
 
-        raise RuntimeError(f"Fast Agentic Search did not complete within {SEARCH_MAX_TURNS} turns")
+        # 超限時回傳 partial report（不 raise）
+        logger.warning(
+            "[%s] Search did not complete within %d turns, returning partial results",
+            trace_id,
+            SEARCH_MAX_TURNS,
+        )
+        merged_files = self._merge_observed_ranges()
+        return {
+            "query": query,
+            "explanation": (
+                f"[PARTIAL] Search did not complete within {SEARCH_MAX_TURNS} turns. "
+                f"Returning {len(merged_files)} observed files based on exploration."
+            ),
+            "files": merged_files,
+            "turns_used": SEARCH_MAX_TURNS,
+            "partial": True,
+        }
+
+    def _record_grep_results(self, grep_output: str) -> None:
+        """解析 grep 輸出並記錄到 observed_files。
+
+        Grep 輸出格式：path:line:content
+        注意：grep 輸出的路徑是相對於 base_dir 的，可能以 ./ 開頭。
+        """
+        import re
+
+        # 解析 grep 輸出，提取 path:line
+        pattern = r"^([^:]+):(\d+):"
+        for line in grep_output.split("\n"):
+            match = re.match(pattern, line)
+            if match:
+                path = match.group(1)
+                # 統一路徑格式：移除 ./ 前綴（grep 相對路徑），確保與 view_file 一致
+                if path.startswith("./"):
+                    path = path[2:]
+                line_num = int(match.group(2))
+
+                if path not in self._observed_files:
+                    self._observed_files[path] = []
+                # 記錄單行範圍
+                self._observed_files[path].append([line_num, line_num])
+
+    def _merge_observed_ranges(self) -> dict[str, list[list[int]]]:
+        """合併並去重 observed_files 中的 ranges。
+
+        相鄰或重疊的 ranges 會被合併，每檔案最多保留 20 段。
+        """
+        max_ranges_per_file = 20
+        max_total_files = 50
+        merged: dict[str, list[list[int]]] = {}
+
+        # 按檔案數量排序，優先保留較多 ranges 的檔案
+        sorted_files = sorted(
+            self._observed_files.items(),
+            key=lambda x: len(x[1]),
+            reverse=True,
+        )[:max_total_files]
+
+        for path, ranges in sorted_files:
+            if not ranges:
+                continue
+
+            # 排序並合併相鄰/重疊的 ranges
+            sorted_ranges = sorted(ranges, key=lambda r: r[0])
+            merged_ranges: list[list[int]] = []
+
+            for r in sorted_ranges:
+                if not merged_ranges:
+                    merged_ranges.append(r[:])
+                else:
+                    last = merged_ranges[-1]
+                    # 相鄰或重疊則合併（允許相鄰 1 行也合併）
+                    if r[0] <= last[1] + 2:
+                        last[1] = max(last[1], r[1])
+                    else:
+                        merged_ranges.append(r[:])
+
+            # 限制每檔案的 ranges 數量
+            merged[path] = merged_ranges[:max_ranges_per_file]
+
+        return merged
+
+    def _repair_tool_call_integrity(self, messages: list[dict[str, Any]], trace_id: str) -> None:
+        """檢查並修復 tool_calls 與 tool results 的配對完整性。
+
+        若有 tool_call 沒有對應的 tool result，會注入 error tool result。
+        這是為了避免 OpenAI-compatible provider 因協議違規而返回 400。
+        """
+        # 收集所有 tool_call ids
+        expected_ids: set[str] = set()
+        for msg in messages:
+            if msg.get("role") == "assistant":
+                tool_calls = msg.get("tool_calls", [])
+                for tc in tool_calls:
+                    tc_id = tc.get("id", "")
+                    if tc_id:
+                        expected_ids.add(tc_id)
+
+        # 收集所有已有的 tool result ids
+        existing_ids: set[str] = set()
+        for msg in messages:
+            if msg.get("role") == "tool":
+                tc_id = msg.get("tool_call_id", "")
+                if tc_id:
+                    existing_ids.add(tc_id)
+
+        # 找出缺失的 tool results
+        missing_ids = expected_ids - existing_ids
+        if missing_ids:
+            logger.warning(
+                "[%s] Found %d missing tool results, injecting error responses",
+                trace_id,
+                len(missing_ids),
+            )
+            # 注入 error tool results
+            for tc_id in missing_ids:
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc_id,
+                        "content": "Error: Tool execution was interrupted or result was truncated.",
+                    }
+                )
 
     def _truncate_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """截斷過長的 message history，保留 system + user + 最近幾輪。"""
-        # 保留 system (0) + user (1) + 最近 6 條 messages
+        """截斷過長的 message history，保留 system + user + 最近幾個 turn blocks。
+
+        Turn block 定義：一個 assistant(tool_calls) + 其對應的所有 tool 結果。
+        截斷時以完整 block 為單位，確保不會留下孤兒 tool message。
+        """
         if len(messages) <= 8:
             return messages
-        return messages[:2] + messages[-6:]
+
+        # 保留 system (0) + user (1)
+        system_and_user = messages[:2]
+        conversation = messages[2:]
+
+        # 識別 turn blocks
+        blocks: list[list[dict[str, Any]]] = []
+        current_block: list[dict[str, Any]] = []
+
+        for msg in conversation:
+            role = msg.get("role", "")
+
+            if role == "assistant":
+                # 若當前 block 有內容，先儲存
+                if current_block:
+                    blocks.append(current_block)
+                # 開始新 block
+                current_block = [msg]
+            elif role == "tool":
+                # tool message 必須跟在 assistant 之後
+                if current_block:
+                    current_block.append(msg)
+                # 如果 current_block 為空（孤兒 tool message），直接丟棄
+            else:
+                # 其他類型（如 user），視為獨立訊息
+                if current_block:
+                    blocks.append(current_block)
+                    current_block = []
+                blocks.append([msg])
+
+        # 最後一個 block
+        if current_block:
+            blocks.append(current_block)
+
+        # 從最新 block 往前保留，目標保留約 6-8 個 messages
+        target_msg_count = 6
+        kept_blocks: list[list[dict[str, Any]]] = []
+        total_msgs = 0
+
+        for block in reversed(blocks):
+            block_size = len(block)
+            if total_msgs + block_size <= target_msg_count * 1.5:  # 允許稍微超過
+                kept_blocks.insert(0, block)
+                total_msgs += block_size
+            elif total_msgs == 0:
+                # 至少保留最後一個 block（即使超過上限）
+                kept_blocks.insert(0, block)
+                break
+            else:
+                break
+
+        # 組合結果
+        result = system_and_user[:]
+        for block in kept_blocks:
+            result.extend(block)
+
+        return result
 
     def _append_tool_results_to_messages(
         self,
@@ -152,10 +372,31 @@ class FastAgenticSearchHarness:
             messages: 要更新的 messages 列表。
             tool_results: tool results 列表。
         """
-        for tc_id, _func_name, result in tool_results:
+        # 工具類型對應的截斷上限與提示
+        tool_limits = {
+            "view_file": (
+                MAX_VIEW_FILE_CHARS,
+                "如需更多內容，請縮小 view_range 或分段查詢。",
+            ),
+            "grep_search": (
+                MAX_GREP_SEARCH_CHARS,
+                "如需更多匹配結果，請使用更具體的 query 或 include_pattern。",
+            ),
+            "bash": (
+                MAX_BASH_CHARS,
+                "如需限制輸出，請用 head -n / tail -n / --max-count 等參數。",
+            ),
+            "view_directory": (
+                MAX_VIEW_DIRECTORY_CHARS,
+                "如需查看更多目錄項目，請使用更具體的路徑。",
+            ),
+        }
+
+        for tc_id, func_name, result in tool_results:
             content = result if isinstance(result, str) else json.dumps(result)
-            # 截斷過長的 tool result
-            content = truncate_for_context(content)
+            # 根據工具類型選擇截斷上限與提示
+            max_chars, hint = tool_limits.get(func_name, (MAX_VIEW_FILE_CHARS, ""))
+            content = truncate_for_context(content, max_chars=max_chars, tool_hint=hint)
             messages.append(
                 {
                     "role": "tool",
@@ -316,7 +557,7 @@ class FastAgenticSearchHarness:
         return tool_results, report_back_result
 
     def _dispatch_tool(self, name: str, args: dict[str, Any]) -> str | dict[str, Any]:
-        """分派 tool call 到對應的 handler。"""
+        """分派 tool call 到對應的 handler，並累積 observed_files。"""
         # 防禦：若 args 不是 dict（例如模型回傳 "arguments": "\"oops\""）
         if not isinstance(args, dict):
             return f"Error: Invalid arguments type, expected dict but got {type(args).__name__}"
@@ -324,11 +565,20 @@ class FastAgenticSearchHarness:
         base_dir = self._config.base_dir
 
         if name == "view_file":
-            return view_file_handler(
-                path=args.get("path", ""),
-                view_range=args.get("view_range", [1, 100]),
+            path = args.get("path", "")
+            view_range = args.get("view_range", [1, 100])
+            result = view_file_handler(
+                path=path,
+                view_range=view_range,
                 base_dir=base_dir,
             )
+            # 記錄 observed_files（去除 /repo/ 前綴）
+            if isinstance(result, str) and not result.startswith("Error:"):
+                normalized_path = path.removeprefix("/repo/")
+                if normalized_path not in self._observed_files:
+                    self._observed_files[normalized_path] = []
+                self._observed_files[normalized_path].append(view_range)
+            return result
         elif name == "view_directory":
             return view_directory_handler(
                 path=args.get("path", ""),
@@ -336,13 +586,18 @@ class FastAgenticSearchHarness:
                 base_dir=base_dir,
             )
         elif name == "grep_search":
-            return grep_search_handler(
+            params = GrepSearchParams(
                 query=args.get("query", ""),
                 case_sensitive=args.get("case_sensitive", True),
                 exclude_pattern=args.get("exclude_pattern"),
                 include_pattern=args.get("include_pattern"),
                 base_dir=base_dir,
             )
+            result = grep_search_handler(params)
+            # 記錄 observed_files（解析 grep 輸出）
+            if isinstance(result, str) and not result.startswith("Error:"):
+                self._record_grep_results(result)
+            return result
         elif name == "report_back":
             return report_back_handler(
                 explanation=args.get("explanation", ""),

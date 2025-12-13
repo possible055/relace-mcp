@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from relace_mcp.clients import RelaceClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.tools.apply import (
     MAX_FILE_SIZE_BYTES,
@@ -112,23 +111,21 @@ class TestApplyFileLogicSuccess:
     def test_successful_apply(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         temp_source_file: Path,
         successful_api_response: dict[str, Any],
         tmp_path: Path,
     ) -> None:
         """Should successfully apply edit and return UDiff."""
-        mock_client = MagicMock(spec=RelaceClient)
         mock_client.apply.return_value = successful_api_response
 
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
-            result = apply_file_logic(
-                client=mock_client,
-                file_path=str(temp_source_file),
-                edit_snippet="// new code",
-                instruction="Add feature",
-                base_dir=str(tmp_path),
-            )
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(temp_source_file),
+            edit_snippet="// new code",
+            instruction="Add feature",
+            base_dir=str(tmp_path),
+        )
 
         assert "Applied code changes using Relace API" in result
         assert "Changes made:" in result
@@ -141,46 +138,43 @@ class TestApplyFileLogicSuccess:
     def test_logs_success_event(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         temp_source_file: Path,
         successful_api_response: dict[str, Any],
         tmp_path: Path,
+        mock_log_path: Path,
     ) -> None:
         """Should log success event."""
-        mock_client = MagicMock(spec=RelaceClient)
         mock_client.apply.return_value = successful_api_response
 
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
-            apply_file_logic(
-                client=mock_client,
-                file_path=str(temp_source_file),
-                edit_snippet="// edit",
-                instruction=None,
-                base_dir=str(tmp_path),
-            )
+        apply_file_logic(
+            client=mock_client,
+            file_path=str(temp_source_file),
+            edit_snippet="// edit",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
 
-        logged = json.loads(log_file.read_text().strip())
+        logged = json.loads(mock_log_path.read_text().strip())
         assert logged["kind"] == "apply_success"
 
     def test_create_new_file(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
         """Should create new file directly without calling API."""
-        mock_client = MagicMock(spec=RelaceClient)
         new_file = tmp_path / "new_file.py"
         content = "def hello():\n    print('Hello')\n"
 
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
-            result = apply_file_logic(
-                client=mock_client,
-                file_path=str(new_file),
-                edit_snippet=content,
-                instruction=None,
-                base_dir=str(tmp_path),
-            )
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(new_file),
+            edit_snippet=content,
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
 
         assert "Created" in result
         assert new_file.exists()
@@ -196,12 +190,12 @@ class TestApplyFileLogicValidation:
     def test_empty_or_whitespace_edit_snippet_returns_error(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         temp_source_file: Path,
         tmp_path: Path,
         snippet: str,
     ) -> None:
         """Should return INVALID_INPUT for empty or whitespace-only edit_snippet."""
-        mock_client = MagicMock(spec=RelaceClient)
 
         result = apply_file_logic(
             client=mock_client,
@@ -217,11 +211,11 @@ class TestApplyFileLogicValidation:
     def test_placeholder_only_snippet_returns_error(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         temp_source_file: Path,
         tmp_path: Path,
     ) -> None:
         """Should return NEEDS_MORE_CONTEXT when snippet has no anchors."""
-        mock_client = MagicMock(spec=RelaceClient)
 
         result = apply_file_logic(
             client=mock_client,
@@ -237,10 +231,10 @@ class TestApplyFileLogicValidation:
     def test_empty_path_returns_invalid_path(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
         """Should return INVALID_PATH for empty file_path."""
-        mock_client = MagicMock(spec=RelaceClient)
 
         result = apply_file_logic(
             client=mock_client,
@@ -257,10 +251,10 @@ class TestApplyFileLogicValidation:
     def test_directory_path_returns_invalid_path(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
         """Should return INVALID_PATH when file_path is a directory."""
-        mock_client = MagicMock(spec=RelaceClient)
 
         result = apply_file_logic(
             client=mock_client,
@@ -277,22 +271,20 @@ class TestApplyFileLogicValidation:
     def test_delete_with_remove_directive_is_allowed(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         temp_source_file: Path,
         tmp_path: Path,
     ) -> None:
         """Should allow delete with // remove directive (no longer blocked by gate)."""
-        mock_client = MagicMock(spec=RelaceClient)
         mock_client.apply.return_value = {"mergedCode": "# modified\n", "usage": {}}
 
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
-            result = apply_file_logic(
-                client=mock_client,
-                file_path=str(temp_source_file),
-                edit_snippet="// ... existing code ...\n// remove foo\n// ... rest of code ...\n",
-                instruction="delete foo",
-                base_dir=str(tmp_path),
-            )
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(temp_source_file),
+            edit_snippet="// ... existing code ...\n// remove foo\n// ... rest of code ...\n",
+            instruction="delete foo",
+            base_dir=str(tmp_path),
+        )
 
         # Should call API, not return error
         mock_client.apply.assert_called_once()
@@ -301,23 +293,21 @@ class TestApplyFileLogicValidation:
     def test_no_changes_returns_message(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         temp_source_file: Path,
         tmp_path: Path,
     ) -> None:
         """Should return 'No changes made' when diff is empty."""
         original = temp_source_file.read_text()
-        mock_client = MagicMock(spec=RelaceClient)
         mock_client.apply.return_value = {"mergedCode": original, "usage": {}}
 
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
-            result = apply_file_logic(
-                client=mock_client,
-                file_path=str(temp_source_file),
-                edit_snippet="// edit",
-                instruction=None,
-                base_dir=str(tmp_path),
-            )
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(temp_source_file),
+            edit_snippet="// edit",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
 
         assert result == "No changes made"
 
@@ -328,11 +318,11 @@ class TestApplyFileLogicFileSize:
     def test_large_file_raises(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         temp_large_file: Path,
         tmp_path: Path,
     ) -> None:
         """Should raise on files exceeding size limit."""
-        mock_client = MagicMock(spec=RelaceClient)
 
         with pytest.raises(RuntimeError, match="File too large"):
             apply_file_logic(
@@ -346,6 +336,7 @@ class TestApplyFileLogicFileSize:
     def test_file_at_limit_allowed(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         tmp_path: Path,
         successful_api_response: dict[str, Any],
     ) -> None:
@@ -354,19 +345,16 @@ class TestApplyFileLogicFileSize:
         limit_file = tmp_path / "limit.py"
         limit_file.write_text("x" * MAX_FILE_SIZE_BYTES)
 
-        mock_client = MagicMock(spec=RelaceClient)
         mock_client.apply.return_value = successful_api_response
 
         # Should not raise
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
-            result = apply_file_logic(
-                client=mock_client,
-                file_path=str(limit_file),
-                edit_snippet="// edit",
-                instruction=None,
-                base_dir=str(tmp_path),
-            )
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(limit_file),
+            edit_snippet="// edit",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
         assert "Applied code changes" in result or "No changes made" in result
 
 
@@ -376,11 +364,11 @@ class TestApplyFileLogicEncoding:
     def test_binary_file_raises(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         temp_binary_file: Path,
         tmp_path: Path,
     ) -> None:
         """Should raise on non-UTF-8 encoded files."""
-        mock_client = MagicMock(spec=RelaceClient)
 
         with pytest.raises(RuntimeError, match="Cannot detect encoding"):
             apply_file_logic(
@@ -394,10 +382,10 @@ class TestApplyFileLogicEncoding:
     def test_gbk_file_supported(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
         """Should successfully read and write GBK encoded files."""
-        mock_client = MagicMock(spec=RelaceClient)
         gbk_file = tmp_path / "gbk_file.py"
         # 寫入 GBK 編碼的中文內容
         gbk_content = "# 这是简体中文注释\nprint('你好')\n"
@@ -406,15 +394,13 @@ class TestApplyFileLogicEncoding:
         merged_code = "# 这是简体中文注释\nprint('你好世界')\n"
         mock_client.apply.return_value = {"mergedCode": merged_code, "usage": {}}
 
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
-            result = apply_file_logic(
-                client=mock_client,
-                file_path=str(gbk_file),
-                edit_snippet="// edit",
-                instruction=None,
-                base_dir=str(tmp_path),
-            )
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(gbk_file),
+            edit_snippet="// edit",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
 
         assert "Applied code changes" in result
         # 確認寫回的檔案仍為 GBK 編碼
@@ -427,10 +413,10 @@ class TestApplyFileLogicBaseDirSecurity:
     def test_blocks_path_outside_base_dir(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
         """Should block access to files outside base_dir."""
-        mock_client = MagicMock(spec=RelaceClient)
 
         # 嘗試存取 base_dir 外部的檔案
         outside_file = tmp_path.parent / "outside.py"
@@ -457,69 +443,54 @@ class TestApplyFileLogicApiErrors:
     def test_logs_error_on_api_failure(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         temp_source_file: Path,
         tmp_path: Path,
+        mock_log_path: Path,
     ) -> None:
         """Should log error event when API call fails."""
-        mock_client = MagicMock(spec=RelaceClient)
         mock_client.apply.side_effect = RuntimeError("API Error")
 
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
-            with pytest.raises(RuntimeError):
-                apply_file_logic(
-                    client=mock_client,
-                    file_path=str(temp_source_file),
-                    edit_snippet="// edit",
-                    instruction=None,
-                    base_dir=str(tmp_path),
-                )
+        with pytest.raises(RuntimeError):
+            apply_file_logic(
+                client=mock_client,
+                file_path=str(temp_source_file),
+                edit_snippet="// edit",
+                instruction=None,
+                base_dir=str(tmp_path),
+            )
 
-        logged = json.loads(log_file.read_text().strip())
+        logged = json.loads(mock_log_path.read_text().strip())
         assert logged["kind"] == "apply_error"
         assert "API Error" in logged["error"]
 
-    def test_missing_merged_code_raises(
+    @pytest.mark.parametrize(
+        "response",
+        [
+            {"usage": {}},  # No mergedCode
+            {"mergedCode": None, "usage": {}},  # Null mergedCode
+        ],
+        ids=["missing_merged_code", "null_merged_code"],
+    )
+    def test_invalid_merged_code_raises(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         temp_source_file: Path,
         tmp_path: Path,
+        response: dict[str, Any],
     ) -> None:
-        """Should raise when API returns no mergedCode."""
-        mock_client = MagicMock(spec=RelaceClient)
-        mock_client.apply.return_value = {"usage": {}}  # No mergedCode
+        """Should raise when API returns no or null mergedCode."""
+        mock_client.apply.return_value = response
 
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
-            with pytest.raises(RuntimeError, match="did not return 'mergedCode'"):
-                apply_file_logic(
-                    client=mock_client,
-                    file_path=str(temp_source_file),
-                    edit_snippet="// edit",
-                    instruction=None,
-                    base_dir=str(tmp_path),
-                )
-
-    def test_null_merged_code_raises(
-        self,
-        mock_config: RelaceConfig,
-        temp_source_file: Path,
-        tmp_path: Path,
-    ) -> None:
-        """Should raise when API returns null mergedCode."""
-        mock_client = MagicMock(spec=RelaceClient)
-        mock_client.apply.return_value = {"mergedCode": None, "usage": {}}
-
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
-            with pytest.raises(RuntimeError, match="did not return 'mergedCode'"):
-                apply_file_logic(
-                    client=mock_client,
-                    file_path=str(temp_source_file),
-                    edit_snippet="// edit",
-                    instruction=None,
-                    base_dir=str(tmp_path),
-                )
+        with pytest.raises(RuntimeError, match="did not return 'mergedCode'"):
+            apply_file_logic(
+                client=mock_client,
+                file_path=str(temp_source_file),
+                edit_snippet="// edit",
+                instruction=None,
+                base_dir=str(tmp_path),
+            )
 
 
 class TestApplyFileLogicSnippetPreview:
@@ -528,87 +499,61 @@ class TestApplyFileLogicSnippetPreview:
     def test_truncates_long_snippet_in_log(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         temp_source_file: Path,
         successful_api_response: dict[str, Any],
         tmp_path: Path,
+        mock_log_path: Path,
     ) -> None:
         """Should truncate edit_snippet to 200 chars in log."""
-        mock_client = MagicMock(spec=RelaceClient)
         mock_client.apply.return_value = successful_api_response
 
         long_snippet = "x" * 500
 
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
-            apply_file_logic(
-                client=mock_client,
-                file_path=str(temp_source_file),
-                edit_snippet=long_snippet,
-                instruction=None,
-                base_dir=str(tmp_path),
-            )
+        apply_file_logic(
+            client=mock_client,
+            file_path=str(temp_source_file),
+            edit_snippet=long_snippet,
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
 
-        logged = json.loads(log_file.read_text().strip())
+        logged = json.loads(mock_log_path.read_text().strip())
         assert len(logged["edit_snippet_preview"]) == 200
 
 
 class TestApplyFileLogicPathNormalization:
     """Test path normalization for /repo/... virtual root."""
 
-    def test_repo_virtual_root_path(
+    @pytest.mark.parametrize(
+        "file_path",
+        ["/repo/src/file.py", "src/file.py"],
+        ids=["virtual_root", "relative_path"],
+    )
+    def test_path_formats_accepted(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         tmp_path: Path,
+        file_path: str,
     ) -> None:
-        """Should accept /repo/... format and map to base_dir."""
+        """Should accept /repo/... and relative path formats and map to base_dir."""
         test_file = tmp_path / "src" / "file.py"
         test_file.parent.mkdir(parents=True, exist_ok=True)
         test_file.write_text("original = True\n")
 
-        mock_client = MagicMock(spec=RelaceClient)
         mock_client.apply.return_value = {
             "mergedCode": "modified = True\n",
             "usage": {},
         }
 
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
-            result = apply_file_logic(
-                client=mock_client,
-                file_path="/repo/src/file.py",
-                edit_snippet="modified = True\n",
-                instruction=None,
-                base_dir=str(tmp_path),
-            )
-
-        assert "Applied code changes" in result
-        mock_client.apply.assert_called_once()
-
-    def test_relative_path_mapped_to_base_dir(
-        self,
-        mock_config: RelaceConfig,
-        tmp_path: Path,
-    ) -> None:
-        """Should accept relative path and map to base_dir."""
-        test_file = tmp_path / "src" / "file.py"
-        test_file.parent.mkdir(parents=True, exist_ok=True)
-        test_file.write_text("original = True\n")
-
-        mock_client = MagicMock(spec=RelaceClient)
-        mock_client.apply.return_value = {
-            "mergedCode": "modified = True\n",
-            "usage": {},
-        }
-
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
-            result = apply_file_logic(
-                client=mock_client,
-                file_path="src/file.py",
-                edit_snippet="modified = True\n",
-                instruction=None,
-                base_dir=str(tmp_path),
-            )
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=file_path,
+            edit_snippet="modified = True\n",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
 
         assert "Applied code changes" in result
         mock_client.apply.assert_called_once()
@@ -616,10 +561,10 @@ class TestApplyFileLogicPathNormalization:
     def test_invalid_path_returns_error(
         self,
         mock_config: RelaceConfig,
+        mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
         """Should return INVALID_PATH for paths outside base_dir."""
-        mock_client = MagicMock(spec=RelaceClient)
 
         result = apply_file_logic(
             client=mock_client,

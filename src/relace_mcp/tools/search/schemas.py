@@ -1,4 +1,17 @@
+from dataclasses import dataclass
 from typing import Any
+
+
+@dataclass(frozen=True, slots=True)
+class GrepSearchParams:
+    """封裝 grep_search 工具參數。"""
+
+    query: str
+    case_sensitive: bool
+    include_pattern: str | None
+    exclude_pattern: str | None
+    base_dir: str
+
 
 SYSTEM_PROMPT = """You are an AI agent whose job is to explore a code base with the provided tools and thoroughly understand the problem. You should use the tools provided to explore the codebase, read files, search for specific terms, and execute bash commands as needed. Once you have a good understanding of the problem, use the `report_back` tool share your findings. Make sure to only use the `report_back` tool when you are confident that you have gathered enough information to make an informed decision. Your objective is speed and efficiency so call multiple tools at once where applicable to reduce latency and reduce the number of turns. You are given a limited number of turns so aim to call 4-12 tools in parallel. You are suggested to explain your reasoning for the tools you choose to call before calling them."""
 

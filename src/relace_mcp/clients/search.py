@@ -13,6 +13,7 @@ from ..config import (
     SEARCH_TIMEOUT_SECONDS,
     RelaceConfig,
 )
+from .exceptions import RelaceAPIError, raise_for_status
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ class RelaceSearchClient:
             Relace Search API 回傳的 JSON dict（OpenAI chat.completions 格式）。
 
         Raises:
-            RuntimeError: API 呼叫失敗時。
+            RuntimeError: API 呼叫失敗時（包含不可重試的錯誤或重試次數用盡）。
         """
         payload: dict[str, Any] = {
             "model": RELACE_SEARCH_MODEL,
@@ -67,35 +68,42 @@ class RelaceSearchClient:
                     resp = client.post(RELACE_SEARCH_ENDPOINT, json=payload, headers=headers)
                 latency_ms = int((time.monotonic() - started_at) * 1000)
 
-                # 4xx: fail-fast，不 retry
-                if 400 <= resp.status_code < 500:
-                    logger.error(
-                        "[%s] Relace Search API 4xx error (status=%d, latency=%dms)",
-                        trace_id,
-                        resp.status_code,
-                        latency_ms,
-                    )
-                    raise RuntimeError(
-                        f"Relace Search API error (status {resp.status_code}): {resp.text}"
-                    )
+                try:
+                    raise_for_status(resp)
+                except RelaceAPIError as exc:
+                    if not exc.retryable:
+                        # 不可重試的錯誤（4xx 除了 429/423），直接拋出
+                        logger.error(
+                            "[%s] Relace Search API %s (status=%d, latency=%dms): %s",
+                            trace_id,
+                            exc.code,
+                            resp.status_code,
+                            latency_ms,
+                            exc.message,
+                        )
+                        raise RuntimeError(
+                            f"Relace Search API error ({exc.code}): {exc.message}"
+                        ) from exc
 
-                # 5xx: 可 retry
-                if resp.is_server_error:
+                    # 可重試的錯誤（429, 423, 5xx）
+                    last_exc = exc
                     logger.warning(
-                        "[%s] Relace Search API 5xx error (status=%d, latency=%dms, attempt=%d/%d)",
+                        "[%s] Relace Search API %s (status=%d, latency=%dms, attempt=%d/%d)",
                         trace_id,
+                        exc.code,
                         resp.status_code,
                         latency_ms,
                         attempt + 1,
                         MAX_RETRIES + 1,
                     )
                     if attempt < MAX_RETRIES:
-                        delay = RETRY_BASE_DELAY * (2**attempt) + random.uniform(0, 0.5)  # nosec B311
+                        delay = exc.retry_after or RETRY_BASE_DELAY * (2**attempt)
+                        delay += random.uniform(0, 0.5)  # nosec B311
                         time.sleep(delay)
                         continue
                     raise RuntimeError(
-                        f"Relace Search API error (status {resp.status_code}): {resp.text}"
-                    )
+                        f"Relace Search API error ({exc.code}): {exc.message}"
+                    ) from exc
 
                 # 成功
                 logger.info(
@@ -108,6 +116,12 @@ class RelaceSearchClient:
                 try:
                     return resp.json()
                 except ValueError as exc:
+                    # 2xx 但非 JSON 是服務端異常行為
+                    logger.error(
+                        "[%s] Relace Search API returned non-JSON response (status=%d)",
+                        trace_id,
+                        resp.status_code,
+                    )
                     raise RuntimeError("Relace Search API returned non-JSON response") from exc
 
             except httpx.TimeoutException as exc:

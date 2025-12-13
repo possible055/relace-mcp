@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ...utils import MAX_FILE_SIZE_BYTES, normalize_repo_path, validate_file_path
+from .schemas import GrepSearchParams
 
 # 目錄列出上限
 MAX_DIR_ITEMS = 250
@@ -15,8 +16,12 @@ MAX_GREP_MATCHES = 50
 GREP_TIMEOUT_SECONDS = 30
 # Python fallback grep 最大深度
 MAX_GREP_DEPTH = 10
-# Context 截斷：每個 tool result 最大字元數
-MAX_TOOL_RESULT_CHARS = 50000
+# Context 截斷：每個 tool result 最大字元數（分工具類型）
+MAX_TOOL_RESULT_CHARS = 50000  # truncate_for_context 的預設上限
+MAX_VIEW_FILE_CHARS = 20000
+MAX_GREP_SEARCH_CHARS = 12000
+MAX_BASH_CHARS = 15000
+MAX_VIEW_DIRECTORY_CHARS = 8000
 
 
 def _timeout_context(seconds: int):
@@ -57,7 +62,9 @@ def _timeout_context(seconds: int):
 def map_repo_path(path: str, base_dir: str) -> str:
     """將模型傳來的 /repo/... 路徑轉為實際檔案系統路徑。
 
-    向後相容的 wrapper，內部使用 normalize_repo_path。
+    此函數刻意只接受 /repo 虛擬根目錄格式（/repo 或 /repo/...），
+    用於強制 search agent 一律以 /repo 作為「虛擬 repo root」回傳路徑。
+    內部實作委派給 normalize_repo_path 進行實際路徑轉換。
 
     Args:
         path: 模型傳來的路徑，預期格式為 /repo 或 /repo/...
@@ -69,9 +76,73 @@ def map_repo_path(path: str, base_dir: str) -> str:
     Raises:
         RuntimeError: 若 path 不以 /repo 開頭。
     """
-    if not (path == "/repo" or path == "/repo/" or path.startswith("/repo/")):
+    if path not in ("/repo", "/repo/") and not path.startswith("/repo/"):
         raise RuntimeError(f"Fast Agentic Search expects absolute paths under /repo/, got: {path}")
     return normalize_repo_path(path, base_dir)
+
+
+def _validate_file_for_view(resolved: Path, path: str) -> str | None:
+    """驗證檔案是否可讀取。
+
+    Args:
+        resolved: 解析後的檔案路徑。
+        path: 原始請求路徑。
+
+    Returns:
+        錯誤訊息（若有問題），否則 None。
+    """
+    if not resolved.exists():
+        return f"Error: File not found: {path}"
+    if not resolved.is_file():
+        return f"Error: Not a file: {path}"
+
+    file_size = resolved.stat().st_size
+    if file_size > MAX_FILE_SIZE_BYTES:
+        return f"Error: File too large ({file_size} bytes). Maximum: {MAX_FILE_SIZE_BYTES} bytes"
+
+    return None
+
+
+def _parse_view_range(view_range: list[int], total_lines: int) -> tuple[int, int]:
+    """解析並正規化 view_range。
+
+    Args:
+        view_range: [start, end] 範圍。
+        total_lines: 檔案總行數。
+
+    Returns:
+        (start_idx, end_idx) 0-indexed 範圍。
+    """
+    start = view_range[0] if len(view_range) > 0 else 1
+    end = view_range[1] if len(view_range) > 1 else 100
+
+    if end == -1:
+        end = total_lines
+
+    start_idx = max(0, start - 1)
+    end_idx = min(total_lines, end)
+
+    return start_idx, end_idx
+
+
+def _format_file_lines(lines: list[str], start_idx: int, end_idx: int) -> str:
+    """格式化檔案行（附帶行號）。
+
+    Args:
+        lines: 檔案所有行。
+        start_idx: 起始索引（0-indexed）。
+        end_idx: 結束索引（0-indexed）。
+
+    Returns:
+        格式化後的內容字串。
+    """
+    result_lines = [f"{idx + 1} {lines[idx]}" for idx in range(start_idx, end_idx)]
+    result = "\n".join(result_lines)
+
+    if end_idx < len(lines):
+        result += "\n... rest of file truncated ..."
+
+    return result
 
 
 def view_file_handler(path: str, view_range: list[int], base_dir: str) -> str:
@@ -80,45 +151,30 @@ def view_file_handler(path: str, view_range: list[int], base_dir: str) -> str:
         fs_path = map_repo_path(path, base_dir)
         resolved = validate_file_path(fs_path, base_dir, allow_empty=True)
 
-        if not resolved.exists():
-            return f"Error: File not found: {path}"
-        if not resolved.is_file():
-            return f"Error: Not a file: {path}"
-
-        file_size = resolved.stat().st_size
-        if file_size > MAX_FILE_SIZE_BYTES:
-            return (
-                f"Error: File too large ({file_size} bytes). Maximum: {MAX_FILE_SIZE_BYTES} bytes"
-            )
+        error = _validate_file_for_view(resolved, path)
+        if error:
+            return error
 
         content = resolved.read_text(encoding="utf-8", errors="replace")
         lines = content.splitlines()
 
-        start = view_range[0] if len(view_range) > 0 else 1
-        end = view_range[1] if len(view_range) > 1 else 100
-
-        # -1 表示到檔尾
-        if end == -1:
-            end = len(lines)
-
-        # 轉為 0-indexed
-        start_idx = max(0, start - 1)
-        end_idx = min(len(lines), end)
-
-        result_lines = []
-        for idx in range(start_idx, end_idx):
-            line_num = idx + 1
-            result_lines.append(f"{line_num} {lines[idx]}")
-
-        result = "\n".join(result_lines)
-
-        if end_idx < len(lines):
-            result += "\n... rest of file truncated ..."
-
-        return result
+        start_idx, end_idx = _parse_view_range(view_range, len(lines))
+        return _format_file_lines(lines, start_idx, end_idx)
 
     except Exception as exc:
         return f"Error reading file: {exc}"
+
+
+def _strip_dot_prefix(path_str: str) -> str:
+    """移除路徑開頭的 './'。
+
+    Args:
+        path_str: 路徑字串。
+
+    Returns:
+        移除前綴後的路徑字串。
+    """
+    return path_str[2:] if path_str.startswith("./") else path_str
 
 
 def _collect_entries(
@@ -158,6 +214,43 @@ def _collect_entries(
     return files_list, dirs_list
 
 
+def _collect_directory_items(resolved: Path, include_hidden: bool) -> tuple[list[str], bool]:
+    """BFS 收集目錄項目。
+
+    Args:
+        resolved: 目錄絕對路徑。
+        include_hidden: 是否包含隱藏檔案。
+
+    Returns:
+        (items, truncated) tuple，items 為項目列表，truncated 表示是否被截斷。
+    """
+    items: list[str] = []
+    queue: deque[tuple[Path, Path]] = deque()
+    queue.append((resolved, Path(".")))
+
+    while queue and len(items) < MAX_DIR_ITEMS:
+        current_abs, current_rel = queue.popleft()
+        files_list, dirs_list = _collect_entries(current_abs, include_hidden)
+
+        # 先列出當前層的檔案
+        for name, _ in files_list:
+            if len(items) >= MAX_DIR_ITEMS:
+                break
+            rel_path = current_rel / name
+            items.append(_strip_dot_prefix(str(rel_path)))
+
+        # 列出子目錄並加入 queue
+        for name, entry in dirs_list:
+            if len(items) >= MAX_DIR_ITEMS:
+                break
+            rel_path = current_rel / name
+            items.append(_strip_dot_prefix(str(rel_path)) + "/")
+            queue.append((entry, rel_path))
+
+    truncated = len(items) >= MAX_DIR_ITEMS
+    return items, truncated
+
+
 def view_directory_handler(path: str, include_hidden: bool, base_dir: str) -> str:
     """view_directory 工具實作（BFS-like 順序：先列當前層，再遞迴）。"""
     try:
@@ -169,48 +262,56 @@ def view_directory_handler(path: str, include_hidden: bool, base_dir: str) -> st
         if not resolved.is_dir():
             return f"Error: Not a directory: {path}"
 
-        items: list[str] = []
-
-        # BFS：使用 queue 實現廣度優先
-        queue: deque[tuple[Path, Path]] = deque()  # (absolute_path, relative_path)
-        queue.append((resolved, Path(".")))
-
-        while queue and len(items) < MAX_DIR_ITEMS:
-            current_abs, current_rel = queue.popleft()
-
-            files_list, dirs_list = _collect_entries(current_abs, include_hidden)
-
-            # 先列出當前層的檔案（符合官方範例順序）
-            for name, _ in files_list:
-                if len(items) >= MAX_DIR_ITEMS:
-                    break
-                rel_path = current_rel / name
-                path_str = str(rel_path)
-                # 移除開頭的 "./"
-                if path_str.startswith("./"):
-                    path_str = path_str[2:]
-                items.append(path_str)
-
-            # 列出子目錄並加入 queue
-            for name, entry in dirs_list:
-                if len(items) >= MAX_DIR_ITEMS:
-                    break
-                rel_path = current_rel / name
-                path_str = str(rel_path)
-                if path_str.startswith("./"):
-                    path_str = path_str[2:]
-                items.append(f"{path_str}/")
-                # 加入 queue 以便後續遞迴
-                queue.append((entry, rel_path))
+        items, truncated = _collect_directory_items(resolved, include_hidden)
 
         result = "\n".join(items)
-        if len(items) >= MAX_DIR_ITEMS:
+        if truncated:
             result += f"\n... output truncated at {MAX_DIR_ITEMS} items ..."
 
         return result
 
     except Exception as exc:
         return f"Error listing directory: {exc}"
+
+
+def _exceeds_max_depth(root: Path, base_path: Path, max_depth: int) -> bool:
+    """檢查目錄深度是否超過限制。
+
+    Args:
+        root: 當前目錄路徑。
+        base_path: 基準目錄路徑。
+        max_depth: 最大深度。
+
+    Returns:
+        True 若深度超過限制。
+    """
+    try:
+        depth = len(Path(root).relative_to(base_path).parts)
+    except ValueError:
+        depth = 0
+    return depth >= max_depth
+
+
+def _matches_file_patterns(
+    filename: str, include_pattern: str | None, exclude_pattern: str | None
+) -> bool:
+    """檢查檔名是否符合 include/exclude pattern。
+
+    Args:
+        filename: 檔案名稱。
+        include_pattern: include pattern (fnmatch 格式)。
+        exclude_pattern: exclude pattern (fnmatch 格式)。
+
+    Returns:
+        True 若檔案符合條件。
+    """
+    import fnmatch
+
+    if include_pattern and not fnmatch.fnmatch(filename, include_pattern):
+        return False
+    if exclude_pattern and fnmatch.fnmatch(filename, exclude_pattern):
+        return False
+    return True
 
 
 def _compile_search_pattern(query: str, case_sensitive: bool) -> re.Pattern | str:
@@ -230,6 +331,36 @@ def _compile_search_pattern(query: str, case_sensitive: bool) -> re.Pattern | st
         return f"Invalid regex pattern: {exc}"
 
 
+def _filter_visible_dirs(dirs: list[str]) -> list[str]:
+    """過濾掉隱藏目錄。
+
+    Args:
+        dirs: 目錄名稱列表。
+
+    Returns:
+        可見目錄列表。
+    """
+    return [d for d in dirs if not d.startswith(".")]
+
+
+def _is_searchable_file(
+    filename: str, include_pattern: str | None, exclude_pattern: str | None
+) -> bool:
+    """判斷檔案是否應被搜尋。
+
+    Args:
+        filename: 檔案名稱。
+        include_pattern: include pattern。
+        exclude_pattern: exclude pattern。
+
+    Returns:
+        True 若檔案應被搜尋。
+    """
+    if filename.startswith("."):
+        return False
+    return _matches_file_patterns(filename, include_pattern, exclude_pattern)
+
+
 def _iter_searchable_files(
     base_path: Path,
     include_pattern: str | None,
@@ -245,29 +376,15 @@ def _iter_searchable_files(
     Yields:
         (filepath, rel_path) tuple。
     """
-    import fnmatch
-
     for root, dirs, files in os.walk(base_path):
-        # 計算深度，超過限制則停止遞迴
-        try:
-            depth = len(Path(root).relative_to(base_path).parts)
-        except ValueError:
-            depth = 0
-        if depth >= MAX_GREP_DEPTH:
+        if _exceeds_max_depth(Path(root), base_path, MAX_GREP_DEPTH):
             dirs.clear()
             continue
 
-        # 跳過隱藏目錄
-        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        dirs[:] = _filter_visible_dirs(dirs)
 
         for filename in files:
-            if filename.startswith("."):
-                continue
-
-            # 檢查 include/exclude pattern
-            if include_pattern and not fnmatch.fnmatch(filename, include_pattern):
-                continue
-            if exclude_pattern and fnmatch.fnmatch(filename, exclude_pattern):
+            if not _is_searchable_file(filename, include_pattern, exclude_pattern):
                 continue
 
             filepath = Path(root) / filename
@@ -313,90 +430,112 @@ def _search_in_file(
     return matches
 
 
-def grep_search_handler(
-    query: str,
-    case_sensitive: bool,
-    exclude_pattern: str | None,
-    include_pattern: str | None,
-    base_dir: str,
-) -> str:
+def _build_ripgrep_command(params: GrepSearchParams) -> list[str]:
+    """構建 ripgrep 命令列表。
+
+    Args:
+        params: grep 搜尋參數。
+
+    Returns:
+        ripgrep 命令列表。
+    """
+    cmd = ["rg", "--line-number", "--no-heading", "--color=never"]
+
+    if not params.case_sensitive:
+        cmd.append("-i")
+
+    if params.include_pattern:
+        cmd.extend(["-g", params.include_pattern])
+
+    if params.exclude_pattern:
+        cmd.extend(["-g", f"!{params.exclude_pattern}"])
+
+    cmd.extend(["--max-count", "100"])
+    cmd.append(params.query)
+    cmd.append(".")
+
+    return cmd
+
+
+def _process_ripgrep_output(stdout: str) -> str:
+    """處理 ripgrep 輸出並截斷至上限。
+
+    Args:
+        stdout: ripgrep 的 stdout 輸出。
+
+    Returns:
+        處理後的輸出字串。
+    """
+    output = stdout.strip()
+    if not output:
+        return "No matches found."
+
+    lines = output.split("\n")
+    if len(lines) > MAX_GREP_MATCHES:
+        lines = lines[:MAX_GREP_MATCHES]
+        output = "\n".join(lines)
+        output += f"\n... output capped at {MAX_GREP_MATCHES} matches ..."
+
+    return output
+
+
+def _try_ripgrep(params: GrepSearchParams) -> str:
+    """嘗試使用 ripgrep 執行搜尋。
+
+    Args:
+        params: grep 搜尋參數。
+
+    Returns:
+        搜尋結果字串。
+
+    Raises:
+        FileNotFoundError: ripgrep 不可用或執行失敗。
+        subprocess.TimeoutExpired: 搜尋超時。
+    """
+    cmd = _build_ripgrep_command(params)
+
+    result = subprocess.run(  # nosec B603
+        cmd,
+        cwd=params.base_dir,
+        capture_output=True,
+        text=True,
+        timeout=GREP_TIMEOUT_SECONDS,
+        check=False,
+    )
+
+    if result.returncode == 0:
+        return _process_ripgrep_output(result.stdout)
+    elif result.returncode == 1:
+        return "No matches found."
+    else:
+        raise FileNotFoundError("ripgrep failed")
+
+
+def grep_search_handler(params: GrepSearchParams) -> str:
     """grep_search 工具實作（使用 ripgrep 或 fallback 到 Python re）。"""
     try:
-        # 嘗試使用 ripgrep
-        cmd = ["rg", "--line-number", "--no-heading", "--color=never"]
-
-        if not case_sensitive:
-            cmd.append("-i")
-
-        if include_pattern:
-            cmd.extend(["-g", include_pattern])
-
-        if exclude_pattern:
-            cmd.extend(["-g", f"!{exclude_pattern}"])
-
-        # 注意：--max-count 是每個檔案的上限，不是總數
-        # 我們用較大的值，然後在 post-processing 截斷
-        cmd.extend(["--max-count", "100"])
-        cmd.append(query)
-        cmd.append(".")
-
-        try:
-            result = subprocess.run(  # nosec B603
-                cmd,
-                cwd=base_dir,
-                capture_output=True,
-                text=True,
-                timeout=GREP_TIMEOUT_SECONDS,
-                check=False,
-            )
-
-            if result.returncode == 0:
-                output = result.stdout.strip()
-                lines = output.split("\n") if output else []
-                # Post-processing: 截斷到 MAX_GREP_MATCHES
-                if len(lines) > MAX_GREP_MATCHES:
-                    lines = lines[:MAX_GREP_MATCHES]
-                    output = "\n".join(lines)
-                    output += f"\n... output capped at {MAX_GREP_MATCHES} matches ..."
-                return output if output else "No matches found."
-            elif result.returncode == 1:
-                # ripgrep returns 1 when no matches found
-                return "No matches found."
-            else:
-                # ripgrep error, fallback to Python
-                raise FileNotFoundError("ripgrep failed")
-
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            # Fallback 到 Python 實作
-            return _grep_search_python_fallback(
-                query, case_sensitive, include_pattern, exclude_pattern, base_dir
-            )
-
+        return _try_ripgrep(params)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return _grep_search_python_fallback(params)
     except Exception as exc:
         return f"Error in grep search: {exc}"
 
 
-def _grep_search_python_fallback(
-    query: str,
-    case_sensitive: bool,
-    include_pattern: str | None,
-    exclude_pattern: str | None,
-    base_dir: str,
-) -> str:
+def _grep_search_python_fallback(params: GrepSearchParams) -> str:
     """純 Python 的 grep 實作（當 ripgrep 不可用時）。"""
     # 編譯 pattern
-    pattern = _compile_search_pattern(query, case_sensitive)
+    pattern = _compile_search_pattern(params.query, params.case_sensitive)
     if isinstance(pattern, str):
         # 編譯失敗，返回錯誤訊息
         return pattern
 
     matches: list[str] = []
-    base_path = Path(base_dir)
+    base_path = Path(params.base_dir)
 
     try:
         with _timeout_context(GREP_TIMEOUT_SECONDS):
             for filepath, rel_path in _iter_searchable_files(
-                base_path, include_pattern, exclude_pattern
+                base_path, params.include_pattern, params.exclude_pattern
             ):
                 remaining = MAX_GREP_MATCHES - len(matches)
                 if remaining <= 0:
@@ -428,12 +567,23 @@ def report_back_handler(explanation: str, files: dict[str, list[list[int]]]) -> 
     }
 
 
-def truncate_for_context(text: str, max_chars: int = MAX_TOOL_RESULT_CHARS) -> str:
-    """截斷過長的 tool result 以避免 context overflow。"""
+def truncate_for_context(
+    text: str, max_chars: int = MAX_TOOL_RESULT_CHARS, tool_hint: str = ""
+) -> str:
+    """截斷過長的 tool result 以避免 context overflow。
+
+    Args:
+        text: 要截斷的文字。
+        max_chars: 最大字元數。
+        tool_hint: 截斷時顯示的工具提示訊息。
+    """
     if len(text) <= max_chars:
         return text
     truncated = text[:max_chars]
-    return truncated + f"\n... truncated ({len(text)} chars total, showing {max_chars}) ..."
+    hint_msg = f"\n... [truncated] ({len(text)} chars total, showing {max_chars})"
+    if tool_hint:
+        hint_msg += f"\n{tool_hint}"
+    return truncated + hint_msg
 
 
 def estimate_context_size(messages: list[dict[str, Any]]) -> int:
@@ -645,6 +795,42 @@ PYTHON_DANGEROUS_PATTERNS = [
 ]
 
 
+def _is_traversal_token(token: str) -> bool:
+    """檢查 token 是否為路徑穿越模式。
+
+    Args:
+        token: 待檢查的 token。
+
+    Returns:
+        True 若為路徑穿越模式。
+    """
+    if token in ("..", "./..", ".\\.."):
+        return True
+    if token.endswith("/..") or token.endswith("\\.."):
+        return True
+    if "/../" in token or "\\..\\" in token:
+        return True
+    return False
+
+
+def _check_absolute_paths(tokens: list[str]) -> tuple[bool, str]:
+    """檢查 tokens 中的絕對路徑是否安全。
+
+    Args:
+        tokens: 命令 tokens。
+
+    Returns:
+        (is_blocked, reason) tuple。
+    """
+    for token in tokens:
+        if token.startswith("/"):
+            if token == "/repo" or token.startswith("/repo/"):  # nosec B105
+                continue
+            # 阻止存取系統目錄
+            return True, f"Absolute path outside /repo not allowed: {token}"
+    return False, ""
+
+
 def _check_blocked_patterns(command: str) -> tuple[bool, str]:
     """檢查命令中的危險模式（pipe, redirect, command substitution 等）。
 
@@ -679,21 +865,11 @@ def _check_path_safety(command: str, tokens: list[str]) -> tuple[bool, str]:
     if "../" in command or "..\\" in command:
         return True, "Path traversal pattern detected"
 
-    for token in tokens:
-        if token in ("..", "./..", ".\\..") or token.endswith("/..") or token.endswith("\\.."):
-            return True, "Path traversal pattern detected"
-        if "/../" in token or "\\..\\" in token:
-            return True, "Path traversal pattern detected"
+    if any(_is_traversal_token(t) for t in tokens):
+        return True, "Path traversal pattern detected"
 
-    # 檢查絕對路徑（非 /repo）
-    for token in tokens:
-        if token.startswith("/"):
-            if token == "/repo" or token.startswith("/repo/"):  # nosec B105
-                continue
-            # 阻止存取系統目錄
-            return True, f"Absolute path outside /repo not allowed: {token}"
-
-    return False, ""
+    # 檢查絕對路徑
+    return _check_absolute_paths(tokens)
 
 
 def _check_git_subcommand(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
@@ -766,6 +942,62 @@ def _check_command_in_arguments(tokens: list[str]) -> tuple[bool, str]:
     return False, ""
 
 
+def _parse_command_tokens(command: str) -> list[str]:
+    """解析命令為 tokens。
+
+    Args:
+        command: 命令字串。
+
+    Returns:
+        token 列表。
+    """
+    import shlex
+
+    try:
+        return shlex.split(command)
+    except ValueError:
+        return command.split()
+
+
+def _validate_command_base(base_cmd: str) -> tuple[bool, str]:
+    """驗證命令基本安全性（黑白名單）。
+
+    Args:
+        base_cmd: 基本命令名稱。
+
+    Returns:
+        (is_blocked, reason) tuple。
+    """
+    if base_cmd in BASH_BLOCKED_COMMANDS:
+        return True, f"Blocked command: {base_cmd}"
+
+    if base_cmd not in BASH_SAFE_COMMANDS:
+        return True, f"Command not in allowlist: {base_cmd}"
+
+    return False, ""
+
+
+def _validate_specialized_commands(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
+    """驗證特殊命令（git, python）和參數。
+
+    Args:
+        tokens: 命令 tokens。
+        base_cmd: 基本命令名稱。
+
+    Returns:
+        (is_blocked, reason) tuple。
+    """
+    blocked, reason = _check_git_subcommand(tokens, base_cmd)
+    if blocked:
+        return blocked, reason
+
+    blocked, reason = _check_python_code(tokens, base_cmd)
+    if blocked:
+        return blocked, reason
+
+    return _check_command_in_arguments(tokens)
+
+
 def _is_blocked_command(command: str, base_dir: str) -> tuple[bool, str]:
     """檢查命令是否違反安全規則。
 
@@ -776,8 +1008,6 @@ def _is_blocked_command(command: str, base_dir: str) -> tuple[bool, str]:
     Returns:
         (is_blocked, reason) tuple。
     """
-    import shlex
-
     command_stripped = command.strip()
     if not command_stripped:
         return True, "Empty command"
@@ -787,45 +1017,51 @@ def _is_blocked_command(command: str, base_dir: str) -> tuple[bool, str]:
     if blocked:
         return blocked, reason
 
-    # 檢查路徑穿越和絕對路徑
-    try:
-        tokens = shlex.split(command)
-    except ValueError:
-        tokens = command.split()
-
+    # 解析命令 tokens
+    tokens = _parse_command_tokens(command)
     if not tokens:
         return True, "Empty command after parsing"
 
+    # 檢查路徑安全
     blocked, reason = _check_path_safety(command, tokens)
     if blocked:
         return blocked, reason
 
+    # 驗證基本命令
     base_cmd = os.path.basename(tokens[0])
-
-    # 檢查黑名單命令
-    if base_cmd in BASH_BLOCKED_COMMANDS:
-        return True, f"Blocked command: {base_cmd}"
-
-    # 檢查白名單（阻止未知命令）
-    if base_cmd not in BASH_SAFE_COMMANDS:
-        return True, f"Command not in allowlist: {base_cmd}"
-
-    # 檢查 git 子命令
-    blocked, reason = _check_git_subcommand(tokens, base_cmd)
+    blocked, reason = _validate_command_base(base_cmd)
     if blocked:
         return blocked, reason
 
-    # 檢查 python 代碼
-    blocked, reason = _check_python_code(tokens, base_cmd)
-    if blocked:
-        return blocked, reason
+    # 驗證特殊命令
+    return _validate_specialized_commands(tokens, base_cmd)
 
-    # 檢查參數中的危險命令
-    blocked, reason = _check_command_in_arguments(tokens)
-    if blocked:
-        return blocked, reason
 
-    return False, ""
+def _format_bash_result(result: subprocess.CompletedProcess) -> str:
+    """格式化 bash 執行結果。
+
+    Args:
+        result: subprocess.CompletedProcess 物件。
+
+    Returns:
+        格式化後的輸出字串。
+    """
+    stdout = result.stdout or ""
+    stderr = result.stderr or ""
+
+    if result.returncode != 0 and stderr:
+        output = f"Exit code: {result.returncode}\n"
+        if stdout:
+            output += f"stdout:\n{stdout}\n"
+        output += f"stderr:\n{stderr}"
+    else:
+        output = stdout + stderr
+
+    if len(output) > BASH_MAX_OUTPUT_CHARS:
+        output = output[:BASH_MAX_OUTPUT_CHARS]
+        output += f"\n... output capped at {BASH_MAX_OUTPUT_CHARS} chars ..."
+
+    return output.strip() if output.strip() else "(no output)"
 
 
 def bash_handler(command: str, base_dir: str) -> str:
@@ -862,22 +1098,7 @@ def bash_handler(command: str, base_dir: str) -> str:
             check=False,
         )
 
-        stdout = result.stdout or ""
-        stderr = result.stderr or ""
-
-        if result.returncode != 0 and stderr:
-            output = f"Exit code: {result.returncode}\n"
-            if stdout:
-                output += f"stdout:\n{stdout}\n"
-            output += f"stderr:\n{stderr}"
-        else:
-            output = stdout + stderr
-
-        if len(output) > BASH_MAX_OUTPUT_CHARS:
-            output = output[:BASH_MAX_OUTPUT_CHARS]
-            output += f"\n... output capped at {BASH_MAX_OUTPUT_CHARS} chars ..."
-
-        return output.strip() if output.strip() else "(no output)"
+        return _format_bash_result(result)
 
     except subprocess.TimeoutExpired:
         return f"Error: Command timed out after {BASH_TIMEOUT_SECONDS}s"

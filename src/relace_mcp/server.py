@@ -107,21 +107,6 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
     )
 
-    # Deprecation warning for legacy environment variables
-    deprecated_vars = [
-        "RELACE_MCP_TRANSPORT",
-        "RELACE_MCP_HOST",
-        "RELACE_MCP_PORT",
-        "RELACE_MCP_PATH",
-    ]
-    for var in deprecated_vars:
-        if os.getenv(var):
-            logger.warning(
-                "Environment variable %s is deprecated and ignored. "
-                "Use CLI arguments instead: relace-mcp --help",
-                var,
-            )
-
     config = RelaceConfig.from_env()
     server = build_server(config)
 

@@ -142,6 +142,11 @@ def mock_client_with_response(
 
 
 @pytest.fixture
+def mock_client() -> MagicMock:
+    return MagicMock(spec=RelaceClient)
+
+
+@pytest.fixture
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for var in ["RELACE_API_KEY", "RELACE_BASE_DIR"]:
         monkeypatch.delenv(var, raising=False)

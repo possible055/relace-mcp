@@ -154,37 +154,33 @@ class TestFastAgenticSearchHarness:
 
         assert len(result["files"]) == 2
 
-    def test_raises_on_max_turns_exceeded(
+    def test_returns_partial_on_max_turns_exceeded(
         self,
         mock_config: RelaceConfig,
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """Should raise error when max turns exceeded."""
+        """Should return partial results (not raise) when max turns exceeded."""
+        (tmp_path / "test.py").write_text("def hello(): pass\n")
+
+        # Always request a tool (never report_back) so the harness hits SEARCH_MAX_TURNS.
         mock_client.chat.return_value = {
             "choices": [
                 {
                     "message": {
-                        "tool_calls": [
-                            {
-                                "id": "call_1",
-                                "function": {
-                                    "name": "view_directory",
-                                    "arguments": json.dumps(
-                                        {"path": "/repo", "include_hidden": False}
-                                    ),
-                                },
-                            }
-                        ]
+                        "tool_calls": [_make_view_file_call("call_1", "/repo/test.py")],
                     }
                 }
             ]
         }
 
         harness = FastAgenticSearchHarness(mock_config, mock_client)
+        result = harness.run("This will timeout")
 
-        with pytest.raises(RuntimeError, match="did not complete"):
-            harness.run("This will timeout")
+        assert result["partial"] is True
+        assert result["turns_used"] > 0
+        assert "did not complete" in result["explanation"]
+        assert "test.py" in result["files"]
 
 
 class TestParallelToolCallsFix:

@@ -12,6 +12,7 @@ from relace_mcp.tools.search.handlers import (
     view_directory_handler,
     view_file_handler,
 )
+from relace_mcp.tools.search.schemas import GrepSearchParams
 from relace_mcp.utils import validate_file_path
 
 
@@ -160,7 +161,14 @@ class TestGrepSearchHandler:
         """Should find pattern matches."""
         (tmp_path / "test.py").write_text("def hello():\n    print('world')\n")
 
-        result = grep_search_handler("hello", True, None, None, str(tmp_path))
+        params = GrepSearchParams(
+            query="hello",
+            case_sensitive=True,
+            include_pattern=None,
+            exclude_pattern=None,
+            base_dir=str(tmp_path),
+        )
+        result = grep_search_handler(params)
         assert "hello" in result
         assert "test.py" in result
 
@@ -168,14 +176,28 @@ class TestGrepSearchHandler:
         """Should support case-insensitive search."""
         (tmp_path / "test.py").write_text("HELLO world\n")
 
-        result = grep_search_handler("hello", False, None, None, str(tmp_path))
+        params = GrepSearchParams(
+            query="hello",
+            case_sensitive=False,
+            include_pattern=None,
+            exclude_pattern=None,
+            base_dir=str(tmp_path),
+        )
+        result = grep_search_handler(params)
         assert "HELLO" in result or "hello" in result.lower()
 
     def test_no_matches_returns_message(self, tmp_path: Path) -> None:
         """Should return 'No matches' when nothing found."""
         (tmp_path / "test.py").write_text("nothing here\n")
 
-        result = grep_search_handler("xyz123abc", True, None, None, str(tmp_path))
+        params = GrepSearchParams(
+            query="xyz123abc",
+            case_sensitive=True,
+            include_pattern=None,
+            exclude_pattern=None,
+            base_dir=str(tmp_path),
+        )
+        result = grep_search_handler(params)
         assert "No matches" in result
 
 
@@ -316,7 +338,14 @@ class TestGrepTruncation:
         for i in range(100):
             (tmp_path / f"file{i:03d}.py").write_text(f"MATCH_PATTERN line {i}\n")
 
-        result = grep_search_handler("MATCH_PATTERN", True, None, None, str(tmp_path))
+        params = GrepSearchParams(
+            query="MATCH_PATTERN",
+            case_sensitive=True,
+            include_pattern=None,
+            exclude_pattern=None,
+            base_dir=str(tmp_path),
+        )
+        result = grep_search_handler(params)
 
         assert "capped at 50 matches" in result or "50" in result
 
