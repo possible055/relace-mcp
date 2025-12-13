@@ -10,11 +10,15 @@
 
 MCP server for [Relace](https://www.relace.ai/) — AI-powered instant code merging and agentic codebase search.
 
+## Requirements
+
+- Python 3.12 or higher
+- [Relace API Key](https://app.relace.ai/settings/billing)
+
 ## Features
 
 - **Fast Apply** — Apply code edits at 10,000+ tokens/sec via Relace API
 - **Fast Search** — Agentic codebase exploration with natural language queries
-- **Dual Transport** — STDIO for IDEs, HTTP for remote deployment
 
 ## Installation
 
@@ -70,11 +74,24 @@ function newFeature() {
 ```
 
 **Parameters:**
-- `file_path` — Absolute path to target file
-- `edit_snippet` — Code with abbreviation placeholders
-- `instruction` (optional) — Hint for disambiguation
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `path` | ✅ | Target file path (see [Path Formats](#path-formats)) |
+| `edit_snippet` | ✅ | Code with abbreviation placeholders |
+| `instruction` | ❌ | Hint for disambiguation |
 
 **Returns:** UDiff of changes, or confirmation for new files.
+
+#### Path Formats
+
+`fast_apply` supports multiple path formats:
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| Virtual root | `/repo/src/file.py` | From `fast_search` results |
+| Relative | `src/file.py` | Relative to workspace |
+| Absolute | `/home/user/project/file.py` | Must be within `RELACE_BASE_DIR` |
 
 ### `fast_search`
 
@@ -100,7 +117,7 @@ Find relevant code with natural language:
 |----------|----------|-------------|
 | `RELACE_API_KEY` | ✅ | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
 | `RELACE_BASE_DIR` | ⚠️ | Project root path (prefer `cwd` config; falls back to current directory) |
-| `RELACE_STRICT_MODE` | ❌ | Set `1` to require explicit base dir |
+| `RELACE_STRICT_MODE` | ❌ | Set `1` to require explicit base dir (recommended for production) |
 
 <details>
 <summary>Advanced Settings</summary>
@@ -119,12 +136,13 @@ Find relevant code with natural language:
 
 </details>
 
-## HTTP Mode
+<details>
+<summary>Remote Deployment (Streamable HTTP)</summary>
 
-For remote deployment:
+For remote deployment, run with streamable-http transport:
 
 ```bash
-relace-mcp -t http -p 8000
+relace-mcp -t streamable-http -p 8000
 ```
 
 Connect via:
@@ -140,6 +158,51 @@ Connect via:
 }
 ```
 
+Additional options: `--host` (default: `0.0.0.0`), `--path` (default: `/mcp`).
+
+</details>
+
+## Logging
+
+Operation logs are written to:
+
+```
+~/.local/state/relace/relace_apply.log
+```
+
+- JSON-line format with trace IDs
+- Automatic rotation at 10 MB
+- Keeps up to 5 rotated logs
+
+## Security Considerations
+
+- **Restrict `RELACE_BASE_DIR`**: Always set an explicit base directory in production to limit file access scope.
+- **Enable Strict Mode**: Set `RELACE_STRICT_MODE=1` to require explicit base directory configuration.
+- **API Key Safety**: Never commit `RELACE_API_KEY` to version control. Use environment variables or secrets management.
+
+## Troubleshooting
+
+<details>
+<summary>Common Issues</summary>
+
+### `RELACE_API_KEY is not set`
+
+Ensure the API key is exported in your environment or set in the MCP config's `env` block.
+
+### `RELACE_BASE_DIR does not exist`
+
+The specified base directory path doesn't exist or isn't accessible. Verify the path and permissions.
+
+### `API key does not start with 'rlc-'`
+
+Your API key may be invalid. Get a valid key from [Relace Dashboard](https://app.relace.ai/settings/billing).
+
+### `NEEDS_MORE_CONTEXT`
+
+The edit snippet lacks sufficient anchor lines. Add 1-3 real lines of code before and after the target block.
+
+</details>
+
 ## Development
 
 ```bash
@@ -148,3 +211,7 @@ cd relace-mcp
 uv sync
 uv run pytest
 ```
+
+## License
+
+[MIT](LICENSE)

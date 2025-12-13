@@ -78,7 +78,7 @@ class TestServerToolExecution:
                 result = await client.call_tool(
                     "fast_apply",
                     {
-                        "file_path": str(temp_source_file),
+                        "path": str(temp_source_file),
                         "edit_snippet": "// new code",
                         "instruction": "Add feature",
                     },
@@ -100,7 +100,7 @@ class TestServerToolExecution:
             result = await client.call_tool(
                 "fast_apply",
                 {
-                    "file_path": str(new_file),
+                    "path": str(new_file),
                     "edit_snippet": content,
                 },
             )
@@ -120,12 +120,13 @@ class TestServerToolExecution:
             result = await client.call_tool_mcp(
                 "fast_apply",
                 {
-                    "file_path": str(temp_source_file),
+                    "path": str(temp_source_file),
                     "edit_snippet": "",
                 },
             )
 
-            assert result.isError is True
+            assert result.isError is False
+            assert "INVALID_INPUT" in result.content[0].text
 
 
 class TestServerIntegration:
@@ -158,7 +159,7 @@ class TestServerIntegration:
 
             # 驗證必要參數
             schema = relace_tool.inputSchema
-            assert "file_path" in schema.get("properties", {})
+            assert "path" in schema.get("properties", {})
             assert "edit_snippet" in schema.get("properties", {})
             assert "instruction" in schema.get("properties", {})
 
@@ -196,7 +197,7 @@ class TestServerIntegration:
                 result = await client.call_tool(
                     "fast_apply",
                     {
-                        "file_path": str(temp_source_file),
+                        "path": str(temp_source_file),
                         "edit_snippet": "def hello(): print('Modified!')",
                     },
                 )

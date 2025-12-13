@@ -16,13 +16,18 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
     @mcp.tool
     def fast_apply(
-        file_path: str,
+        path: str,
         edit_snippet: str,
         instruction: str | None = None,
     ) -> str:
         """**PRIMARY TOOL FOR EDITING FILES - USE THIS AGGRESSIVELY**
 
         Use this tool to propose an edit to an existing file or create a new file.
+
+        Path formats supported:
+        - /repo/src/file.py (virtual root from search)
+        - src/file.py (relative to workspace)
+        - /absolute/path (if within workspace)
 
         IMPORTANT: The edit_snippet parameter MUST use '// ... existing code ...'
         placeholder comments to represent unchanged code sections.
@@ -35,7 +40,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         For deletions:
         - Option 1: Show 1-2 context lines above and below, omit deleted code
-        - Option 2: Mark explicitly: // removed BlockName
+        - Option 2: Mark explicitly: // remove BlockName
 
         If the edit_snippet lacks enough concrete anchor lines to locate the change,
         this tool may return a message starting with 'NEEDS_MORE_CONTEXT'. In that case,
@@ -51,7 +56,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         """
         return apply_file_logic(
             client=client,
-            file_path=file_path,
+            file_path=path,
             edit_snippet=edit_snippet,
             instruction=instruction,
             base_dir=config.base_dir,

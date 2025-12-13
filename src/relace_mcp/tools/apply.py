@@ -7,16 +7,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastmcp.exceptions import ToolError
+from charset_normalizer import from_bytes
 
 from ..clients import RelaceClient
 from ..config import LOG_PATH, MAX_LOG_SIZE_BYTES
-from ..utils import validate_file_path
+from ..utils import MAX_FILE_SIZE_BYTES, normalize_repo_path, validate_file_path
 
 logger = logging.getLogger(__name__)
-
-# 限制檔案大小為 10MB，避免記憶體耗盡
-MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
 # Log rotation：保留的舊 log 數量上限
 MAX_ROTATED_LOGS = 5
@@ -25,57 +22,27 @@ MAX_ROTATED_LOGS = 5
 _PREFERRED_ENCODINGS = ("utf-8", "gbk")
 
 
-def _is_placeholder_line(line: str) -> bool:
+def _is_truncation_placeholder(line: str) -> bool:
+    """判斷是否為截斷用的 placeholder（省略標記）。
+
+    注意：// remove Block 是 directive，不是 placeholder。
+    """
     s = line.strip()
     if not s:
         return True
 
     lower = s.lower()
-    if lower.startswith("// ...") or lower.startswith("# ..."):
-        return True
-    if lower.startswith("// remove") or lower.startswith("# remove"):
-        return True
-    if lower.startswith("// removed") or lower.startswith("# removed"):
-        return True
-    return False
+    return lower.startswith("// ...") or lower.startswith("# ...")
 
 
 def _concrete_lines(text: str) -> list[str]:
-    return [line for line in text.splitlines() if not _is_placeholder_line(line)]
+    """回傳非 placeholder 的行（包含 remove directive）。"""
+    return [line for line in text.splitlines() if not _is_truncation_placeholder(line)]
 
 
-def _count_concrete_groups(text: str) -> int:
-    in_group = False
-    groups = 0
-    for line in text.splitlines():
-        if _is_placeholder_line(line):
-            in_group = False
-            continue
-        if not in_group:
-            groups += 1
-            in_group = True
-    return groups
-
-
-def _is_delete_like(instruction: str | None, edit_snippet: str) -> bool:
-    haystack = "\n".join([instruction or "", edit_snippet]).lower()
-    return ("delete" in haystack) or ("remove" in haystack) or ("刪除" in haystack)
-
-
-def _needs_more_context_message(file_path: str, instruction: str | None) -> str:
-    instruction_part = instruction or ""
-    return (
-        "NEEDS_MORE_CONTEXT\n"
-        "Your edit_snippet does not include enough concrete anchor lines to locate the change safely.\n"
-        "Re-run fast_apply with 1-3 real lines before AND after the block you want to edit/delete.\n"
-        f"file_path: {file_path}\n"
-        f"instruction: {instruction_part}\n\n"
-        "TEMPLATE (example):\n"
-        "// ... existing code ...\n"
-        "<1-3 lines of real code BEFORE the target block>\n"
-        "<1-3 lines of real code AFTER the target block>\n"
-        "// ... rest of code ...\n"
-    )
+def _recoverable_error(error_code: str, message: str, path: str, instruction: str | None) -> str:
+    """產生可恢復錯誤的回傳訊息。"""
+    return f"{error_code}\n{message}\npath: {path}\ninstruction: {instruction or ''}\n"
 
 
 def _read_text_with_fallback(path: Path) -> tuple[str, str]:
@@ -103,8 +70,6 @@ def _read_text_with_fallback(path: Path) -> tuple[str, str]:
             continue
 
     # Fallback：自動偵測
-    from charset_normalizer import from_bytes
-
     result = from_bytes(raw)
     best = result.best()
     if best is None or best.coherence < 0.5:
@@ -177,11 +142,26 @@ def apply_file_logic(
     trace_id = str(uuid.uuid4())[:8]
 
     if not edit_snippet or not edit_snippet.strip():
-        raise RuntimeError("edit_snippet cannot be empty")
+        return _recoverable_error(
+            "INVALID_INPUT", "edit_snippet cannot be empty", file_path, instruction
+        )
+
+    # 路徑正規化與驗證
+    try:
+        normalized = normalize_repo_path(file_path, base_dir)
+        resolved_path = validate_file_path(normalized, base_dir)
+    except RuntimeError as e:
+        return _recoverable_error("INVALID_PATH", str(e), file_path, instruction)
 
     try:
-        resolved_path = validate_file_path(file_path, base_dir)
         file_exists = resolved_path.exists()
+        if file_exists and not resolved_path.is_file():
+            return _recoverable_error(
+                "INVALID_PATH",
+                f"Path exists but is not a file: {resolved_path}",
+                file_path,
+                instruction,
+            )
         file_size = resolved_path.stat().st_size if file_exists else 0
 
         # New file: write directly without calling API
@@ -205,13 +185,11 @@ def apply_file_logic(
 
         concrete = _concrete_lines(edit_snippet)
         if not concrete:
-            raise ToolError(
-                _needs_more_context_message(file_path=file_path, instruction=instruction)
-            )
-
-        if _is_delete_like(instruction, edit_snippet) and _count_concrete_groups(edit_snippet) < 2:
-            raise ToolError(
-                _needs_more_context_message(file_path=file_path, instruction=instruction)
+            return _recoverable_error(
+                "NEEDS_MORE_CONTEXT",
+                "edit_snippet 沒有足夠的 anchor lines。請加入 1-3 行真實程式碼作為定位。",
+                file_path,
+                instruction,
             )
 
         # Existing file: check size and read

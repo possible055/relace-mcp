@@ -115,17 +115,7 @@ class FastAgenticSearchHarness:
             tool_results, report_back_result = self._execute_tools_parallel(tool_calls, trace_id)
 
             # 將所有 tool results 加入 messages（符合 OpenAI 協議）
-            for tc_id, _func_name, result in tool_results:
-                content = result if isinstance(result, str) else json.dumps(result)
-                # 截斷過長的 tool result
-                content = truncate_for_context(content)
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tc_id,
-                        "content": content,
-                    }
-                )
+            self._append_tool_results_to_messages(messages, tool_results)
 
             # 所有 tool calls 處理完後，如果有 report_back 則返回
             if report_back_result is not None:
@@ -151,19 +141,44 @@ class FastAgenticSearchHarness:
             return messages
         return messages[:2] + messages[-6:]
 
-    def _execute_tools_parallel(
+    def _append_tool_results_to_messages(
+        self,
+        messages: list[dict[str, Any]],
+        tool_results: list[tuple[str, str, str | dict[str, Any]]],
+    ) -> None:
+        """將 tool results 格式化並加入 messages。
+
+        Args:
+            messages: 要更新的 messages 列表。
+            tool_results: tool results 列表。
+        """
+        for tc_id, _func_name, result in tool_results:
+            content = result if isinstance(result, str) else json.dumps(result)
+            # 截斷過長的 tool result
+            content = truncate_for_context(content)
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc_id,
+                    "content": content,
+                }
+            )
+
+    def _parse_and_classify_tool_calls(
         self, tool_calls: list[dict[str, Any]], trace_id: str
-    ) -> tuple[list[tuple[str, str, str | dict[str, Any]]], dict[str, Any] | None]:
-        """並行執行 read-only 工具，順序執行其他工具。
+    ) -> tuple[
+        list[tuple[str, str, str, dict[str, Any] | None]],
+        list[tuple[str, str, str, dict[str, Any] | None]],
+    ]:
+        """解析並分類 tool calls 為並行或順序執行。
 
         Args:
             tool_calls: API 回傳的 tool_calls 列表。
             trace_id: 追蹤 ID。
 
         Returns:
-            (tool_results, report_back_result) tuple。
+            (parallel_calls, sequential_calls) tuple。
         """
-        # 先解析所有 tool calls
         parsed_calls: list[tuple[str, str, str, dict[str, Any] | None]] = []
         for tc in tool_calls:
             tc_id = tc.get("id", "")
@@ -194,15 +209,57 @@ class FastAgenticSearchHarness:
             else:
                 sequential_calls.append(item)
 
-        tool_results: list[tuple[str, str, str | dict[str, Any]]] = []
-        report_back_result: dict[str, Any] | None = None
+        return parallel_calls, sequential_calls
 
-        # 並行執行 read-only 工具
+    def _execute_tools_parallel(
+        self, tool_calls: list[dict[str, Any]], trace_id: str
+    ) -> tuple[list[tuple[str, str, str | dict[str, Any]]], dict[str, Any] | None]:
+        """並行執行 read-only 工具，順序執行其他工具。
+
+        Args:
+            tool_calls: API 回傳的 tool_calls 列表。
+            trace_id: 追蹤 ID。
+
+        Returns:
+            (tool_results, report_back_result) tuple。
+        """
+        parallel_calls, sequential_calls = self._parse_and_classify_tool_calls(tool_calls, trace_id)
+
+        tool_results = self._execute_parallel_batch(parallel_calls, trace_id)
+        seq_results, report_back_result = self._execute_sequential_batch(sequential_calls, trace_id)
+        tool_results.extend(seq_results)
+
+        # 按原始順序排序（維持 API 協議一致性）
+        original_order = {tc.get("id", ""): i for i, tc in enumerate(tool_calls)}
+        tool_results.sort(key=lambda x: original_order.get(x[0], 999))
+
+        return tool_results, report_back_result
+
+    def _execute_parallel_batch(
+        self,
+        parallel_calls: list[tuple[str, str, str, dict[str, Any] | None]],
+        trace_id: str,
+    ) -> list[tuple[str, str, str | dict[str, Any]]]:
+        """並行執行 read-only 工具。
+
+        Args:
+            parallel_calls: 可並行執行的 tool calls。
+            trace_id: 追蹤 ID。
+
+        Returns:
+            tool results 列表。
+        """
+        tool_results: list[tuple[str, str, str | dict[str, Any]]] = []
+
         if parallel_calls:
             logger.debug("[%s] Executing %d tools in parallel", trace_id, len(parallel_calls))
             with ThreadPoolExecutor(max_workers=MAX_PARALLEL_WORKERS) as executor:
                 futures = {}
                 for tc_id, func_name, _, func_args in parallel_calls:
+                    # 防禦：若 func_args 不是 dict（理論上不應發生，因為 error 會被分到 sequential）
+                    if func_args is None:
+                        tool_results.append((tc_id, func_name, "Error: Missing arguments"))
+                        continue
                     logger.debug("[%s] Tool call (parallel): %s", trace_id, func_name)
                     future = executor.submit(self._dispatch_tool, func_name, func_args)
                     futures[future] = (tc_id, func_name)
@@ -216,10 +273,32 @@ class FastAgenticSearchHarness:
                         result = f"Error: {exc}"
                     tool_results.append((tc_id, func_name, result))
 
-        # 順序執行 report_back 和錯誤項目
+        return tool_results
+
+    def _execute_sequential_batch(
+        self,
+        sequential_calls: list[tuple[str, str, str, dict[str, Any] | None]],
+        trace_id: str,
+    ) -> tuple[list[tuple[str, str, str | dict[str, Any]]], dict[str, Any] | None]:
+        """順序執行 tool calls，並檢測 report_back。
+
+        Args:
+            sequential_calls: 需順序執行的 tool calls。
+            trace_id: 追蹤 ID。
+
+        Returns:
+            (tool_results, report_back_result) tuple。
+        """
+        tool_results: list[tuple[str, str, str | dict[str, Any]]] = []
+        report_back_result: dict[str, Any] | None = None
+
         for tc_id, func_name, error, func_args in sequential_calls:
             if error:
                 tool_results.append((tc_id, func_name, error))
+                continue
+
+            if func_args is None:
+                tool_results.append((tc_id, func_name, "Error: Missing arguments"))
                 continue
 
             logger.debug("[%s] Tool call (sequential): %s", trace_id, func_name)
@@ -233,10 +312,6 @@ class FastAgenticSearchHarness:
                 report_back_result = result
 
             tool_results.append((tc_id, func_name, result))
-
-        # 按原始順序排序（維持 API 協議一致性）
-        original_order = {tc.get("id", ""): i for i, tc in enumerate(tool_calls)}
-        tool_results.sort(key=lambda x: original_order.get(x[0], 999))
 
         return tool_results, report_back_result
 

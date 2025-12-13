@@ -47,3 +47,6 @@ exclude_dirs = ["tests"]
 
 [tool.mypy]
 python_version = "3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

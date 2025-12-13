@@ -1,0 +1,357 @@
+from pathlib import Path
+
+import pytest
+
+from relace_mcp.tools.search.handlers import (
+    MAX_TOOL_RESULT_CHARS,
+    bash_handler,
+    estimate_context_size,
+    grep_search_handler,
+    map_repo_path,
+    truncate_for_context,
+    view_directory_handler,
+    view_file_handler,
+)
+from relace_mcp.utils import validate_file_path
+
+
+class TestMapRepoPath:
+    """Test /repo path mapping."""
+
+    def test_maps_repo_root(self, tmp_path: Path) -> None:
+        """Should map /repo to base_dir."""
+        result = map_repo_path("/repo", str(tmp_path))
+        assert result == str(tmp_path)
+
+    def test_maps_repo_root_with_slash(self, tmp_path: Path) -> None:
+        """Should map /repo/ to base_dir."""
+        result = map_repo_path("/repo/", str(tmp_path))
+        assert result == str(tmp_path)
+
+    def test_maps_repo_subpath(self, tmp_path: Path) -> None:
+        """Should map /repo/src/file.py to base_dir/src/file.py."""
+        result = map_repo_path("/repo/src/file.py", str(tmp_path))
+        assert result == str(tmp_path / "src" / "file.py")
+
+    def test_rejects_non_repo_path(self, tmp_path: Path) -> None:
+        """Should reject paths not starting with /repo/."""
+        with pytest.raises(RuntimeError, match="expects absolute paths under /repo/"):
+            map_repo_path("/other/path", str(tmp_path))
+
+    def test_rejects_relative_path(self, tmp_path: Path) -> None:
+        """Should reject relative paths."""
+        with pytest.raises(RuntimeError, match="expects absolute paths under /repo/"):
+            map_repo_path("src/file.py", str(tmp_path))
+
+
+class TestValidatePath:
+    """Test path validation security."""
+
+    def test_valid_path_within_base(self, tmp_path: Path) -> None:
+        """Should accept paths within base_dir."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("content")
+        result = validate_file_path(str(test_file), str(tmp_path), allow_empty=True)
+        assert result == test_file.resolve()
+
+    def test_blocks_path_traversal(self, tmp_path: Path) -> None:
+        """Should block path traversal attempts."""
+        outside_path = tmp_path.parent / "outside.py"
+        with pytest.raises(RuntimeError, match="outside allowed directory"):
+            validate_file_path(str(outside_path), str(tmp_path), allow_empty=True)
+
+    def test_blocks_traversal_with_dots(self, tmp_path: Path) -> None:
+        """Should block ../.. traversal."""
+        traversal = str(tmp_path / ".." / ".." / "etc" / "passwd")
+        with pytest.raises(RuntimeError, match="outside allowed directory"):
+            validate_file_path(traversal, str(tmp_path), allow_empty=True)
+
+
+class TestViewFileHandler:
+    """Test view_file tool handler."""
+
+    def test_reads_file_with_line_numbers(self, tmp_path: Path) -> None:
+        """Should read file and add line numbers."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("line1\nline2\nline3\n")
+
+        result = view_file_handler("/repo/test.py", [1, 3], str(tmp_path))
+        assert "1 line1" in result
+        assert "2 line2" in result
+        assert "3 line3" in result
+
+    def test_truncates_at_range_end(self, tmp_path: Path) -> None:
+        """Should show truncation message when not at EOF."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("line1\nline2\nline3\nline4\n")
+
+        result = view_file_handler("/repo/test.py", [1, 2], str(tmp_path))
+        assert "1 line1" in result
+        assert "2 line2" in result
+        assert "truncated" in result
+
+    def test_handles_negative_one_end(self, tmp_path: Path) -> None:
+        """Should read to EOF when end is -1."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("line1\nline2\nline3\n")
+
+        result = view_file_handler("/repo/test.py", [2, -1], str(tmp_path))
+        assert "2 line2" in result
+        assert "3 line3" in result
+        assert "truncated" not in result
+
+    def test_returns_error_for_missing_file(self, tmp_path: Path) -> None:
+        """Should return error for non-existent file."""
+        result = view_file_handler("/repo/missing.py", [1, 100], str(tmp_path))
+        assert "Error" in result
+        assert "not found" in result.lower()
+
+    def test_returns_error_for_directory(self, tmp_path: Path) -> None:
+        """Should return error when path is a directory."""
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+
+        result = view_file_handler("/repo/subdir", [1, 100], str(tmp_path))
+        assert "Error" in result
+        assert "Not a file" in result
+
+
+class TestViewDirectoryHandler:
+    """Test view_directory tool handler."""
+
+    def test_lists_files_and_dirs(self, tmp_path: Path) -> None:
+        """Should list files and directories."""
+        (tmp_path / "file1.txt").write_text("content")
+        (tmp_path / "subdir").mkdir()
+        (tmp_path / "subdir" / "file2.txt").write_text("content")
+
+        result = view_directory_handler("/repo", False, str(tmp_path))
+        assert "file1.txt" in result
+        assert "subdir/" in result
+
+    def test_excludes_hidden_by_default(self, tmp_path: Path) -> None:
+        """Should exclude hidden files by default."""
+        (tmp_path / ".hidden").write_text("content")
+        (tmp_path / "visible.txt").write_text("content")
+
+        result = view_directory_handler("/repo", False, str(tmp_path))
+        assert ".hidden" not in result
+        assert "visible.txt" in result
+
+    def test_includes_hidden_when_requested(self, tmp_path: Path) -> None:
+        """Should include hidden files when include_hidden=True."""
+        (tmp_path / ".hidden").write_text("content")
+        (tmp_path / "visible.txt").write_text("content")
+
+        result = view_directory_handler("/repo", True, str(tmp_path))
+        assert ".hidden" in result
+        assert "visible.txt" in result
+
+    def test_returns_error_for_missing_dir(self, tmp_path: Path) -> None:
+        """Should return error for non-existent directory."""
+        result = view_directory_handler("/repo/missing", False, str(tmp_path))
+        assert "Error" in result
+
+
+class TestGrepSearchHandler:
+    """Test grep_search tool handler."""
+
+    def test_finds_pattern_in_files(self, tmp_path: Path) -> None:
+        """Should find pattern matches."""
+        (tmp_path / "test.py").write_text("def hello():\n    print('world')\n")
+
+        result = grep_search_handler("hello", True, None, None, str(tmp_path))
+        assert "hello" in result
+        assert "test.py" in result
+
+    def test_case_insensitive_search(self, tmp_path: Path) -> None:
+        """Should support case-insensitive search."""
+        (tmp_path / "test.py").write_text("HELLO world\n")
+
+        result = grep_search_handler("hello", False, None, None, str(tmp_path))
+        assert "HELLO" in result or "hello" in result.lower()
+
+    def test_no_matches_returns_message(self, tmp_path: Path) -> None:
+        """Should return 'No matches' when nothing found."""
+        (tmp_path / "test.py").write_text("nothing here\n")
+
+        result = grep_search_handler("xyz123abc", True, None, None, str(tmp_path))
+        assert "No matches" in result
+
+
+class TestBashHandler:
+    """Test bash tool handler and security."""
+
+    def test_executes_safe_command(self, tmp_path: Path) -> None:
+        """Should execute safe read-only commands."""
+        (tmp_path / "test.py").write_text("print('hello')\n")
+
+        result = bash_handler("ls -la", str(tmp_path))
+        assert "test.py" in result
+
+    def test_executes_find_command(self, tmp_path: Path) -> None:
+        """Should allow find command for file discovery."""
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "main.py").write_text("code")
+
+        result = bash_handler("find . -name '*.py'", str(tmp_path))
+        assert "main.py" in result
+
+    def test_executes_head_tail(self, tmp_path: Path) -> None:
+        """Should allow head/tail for file inspection."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("line1\nline2\nline3\n")
+
+        result = bash_handler("head -n 2 test.txt", str(tmp_path))
+        assert "line1" in result
+        assert "line2" in result
+
+    def test_executes_wc_command(self, tmp_path: Path) -> None:
+        """Should allow wc for counting lines."""
+        (tmp_path / "test.py").write_text("a\nb\nc\n")
+
+        result = bash_handler("wc -l test.py", str(tmp_path))
+        assert "3" in result
+
+    def test_blocks_rm_command(self, tmp_path: Path) -> None:
+        """Should block rm command."""
+        result = bash_handler("rm file.txt", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_blocks_sudo(self, tmp_path: Path) -> None:
+        """Should block sudo command."""
+        result = bash_handler("sudo ls", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_blocks_curl(self, tmp_path: Path) -> None:
+        """Should block curl command."""
+        result = bash_handler("curl http://example.com", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_blocks_wget(self, tmp_path: Path) -> None:
+        """Should block wget command."""
+        result = bash_handler("wget http://example.com", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_blocks_pipe(self, tmp_path: Path) -> None:
+        """Should block pipe operator."""
+        result = bash_handler("ls | cat", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_blocks_redirect(self, tmp_path: Path) -> None:
+        """Should block output redirection."""
+        result = bash_handler("echo test > file.txt", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_blocks_command_substitution(self, tmp_path: Path) -> None:
+        """Should block command substitution."""
+        result = bash_handler("echo $(whoami)", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_blocks_backtick_substitution(self, tmp_path: Path) -> None:
+        """Should block backtick command substitution."""
+        result = bash_handler("echo `whoami`", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_returns_no_output_message(self, tmp_path: Path) -> None:
+        """Should return message for empty output."""
+        result = bash_handler("true", str(tmp_path))
+        assert result == "(no output)"
+
+    def test_returns_exit_code_on_error(self, tmp_path: Path) -> None:
+        """Should include exit code when command fails."""
+        result = bash_handler("ls nonexistent_file_xyz", str(tmp_path))
+        assert "Exit code" in result or "No such file" in result
+
+
+class TestContextTruncation:
+    """Test context window management."""
+
+    def test_truncate_for_context_short_text(self) -> None:
+        """Short text should not be truncated."""
+        short = "Hello world"
+        result = truncate_for_context(short)
+        assert result == short
+        assert "truncated" not in result
+
+    def test_truncate_for_context_long_text(self) -> None:
+        """Long text should be truncated with message."""
+        long_text = "x" * (MAX_TOOL_RESULT_CHARS + 1000)
+        result = truncate_for_context(long_text)
+
+        assert len(result) < len(long_text)
+        assert "truncated" in result
+        assert str(len(long_text)) in result
+
+    def test_estimate_context_size(self) -> None:
+        """Should estimate message context size."""
+        from typing import Any
+
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": "Hello"},
+            {"role": "user", "content": "World"},
+            {
+                "role": "assistant",
+                "tool_calls": [{"function": {"arguments": '{"key": "value"}'}}],
+            },
+        ]
+
+        size = estimate_context_size(messages)
+        assert size == 26
+
+
+class TestGrepTruncation:
+    """Test grep search truncation behavior."""
+
+    def test_truncates_at_max_matches(self, tmp_path: Path) -> None:
+        """Should truncate output at MAX_GREP_MATCHES."""
+        for i in range(100):
+            (tmp_path / f"file{i:03d}.py").write_text(f"MATCH_PATTERN line {i}\n")
+
+        result = grep_search_handler("MATCH_PATTERN", True, None, None, str(tmp_path))
+
+        assert "capped at 50 matches" in result or "50" in result
+
+        match_lines = [line for line in result.split("\n") if "MATCH_PATTERN" in line]
+        assert len(match_lines) <= 50
+
+
+class TestViewDirectoryBFS:
+    """Test P2 fix: BFS-like directory listing order."""
+
+    def test_root_files_before_subdir_contents(self, tmp_path: Path) -> None:
+        """Root files should appear before subdirectory contents."""
+        (tmp_path / "z_file.txt").write_text("root file")
+        subdir = tmp_path / "a_subdir"
+        subdir.mkdir()
+        (subdir / "nested.txt").write_text("nested")
+
+        result = view_directory_handler("/repo", False, str(tmp_path))
+        lines = result.strip().split("\n")
+
+        z_idx = next(i for i, line in enumerate(lines) if "z_file.txt" in line)
+        nested_idx = next(i for i, line in enumerate(lines) if "nested.txt" in line)
+
+        assert z_idx < nested_idx
+
+    def test_bfs_order_multiple_levels(self, tmp_path: Path) -> None:
+        """BFS should list level by level."""
+        (tmp_path / "root.txt").write_text("root")
+        level1 = tmp_path / "level1_a"
+        level1.mkdir()
+        level2 = level1 / "level2"
+        level2.mkdir()
+        (level2 / "deep.txt").write_text("deep")
+
+        result = view_directory_handler("/repo", False, str(tmp_path))
+        lines = result.strip().split("\n")
+
+        assert "root.txt" in lines[0]

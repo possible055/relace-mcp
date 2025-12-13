@@ -4,7 +4,6 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastmcp.exceptions import ToolError
 
 from relace_mcp.clients import RelaceClient
 from relace_mcp.config import RelaceConfig
@@ -194,64 +193,110 @@ class TestApplyFileLogicValidation:
     """Test apply_file_logic input validation."""
 
     @pytest.mark.parametrize("snippet", ["", "   \n\t  "])
-    def test_empty_or_whitespace_edit_snippet_raises(
+    def test_empty_or_whitespace_edit_snippet_returns_error(
         self,
         mock_config: RelaceConfig,
         temp_source_file: Path,
         tmp_path: Path,
         snippet: str,
     ) -> None:
-        """Should raise on empty or whitespace-only edit_snippet."""
+        """Should return INVALID_INPUT for empty or whitespace-only edit_snippet."""
         mock_client = MagicMock(spec=RelaceClient)
 
-        with pytest.raises(RuntimeError, match="edit_snippet cannot be empty"):
-            apply_file_logic(
-                client=mock_client,
-                file_path=str(temp_source_file),
-                edit_snippet=snippet,
-                instruction=None,
-                base_dir=str(tmp_path),
-            )
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(temp_source_file),
+            edit_snippet=snippet,
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
 
-    def test_placeholder_only_snippet_raises_tool_error(
+        assert "INVALID_INPUT" in result
+        assert "edit_snippet cannot be empty" in result
+
+    def test_placeholder_only_snippet_returns_error(
         self,
         mock_config: RelaceConfig,
         temp_source_file: Path,
         tmp_path: Path,
     ) -> None:
-        """Should raise ToolError with NEEDS_MORE_CONTEXT when snippet has no anchors."""
+        """Should return NEEDS_MORE_CONTEXT when snippet has no anchors."""
         mock_client = MagicMock(spec=RelaceClient)
 
-        with pytest.raises(ToolError, match="NEEDS_MORE_CONTEXT"):
-            apply_file_logic(
-                client=mock_client,
-                file_path=str(temp_source_file),
-                edit_snippet="// ... existing code ...\n// ... rest of code ...\n",
-                instruction=None,
-                base_dir=str(tmp_path),
-            )
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(temp_source_file),
+            edit_snippet="// ... existing code ...\n// ... rest of code ...\n",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
 
+        assert "NEEDS_MORE_CONTEXT" in result
         mock_client.apply.assert_not_called()
 
-    def test_delete_like_with_insufficient_concrete_lines_raises_tool_error(
+    def test_empty_path_returns_invalid_path(
+        self,
+        mock_config: RelaceConfig,
+        tmp_path: Path,
+    ) -> None:
+        """Should return INVALID_PATH for empty file_path."""
+        mock_client = MagicMock(spec=RelaceClient)
+
+        result = apply_file_logic(
+            client=mock_client,
+            file_path="",
+            edit_snippet="code",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
+
+        assert "INVALID_PATH" in result
+        assert "cannot be empty" in result
+        mock_client.apply.assert_not_called()
+
+    def test_directory_path_returns_invalid_path(
+        self,
+        mock_config: RelaceConfig,
+        tmp_path: Path,
+    ) -> None:
+        """Should return INVALID_PATH when file_path is a directory."""
+        mock_client = MagicMock(spec=RelaceClient)
+
+        result = apply_file_logic(
+            client=mock_client,
+            file_path=str(tmp_path),
+            edit_snippet="code",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
+
+        assert "INVALID_PATH" in result
+        assert "not a file" in result
+        mock_client.apply.assert_not_called()
+
+    def test_delete_with_remove_directive_is_allowed(
         self,
         mock_config: RelaceConfig,
         temp_source_file: Path,
         tmp_path: Path,
     ) -> None:
-        """Should raise ToolError with NEEDS_MORE_CONTEXT for delete with insufficient anchors."""
+        """Should allow delete with // remove directive (no longer blocked by gate)."""
         mock_client = MagicMock(spec=RelaceClient)
+        mock_client.apply.return_value = {"mergedCode": "# modified\n", "usage": {}}
 
-        with pytest.raises(ToolError, match="NEEDS_MORE_CONTEXT"):
-            apply_file_logic(
+        log_file = tmp_path / "test.log"
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
+            result = apply_file_logic(
                 client=mock_client,
                 file_path=str(temp_source_file),
-                edit_snippet="def foo():\n    pass\n// ... rest of code ...\n",
+                edit_snippet="// ... existing code ...\n// remove foo\n// ... rest of code ...\n",
                 instruction="delete foo",
                 base_dir=str(tmp_path),
             )
 
-        mock_client.apply.assert_not_called()
+        # Should call API, not return error
+        mock_client.apply.assert_called_once()
+        assert "Applied code changes" in result or "No changes made" in result
 
     def test_no_changes_returns_message(
         self,
@@ -392,14 +437,16 @@ class TestApplyFileLogicBaseDirSecurity:
         outside_file.write_text("content")
 
         try:
-            with pytest.raises(RuntimeError, match="outside allowed directory"):
-                apply_file_logic(
-                    client=mock_client,
-                    file_path=str(outside_file),
-                    edit_snippet="// edit",
-                    instruction=None,
-                    base_dir=str(tmp_path),
-                )
+            result = apply_file_logic(
+                client=mock_client,
+                file_path=str(outside_file),
+                edit_snippet="// edit",
+                instruction=None,
+                base_dir=str(tmp_path),
+            )
+            assert "INVALID_PATH" in result
+            assert "outside allowed directory" in result
+            mock_client.apply.assert_not_called()
         finally:
             outside_file.unlink(missing_ok=True)
 
@@ -503,3 +550,85 @@ class TestApplyFileLogicSnippetPreview:
 
         logged = json.loads(log_file.read_text().strip())
         assert len(logged["edit_snippet_preview"]) == 200
+
+
+class TestApplyFileLogicPathNormalization:
+    """Test path normalization for /repo/... virtual root."""
+
+    def test_repo_virtual_root_path(
+        self,
+        mock_config: RelaceConfig,
+        tmp_path: Path,
+    ) -> None:
+        """Should accept /repo/... format and map to base_dir."""
+        test_file = tmp_path / "src" / "file.py"
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+        test_file.write_text("original = True\n")
+
+        mock_client = MagicMock(spec=RelaceClient)
+        mock_client.apply.return_value = {
+            "mergedCode": "modified = True\n",
+            "usage": {},
+        }
+
+        log_file = tmp_path / "test.log"
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
+            result = apply_file_logic(
+                client=mock_client,
+                file_path="/repo/src/file.py",
+                edit_snippet="modified = True\n",
+                instruction=None,
+                base_dir=str(tmp_path),
+            )
+
+        assert "Applied code changes" in result
+        mock_client.apply.assert_called_once()
+
+    def test_relative_path_mapped_to_base_dir(
+        self,
+        mock_config: RelaceConfig,
+        tmp_path: Path,
+    ) -> None:
+        """Should accept relative path and map to base_dir."""
+        test_file = tmp_path / "src" / "file.py"
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+        test_file.write_text("original = True\n")
+
+        mock_client = MagicMock(spec=RelaceClient)
+        mock_client.apply.return_value = {
+            "mergedCode": "modified = True\n",
+            "usage": {},
+        }
+
+        log_file = tmp_path / "test.log"
+        with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
+            result = apply_file_logic(
+                client=mock_client,
+                file_path="src/file.py",
+                edit_snippet="modified = True\n",
+                instruction=None,
+                base_dir=str(tmp_path),
+            )
+
+        assert "Applied code changes" in result
+        mock_client.apply.assert_called_once()
+
+    def test_invalid_path_returns_error(
+        self,
+        mock_config: RelaceConfig,
+        tmp_path: Path,
+    ) -> None:
+        """Should return INVALID_PATH for paths outside base_dir."""
+        mock_client = MagicMock(spec=RelaceClient)
+
+        result = apply_file_logic(
+            client=mock_client,
+            file_path="/other/path/file.py",
+            edit_snippet="code",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
+
+        assert "INVALID_PATH" in result
+        assert "outside allowed directory" in result
+        mock_client.apply.assert_not_called()
