@@ -1,6 +1,14 @@
 from dataclasses import dataclass
 from typing import Any
 
+from ...config import (
+    BUDGET_HINT_TEMPLATE,
+    CONVERGENCE_HINT,
+    STRATEGIES,
+    SYSTEM_PROMPT,
+    USER_PROMPT_TEMPLATE,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class GrepSearchParams:
@@ -13,74 +21,16 @@ class GrepSearchParams:
     base_dir: str
 
 
-SYSTEM_PROMPT = """You are an AI agent whose job is to explore a code base with the provided tools and thoroughly understand the problem. You should use the tools provided to explore the codebase, read files, search for specific terms, and execute bash commands as needed. Once you have a good understanding of the problem, use the `report_back` tool share your findings. Make sure to only use the `report_back` tool when you are confident that you have gathered enough information to make an informed decision. Your objective is speed and efficiency so call multiple tools at once where applicable to reduce latency and reduce the number of turns. You are given a limited number of turns so aim to call 4-12 tools in parallel. You are suggested to explain your reasoning for the tools you choose to call before calling them."""
-
-USER_PROMPT_TEMPLATE = """I have uploaded a code repository in the /repo directory. Now consider the following user query:
-
-<user_query>
-{query}
-</user_query>
-
-You need to resolve the <user_query>. To do this, follow the workflow below:
-
----
-
-Your job is purely to understand the codebase.
-
-### 1. Explore and Understand the Codebase
-
-You **must first build a deep understanding of the relevant code**. Use the available tools to:
-
-- Locate and examine all relevant parts of the codebase.
-- Understand how the current code works, including expected behaviors, control flow, and edge cases.
-- Identify the potential root cause(s) of the issue or the entry points for the requested feature.
-- Review any related unit tests to understand expected behavior.
-
----
-
-### 2. Report Back Your Understanding
-
-Once you believe you have a solid understanding of the issue and the relevant code:
-
-- Use the `report_back` tool to report you findings.
-- File paths should be relative to the project root excluding the base `/repo/` failure to comply will result in deductions.
-- Only report the relevant files within the repository. You may speculate that a file or folder may be added in your explaination, but it must not be put within you reported files.
-
----
-
-### Success Criteria
-
-A successful resolution means:
-
-- The specific issue in the <user_query> is well understood.
-- Your explain clearly the reasoning behind marking code as relavent.
-- The files comprehensively covers all the key files needed to address the query.
-- Relevant files can be any of three types:
-  - Files needing edits
-  - Files providing needed provide the required edits
-
-<use_parallel_tool_calls>
-If you intend to call multiple tools and there are no dependencies between the tool calls, make all of the independent tool calls in parallel. Prioritize calling tools simultaneously whenever the actions can be done in parallel rather than sequentially. For example, when reading 3 files, run 3 tool calls in parallel to read all 3 files into context at the same time. Maximize use of parallel tool calls where possible to increase speed and efficiency. However, if some tool calls depend on previous calls to inform dependent values like the parameters, do NOT call these tools in parallel and instead call them sequentially. Never use placeholders or guess missing parameters in tool calls.
-
-Parallel tool calls can be made using the following schema:
-<tool_call>
-<function=example_function_name_1>
-<parameter=example_parameter_1>
-value_1
-</parameter>
-<parameter=example_parameter_2>
-</parameter>
-</function>
-<function=example_function_name_2>
-<parameter=example_parameter_1>
-value_1
-</parameter>
-<parameter=example_parameter_2>
-</parameter>
-</function>
-</tool_call>
-Where you can place as many <function=...>...</function> tags as you want within the <tool_call>...</tool_call> tags for parallel tool calls.
-</use_parallel_tool_calls>"""
+# Re-export for backward compatibility
+__all__ = [
+    "GrepSearchParams",
+    "SYSTEM_PROMPT",
+    "USER_PROMPT_TEMPLATE",
+    "BUDGET_HINT_TEMPLATE",
+    "CONVERGENCE_HINT",
+    "STRATEGIES",
+    "TOOL_SCHEMAS",
+]
 
 TOOL_SCHEMAS: list[dict[str, Any]] = [
     {

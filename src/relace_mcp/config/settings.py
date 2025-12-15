@@ -22,7 +22,7 @@ RELACE_SEARCH_ENDPOINT = os.getenv(
 )
 RELACE_SEARCH_MODEL = os.getenv("RELACE_SEARCH_MODEL", "relace-search")
 SEARCH_TIMEOUT_SECONDS = float(os.getenv("RELACE_SEARCH_TIMEOUT_SECONDS", "120.0"))
-SEARCH_MAX_TURNS = int(os.getenv("RELACE_SEARCH_MAX_TURNS", "10"))
+SEARCH_MAX_TURNS = int(os.getenv("RELACE_SEARCH_MAX_TURNS", "6"))
 
 # Strict mode：強制安全設定
 RELACE_STRICT_MODE = os.getenv("RELACE_STRICT_MODE", "0") == "1"

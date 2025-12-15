@@ -20,7 +20,15 @@ from .handlers import (
     view_directory_handler,
     view_file_handler,
 )
-from .schemas import SYSTEM_PROMPT, TOOL_SCHEMAS, USER_PROMPT_TEMPLATE, GrepSearchParams
+from .schemas import (
+    BUDGET_HINT_TEMPLATE,
+    CONVERGENCE_HINT,
+    STRATEGIES,
+    SYSTEM_PROMPT,
+    TOOL_SCHEMAS,
+    USER_PROMPT_TEMPLATE,
+    GrepSearchParams,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +40,11 @@ PARALLEL_SAFE_TOOLS = frozenset({"view_file", "view_directory", "grep_search"})
 
 # 並行執行的最大 worker 數（官方建議 4-12 tool calls per turn）
 MAX_PARALLEL_WORKERS = 12
+
+# Budget Tracker 策略閾值（配合 SEARCH_MAX_TURNS=6）
+BUDGET_HIGH_THRESHOLD = 4  # 剩餘 4+ 輪：廣泛探索
+BUDGET_MID_THRESHOLD = 2  # 剩餘 2-3 輪：聚焦準備
+# 剩餘 < 2 輪：立即回報
 
 
 class FastAgenticSearchHarness:
@@ -46,6 +59,29 @@ class FastAgenticSearchHarness:
         self._client = client
         self._observed_files: dict[str, list[list[int]]] = {}
         self._view_line_re = re.compile(r"^(\d+)\s")
+
+    def _get_budget_hint(self, turn: int, max_turns: int) -> str:
+        """產生 Budget Tracker 提示訊息。
+
+        根據剩餘輪數提供策略建議，幫助模型自主收斂。
+        """
+        remaining = max_turns - turn
+        remaining_pct = 100 - (turn / max_turns) * 100
+
+        if remaining >= BUDGET_HIGH_THRESHOLD:
+            strategy = STRATEGIES["high"]
+        elif remaining >= BUDGET_MID_THRESHOLD:
+            strategy = STRATEGIES["mid"]
+        else:
+            strategy = STRATEGIES["low"]
+
+        return BUDGET_HINT_TEMPLATE.format(
+            turn=turn + 1,
+            max_turns=max_turns,
+            remaining=remaining,
+            remaining_pct=f"{remaining_pct:.0f}",
+            strategy=strategy,
+        )
 
     def run(self, query: str) -> dict[str, Any]:
         """執行一次 Fast Agentic Search。
@@ -100,13 +136,17 @@ class FastAgenticSearchHarness:
         for turn in range(SEARCH_MAX_TURNS):
             logger.debug("[%s] Turn %d/%d", trace_id, turn + 1, SEARCH_MAX_TURNS)
 
-            # 強制收斂機制：最後 2 turn 注入提示
-            if turn >= SEARCH_MAX_TURNS - 2:
-                convergence_hint = (
-                    "剩餘回合有限，請立即使用 report_back 回報目前發現，"
-                    "不要追求完整覆蓋。請基於已收集的資訊做出判斷。"
-                )
-                messages.append({"role": "user", "content": convergence_hint})
+            # Budget Tracker：每輪注入 budget 狀態（從第 2 輪開始）
+            if turn > 0:
+                budget_hint = self._get_budget_hint(turn, SEARCH_MAX_TURNS)
+                messages.append({"role": "user", "content": budget_hint})
+                logger.debug("[%s] Injected budget hint at turn %d", trace_id, turn + 1)
+
+            # 漸進式收斂提示：從中間點開始（而非最後 2 輪）
+            remaining = SEARCH_MAX_TURNS - turn
+            if remaining < BUDGET_MID_THRESHOLD:
+                # 最後 2 輪：強制收斂
+                messages.append({"role": "user", "content": CONVERGENCE_HINT})
                 logger.info("[%s] Injected convergence hint at turn %d", trace_id, turn + 1)
 
             # 檢查 context 大小
