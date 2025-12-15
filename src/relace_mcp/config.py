@@ -27,6 +27,14 @@ SEARCH_MAX_TURNS = int(os.getenv("RELACE_SEARCH_MAX_TURNS", "10"))
 # Strict mode：強制安全設定
 RELACE_STRICT_MODE = os.getenv("RELACE_STRICT_MODE", "0") == "1"
 
+# Backup：備份機制（預設關閉）
+RELACE_BACKUP_ENABLED = os.getenv("RELACE_BACKUP_ENABLED", "0") == "1"
+BACKUP_DIR = (
+    Path(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")))
+    / "relace"
+    / "backups"
+)
+
 # Logging
 LOG_DIR = Path(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state"))) / "relace"
 LOG_PATH = LOG_DIR / "relace_apply.log"

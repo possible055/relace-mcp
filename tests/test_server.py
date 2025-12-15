@@ -176,7 +176,8 @@ class TestServerIntegration:
             base_dir=str(tmp_path),
         )
 
-        merged_code = "def hello():\n    print('Modified!')\n"
+        # temp_source_file 內容: def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Goodbye')\n
+        merged_code = "def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Modified!')\n"
 
         with patch("relace_mcp.tools.RelaceClient") as mock_client_cls:
             mock_client = MagicMock()
@@ -193,12 +194,12 @@ class TestServerIntegration:
                 tools = await client.list_tools()
                 assert len(tools) >= 1
 
-                # Step 2: Call tool
+                # Step 2: Call tool（edit_snippet 包含原始檔案中存在的 anchor lines）
                 result = await client.call_tool(
                     "fast_apply",
                     {
                         "path": str(temp_source_file),
-                        "edit_snippet": "def hello(): print('Modified!')",
+                        "edit_snippet": "def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Modified!')\n",
                     },
                 )
 

@@ -156,5 +156,5 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def mock_log_path(tmp_path: Path) -> Generator[Path, None, None]:
     """Auto-mock LOG_PATH for all tests to avoid writing to real log."""
     log_file = tmp_path / "test.log"
-    with patch("relace_mcp.tools.apply.LOG_PATH", log_file):
+    with patch("relace_mcp.tools.apply.logging.LOG_PATH", log_file):
         yield log_file
