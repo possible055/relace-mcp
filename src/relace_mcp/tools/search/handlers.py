@@ -5,7 +5,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
-from ...utils import MAX_FILE_SIZE_BYTES, normalize_repo_path, validate_file_path
+from ...utils import MAX_FILE_SIZE_BYTES, validate_file_path
 from .schemas import GrepSearchParams
 
 # Directory listing limit
@@ -60,25 +60,27 @@ def _timeout_context(seconds: int):
 
 
 def map_repo_path(path: str, base_dir: str) -> str:
-    """Map model-provided /repo/... path to actual filesystem path.
+    """Map /repo/... virtual root path to actual filesystem path.
 
-    This function intentionally only accepts /repo virtual root format (/repo or /repo/...),
-    to enforce search agent to always return paths using /repo as the "virtual repo root".
-    Internal implementation delegates to normalize_repo_path for actual path conversion.
+    This function is for INTERNAL use only - translating paths from Relace Search API
+    which uses /repo as the virtual repository root.
+
+    External API (fast_apply, fast_search results) now uses absolute paths.
 
     Args:
-        path: Model-provided path, expected format is /repo or /repo/...
+        path: Path from Relace API, format: /repo or /repo/...
         base_dir: Actual repo root directory.
 
     Returns:
-        Actual filesystem path.
-
-    Raises:
-        RuntimeError: If path does not start with /repo.
+        Actual filesystem absolute path.
     """
-    if path not in ("/repo", "/repo/") and not path.startswith("/repo/"):
-        raise RuntimeError(f"Fast Agentic Search expects absolute paths under /repo/, got: {path}")
-    return normalize_repo_path(path, base_dir)
+    if path == "/repo" or path == "/repo/":
+        return base_dir
+    if path.startswith("/repo/"):
+        rel = path[len("/repo/") :]
+        return os.path.join(base_dir, rel)
+    # Already absolute or relative - pass through
+    return path
 
 
 def _validate_file_for_view(resolved: Path, path: str) -> str | None:

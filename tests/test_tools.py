@@ -572,22 +572,16 @@ class TestApplyFileLogicSnippetPreview:
 
 
 class TestApplyFileLogicPathNormalization:
-    """Test path normalization for /repo/... virtual root."""
+    """Test path normalization for relative and absolute paths."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "file_path",
-        ["/repo/src/file.py", "src/file.py"],
-        ids=["virtual_root", "relative_path"],
-    )
-    async def test_path_formats_accepted(
+    async def test_relative_path_accepted(
         self,
         mock_config: RelaceConfig,
         mock_client: AsyncMock,
         tmp_path: Path,
-        file_path: str,
     ) -> None:
-        """Should accept /repo/... and relative path formats and map to base_dir."""
+        """Should accept relative path and map to base_dir."""
         test_file = tmp_path / "src" / "file.py"
         test_file.parent.mkdir(parents=True, exist_ok=True)
         test_file.write_text("original_value = True\n")
@@ -597,10 +591,38 @@ class TestApplyFileLogicPathNormalization:
             "usage": {},
         }
 
-        # edit_snippet contains anchor lines that exist in original file
         result = await apply_file_logic(
             client=mock_client,
-            file_path=file_path,
+            file_path="src/file.py",
+            edit_snippet="original_value = True\nmodified_value = True\n",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
+
+        assert result["status"] == "ok"
+        assert "Applied code changes" in result["message"]
+        mock_client.apply.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_absolute_path_accepted(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: AsyncMock,
+        tmp_path: Path,
+    ) -> None:
+        """Should accept absolute path within base_dir."""
+        test_file = tmp_path / "src" / "file.py"
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+        test_file.write_text("original_value = True\n")
+
+        mock_client.apply.return_value = {
+            "mergedCode": "modified_value = True\n",
+            "usage": {},
+        }
+
+        result = await apply_file_logic(
+            client=mock_client,
+            file_path=str(test_file),
             edit_snippet="original_value = True\nmodified_value = True\n",
             instruction=None,
             base_dir=str(tmp_path),
