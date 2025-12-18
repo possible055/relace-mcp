@@ -2,9 +2,10 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from ..clients import RelaceClient, RelaceSearchClient
+from ..clients import RelaceClient, RelaceRepoClient, RelaceSearchClient
 from ..config import RelaceConfig
 from .apply import apply_file_logic
+from .repo import cloud_search_logic, cloud_sync_logic
 from .search import FastAgenticSearchHarness
 
 __all__ = ["register_tools"]
@@ -66,5 +67,55 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         # Avoid shared mutable state across concurrent calls.
         return FastAgenticSearchHarness(config, search_client).run(query=query)
 
+    # Cloud Repos (Semantic Search & Sync)
+    repo_client = RelaceRepoClient(config)
+
+    @mcp.tool
+    def cloud_sync() -> dict[str, Any]:
+        """Synchronize local codebase to Relace Cloud for semantic search.
+
+        This uploads files from base_dir to Relace Repos, enabling cloud-based
+        semantic search via cloud_search. Respects .gitignore patterns.
+
+        Use this when:
+        - First time setup for cloud semantic search
+        - After significant code changes to refresh the index
+
+        Note: This is a cloud operation, not local file manipulation.
+        """
+        return cloud_sync_logic(repo_client, config.base_dir)
+
+    @mcp.tool
+    def cloud_search(
+        query: str,
+        score_threshold: float = 0.3,
+        token_limit: int = 30000,
+    ) -> dict[str, Any]:
+        """Perform semantic search over the codebase using Relace Cloud.
+
+        Unlike fast_search (local grep-based), this uses AI embeddings to find
+        semantically related code, even when exact keywords don't match.
+
+        Best for:
+        - Conceptual queries: "Where is user authentication handled?"
+        - Finding related code: "Show me error handling patterns"
+        - Understanding architecture: "How does the payment flow work?"
+
+        For exact pattern matching, use fast_search instead.
+
+        Args:
+            query: Natural language search query.
+            score_threshold: Minimum relevance score (0.0-1.0, default 0.3).
+            token_limit: Maximum tokens to return (default 30000).
+        """
+        return cloud_search_logic(
+            repo_client,
+            query,
+            score_threshold=score_threshold,
+            token_limit=token_limit,
+        )
+
     _ = fast_apply
     _ = fast_search
+    _ = cloud_sync
+    _ = cloud_search
