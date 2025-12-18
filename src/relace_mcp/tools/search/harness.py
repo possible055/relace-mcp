@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -211,7 +212,7 @@ class FastAgenticSearchHarness:
                 return {
                     "query": query,
                     "explanation": report_back_result.get("explanation", ""),
-                    "files": report_back_result.get("files", {}),
+                    "files": self._normalize_report_files(report_back_result.get("files", {})),
                     "turns_used": turn + 1,
                 }
 
@@ -237,7 +238,7 @@ class FastAgenticSearchHarness:
         """Parse grep output and record to observed_files.
 
         Grep output format: path:line:content
-        Note: grep output paths are relative to base_dir, may start with ./
+        Note: grep output paths are relative to base_dir, converted to absolute paths.
         """
         import re
 
@@ -246,16 +247,18 @@ class FastAgenticSearchHarness:
         for line in grep_output.split("\n"):
             match = re.match(pattern, line)
             if match:
-                path = match.group(1)
-                # Normalize path format: remove ./ prefix (grep relative path), ensure consistency with view_file
-                if path.startswith("./"):
-                    path = path[2:]
+                rel_path = match.group(1)
+                # Normalize path format: remove ./ prefix
+                if rel_path.startswith("./"):
+                    rel_path = rel_path[2:]
+                # Convert to absolute path
+                abs_path = os.path.join(self._config.base_dir, rel_path)
                 line_num = int(match.group(2))
 
-                if path not in self._observed_files:
-                    self._observed_files[path] = []
+                if abs_path not in self._observed_files:
+                    self._observed_files[abs_path] = []
                 # Record single-line range
-                self._observed_files[path].append([line_num, line_num])
+                self._observed_files[abs_path].append([line_num, line_num])
 
     def _merge_observed_ranges(self) -> dict[str, list[list[int]]]:
         """Merge and deduplicate ranges in observed_files.
@@ -317,16 +320,38 @@ class FastAgenticSearchHarness:
             return None
         return [start, end]
 
+    def _to_absolute_path(self, path: str) -> str:
+        """Convert any path format to absolute filesystem path.
+
+        Handles: /repo/..., relative paths, and already-absolute paths.
+        """
+        if path.startswith("/repo/"):
+            return os.path.join(self._config.base_dir, path[6:])
+        if path in ("/repo", "/repo/"):
+            return self._config.base_dir
+        if os.path.isabs(path):
+            return path
+        return os.path.join(self._config.base_dir, path)
+
     def _normalize_view_path(self, raw_path: Any) -> str | None:
-        """Convert view_file path to path string relative to repo root."""
+        """Convert /repo/... path to absolute filesystem path.
+
+        Used to record observed files with absolute paths for the final report.
+        Returns None if the path format is invalid.
+        """
         if not isinstance(raw_path, str):
             return None
-        if raw_path in ("/repo", "/repo/"):
+        if not raw_path.startswith("/repo"):
             return None
-        path = raw_path.removeprefix("/repo/")
-        if path.startswith("./"):
-            path = path[2:]
-        return path or None
+        return self._to_absolute_path(raw_path)
+
+    def _normalize_report_files(
+        self, files: dict[str, list[list[int]]]
+    ) -> dict[str, list[list[int]]]:
+        """Normalize report_back file paths to absolute paths."""
+        if not isinstance(files, dict):
+            return {}
+        return {self._to_absolute_path(path): ranges for path, ranges in files.items()}
 
     def _maybe_record_observed(
         self, name: str, args: dict[str, Any], result: str | dict[str, Any]

@@ -72,7 +72,9 @@ class TestFastAgenticSearchHarness:
         result = harness.run("Find hello function")
 
         assert result["explanation"] == "Found the hello function"
-        assert "test.py" in result["files"]
+        # Files are now normalized to absolute paths
+        expected_path = str(tmp_path / "test.py")
+        assert expected_path in result["files"]
         assert result["turns_used"] == 1
 
     def test_handles_multiple_turns(
@@ -180,7 +182,9 @@ class TestFastAgenticSearchHarness:
         assert result["partial"] is True
         assert result["turns_used"] > 0
         assert "did not complete" in result["explanation"]
-        assert "test.py" in result["files"]
+        # Files are now keyed by absolute path
+        expected_path = str(tmp_path / "test.py")
+        assert expected_path in result["files"]
 
     def test_partial_results_normalize_view_file_ranges(
         self,
@@ -216,7 +220,9 @@ class TestFastAgenticSearchHarness:
         harness = FastAgenticSearchHarness(mock_config, mock_client)
         result = harness.run("This will timeout")
 
-        ranges = result["files"]["test.py"]
+        # Files are now keyed by absolute path
+        expected_path = str(tmp_path / "test.py")
+        ranges = result["files"][expected_path]
         assert ranges
         assert all(r[0] > 0 and r[1] >= r[0] for r in ranges)
         assert all(r[1] != -1 for r in ranges)
