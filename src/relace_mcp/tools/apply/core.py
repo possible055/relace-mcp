@@ -9,7 +9,7 @@ from typing import Any, NotRequired, TypedDict
 
 from ...clients import RelaceClient
 from ...config import EXPERIMENTAL_POST_CHECK
-from ...utils import MAX_FILE_SIZE_BYTES, normalize_repo_path, validate_file_path
+from ...utils import MAX_FILE_SIZE_BYTES, validate_file_path
 from . import errors, file_io, snippet
 from . import logging as apply_logging
 from .exceptions import (
@@ -72,8 +72,7 @@ def _resolve_path(
         on failure returns error dict.
     """
     try:
-        normalized = normalize_repo_path(file_path, base_dir)
-        resolved_path = validate_file_path(normalized, base_dir)
+        resolved_path = validate_file_path(file_path, base_dir)
     except RuntimeError as e:
         return errors.recoverable_error(
             "INVALID_PATH", str(e), file_path, ctx.instruction, ctx.trace_id, ctx.elapsed_ms()
