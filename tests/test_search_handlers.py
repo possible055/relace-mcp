@@ -34,15 +34,15 @@ class TestMapRepoPath:
         result = map_repo_path("/repo/src/file.py", str(tmp_path))
         assert result == str(tmp_path / "src" / "file.py")
 
-    def test_rejects_non_repo_path(self, tmp_path: Path) -> None:
-        """Should reject paths not starting with /repo/."""
-        with pytest.raises(RuntimeError, match="expects absolute paths under /repo/"):
-            map_repo_path("/other/path", str(tmp_path))
+    def test_passes_through_absolute_path(self, tmp_path: Path) -> None:
+        """Non-/repo absolute paths should pass through unchanged."""
+        result = map_repo_path("/other/path", str(tmp_path))
+        assert result == "/other/path"
 
-    def test_rejects_relative_path(self, tmp_path: Path) -> None:
-        """Should reject relative paths."""
-        with pytest.raises(RuntimeError, match="expects absolute paths under /repo/"):
-            map_repo_path("src/file.py", str(tmp_path))
+    def test_passes_through_relative_path(self, tmp_path: Path) -> None:
+        """Relative paths should pass through unchanged."""
+        result = map_repo_path("src/file.py", str(tmp_path))
+        assert result == "src/file.py"
 
 
 class TestValidatePath:

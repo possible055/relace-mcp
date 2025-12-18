@@ -5,33 +5,13 @@ from pathlib import Path
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
 
-def normalize_repo_path(path: str, base_dir: str) -> str:
-    """Normalize path, supporting /repo/... virtual root format.
-
-    Args:
-        path: Input path, can be /repo/..., relative path, or absolute path.
-        base_dir: The actual repo root directory.
-
-    Returns:
-        Normalized absolute path string.
-    """
-    if not path or not path.strip():
-        return path
-    if path == "/repo" or path == "/repo/":
-        return base_dir
-    if path.startswith("/repo/"):
-        rel = path[len("/repo/") :]
-        return os.path.join(base_dir, rel)
-    if not os.path.isabs(path):
-        return os.path.join(base_dir, path)
-    return path
-
-
 def validate_file_path(file_path: str, base_dir: str, *, allow_empty: bool = False) -> Path:
     """Validates and resolves file path, preventing path traversal attacks.
 
+    Accepts absolute or relative paths. Relative paths are resolved against base_dir.
+
     Args:
-        file_path: File path to validate.
+        file_path: File path to validate (absolute or relative).
         base_dir: Base directory that restricts access scope.
         allow_empty: If True, allows empty paths (will error in subsequent processing).
 
@@ -43,6 +23,10 @@ def validate_file_path(file_path: str, base_dir: str, *, allow_empty: bool = Fal
     """
     if not allow_empty and (not file_path or not file_path.strip()):
         raise RuntimeError("file_path cannot be empty")
+
+    # Handle relative paths: resolve against base_dir
+    if not os.path.isabs(file_path):
+        file_path = os.path.join(base_dir, file_path)
 
     try:
         resolved = Path(file_path).resolve()
