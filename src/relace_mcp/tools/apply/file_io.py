@@ -1,5 +1,6 @@
 import logging
 import os
+import uuid
 from pathlib import Path
 
 from charset_normalizer import from_bytes
@@ -48,6 +49,7 @@ def atomic_write(path: Path, content: str, encoding: str) -> None:
     """Atomically write to file (using temp file + os.replace).
 
     Atomic write prevents file corruption if interrupted during write.
+    Uses unique temp file names to avoid collisions during concurrent writes.
 
     Args:
         path: Target file path.
@@ -57,7 +59,9 @@ def atomic_write(path: Path, content: str, encoding: str) -> None:
     Raises:
         OSError: Raised when write fails.
     """
-    temp_path = path.with_suffix(path.suffix + ".tmp")
+    # Use uuid to generate unique temp file name, avoiding concurrent write collisions
+    unique_suffix = f".{uuid.uuid4().hex[:8]}.tmp"
+    temp_path = path.with_suffix(path.suffix + unique_suffix)
     try:
         temp_path.write_text(content, encoding=encoding)
         # os.replace is atomic on POSIX systems

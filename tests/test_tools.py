@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -104,10 +104,11 @@ class TestLogEvent:
 class TestApplyFileLogicSuccess:
     """Test apply_file_logic successful scenarios."""
 
-    def test_successful_apply(
+    @pytest.mark.asyncio
+    async def test_successful_apply(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         temp_source_file: Path,
         successful_api_response: dict[str, Any],
         tmp_path: Path,
@@ -117,7 +118,7 @@ class TestApplyFileLogicSuccess:
 
         # edit_snippet contains anchor lines that exist in temp_source_file
         # temp_source_file: def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Goodbye')\n
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(temp_source_file),
             edit_snippet="def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Hello, World!')\n",
@@ -134,10 +135,11 @@ class TestApplyFileLogicSuccess:
         # Verify file was written
         assert temp_source_file.read_text() == successful_api_response["mergedCode"]
 
-    def test_logs_success_event(
+    @pytest.mark.asyncio
+    async def test_logs_success_event(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         temp_source_file: Path,
         successful_api_response: dict[str, Any],
         tmp_path: Path,
@@ -147,7 +149,7 @@ class TestApplyFileLogicSuccess:
         mock_client.apply.return_value = successful_api_response
 
         # edit_snippet contains anchor lines that exist in temp_source_file
-        apply_file_logic(
+        await apply_file_logic(
             client=mock_client,
             file_path=str(temp_source_file),
             edit_snippet="def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Hello, World!')\n",
@@ -158,17 +160,18 @@ class TestApplyFileLogicSuccess:
         logged = json.loads(mock_log_path.read_text().strip())
         assert logged["kind"] == "apply_success"
 
-    def test_create_new_file(
+    @pytest.mark.asyncio
+    async def test_create_new_file(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Should create new file directly without calling API."""
         new_file = tmp_path / "new_file.py"
         content = "def hello():\n    print('Hello')\n"
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(new_file),
             edit_snippet=content,
@@ -187,18 +190,19 @@ class TestApplyFileLogicSuccess:
 class TestApplyFileLogicValidation:
     """Test apply_file_logic input validation."""
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("snippet", ["", "   \n\t  "])
-    def test_empty_or_whitespace_edit_snippet_returns_error(
+    async def test_empty_or_whitespace_edit_snippet_returns_error(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         temp_source_file: Path,
         tmp_path: Path,
         snippet: str,
     ) -> None:
         """Should return INVALID_INPUT for empty or whitespace-only edit_snippet."""
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(temp_source_file),
             edit_snippet=snippet,
@@ -210,16 +214,17 @@ class TestApplyFileLogicValidation:
         assert result["code"] == "INVALID_INPUT"
         assert "edit_snippet cannot be empty" in result["message"]
 
-    def test_placeholder_only_snippet_returns_error(
+    @pytest.mark.asyncio
+    async def test_placeholder_only_snippet_returns_error(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         temp_source_file: Path,
         tmp_path: Path,
     ) -> None:
         """Should return NEEDS_MORE_CONTEXT when snippet has no anchors."""
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(temp_source_file),
             edit_snippet="// ... existing code ...\n// ... rest of code ...\n",
@@ -231,15 +236,16 @@ class TestApplyFileLogicValidation:
         assert result["code"] == "NEEDS_MORE_CONTEXT"
         mock_client.apply.assert_not_called()
 
-    def test_empty_path_returns_invalid_path(
+    @pytest.mark.asyncio
+    async def test_empty_path_returns_invalid_path(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Should return INVALID_PATH for empty file_path."""
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path="",
             edit_snippet="code",
@@ -252,15 +258,16 @@ class TestApplyFileLogicValidation:
         assert "cannot be empty" in result["message"]
         mock_client.apply.assert_not_called()
 
-    def test_directory_path_returns_invalid_path(
+    @pytest.mark.asyncio
+    async def test_directory_path_returns_invalid_path(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Should return INVALID_PATH when file_path is a directory."""
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(tmp_path),
             edit_snippet="code",
@@ -273,10 +280,11 @@ class TestApplyFileLogicValidation:
         assert "not a file" in result["message"]
         mock_client.apply.assert_not_called()
 
-    def test_delete_with_remove_directive_is_allowed(
+    @pytest.mark.asyncio
+    async def test_delete_with_remove_directive_is_allowed(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         temp_source_file: Path,
         tmp_path: Path,
     ) -> None:
@@ -287,7 +295,7 @@ class TestApplyFileLogicValidation:
         }
 
         # snippet contains real anchor (def hello) and remove directive
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(temp_source_file),
             edit_snippet="def hello():\n    print('Hello')\n\n// remove goodbye\n",
@@ -299,10 +307,11 @@ class TestApplyFileLogicValidation:
         mock_client.apply.assert_called_once()
         assert result["status"] == "ok"
 
-    def test_no_changes_returns_message(
+    @pytest.mark.asyncio
+    async def test_no_changes_returns_message(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         temp_source_file: Path,
         tmp_path: Path,
     ) -> None:
@@ -311,7 +320,7 @@ class TestApplyFileLogicValidation:
         mock_client.apply.return_value = {"mergedCode": original, "usage": {}}
 
         # edit_snippet contains content already existing in original file (true idempotent scenario)
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(temp_source_file),
             edit_snippet="def hello():\n    print('Hello')\n",
@@ -326,16 +335,17 @@ class TestApplyFileLogicValidation:
 class TestApplyFileLogicFileSize:
     """Test file size limit enforcement."""
 
-    def test_large_file_returns_recoverable_error(
+    @pytest.mark.asyncio
+    async def test_large_file_returns_recoverable_error(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         temp_large_file: Path,
         tmp_path: Path,
     ) -> None:
         """Should return FILE_TOO_LARGE for files exceeding size limit (not crash MCP tool)."""
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(temp_large_file),
             edit_snippet="// edit",
@@ -348,10 +358,11 @@ class TestApplyFileLogicFileSize:
         assert "File too large" in result["message"]
         mock_client.apply.assert_not_called()
 
-    def test_file_at_limit_allowed(
+    @pytest.mark.asyncio
+    async def test_file_at_limit_allowed(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
         successful_api_response: dict[str, Any],
     ) -> None:
@@ -364,7 +375,7 @@ class TestApplyFileLogicFileSize:
         mock_client.apply.return_value = successful_api_response
 
         # edit_snippet contains locatable anchor lines
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(limit_file),
             edit_snippet="def placeholder_function():\n    pass\n",
@@ -377,16 +388,17 @@ class TestApplyFileLogicFileSize:
 class TestApplyFileLogicEncoding:
     """Test file encoding validation."""
 
-    def test_binary_file_returns_recoverable_error(
+    @pytest.mark.asyncio
+    async def test_binary_file_returns_recoverable_error(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         temp_binary_file: Path,
         tmp_path: Path,
     ) -> None:
         """Should return ENCODING_ERROR on non-text/binary files (not crash MCP tool)."""
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(temp_binary_file),
             edit_snippet="// edit",
@@ -399,10 +411,11 @@ class TestApplyFileLogicEncoding:
         assert "Cannot detect encoding" in result["message"]
         mock_client.apply.assert_not_called()
 
-    def test_gbk_file_supported(
+    @pytest.mark.asyncio
+    async def test_gbk_file_supported(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Should successfully read and write GBK encoded files."""
@@ -417,7 +430,7 @@ class TestApplyFileLogicEncoding:
         mock_client.apply.return_value = {"mergedCode": merged_code, "usage": {}}
 
         # edit_snippet contains anchor lines that exist in original file
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(gbk_file),
             edit_snippet="# 这是简体中文注释用于测试\ndef process_chinese_data():\n    print('你好世界')\n",
@@ -434,10 +447,11 @@ class TestApplyFileLogicEncoding:
 class TestApplyFileLogicBaseDirSecurity:
     """Test base_dir security restrictions."""
 
-    def test_blocks_path_outside_base_dir(
+    @pytest.mark.asyncio
+    async def test_blocks_path_outside_base_dir(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Should block access to files outside base_dir."""
@@ -447,7 +461,7 @@ class TestApplyFileLogicBaseDirSecurity:
         outside_file.write_text("content")
 
         try:
-            result = apply_file_logic(
+            result = await apply_file_logic(
                 client=mock_client,
                 file_path=str(outside_file),
                 edit_snippet="// edit",
@@ -465,10 +479,11 @@ class TestApplyFileLogicBaseDirSecurity:
 class TestApplyFileLogicApiErrors:
     """Test API error handling."""
 
-    def test_logs_error_on_api_failure(
+    @pytest.mark.asyncio
+    async def test_logs_error_on_api_failure(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         temp_source_file: Path,
         tmp_path: Path,
         mock_log_path: Path,
@@ -478,7 +493,7 @@ class TestApplyFileLogicApiErrors:
 
         # edit_snippet contains anchor lines that exist in original file
         with pytest.raises(RuntimeError):
-            apply_file_logic(
+            await apply_file_logic(
                 client=mock_client,
                 file_path=str(temp_source_file),
                 edit_snippet="def hello():\n    print('Hello')\n",
@@ -490,6 +505,7 @@ class TestApplyFileLogicApiErrors:
         assert logged["kind"] == "apply_error"
         assert "API Error" in logged["error"]
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "response",
         [
@@ -498,10 +514,10 @@ class TestApplyFileLogicApiErrors:
         ],
         ids=["missing_merged_code", "null_merged_code"],
     )
-    def test_invalid_merged_code_raises(
+    async def test_invalid_merged_code_raises(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         temp_source_file: Path,
         tmp_path: Path,
         response: dict[str, Any],
@@ -510,7 +526,7 @@ class TestApplyFileLogicApiErrors:
         mock_client.apply.return_value = response
 
         # edit_snippet contains anchor lines that exist in original file
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(temp_source_file),
             edit_snippet="def hello():\n    print('Hello')\n",
@@ -526,10 +542,11 @@ class TestApplyFileLogicApiErrors:
 class TestApplyFileLogicSnippetPreview:
     """Test edit_snippet_preview in logs."""
 
-    def test_truncates_long_snippet_in_log(
+    @pytest.mark.asyncio
+    async def test_truncates_long_snippet_in_log(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         temp_source_file: Path,
         tmp_path: Path,
         mock_log_path: Path,
@@ -542,7 +559,7 @@ class TestApplyFileLogicSnippetPreview:
 
         mock_client.apply.return_value = {"mergedCode": merged_code, "usage": {}}
 
-        apply_file_logic(
+        await apply_file_logic(
             client=mock_client,
             file_path=str(temp_source_file),
             edit_snippet=long_snippet,
@@ -557,15 +574,16 @@ class TestApplyFileLogicSnippetPreview:
 class TestApplyFileLogicPathNormalization:
     """Test path normalization for /repo/... virtual root."""
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "file_path",
         ["/repo/src/file.py", "src/file.py"],
         ids=["virtual_root", "relative_path"],
     )
-    def test_path_formats_accepted(
+    async def test_path_formats_accepted(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
         file_path: str,
     ) -> None:
@@ -580,7 +598,7 @@ class TestApplyFileLogicPathNormalization:
         }
 
         # edit_snippet contains anchor lines that exist in original file
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=file_path,
             edit_snippet="original_value = True\nmodified_value = True\n",
@@ -592,15 +610,16 @@ class TestApplyFileLogicPathNormalization:
         assert "Applied code changes" in result["message"]
         mock_client.apply.assert_called_once()
 
-    def test_invalid_path_returns_error(
+    @pytest.mark.asyncio
+    async def test_invalid_path_returns_error(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Should return INVALID_PATH for paths outside base_dir."""
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path="/other/path/file.py",
             edit_snippet="code",
@@ -617,10 +636,11 @@ class TestApplyFileLogicPathNormalization:
 class TestApplyFileLogicRecoverableErrors:
     """Test recoverable error handling."""
 
-    def test_anchor_precheck_failure_returns_needs_more_context(
+    @pytest.mark.asyncio
+    async def test_anchor_precheck_failure_returns_needs_more_context(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Should return NEEDS_MORE_CONTEXT when anchor lines don't match file content."""
@@ -628,7 +648,7 @@ class TestApplyFileLogicRecoverableErrors:
         test_file.write_text("def existing_function():\n    return 42\n")
 
         # edit_snippet contains ellipsis markers (triggers precheck) but anchor cannot be located
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="// ... existing code ...\ndef totally_different_function():\n    return 999\n// ... more code ...\n",
@@ -642,10 +662,11 @@ class TestApplyFileLogicRecoverableErrors:
         # API should NOT be called when precheck fails
         mock_client.apply.assert_not_called()
 
-    def test_anchor_precheck_skipped_with_append_directive(
+    @pytest.mark.asyncio
+    async def test_anchor_precheck_skipped_with_append_directive(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Instruction with explicit position directive should skip precheck to avoid false blocking."""
@@ -656,7 +677,7 @@ class TestApplyFileLogicRecoverableErrors:
         merged = original + "\n# appended\n"
         mock_client.apply.return_value = {"mergedCode": merged, "usage": {}}
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="// ... existing code ...\n# appended\n// ... existing code ...\n",
@@ -668,10 +689,11 @@ class TestApplyFileLogicRecoverableErrors:
         mock_client.apply.assert_called_once()
         assert test_file.read_text() == merged
 
-    def test_permission_error_returns_permission_error(
+    @pytest.mark.asyncio
+    async def test_permission_error_returns_permission_error(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """PermissionError should convert to PERMISSION_ERROR (avoid MCP tool crash)."""
@@ -682,7 +704,7 @@ class TestApplyFileLogicRecoverableErrors:
             "relace_mcp.tools.apply.core.file_io.read_text_with_fallback",
             side_effect=PermissionError("Permission denied"),
         ):
-            result = apply_file_logic(
+            result = await apply_file_logic(
                 client=mock_client,
                 file_path=str(test_file),
                 edit_snippet="def existing_function():\n    return 42\n",
@@ -693,10 +715,11 @@ class TestApplyFileLogicRecoverableErrors:
         assert result["status"] == "error"
         assert result["code"] == "PERMISSION_ERROR"
 
-    def test_filesystem_error_returns_fs_error_on_create(
+    @pytest.mark.asyncio
+    async def test_filesystem_error_returns_fs_error_on_create(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """OSError should convert to FS_ERROR (avoid MCP tool crash)."""
@@ -706,7 +729,7 @@ class TestApplyFileLogicRecoverableErrors:
             "relace_mcp.tools.apply.core.file_io.atomic_write",
             side_effect=OSError("Disk full"),
         ):
-            result = apply_file_logic(
+            result = await apply_file_logic(
                 client=mock_client,
                 file_path=str(new_file),
                 edit_snippet="print('hello')\n",
@@ -719,10 +742,11 @@ class TestApplyFileLogicRecoverableErrors:
         assert not new_file.exists()
         mock_client.apply.assert_not_called()
 
-    def test_read_only_file_returns_file_not_writable(
+    @pytest.mark.asyncio
+    async def test_read_only_file_returns_file_not_writable(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Unwritable file should convert to FILE_NOT_WRITABLE (avoid MCP tool crash)."""
@@ -735,7 +759,7 @@ class TestApplyFileLogicRecoverableErrors:
             "usage": {},
         }
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="original_value_setting = True\nmodified_value_setting = False\nprocess_data_function()\n",
@@ -746,10 +770,11 @@ class TestApplyFileLogicRecoverableErrors:
         assert result["status"] == "error"
         assert result["code"] == "FILE_NOT_WRITABLE"
 
-    def test_api_auth_error_returns_auth_error(
+    @pytest.mark.asyncio
+    async def test_api_auth_error_returns_auth_error(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Should return AUTH_ERROR for 401/403 API errors."""
@@ -765,7 +790,7 @@ class TestApplyFileLogicRecoverableErrors:
             retryable=False,
         )
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="def authenticate_user():\n    return validate_credentials()\n",
@@ -780,10 +805,11 @@ class TestApplyFileLogicRecoverableErrors:
         assert result["detail"]["api_code"] == "unauthorized"
         assert "Invalid API key" in result["detail"]["api_message"]
 
-    def test_api_403_error_returns_auth_error(
+    @pytest.mark.asyncio
+    async def test_api_403_error_returns_auth_error(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Should return AUTH_ERROR for 403 API errors."""
@@ -799,7 +825,7 @@ class TestApplyFileLogicRecoverableErrors:
             retryable=False,
         )
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="def authenticate_user():\n    return validate_credentials()\n",
@@ -811,10 +837,11 @@ class TestApplyFileLogicRecoverableErrors:
         assert result["code"] == "AUTH_ERROR"
         assert result["detail"]["status_code"] == 403
 
-    def test_api_other_4xx_returns_api_error(
+    @pytest.mark.asyncio
+    async def test_api_other_4xx_returns_api_error(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Should return API_ERROR for other 4xx errors (e.g., anchor not found)."""
@@ -830,7 +857,7 @@ class TestApplyFileLogicRecoverableErrors:
             retryable=False,
         )
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="def authenticate_user():\n    return validate_credentials()\n",
@@ -845,10 +872,11 @@ class TestApplyFileLogicRecoverableErrors:
         assert result["detail"]["api_code"] == "anchor_not_found"
         assert "Cannot locate anchor lines" in result["detail"]["api_message"]
 
-    def test_network_error_returns_network_error(
+    @pytest.mark.asyncio
+    async def test_network_error_returns_network_error(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Should return NETWORK_ERROR for network failures."""
@@ -859,7 +887,7 @@ class TestApplyFileLogicRecoverableErrors:
 
         mock_client.apply.side_effect = RelaceNetworkError("Connection failed")
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="def authenticate_user():\n    return validate_credentials()\n",
@@ -872,10 +900,11 @@ class TestApplyFileLogicRecoverableErrors:
         assert "Network error" in result["message"]
         assert "Connection failed" in result["detail"]
 
-    def test_timeout_error_returns_timeout_error(
+    @pytest.mark.asyncio
+    async def test_timeout_error_returns_timeout_error(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Should return TIMEOUT_ERROR for timeout failures."""
@@ -886,7 +915,7 @@ class TestApplyFileLogicRecoverableErrors:
 
         mock_client.apply.side_effect = RelaceTimeoutError("Request timed out after 60s")
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="def authenticate_user():\n    return validate_credentials()\n",
@@ -899,10 +928,11 @@ class TestApplyFileLogicRecoverableErrors:
         assert "Request timed out" in result["message"]
         assert "Request timed out" in result["detail"]
 
-    def test_anchor_precheck_allows_remove_directives(
+    @pytest.mark.asyncio
+    async def test_anchor_precheck_allows_remove_directives(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Should allow snippets with remove directives if they have valid anchors."""
@@ -916,7 +946,7 @@ class TestApplyFileLogicRecoverableErrors:
             "usage": {},
         }
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="def main_function():\n    return process_data()\n\n// remove helper_function\n",
@@ -928,10 +958,11 @@ class TestApplyFileLogicRecoverableErrors:
         mock_client.apply.assert_called_once()
         assert result["status"] == "ok"
 
-    def test_anchor_precheck_with_indentation_difference(
+    @pytest.mark.asyncio
+    async def test_anchor_precheck_with_indentation_difference(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Should use strip() for lenient matching despite indentation differences."""
@@ -945,7 +976,7 @@ class TestApplyFileLogicRecoverableErrors:
 
         # edit_snippet indentation differs from original file, but should match after strip()
         # Ensure 2 anchor hits: def process_data_handler(): and return calculate_result_value()
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="def process_data_handler():\nreturn calculate_result_value()\n",  # Different indentation
@@ -961,10 +992,11 @@ class TestApplyFileLogicRecoverableErrors:
 class TestApplyNoopDetection:
     """Test no-op detection logic (Defense 2)."""
 
-    def test_noop_with_new_lines_returns_apply_noop(
+    @pytest.mark.asyncio
+    async def test_noop_with_new_lines_returns_apply_noop(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Snippet contains new lines but merge produces no changes, should return APPLY_NOOP."""
@@ -978,7 +1010,7 @@ class TestApplyNoopDetection:
             "usage": {},
         }
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="def process_data_from_input():\n    return calculate_result_value()\n\ndef new_function_that_should_be_added():\n    pass\n",
@@ -990,10 +1022,11 @@ class TestApplyNoopDetection:
         assert result["code"] == "APPLY_NOOP"
         assert "identical to initial" in result["message"]
 
-    def test_noop_idempotent_returns_ok(
+    @pytest.mark.asyncio
+    async def test_noop_idempotent_returns_ok(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Snippet already exists in file, should return OK (idempotent)."""
@@ -1008,7 +1041,7 @@ class TestApplyNoopDetection:
         }
 
         # snippet only contains existing code (true idempotent)
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="def process_data_from_input():\n    return calculate_result_value()\n",
@@ -1019,10 +1052,11 @@ class TestApplyNoopDetection:
         assert result["status"] == "ok"
         assert "No changes needed" in result["message"] or "already matches" in result["message"]
 
-    def test_noop_with_remove_directive_returns_apply_noop(
+    @pytest.mark.asyncio
+    async def test_noop_with_remove_directive_returns_apply_noop(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Has remove directive but no changes, should return APPLY_NOOP."""
@@ -1036,7 +1070,7 @@ class TestApplyNoopDetection:
             "usage": {},
         }
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="def main_function_handler():\n    return process_request()\n\n// remove helper_utility_function\n",
@@ -1047,10 +1081,11 @@ class TestApplyNoopDetection:
         assert result["status"] == "error"
         assert result["code"] == "APPLY_NOOP"
 
-    def test_noop_with_short_new_line_returns_apply_noop(
+    @pytest.mark.asyncio
+    async def test_noop_with_short_new_line_returns_apply_noop(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Adding short line (e.g., x = 1) but merge produces no changes, should return APPLY_NOOP."""
@@ -1065,7 +1100,7 @@ class TestApplyNoopDetection:
         }
 
         # Adding short line x = 1 (5 chars)
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="def process_data_handler():\n    return calculate_result()\n    x = 1\n",
@@ -1076,10 +1111,11 @@ class TestApplyNoopDetection:
         assert result["status"] == "error"
         assert result["code"] == "APPLY_NOOP"
 
-    def test_noop_with_trivial_line_returns_ok(
+    @pytest.mark.asyncio
+    async def test_noop_with_trivial_line_returns_ok(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Adding trivial line (e.g., return) is treated as idempotent, should return OK."""
@@ -1094,7 +1130,7 @@ class TestApplyNoopDetection:
         }
 
         # Only adding trivial line return (common syntax keyword)
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="def process_data_handler():\n    calculate_result()\n    return\n",
@@ -1105,10 +1141,11 @@ class TestApplyNoopDetection:
         # return is trivial token, not considered expected change
         assert result["status"] == "ok"
 
-    def test_noop_with_substring_match_returns_apply_noop(
+    @pytest.mark.asyncio
+    async def test_noop_with_substring_match_returns_apply_noop(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """New line is substring of existing line, should correctly detect as APPLY_NOOP."""
@@ -1124,7 +1161,7 @@ class TestApplyNoopDetection:
         }
 
         # snippet contains x = 1 (is substring of x = 100, but should be treated as new line)
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="def process_data_handler():\n    x = 1\n    return x\n",
@@ -1140,10 +1177,11 @@ class TestApplyNoopDetection:
 class TestApplyWriteVerification:
     """Test atomic write and post-write verification (Defense 3)."""
 
-    def test_atomic_write_creates_temp_file(
+    @pytest.mark.asyncio
+    async def test_atomic_write_creates_temp_file(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Atomic write should complete normally without leaving .tmp file."""
@@ -1155,7 +1193,7 @@ class TestApplyWriteVerification:
             "usage": {},
         }
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="original_content_value = True\nmodified_content_value = False\nprocess_data_function()\n",
@@ -1165,15 +1203,16 @@ class TestApplyWriteVerification:
 
         # Should succeed
         assert result["status"] == "ok"
-        # .tmp file should not exist (deleted after atomic write completes)
+        # Fixed .tmp file should not exist (now uses unique uuid-based names)
         assert not (tmp_path / "test.py.tmp").exists()
         # Content should be new
         assert test_file.read_text() == "modified_content_value = False\nprocess_data_function()\n"
 
-    def test_post_write_verification_failure_returns_error(
+    @pytest.mark.asyncio
+    async def test_post_write_verification_failure_returns_error(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Post-write verification failure should return WRITE_VERIFY_FAILED."""
@@ -1195,7 +1234,7 @@ class TestApplyWriteVerification:
                 OSError("Permission denied"),
             ]
 
-            result = apply_file_logic(
+            result = await apply_file_logic(
                 client=mock_client,
                 file_path=str(test_file),
                 edit_snippet="original_content_value = True\nmodified_content_value = False\nprocess_data_function()\n",
@@ -1211,10 +1250,11 @@ class TestApplyWriteVerification:
 class TestApplyResponseFormat:
     """Test response format includes required fields."""
 
-    def test_success_response_includes_path_and_trace_id(
+    @pytest.mark.asyncio
+    async def test_success_response_includes_path_and_trace_id(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """Success response should include path and trace_id."""
@@ -1226,7 +1266,7 @@ class TestApplyResponseFormat:
             "usage": {},
         }
 
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="original_value_setting = True\nmodified_value_setting = False\nprocess_data_function()\n",
@@ -1239,10 +1279,11 @@ class TestApplyResponseFormat:
         assert result["trace_id"] is not None
         assert result["timing_ms"] >= 0
 
-    def test_noop_response_includes_path(
+    @pytest.mark.asyncio
+    async def test_noop_response_includes_path(
         self,
         mock_config: RelaceConfig,
-        mock_client: MagicMock,
+        mock_client: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """No-op (idempotent) response should also include path."""
@@ -1256,7 +1297,7 @@ class TestApplyResponseFormat:
         }
 
         # True idempotent case
-        result = apply_file_logic(
+        result = await apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
             edit_snippet="def existing_function_handler():\n    return process_request_data()\n",

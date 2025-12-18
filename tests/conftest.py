@@ -2,7 +2,7 @@ import json
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -42,6 +42,7 @@ def api_error_response() -> dict[str, Any]:
 
 @pytest.fixture
 def mock_httpx_success(successful_api_response: dict[str, Any]):
+    """Mock httpx.AsyncClient for successful API calls."""
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.is_success = True
@@ -49,17 +50,18 @@ def mock_httpx_success(successful_api_response: dict[str, Any]):
     mock_response.json.return_value = successful_api_response
     mock_response.text = json.dumps(successful_api_response)
 
-    mock_client = MagicMock()
-    mock_client.__enter__ = MagicMock(return_value=mock_client)
-    mock_client.__exit__ = MagicMock(return_value=False)
-    mock_client.post.return_value = mock_response
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_response)
 
-    with patch("relace_mcp.clients.relace.httpx.Client", return_value=mock_client):
+    with patch("relace_mcp.clients.relace.httpx.AsyncClient", return_value=mock_client):
         yield mock_client
 
 
 @pytest.fixture
 def mock_httpx_error():
+    """Mock httpx.AsyncClient for 401 error responses."""
     mock_response = MagicMock()
     mock_response.status_code = 401
     mock_response.is_success = False
@@ -67,25 +69,26 @@ def mock_httpx_error():
     mock_response.text = '{"code": "invalid_api_key", "message": "Invalid API key"}'
     mock_response.headers = {}
 
-    mock_client = MagicMock()
-    mock_client.__enter__ = MagicMock(return_value=mock_client)
-    mock_client.__exit__ = MagicMock(return_value=False)
-    mock_client.post.return_value = mock_response
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_response)
 
-    with patch("relace_mcp.clients.relace.httpx.Client", return_value=mock_client):
+    with patch("relace_mcp.clients.relace.httpx.AsyncClient", return_value=mock_client):
         yield mock_client
 
 
 @pytest.fixture
 def mock_httpx_timeout():
+    """Mock httpx.AsyncClient for timeout errors."""
     import httpx
 
-    mock_client = MagicMock()
-    mock_client.__enter__ = MagicMock(return_value=mock_client)
-    mock_client.__exit__ = MagicMock(return_value=False)
-    mock_client.post.side_effect = httpx.TimeoutException("Connection timed out")
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(side_effect=httpx.TimeoutException("Connection timed out"))
 
-    with patch("relace_mcp.clients.relace.httpx.Client", return_value=mock_client):
+    with patch("relace_mcp.clients.relace.httpx.AsyncClient", return_value=mock_client):
         yield mock_client
 
 
@@ -124,6 +127,7 @@ def mock_relace_client(mock_config: RelaceConfig) -> RelaceClient:
 def mock_client_with_response(
     mock_config: RelaceConfig, successful_api_response: dict[str, Any]
 ) -> Generator[RelaceClient, None, None]:
+    """Fixture providing a RelaceClient with mocked AsyncClient."""
     client = RelaceClient(mock_config)
 
     mock_response = MagicMock()
@@ -132,18 +136,20 @@ def mock_client_with_response(
     mock_response.is_server_error = False
     mock_response.json.return_value = successful_api_response
 
-    mock_http = MagicMock()
-    mock_http.__enter__ = MagicMock(return_value=mock_http)
-    mock_http.__exit__ = MagicMock(return_value=False)
-    mock_http.post.return_value = mock_response
+    mock_http = AsyncMock()
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+    mock_http.post = AsyncMock(return_value=mock_response)
 
-    with patch("relace_mcp.clients.relace.httpx.Client", return_value=mock_http):
+    with patch("relace_mcp.clients.relace.httpx.AsyncClient", return_value=mock_http):
         yield client
 
 
 @pytest.fixture
-def mock_client() -> MagicMock:
-    return MagicMock(spec=RelaceClient)
+def mock_client() -> AsyncMock:
+    """Mock RelaceClient with async apply method."""
+    mock = AsyncMock(spec=RelaceClient)
+    return mock
 
 
 @pytest.fixture

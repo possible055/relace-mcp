@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import random
 import time
@@ -22,7 +23,7 @@ class RelaceClient:
     def __init__(self, config: RelaceConfig) -> None:
         self._config = config
 
-    def apply(
+    async def apply(
         self,
         initial_code: str,
         edit_snippet: str,
@@ -67,8 +68,8 @@ class RelaceClient:
         for attempt in range(MAX_RETRIES + 1):
             try:
                 started_at = time.monotonic()
-                with httpx.Client(timeout=TIMEOUT_SECONDS) as client:
-                    resp = client.post(RELACE_ENDPOINT, json=payload, headers=headers)
+                async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
+                    resp = await client.post(RELACE_ENDPOINT, json=payload, headers=headers)
                 latency_ms = int((time.monotonic() - started_at) * 1000)
 
                 try:
@@ -100,7 +101,7 @@ class RelaceClient:
                     if attempt < MAX_RETRIES:
                         delay = exc.retry_after or RETRY_BASE_DELAY * (2**attempt)
                         delay += random.uniform(0, 0.5)  # nosec B311
-                        time.sleep(delay)
+                        await asyncio.sleep(delay)
                         continue
                     raise
 
@@ -140,7 +141,7 @@ class RelaceClient:
                 )
                 if attempt < MAX_RETRIES:
                     delay = RETRY_BASE_DELAY * (2**attempt) + random.uniform(0, 0.5)  # nosec B311
-                    time.sleep(delay)
+                    await asyncio.sleep(delay)
                     continue
                 raise last_exc from exc
 
@@ -156,7 +157,7 @@ class RelaceClient:
                 )
                 if attempt < MAX_RETRIES:
                     delay = RETRY_BASE_DELAY * (2**attempt) + random.uniform(0, 0.5)  # nosec B311
-                    time.sleep(delay)
+                    await asyncio.sleep(delay)
                     continue
                 raise last_exc from exc
 

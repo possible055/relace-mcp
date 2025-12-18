@@ -15,7 +15,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     client = RelaceClient(config)
 
     @mcp.tool
-    def fast_apply(
+    async def fast_apply(
         path: str,
         edit_snippet: str,
         instruction: str | None = None,
@@ -41,7 +41,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         To create a new file, simply specify the content in edit_snippet.
         """
-        return apply_file_logic(
+        return await apply_file_logic(
             client=client,
             file_path=path,
             edit_snippet=edit_snippet,

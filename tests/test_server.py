@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastmcp import Client
@@ -66,9 +66,9 @@ class TestServerToolExecution:
         successful_api_response: dict[str, Any],
     ) -> None:
         """Should execute fast_apply tool successfully."""
-        # Mock the RelaceClient.apply method
+        # Mock the RelaceClient.apply method (now async)
         with patch("relace_mcp.tools.RelaceClient") as mock_client_cls:
-            mock_client = MagicMock()
+            mock_client = AsyncMock()
             mock_client.apply.return_value = successful_api_response
             mock_client_cls.return_value = mock_client
 
@@ -183,7 +183,7 @@ class TestServerIntegration:
         merged_code = "def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Modified!')\n"
 
         with patch("relace_mcp.tools.RelaceClient") as mock_client_cls:
-            mock_client = MagicMock()
+            mock_client = AsyncMock()
             mock_client.apply.return_value = {
                 "mergedCode": merged_code,
                 "usage": {"total_tokens": 100},

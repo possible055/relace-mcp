@@ -1,5 +1,5 @@
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -11,16 +11,17 @@ from relace_mcp.config import RELACE_ENDPOINT, RELACE_MODEL, TIMEOUT_SECONDS, Re
 class TestRelaceClientApply:
     """Test RelaceClient.apply() method."""
 
-    def test_successful_apply(
+    @pytest.mark.asyncio
+    async def test_successful_apply(
         self,
         mock_config: RelaceConfig,
-        mock_httpx_success: MagicMock,
+        mock_httpx_success: AsyncMock,
         successful_api_response: dict[str, Any],
     ) -> None:
         """Should return merged code on successful API call."""
         client = RelaceClient(mock_config)
 
-        result = client.apply(
+        result = await client.apply(
             initial_code="def hello(): pass",
             edit_snippet="def hello(): print('hi')",
         )
@@ -29,8 +30,9 @@ class TestRelaceClientApply:
         assert "mergedCode" in result
         assert "usage" in result
 
-    def test_apply_with_instruction(
-        self, mock_config: RelaceConfig, mock_httpx_success: MagicMock
+    @pytest.mark.asyncio
+    async def test_apply_with_instruction(
+        self, mock_config: RelaceConfig, mock_httpx_success: AsyncMock
     ) -> None:
         """Should include instruction in payload when provided."""
         client = RelaceClient(mock_config)
@@ -39,7 +41,7 @@ class TestRelaceClientApply:
             "usage": {},
         }
 
-        client.apply(
+        await client.apply(
             initial_code="code",
             edit_snippet="snippet",
             instruction="Add logging to the function",
@@ -50,8 +52,9 @@ class TestRelaceClientApply:
         payload = call_args.kwargs.get("json") or call_args[1].get("json")
         assert payload["instruction"] == "Add logging to the function"
 
-    def test_apply_with_metadata(
-        self, mock_config: RelaceConfig, mock_httpx_success: MagicMock
+    @pytest.mark.asyncio
+    async def test_apply_with_metadata(
+        self, mock_config: RelaceConfig, mock_httpx_success: AsyncMock
     ) -> None:
         """Should include relace_metadata in payload when provided."""
         client = RelaceClient(mock_config)
@@ -61,7 +64,7 @@ class TestRelaceClientApply:
         }
 
         metadata = {"source": "test", "file_path": "/test.py"}
-        client.apply(
+        await client.apply(
             initial_code="code",
             edit_snippet="snippet",
             relace_metadata=metadata,
@@ -71,8 +74,9 @@ class TestRelaceClientApply:
         payload = call_args.kwargs.get("json") or call_args[1].get("json")
         assert payload["relace_metadata"] == metadata
 
-    def test_apply_without_optional_params(
-        self, mock_config: RelaceConfig, mock_httpx_success: MagicMock
+    @pytest.mark.asyncio
+    async def test_apply_without_optional_params(
+        self, mock_config: RelaceConfig, mock_httpx_success: AsyncMock
     ) -> None:
         """Should not include optional params when not provided."""
         client = RelaceClient(mock_config)
@@ -81,7 +85,7 @@ class TestRelaceClientApply:
             "usage": {},
         }
 
-        client.apply(initial_code="code", edit_snippet="snippet")
+        await client.apply(initial_code="code", edit_snippet="snippet")
 
         call_args = mock_httpx_success.post.call_args
         payload = call_args.kwargs.get("json") or call_args[1].get("json")
@@ -92,8 +96,9 @@ class TestRelaceClientApply:
 class TestRelaceClientPayload:
     """Test request payload construction."""
 
-    def test_payload_structure(
-        self, mock_config: RelaceConfig, mock_httpx_success: MagicMock
+    @pytest.mark.asyncio
+    async def test_payload_structure(
+        self, mock_config: RelaceConfig, mock_httpx_success: AsyncMock
     ) -> None:
         """Should construct correct payload structure."""
         client = RelaceClient(mock_config)
@@ -102,7 +107,7 @@ class TestRelaceClientPayload:
             "usage": {},
         }
 
-        client.apply(initial_code="initial", edit_snippet="edit")
+        await client.apply(initial_code="initial", edit_snippet="edit")
 
         call_args = mock_httpx_success.post.call_args
         payload = call_args.kwargs.get("json") or call_args[1].get("json")
@@ -112,8 +117,9 @@ class TestRelaceClientPayload:
         assert payload["model"] == RELACE_MODEL
         assert payload["stream"] is False
 
-    def test_authorization_header(
-        self, mock_config: RelaceConfig, mock_httpx_success: MagicMock
+    @pytest.mark.asyncio
+    async def test_authorization_header(
+        self, mock_config: RelaceConfig, mock_httpx_success: AsyncMock
     ) -> None:
         """Should include correct authorization header."""
         client = RelaceClient(mock_config)
@@ -122,15 +128,16 @@ class TestRelaceClientPayload:
             "usage": {},
         }
 
-        client.apply(initial_code="code", edit_snippet="snippet")
+        await client.apply(initial_code="code", edit_snippet="snippet")
 
         call_args = mock_httpx_success.post.call_args
         headers = call_args.kwargs.get("headers") or call_args[1].get("headers")
         assert headers["Authorization"] == f"Bearer {mock_config.api_key}"
         assert headers["Content-Type"] == "application/json"
 
-    def test_uses_constant_endpoint(
-        self, mock_config: RelaceConfig, mock_httpx_success: MagicMock
+    @pytest.mark.asyncio
+    async def test_uses_constant_endpoint(
+        self, mock_config: RelaceConfig, mock_httpx_success: AsyncMock
     ) -> None:
         """Should call the configured endpoint."""
         client = RelaceClient(mock_config)
@@ -139,7 +146,7 @@ class TestRelaceClientPayload:
             "usage": {},
         }
 
-        client.apply(initial_code="code", edit_snippet="snippet")
+        await client.apply(initial_code="code", edit_snippet="snippet")
 
         call_args = mock_httpx_success.post.call_args
         endpoint = call_args.args[0] if call_args.args else call_args[0][0]
@@ -149,40 +156,46 @@ class TestRelaceClientPayload:
 class TestRelaceClientErrors:
     """Test error handling scenarios."""
 
-    def test_api_error_response(
-        self, mock_config: RelaceConfig, mock_httpx_error: MagicMock
+    @pytest.mark.asyncio
+    async def test_api_error_response(
+        self, mock_config: RelaceConfig, mock_httpx_error: AsyncMock
     ) -> None:
         """Should raise RelaceAPIError on 401 response."""
         client = RelaceClient(mock_config)
 
         with pytest.raises(RelaceAPIError) as exc_info:
-            client.apply(initial_code="code", edit_snippet="snippet")
+            await client.apply(initial_code="code", edit_snippet="snippet")
 
         # 401 error is not retryable
         assert exc_info.value.status_code == 401
         assert not exc_info.value.retryable
 
-    def test_timeout_error(self, mock_config: RelaceConfig, mock_httpx_timeout: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_timeout_error(
+        self, mock_config: RelaceConfig, mock_httpx_timeout: AsyncMock
+    ) -> None:
         """Should raise RelaceTimeoutError with helpful message on timeout."""
         client = RelaceClient(mock_config)
 
         with pytest.raises(RelaceTimeoutError, match="timed out"):
-            client.apply(initial_code="code", edit_snippet="snippet")
+            await client.apply(initial_code="code", edit_snippet="snippet")
 
-    def test_connection_error(self, mock_config: RelaceConfig) -> None:
+    @pytest.mark.asyncio
+    async def test_connection_error(self, mock_config: RelaceConfig) -> None:
         """Should raise RelaceNetworkError on connection failure."""
         client = RelaceClient(mock_config)
 
-        mock_client = MagicMock()
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.post.side_effect = httpx.ConnectError("Connection refused")
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.post = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
 
-        with patch("relace_mcp.clients.relace.httpx.Client", return_value=mock_client):
+        with patch("relace_mcp.clients.relace.httpx.AsyncClient", return_value=mock_client):
             with pytest.raises(RelaceNetworkError, match="Network error"):
-                client.apply(initial_code="code", edit_snippet="snippet")
+                await client.apply(initial_code="code", edit_snippet="snippet")
 
-    def test_invalid_json_response(self, mock_config: RelaceConfig) -> None:
+    @pytest.mark.asyncio
+    async def test_invalid_json_response(self, mock_config: RelaceConfig) -> None:
         """Should raise RelaceAPIError on non-JSON response (server-side issue)."""
         client = RelaceClient(mock_config)
 
@@ -193,14 +206,14 @@ class TestRelaceClientErrors:
         mock_response.json.side_effect = ValueError("Invalid JSON")
         mock_response.text = "not json"
 
-        mock_client = MagicMock()
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.post.return_value = mock_response
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.post = AsyncMock(return_value=mock_response)
 
-        with patch("relace_mcp.clients.relace.httpx.Client", return_value=mock_client):
+        with patch("relace_mcp.clients.relace.httpx.AsyncClient", return_value=mock_client):
             with pytest.raises(RelaceAPIError, match="non-JSON response") as exc_info:
-                client.apply(initial_code="code", edit_snippet="snippet")
+                await client.apply(initial_code="code", edit_snippet="snippet")
 
             # Non-JSON response is retryable
             assert exc_info.value.retryable
@@ -209,7 +222,8 @@ class TestRelaceClientErrors:
 class TestRelaceClientTimeout:
     """Test timeout configuration."""
 
-    def test_uses_constant_timeout(self, mock_config: RelaceConfig) -> None:
+    @pytest.mark.asyncio
+    async def test_uses_constant_timeout(self, mock_config: RelaceConfig) -> None:
         """Should use timeout from config."""
         client = RelaceClient(mock_config)
 
@@ -218,23 +232,24 @@ class TestRelaceClientTimeout:
         mock_response.is_server_error = False
         mock_response.json.return_value = {"mergedCode": "code", "usage": {}}
 
-        with patch("relace_mcp.clients.relace.httpx.Client") as mock_client_class:
-            mock_instance = MagicMock()
-            mock_instance.__enter__ = MagicMock(return_value=mock_instance)
-            mock_instance.__exit__ = MagicMock(return_value=False)
-            mock_instance.post.return_value = mock_response
+        with patch("relace_mcp.clients.relace.httpx.AsyncClient") as mock_client_class:
+            mock_instance = AsyncMock()
+            mock_instance.__aenter__.return_value = mock_instance
+            mock_instance.__aexit__.return_value = None
+            mock_instance.post = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_instance
 
-            client.apply(initial_code="code", edit_snippet="snippet")
+            await client.apply(initial_code="code", edit_snippet="snippet")
 
-            # Verify Client was created with correct timeout
+            # Verify AsyncClient was created with correct timeout
             mock_client_class.assert_called_once_with(timeout=TIMEOUT_SECONDS)
 
 
 class TestRelaceClientRetry:
     """Test retry behavior for retryable errors."""
 
-    def test_rate_limit_respects_retry_after_header(self, mock_config: RelaceConfig) -> None:
+    @pytest.mark.asyncio
+    async def test_rate_limit_respects_retry_after_header(self, mock_config: RelaceConfig) -> None:
         """Should use Retry-After header value for 429 responses."""
         client = RelaceClient(mock_config)
         call_count = 0
@@ -249,15 +264,15 @@ class TestRelaceClientRetry:
             mock_resp.headers = {"retry-after": "2.5"}
             return mock_resp
 
-        mock_client = MagicMock()
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.post.side_effect = mock_post
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.post = AsyncMock(side_effect=mock_post)
 
-        with patch("relace_mcp.clients.relace.httpx.Client", return_value=mock_client):
-            with patch("relace_mcp.clients.relace.time.sleep") as mock_sleep:
+        with patch("relace_mcp.clients.relace.httpx.AsyncClient", return_value=mock_client):
+            with patch("relace_mcp.clients.relace.asyncio.sleep") as mock_sleep:
                 with pytest.raises(RelaceAPIError) as exc_info:
-                    client.apply(initial_code="code", edit_snippet="snippet")
+                    await client.apply(initial_code="code", edit_snippet="snippet")
 
                 # Verify 429 error is retryable with retry_after
                 assert exc_info.value.status_code == 429
@@ -274,7 +289,8 @@ class TestRelaceClientRetry:
 
         assert call_count == MAX_RETRIES + 1
 
-    def test_server_error_retries_with_backoff(self, mock_config: RelaceConfig) -> None:
+    @pytest.mark.asyncio
+    async def test_server_error_retries_with_backoff(self, mock_config: RelaceConfig) -> None:
         """Should retry 5xx errors with exponential backoff."""
         from relace_mcp.config import MAX_RETRIES, RETRY_BASE_DELAY
 
@@ -291,15 +307,15 @@ class TestRelaceClientRetry:
             mock_resp.headers = {}
             return mock_resp
 
-        mock_client = MagicMock()
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.post.side_effect = mock_post
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.post = AsyncMock(side_effect=mock_post)
 
-        with patch("relace_mcp.clients.relace.httpx.Client", return_value=mock_client):
-            with patch("relace_mcp.clients.relace.time.sleep") as mock_sleep:
+        with patch("relace_mcp.clients.relace.httpx.AsyncClient", return_value=mock_client):
+            with patch("relace_mcp.clients.relace.asyncio.sleep") as mock_sleep:
                 with pytest.raises(RelaceAPIError) as exc_info:
-                    client.apply(initial_code="code", edit_snippet="snippet")
+                    await client.apply(initial_code="code", edit_snippet="snippet")
 
                 # Verify 500 error is retryable
                 assert exc_info.value.status_code == 500

@@ -108,7 +108,7 @@ def _create_new_file(ctx: ApplyContext, resolved_path: Path, edit_snippet: str) 
     )
 
 
-def _apply_to_existing_file(
+async def _apply_to_existing_file(
     ctx: ApplyContext,
     client: RelaceClient,
     resolved_path: Path,
@@ -128,6 +128,12 @@ def _apply_to_existing_file(
 
     if file_size > MAX_FILE_SIZE_BYTES:
         raise FileTooLargeError(file_size, MAX_FILE_SIZE_BYTES)
+
+    # Pre-check file and directory writability BEFORE calling API (avoid wasting API calls)
+    if not os.access(resolved_path, os.W_OK):
+        raise FileNotWritableError(ctx.file_path)
+    if not os.access(resolved_path.parent, os.W_OK):
+        raise FileNotWritableError(f"Directory not writable: {resolved_path.parent}")
 
     initial_code, detected_encoding = file_io.read_text_with_fallback(resolved_path)
 
@@ -149,7 +155,7 @@ def _apply_to_existing_file(
         "trace_id": ctx.trace_id,
     }
 
-    result = client.apply(
+    result = await client.apply(
         initial_code=initial_code,
         edit_snippet=edit_snippet,
         instruction=ctx.instruction,
@@ -194,9 +200,6 @@ def _apply_to_existing_file(
             "No changes needed (already matches)",
             diff=None,
         )
-
-    if not os.access(resolved_path, os.W_OK):
-        raise FileNotWritableError(ctx.file_path)
 
     # EXPERIMENTAL: Post-check validation (disabled by default, enable via RELACE_EXPERIMENTAL_POST_CHECK)
     if EXPERIMENTAL_POST_CHECK:
@@ -271,7 +274,7 @@ def _apply_to_existing_file(
     )
 
 
-def apply_file_logic(
+async def apply_file_logic(
     client: RelaceClient,
     file_path: str,
     edit_snippet: str,
@@ -315,7 +318,7 @@ def apply_file_logic(
 
         if not file_exists:
             return _create_new_file(ctx, resolved_path, edit_snippet)
-        return _apply_to_existing_file(ctx, client, resolved_path, edit_snippet, file_size)
+        return await _apply_to_existing_file(ctx, client, resolved_path, edit_snippet, file_size)
     except Exception as exc:
         from ...clients.exceptions import RelaceAPIError, RelaceNetworkError, RelaceTimeoutError
 
