@@ -326,6 +326,43 @@ class TestComputeDiffOperations:
         assert "modified.py" in filenames
         assert "deleted.py" in filenames
 
+    def test_skips_delete_when_file_exists_but_hash_failed(self, tmp_path: Path) -> None:
+        """Should not delete files that exist but failed to hash."""
+        # File exists on disk but not in current_hashes (simulating hash failure)
+        (tmp_path / "exists.py").write_text("content")
+        current_hashes: dict[str, str] = {}  # Empty = all hashes failed
+
+        cached = SyncState(
+            repo_id="test-id",
+            repo_head="abc123",
+            last_sync="",
+            files={"exists.py": "sha256:old_hash"},  # Was synced before
+        )
+
+        operations, _ = _compute_diff_operations(str(tmp_path), current_hashes, cached)
+
+        # File exists, should not be deleted even if hash failed
+        assert len(operations) == 0
+
+    def test_deletes_truly_missing_files(self, tmp_path: Path) -> None:
+        """Should delete files that are truly missing from disk."""
+        # No file on disk, and not in current_hashes
+        current_hashes: dict[str, str] = {}
+
+        cached = SyncState(
+            repo_id="test-id",
+            repo_head="abc123",
+            last_sync="",
+            files={"truly_deleted.py": "sha256:old_hash"},
+        )
+
+        operations, _ = _compute_diff_operations(str(tmp_path), current_hashes, cached)
+
+        # File does not exist, should be deleted
+        assert len(operations) == 1
+        assert operations[0]["type"] == "delete"
+        assert operations[0]["filename"] == "truly_deleted.py"
+
 
 class TestCloudSyncLogic:
     """Test cloud_sync_logic function."""

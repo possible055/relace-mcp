@@ -267,6 +267,12 @@ def _compute_diff_operations(
     # Find files to delete (in cache but not in current)
     for rel_path in cached_files:
         if rel_path not in current_files:
+            file_path = Path(base_dir) / rel_path
+            if file_path.exists():
+                # File exists but hash failed (permission issue, etc.)
+                # Skip deletion to avoid data loss
+                logger.warning("Skipping delete for %s: file exists but hash failed", rel_path)
+                continue
             operations.append(
                 {
                     "type": "delete",
