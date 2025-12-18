@@ -1,5 +1,3 @@
-"""Cloud semantic search logic using Relace Repos API."""
-
 import logging
 import uuid
 from typing import Any
@@ -69,5 +67,6 @@ def cloud_search_logic(
         return {
             "query": query,
             "results": [],
+            "repo_id": None,
             "error": str(exc),
         }

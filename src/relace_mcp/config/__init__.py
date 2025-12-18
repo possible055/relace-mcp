@@ -1,5 +1,3 @@
-"""Configuration module for relace-mcp."""
-
 from pathlib import Path
 
 import yaml

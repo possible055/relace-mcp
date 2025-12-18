@@ -71,19 +71,27 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     repo_client = RelaceRepoClient(config)
 
     @mcp.tool
-    def cloud_sync() -> dict[str, Any]:
+    def cloud_sync(force: bool = False) -> dict[str, Any]:
         """Synchronize local codebase to Relace Cloud for semantic search.
 
         This uploads files from base_dir to Relace Repos, enabling cloud-based
         semantic search via cloud_search. Respects .gitignore patterns.
 
+        Uses incremental sync by default - only uploads new/modified files
+        and deletes removed files. First sync or after force=True will do
+        a full upload.
+
         Use this when:
         - First time setup for cloud semantic search
-        - After significant code changes to refresh the index
+        - After code changes to refresh the index (incremental)
+        - With force=True to rebuild from scratch
+
+        Args:
+            force: If True, ignore cached state and do full sync.
 
         Note: This is a cloud operation, not local file manipulation.
         """
-        return cloud_sync_logic(repo_client, config.base_dir)
+        return cloud_sync_logic(repo_client, config.base_dir, force=force)
 
     @mcp.tool
     def cloud_search(

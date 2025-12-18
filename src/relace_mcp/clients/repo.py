@@ -1,5 +1,3 @@
-"""Relace Repos API Client for cloud sync and semantic search."""
-
 import logging
 import random
 import time
@@ -327,6 +325,42 @@ class RelaceRepoClient:
             "POST",
             url,
             trace_id=trace_id,
+            headers=self._get_headers(),
+            json=payload,
+        )
+        return resp.json()
+
+    def update_repo(
+        self,
+        repo_id: str,
+        operations: list[dict[str, Any]],
+        trace_id: str = "unknown",
+    ) -> dict[str, Any]:
+        """Update repo with diff operations (incremental sync).
+
+        Args:
+            repo_id: Repository UUID.
+            operations: List of diff operations. Each operation is a dict with:
+                - {"type": "write", "filename": "...", "content": "..."}
+                - {"type": "rename", "old_filename": "...", "new_filename": "..."}
+                - {"type": "delete", "filename": "..."}
+            trace_id: Trace ID for logging.
+
+        Returns:
+            Dict containing repo_head and changed_files.
+        """
+        url = f"{self._base_url}/repo/{repo_id}/update"
+        payload = {
+            "source": {
+                "type": "diff",
+                "operations": operations,
+            }
+        }
+        resp = self._request_with_retry(
+            "POST",
+            url,
+            trace_id=trace_id,
+            timeout=REPO_SYNC_TIMEOUT_SECONDS,
             headers=self._get_headers(),
             json=payload,
         )
