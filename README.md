@@ -14,6 +14,8 @@ MCP server for [Relace](https://www.relace.ai/) — AI-powered instant code merg
 
 - **Fast Apply** — Apply code edits at 10,000+ tokens/sec via Relace API
 - **Fast Search** — Agentic codebase exploration with natural language queries
+- **Cloud Sync** — Upload local codebase to Relace Cloud for semantic search
+- **Cloud Search** — Semantic code search over cloud-synced repositories
 
 ## Quick Start
 
@@ -111,6 +113,65 @@ Find relevant code with natural language:
 **Parameters:**
 - `query` — Natural language search query
 
+### `cloud_sync`
+
+Synchronize local codebase to Relace Cloud for semantic search. Uploads source files from `RELACE_BASE_DIR` to Relace Repos.
+
+**Incremental Sync:** By default, only uploads new/modified files and deletes removed files. Uses SHA-256 hash comparison for accurate change detection. First sync or `force=True` performs full upload.
+
+**Parameters:**
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `force` | ❌ | `false` | Force full sync, ignoring cached state |
+
+**Behavior:**
+- Respects `.gitignore` patterns (uses `git ls-files` when available)
+- Supports 60+ common source code file types (`.py`, `.js`, `.ts`, `.java`, etc.)
+- Skips files > 1MB and common non-source directories (`node_modules`, `__pycache__`, etc.)
+- Sync state stored in `~/.local/state/relace/sync/`
+
+**Returns:**
+
+```json
+{
+  "repo_id": "uuid-of-repository",
+  "repo_name": "project-name",
+  "repo_head": "abc123def456",
+  "is_incremental": true,
+  "files_created": 5,
+  "files_updated": 3,
+  "files_deleted": 2,
+  "files_unchanged": 40,
+  "total_files": 48
+}
+```
+
+### `cloud_search`
+
+Semantic code search over the cloud-synced repository. Requires running `cloud_sync` first.
+
+**Parameters:**
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `query` | ✅ | — | Natural language search query |
+| `score_threshold` | ❌ | `0.3` | Minimum relevance score (0.0-1.0) |
+| `token_limit` | ❌ | `30000` | Maximum tokens to return |
+
+**Returns:**
+
+```json
+{
+  "query": "user authentication logic",
+  "results": [
+    {"path": "src/auth/login.py", "content": "...", "score": 0.85}
+  ],
+  "repo_id": "uuid",
+  "result_count": 5
+}
+```
+
 ## Environment Variables
 
 | Variable | Required | Description |
@@ -133,6 +194,10 @@ Find relevant code with natural language:
 | `RELACE_SEARCH_MODEL` | `relace-search` |
 | `RELACE_SEARCH_TIMEOUT_SECONDS` | `120` |
 | `RELACE_SEARCH_MAX_TURNS` | `6` |
+| `RELACE_API_ENDPOINT` | `https://api.relace.run/v1` (Cloud Repos API) |
+| `RELACE_REPO_ID` | — (Optional: pre-configured repo UUID to skip list/create) |
+| `RELACE_REPO_SYNC_TIMEOUT` | `300` |
+| `RELACE_REPO_SYNC_MAX_FILES` | `5000` |
 
 </details>
 

@@ -1,4 +1,4 @@
-"""Tests for cloud_sync logic."""
+"""Tests for cloud_sync logic with incremental support."""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -7,9 +7,17 @@ import pytest
 
 from relace_mcp.clients.repo import RelaceRepoClient
 from relace_mcp.config import RelaceConfig
+from relace_mcp.tools.repo.state import (
+    SyncState,
+    compute_file_hash,
+    load_sync_state,
+    save_sync_state,
+)
 from relace_mcp.tools.repo.sync import (
     CODE_EXTENSIONS,
     SPECIAL_FILENAMES,
+    _compute_diff_operations,
+    _compute_file_hashes,
     _get_git_tracked_files,
     _read_file_content,
     _scan_directory,
@@ -31,6 +39,7 @@ def mock_repo_client(mock_config: RelaceConfig) -> MagicMock:
     client.get_repo_name_from_base_dir.return_value = "test-project"
     client.ensure_repo.return_value = "test-repo-id"
     client.upload_file.return_value = {"status": "ok"}
+    client.update_repo.return_value = {"repo_head": "abc123def456", "changed_files": []}
     return client
 
 
@@ -193,36 +202,215 @@ class TestReadFileContent:
         assert content is None
 
 
+class TestComputeFileHashes:
+    """Test _compute_file_hashes function."""
+
+    def test_computes_hashes_for_files(self, tmp_path: Path) -> None:
+        """Should compute SHA-256 hashes for files."""
+        (tmp_path / "main.py").write_text("print('hello')")
+        (tmp_path / "utils.py").write_text("def helper(): pass")
+
+        hashes = _compute_file_hashes(str(tmp_path), ["main.py", "utils.py"])
+
+        assert len(hashes) == 2
+        assert "main.py" in hashes
+        assert "utils.py" in hashes
+        assert hashes["main.py"].startswith("sha256:")
+        assert hashes["utils.py"].startswith("sha256:")
+
+    def test_skips_missing_files(self, tmp_path: Path) -> None:
+        """Should skip files that don't exist."""
+        (tmp_path / "exists.py").write_text("print('hello')")
+
+        hashes = _compute_file_hashes(str(tmp_path), ["exists.py", "missing.py"])
+
+        assert len(hashes) == 1
+        assert "exists.py" in hashes
+
+
+class TestComputeDiffOperations:
+    """Test _compute_diff_operations function."""
+
+    def test_all_files_new_without_cache(self, tmp_path: Path) -> None:
+        """All files should be write operations without cached state."""
+        (tmp_path / "main.py").write_text("print('hello')")
+        hashes = _compute_file_hashes(str(tmp_path), ["main.py"])
+
+        operations, new_hashes = _compute_diff_operations(str(tmp_path), hashes, None)
+
+        assert len(operations) == 1
+        assert operations[0]["type"] == "write"
+        assert operations[0]["filename"] == "main.py"
+        assert operations[0]["content"] == "print('hello')"
+
+    def test_unchanged_files_skipped(self, tmp_path: Path) -> None:
+        """Unchanged files should not generate operations."""
+        (tmp_path / "main.py").write_text("print('hello')")
+        hashes = _compute_file_hashes(str(tmp_path), ["main.py"])
+
+        # Create cached state with same hash
+        cached = SyncState(
+            repo_id="test-id",
+            repo_head="abc123",
+            last_sync="",
+            files=hashes.copy(),
+        )
+
+        operations, new_hashes = _compute_diff_operations(str(tmp_path), hashes, cached)
+
+        assert len(operations) == 0
+        assert len(new_hashes) == 1
+
+    def test_modified_files_detected(self, tmp_path: Path) -> None:
+        """Modified files should generate write operations."""
+        (tmp_path / "main.py").write_text("print('modified')")
+        hashes = _compute_file_hashes(str(tmp_path), ["main.py"])
+
+        # Create cached state with different hash
+        cached = SyncState(
+            repo_id="test-id",
+            repo_head="abc123",
+            last_sync="",
+            files={"main.py": "sha256:different_hash"},
+        )
+
+        operations, new_hashes = _compute_diff_operations(str(tmp_path), hashes, cached)
+
+        assert len(operations) == 1
+        assert operations[0]["type"] == "write"
+        assert operations[0]["filename"] == "main.py"
+
+    def test_deleted_files_detected(self, tmp_path: Path) -> None:
+        """Deleted files should generate delete operations."""
+        # No files exist now
+        hashes: dict[str, str] = {}
+
+        # But cached state had a file
+        cached = SyncState(
+            repo_id="test-id",
+            repo_head="abc123",
+            last_sync="",
+            files={"deleted.py": "sha256:some_hash"},
+        )
+
+        operations, new_hashes = _compute_diff_operations(str(tmp_path), hashes, cached)
+
+        assert len(operations) == 1
+        assert operations[0]["type"] == "delete"
+        assert operations[0]["filename"] == "deleted.py"
+
+    def test_mixed_operations(self, tmp_path: Path) -> None:
+        """Should handle mix of create, update, delete."""
+        (tmp_path / "new.py").write_text("new file")
+        (tmp_path / "modified.py").write_text("modified content")
+        hashes = _compute_file_hashes(str(tmp_path), ["new.py", "modified.py"])
+
+        cached = SyncState(
+            repo_id="test-id",
+            repo_head="abc123",
+            last_sync="",
+            files={
+                "modified.py": "sha256:old_hash",
+                "deleted.py": "sha256:some_hash",
+            },
+        )
+
+        operations, new_hashes = _compute_diff_operations(str(tmp_path), hashes, cached)
+
+        types = {op["type"] for op in operations}
+        filenames = {op["filename"] for op in operations}
+
+        assert "write" in types
+        assert "delete" in types
+        assert "new.py" in filenames
+        assert "modified.py" in filenames
+        assert "deleted.py" in filenames
+
+
 class TestCloudSyncLogic:
     """Test cloud_sync_logic function."""
 
-    def test_sync_uploads_files(self, tmp_path: Path, mock_repo_client: MagicMock) -> None:
-        """Should upload files to cloud."""
+    def test_sync_uploads_files_incremental(
+        self, tmp_path: Path, mock_repo_client: MagicMock
+    ) -> None:
+        """Should sync files using incremental update API."""
         # Create test files
         (tmp_path / "main.py").write_text("print('hello')")
         (tmp_path / "utils.py").write_text("def helper(): pass")
 
         with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
-            result = cloud_sync_logic(mock_repo_client, str(tmp_path))
+            with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=None):
+                with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+                    result = cloud_sync_logic(mock_repo_client, str(tmp_path))
 
         assert result["repo_id"] == "test-repo-id"
-        assert result["files_uploaded"] == 2
-        assert result["files_skipped"] == 0
-        assert mock_repo_client.upload_file.call_count == 2
+        assert result["files_created"] == 2
+        assert result["files_updated"] == 0
+        assert result["is_incremental"] is False  # No cache = full sync
+        mock_repo_client.update_repo.assert_called_once()
 
-    def test_sync_handles_upload_errors(self, tmp_path: Path, mock_repo_client: MagicMock) -> None:
-        """Should handle and report upload errors."""
+    def test_sync_incremental_with_cache(self, tmp_path: Path, mock_repo_client: MagicMock) -> None:
+        """Should use incremental sync when cache exists."""
         (tmp_path / "main.py").write_text("print('hello')")
 
-        mock_repo_client.upload_file.side_effect = Exception("Upload failed")
+        # Create cached state with same file
+        cached = SyncState(
+            repo_id="test-repo-id",
+            repo_head="abc123",
+            last_sync="",
+            files={},  # Empty = all files are new
+        )
 
         with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
-            result = cloud_sync_logic(mock_repo_client, str(tmp_path))
+            with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=cached):
+                with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+                    result = cloud_sync_logic(mock_repo_client, str(tmp_path))
 
-        assert result["files_uploaded"] == 0
-        assert result["files_skipped"] == 1
-        assert len(result["errors"]) > 0
-        assert "Upload failed" in result["errors"][0]
+        assert result["is_incremental"] is True
+        assert result["files_created"] == 1
+
+    def test_sync_skips_unchanged_files(self, tmp_path: Path, mock_repo_client: MagicMock) -> None:
+        """Should skip unchanged files in incremental sync."""
+        (tmp_path / "main.py").write_text("print('hello')")
+        hashes = _compute_file_hashes(str(tmp_path), ["main.py"])
+
+        cached = SyncState(
+            repo_id="test-repo-id",
+            repo_head="abc123",
+            last_sync="",
+            files=hashes.copy(),
+        )
+
+        with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
+            with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=cached):
+                with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+                    result = cloud_sync_logic(mock_repo_client, str(tmp_path))
+
+        assert result["files_unchanged"] == 1
+        assert result["files_created"] == 0
+        assert result["files_updated"] == 0
+        # update_repo should NOT be called when no changes
+        mock_repo_client.update_repo.assert_not_called()
+
+    def test_sync_force_ignores_cache(self, tmp_path: Path, mock_repo_client: MagicMock) -> None:
+        """Should ignore cache when force=True."""
+        (tmp_path / "main.py").write_text("print('hello')")
+        hashes = _compute_file_hashes(str(tmp_path), ["main.py"])
+
+        cached = SyncState(
+            repo_id="test-repo-id",
+            repo_head="abc123",
+            last_sync="",
+            files=hashes.copy(),
+        )
+
+        with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
+            with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=cached):
+                with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+                    result = cloud_sync_logic(mock_repo_client, str(tmp_path), force=True)
+
+        assert result["is_incremental"] is False
+        assert result["files_created"] == 1  # Treated as new
 
     def test_sync_returns_error_on_ensure_repo_failure(
         self, tmp_path: Path, mock_repo_client: MagicMock
@@ -244,11 +432,87 @@ class TestCloudSyncLogic:
 
         with patch("relace_mcp.tools.repo.sync.REPO_SYNC_MAX_FILES", 5):
             with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
-                result = cloud_sync_logic(mock_repo_client, str(tmp_path))
+                with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=None):
+                    with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+                        result = cloud_sync_logic(mock_repo_client, str(tmp_path))
 
-        # Should only upload 5 files
+        # Should only process 5 files
         assert result["total_files"] == 5
-        assert mock_repo_client.upload_file.call_count == 5
+
+
+class TestSyncState:
+    """Test sync state management."""
+
+    def test_compute_file_hash(self, tmp_path: Path) -> None:
+        """Should compute SHA-256 hash."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("print('hello')")
+
+        file_hash = compute_file_hash(test_file)
+
+        assert file_hash is not None
+        assert file_hash.startswith("sha256:")
+        assert len(file_hash) == 7 + 64  # "sha256:" + 64 hex chars
+
+    def test_compute_file_hash_missing_file(self, tmp_path: Path) -> None:
+        """Should return None for missing file."""
+        file_hash = compute_file_hash(tmp_path / "missing.py")
+        assert file_hash is None
+
+    def test_sync_state_to_dict(self) -> None:
+        """Should serialize to dict."""
+        state = SyncState(
+            repo_id="test-id",
+            repo_head="abc123",
+            last_sync="2025-01-01T00:00:00Z",
+            files={"main.py": "sha256:abc"},
+        )
+
+        data = state.to_dict()
+
+        assert data["repo_id"] == "test-id"
+        assert data["repo_head"] == "abc123"
+        assert data["files"]["main.py"] == "sha256:abc"
+
+    def test_sync_state_from_dict(self) -> None:
+        """Should deserialize from dict."""
+        data = {
+            "repo_id": "test-id",
+            "repo_head": "abc123",
+            "last_sync": "2025-01-01T00:00:00Z",
+            "files": {"main.py": "sha256:abc"},
+        }
+
+        state = SyncState.from_dict(data)
+
+        assert state.repo_id == "test-id"
+        assert state.repo_head == "abc123"
+        assert state.files["main.py"] == "sha256:abc"
+
+    def test_save_and_load_sync_state(self, tmp_path: Path) -> None:
+        """Should save and load sync state."""
+        # Override XDG state dir for test
+        with patch("relace_mcp.tools.repo.state._XDG_STATE_HOME", tmp_path):
+            state = SyncState(
+                repo_id="test-id",
+                repo_head="abc123",
+                last_sync="",
+                files={"main.py": "sha256:abc"},
+            )
+
+            save_sync_state("test-project", state)
+            loaded = load_sync_state("test-project")
+
+        assert loaded is not None
+        assert loaded.repo_id == "test-id"
+        assert loaded.files["main.py"] == "sha256:abc"
+
+    def test_load_sync_state_missing(self, tmp_path: Path) -> None:
+        """Should return None for missing state."""
+        with patch("relace_mcp.tools.repo.state._XDG_STATE_HOME", tmp_path):
+            loaded = load_sync_state("nonexistent-project")
+
+        assert loaded is None
 
 
 class TestCodeExtensions:
