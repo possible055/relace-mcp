@@ -93,12 +93,12 @@ class TestLogEvent:
 
     def test_handles_log_failure_gracefully(self, tmp_path: Path) -> None:
         """Should not raise on log write failure (e.g., path is a directory)."""
-        # 使用目錄作為 log 路徑會失敗，但不應拋出例外
+        # Using directory as log path will fail, but should not raise exception
         with (
             patch("relace_mcp.tools.apply.logging.EXPERIMENTAL_LOGGING", True),
             patch("relace_mcp.tools.apply.logging.LOG_PATH", tmp_path),
         ):
-            log_event({"test": True})  # 不應拋出例外
+            log_event({"test": True})  # Should not raise exception
 
 
 class TestApplyFileLogicSuccess:
@@ -115,7 +115,7 @@ class TestApplyFileLogicSuccess:
         """Should successfully apply edit and return UDiff."""
         mock_client.apply.return_value = successful_api_response
 
-        # edit_snippet 包含原始檔案中存在的 anchor lines（temp_source_file 內容）
+        # edit_snippet contains anchor lines that exist in temp_source_file
         # temp_source_file: def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Goodbye')\n
         result = apply_file_logic(
             client=mock_client,
@@ -146,7 +146,7 @@ class TestApplyFileLogicSuccess:
         """Should log success event."""
         mock_client.apply.return_value = successful_api_response
 
-        # edit_snippet 包含原始檔案中存在的 anchor lines（temp_source_file 內容）
+        # edit_snippet contains anchor lines that exist in temp_source_file
         apply_file_logic(
             client=mock_client,
             file_path=str(temp_source_file),
@@ -286,7 +286,7 @@ class TestApplyFileLogicValidation:
             "usage": {},
         }
 
-        # snippet 包含真實 anchor (def hello) 以及 remove directive
+        # snippet contains real anchor (def hello) and remove directive
         result = apply_file_logic(
             client=mock_client,
             file_path=str(temp_source_file),
@@ -310,7 +310,7 @@ class TestApplyFileLogicValidation:
         original = temp_source_file.read_text()
         mock_client.apply.return_value = {"mergedCode": original, "usage": {}}
 
-        # edit_snippet 包含原始檔案中已存在的內容（真正的 idempotent 場景）
+        # edit_snippet contains content already existing in original file (true idempotent scenario)
         result = apply_file_logic(
             client=mock_client,
             file_path=str(temp_source_file),
@@ -363,7 +363,7 @@ class TestApplyFileLogicFileSize:
 
         mock_client.apply.return_value = successful_api_response
 
-        # edit_snippet 包含可定位的 anchor lines
+        # edit_snippet contains locatable anchor lines
         result = apply_file_logic(
             client=mock_client,
             file_path=str(limit_file),
@@ -407,7 +407,7 @@ class TestApplyFileLogicEncoding:
     ) -> None:
         """Should successfully read and write GBK encoded files."""
         gbk_file = tmp_path / "gbk_file.py"
-        # 寫入 GBK 編碼的中文內容（確保有 2 個以上足夠長的 anchor lines）
+        # Write GBK encoded Chinese content (ensure 2+ sufficiently long anchor lines)
         gbk_content = "# 这是简体中文注释用于测试\ndef process_chinese_data():\n    print('你好')\n"
         gbk_file.write_bytes(gbk_content.encode("gbk"))
 
@@ -416,7 +416,7 @@ class TestApplyFileLogicEncoding:
         )
         mock_client.apply.return_value = {"mergedCode": merged_code, "usage": {}}
 
-        # edit_snippet 包含原始檔案中存在的 anchor lines
+        # edit_snippet contains anchor lines that exist in original file
         result = apply_file_logic(
             client=mock_client,
             file_path=str(gbk_file),
@@ -427,7 +427,7 @@ class TestApplyFileLogicEncoding:
 
         assert result["status"] == "ok"
         assert "Applied code changes" in result["message"]
-        # 確認寫回的檔案仍為 GBK 編碼
+        # Confirm written file is still GBK encoded
         assert gbk_file.read_bytes().decode("gbk") == merged_code
 
 
@@ -442,7 +442,7 @@ class TestApplyFileLogicBaseDirSecurity:
     ) -> None:
         """Should block access to files outside base_dir."""
 
-        # 嘗試存取 base_dir 外部的檔案
+        # Attempt to access file outside base_dir
         outside_file = tmp_path.parent / "outside.py"
         outside_file.write_text("content")
 
@@ -476,7 +476,7 @@ class TestApplyFileLogicApiErrors:
         """Should log error event when API call fails."""
         mock_client.apply.side_effect = RuntimeError("API Error")
 
-        # edit_snippet 包含原始檔案中存在的 anchor lines
+        # edit_snippet contains anchor lines that exist in original file
         with pytest.raises(RuntimeError):
             apply_file_logic(
                 client=mock_client,
@@ -509,7 +509,7 @@ class TestApplyFileLogicApiErrors:
         """Should return API_INVALID_RESPONSE when API returns no or null mergedCode."""
         mock_client.apply.return_value = response
 
-        # edit_snippet 包含原始檔案中存在的 anchor lines
+        # edit_snippet contains anchor lines that exist in original file
         result = apply_file_logic(
             client=mock_client,
             file_path=str(temp_source_file),
@@ -535,7 +535,7 @@ class TestApplyFileLogicSnippetPreview:
         mock_log_path: Path,
     ) -> None:
         """Should truncate edit_snippet to 200 chars in log."""
-        # 長 snippet 需包含可定位的 anchor lines，且 mergedCode 應包含新增內容以通過 post_check
+        # Long snippet needs locatable anchor lines, and mergedCode should contain new content to pass post_check
         long_suffix = "x" * 500
         long_snippet = "def hello():\n    print('Hello')\n" + long_suffix
         merged_code = "def hello():\n    print('Hello')\n" + long_suffix
@@ -579,7 +579,7 @@ class TestApplyFileLogicPathNormalization:
             "usage": {},
         }
 
-        # edit_snippet 包含原始檔案中存在的 anchor lines
+        # edit_snippet contains anchor lines that exist in original file
         result = apply_file_logic(
             client=mock_client,
             file_path=file_path,
@@ -627,7 +627,7 @@ class TestApplyFileLogicRecoverableErrors:
         test_file = tmp_path / "test.py"
         test_file.write_text("def existing_function():\n    return 42\n")
 
-        # edit_snippet 包含省略標記（觸發 precheck）但 anchor 無法定位
+        # edit_snippet contains ellipsis markers (triggers precheck) but anchor cannot be located
         result = apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
@@ -638,7 +638,7 @@ class TestApplyFileLogicRecoverableErrors:
 
         assert result["status"] == "error"
         assert result["code"] == "NEEDS_MORE_CONTEXT"
-        assert "無法在檔案中定位" in result["message"]
+        assert "cannot be located" in result["message"]
         # API should NOT be called when precheck fails
         mock_client.apply.assert_not_called()
 
@@ -648,7 +648,7 @@ class TestApplyFileLogicRecoverableErrors:
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """Instruction 含明確位置 directive 時應跳過 precheck，避免誤判阻擋。"""
+        """Instruction with explicit position directive should skip precheck to avoid false blocking."""
         test_file = tmp_path / "test.py"
         original = "def existing_function():\n    return 42\n"
         test_file.write_text(original)
@@ -674,7 +674,7 @@ class TestApplyFileLogicRecoverableErrors:
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """PermissionError 應轉為 PERMISSION_ERROR（避免 MCP tool crash）。"""
+        """PermissionError should convert to PERMISSION_ERROR (avoid MCP tool crash)."""
         test_file = tmp_path / "test.py"
         test_file.write_text("def existing_function():\n    return 42\n")
 
@@ -699,7 +699,7 @@ class TestApplyFileLogicRecoverableErrors:
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """OSError 應轉為 FS_ERROR（避免 MCP tool crash）。"""
+        """OSError should convert to FS_ERROR (avoid MCP tool crash)."""
         new_file = tmp_path / "new_file.py"
 
         with patch(
@@ -725,7 +725,7 @@ class TestApplyFileLogicRecoverableErrors:
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """檔案不可寫時應轉為 FILE_NOT_WRITABLE（避免 MCP tool crash）。"""
+        """Unwritable file should convert to FILE_NOT_WRITABLE (avoid MCP tool crash)."""
         test_file = tmp_path / "readonly.py"
         test_file.write_text("original_value_setting = True\nprocess_data_function()\n")
         test_file.chmod(0o444)
@@ -775,7 +775,7 @@ class TestApplyFileLogicRecoverableErrors:
 
         assert result["status"] == "error"
         assert result["code"] == "AUTH_ERROR"
-        assert "API 認證或權限錯誤" in result["message"]
+        assert "API authentication or permission error" in result["message"]
         assert result["detail"]["status_code"] == 401
         assert result["detail"]["api_code"] == "unauthorized"
         assert "Invalid API key" in result["detail"]["api_message"]
@@ -840,7 +840,7 @@ class TestApplyFileLogicRecoverableErrors:
 
         assert result["status"] == "error"
         assert result["code"] == "API_ERROR"
-        assert "Relace API 錯誤" in result["message"]
+        assert "Relace API error" in result["message"]
         assert result["detail"]["status_code"] == 400
         assert result["detail"]["api_code"] == "anchor_not_found"
         assert "Cannot locate anchor lines" in result["detail"]["api_message"]
@@ -869,7 +869,7 @@ class TestApplyFileLogicRecoverableErrors:
 
         assert result["status"] == "error"
         assert result["code"] == "NETWORK_ERROR"
-        assert "網路錯誤" in result["message"]
+        assert "Network error" in result["message"]
         assert "Connection failed" in result["detail"]
 
     def test_timeout_error_returns_timeout_error(
@@ -896,7 +896,7 @@ class TestApplyFileLogicRecoverableErrors:
 
         assert result["status"] == "error"
         assert result["code"] == "TIMEOUT_ERROR"
-        assert "請求逾時" in result["message"]
+        assert "Request timed out" in result["message"]
         assert "Request timed out" in result["detail"]
 
     def test_anchor_precheck_allows_remove_directives(
@@ -943,12 +943,12 @@ class TestApplyFileLogicRecoverableErrors:
             "usage": {},
         }
 
-        # edit_snippet 的縮排與原檔案不同，但 strip() 後應能匹配
-        # 確保有 2 個 anchor hits：def process_data_handler(): 和 return calculate_result_value()
+        # edit_snippet indentation differs from original file, but should match after strip()
+        # Ensure 2 anchor hits: def process_data_handler(): and return calculate_result_value()
         result = apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
-            edit_snippet="def process_data_handler():\nreturn calculate_result_value()\n",  # 縮排不同
+            edit_snippet="def process_data_handler():\nreturn calculate_result_value()\n",  # Different indentation
             instruction="Change return value",
             base_dir=str(tmp_path),
         )
@@ -967,12 +967,12 @@ class TestApplyNoopDetection:
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """Snippet 含新行但 merge 後無變更，應回 APPLY_NOOP。"""
+        """Snippet contains new lines but merge produces no changes, should return APPLY_NOOP."""
         test_file = tmp_path / "test.py"
         original_content = "def process_data_from_input():\n    return calculate_result_value()\n"
         test_file.write_text(original_content)
 
-        # API 返回與原檔相同的內容（模擬 apply 失敗）
+        # API returns same content as original file (simulating apply failure)
         mock_client.apply.return_value = {
             "mergedCode": original_content,
             "usage": {},
@@ -996,18 +996,18 @@ class TestApplyNoopDetection:
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """Snippet 本來就已存在，應回 OK（idempotent）。"""
+        """Snippet already exists in file, should return OK (idempotent)."""
         test_file = tmp_path / "test.py"
         original_content = "def process_data_from_input():\n    return calculate_result_value()\n"
         test_file.write_text(original_content)
 
-        # API 返回與原檔相同的內容
+        # API returns same content as original file
         mock_client.apply.return_value = {
             "mergedCode": original_content,
             "usage": {},
         }
 
-        # snippet 只包含已存在的程式碼（真正的 idempotent）
+        # snippet only contains existing code (true idempotent)
         result = apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
@@ -1025,12 +1025,12 @@ class TestApplyNoopDetection:
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """有 remove directive 但無變更，應回 APPLY_NOOP。"""
+        """Has remove directive but no changes, should return APPLY_NOOP."""
         test_file = tmp_path / "test.py"
         original_content = "def main_function_handler():\n    return process_request()\n\ndef helper_utility_function():\n    return compute_value()\n"
         test_file.write_text(original_content)
 
-        # API 返回與原檔相同的內容（remove 失敗）
+        # API returns same content as original file (remove failed)
         mock_client.apply.return_value = {
             "mergedCode": original_content,
             "usage": {},
@@ -1053,18 +1053,18 @@ class TestApplyNoopDetection:
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """新增短行（如 x = 1）但 merge 後無變更，應回 APPLY_NOOP。"""
+        """Adding short line (e.g., x = 1) but merge produces no changes, should return APPLY_NOOP."""
         test_file = tmp_path / "test.py"
         original_content = "def process_data_handler():\n    return calculate_result()\n"
         test_file.write_text(original_content)
 
-        # API 返回與原檔相同的內容（apply 失敗）
+        # API returns same content as original file (apply failed)
         mock_client.apply.return_value = {
             "mergedCode": original_content,
             "usage": {},
         }
 
-        # 新增短行 x = 1（5 字元）
+        # Adding short line x = 1 (5 chars)
         result = apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
@@ -1082,18 +1082,18 @@ class TestApplyNoopDetection:
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """新增 trivial 行（如 return）視為 idempotent，應回 OK。"""
+        """Adding trivial line (e.g., return) is treated as idempotent, should return OK."""
         test_file = tmp_path / "test.py"
         original_content = "def process_data_handler():\n    calculate_result()\n"
         test_file.write_text(original_content)
 
-        # API 返回與原檔相同的內容
+        # API returns same content as original file
         mock_client.apply.return_value = {
             "mergedCode": original_content,
             "usage": {},
         }
 
-        # 只新增 trivial 行 return（常見語法關鍵字）
+        # Only adding trivial line return (common syntax keyword)
         result = apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
@@ -1102,7 +1102,7 @@ class TestApplyNoopDetection:
             base_dir=str(tmp_path),
         )
 
-        # return 是 trivial token，不視為預期變更
+        # return is trivial token, not considered expected change
         assert result["status"] == "ok"
 
     def test_noop_with_substring_match_returns_apply_noop(
@@ -1111,19 +1111,19 @@ class TestApplyNoopDetection:
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """新行是現有行的子字串時，應正確偵測為 APPLY_NOOP。"""
+        """New line is substring of existing line, should correctly detect as APPLY_NOOP."""
         test_file = tmp_path / "test.py"
-        # x = 100 包含 x = 1 作為子字串
+        # x = 100 contains x = 1 as substring
         original_content = "def process_data_handler():\n    x = 100\n    return x\n"
         test_file.write_text(original_content)
 
-        # API 返回與原檔相同的內容（apply 失敗）
+        # API returns same content as original file (apply failed)
         mock_client.apply.return_value = {
             "mergedCode": original_content,
             "usage": {},
         }
 
-        # snippet 包含 x = 1（是 x = 100 的子字串，但應被視為新行）
+        # snippet contains x = 1 (is substring of x = 100, but should be treated as new line)
         result = apply_file_logic(
             client=mock_client,
             file_path=str(test_file),
@@ -1132,7 +1132,7 @@ class TestApplyNoopDetection:
             base_dir=str(tmp_path),
         )
 
-        # x = 1 不等於 x = 100，應偵測為預期變更
+        # x = 1 does not equal x = 100, should detect as expected change
         assert result["status"] == "error"
         assert result["code"] == "APPLY_NOOP"
 
@@ -1146,7 +1146,7 @@ class TestApplyWriteVerification:
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """原子寫入應正常完成，不留下 .tmp 檔案。"""
+        """Atomic write should complete normally without leaving .tmp file."""
         test_file = tmp_path / "test.py"
         test_file.write_text("original_content_value = True\nprocess_data_function()\n")
 
@@ -1163,11 +1163,11 @@ class TestApplyWriteVerification:
             base_dir=str(tmp_path),
         )
 
-        # 應該成功
+        # Should succeed
         assert result["status"] == "ok"
-        # .tmp 檔案不應該存在（原子寫入完成後會被刪除）
+        # .tmp file should not exist (deleted after atomic write completes)
         assert not (tmp_path / "test.py.tmp").exists()
-        # 內容應該是新的
+        # Content should be new
         assert test_file.read_text() == "modified_content_value = False\nprocess_data_function()\n"
 
     def test_post_write_verification_failure_returns_error(
@@ -1176,7 +1176,7 @@ class TestApplyWriteVerification:
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """寫入後驗證失敗應返回 WRITE_VERIFY_FAILED。"""
+        """Post-write verification failure should return WRITE_VERIFY_FAILED."""
         test_file = tmp_path / "test.py"
         original = "original_content_value = True\nprocess_data_function()\n"
         test_file.write_text(original)
@@ -1186,10 +1186,10 @@ class TestApplyWriteVerification:
             "usage": {},
         }
 
-        # Mock read_text_with_fallback 在驗證時拋出異常
+        # Mock read_text_with_fallback to raise exception during verification
         with patch("relace_mcp.tools.apply.core.file_io.read_text_with_fallback") as mock_read:
-            # 第一次呼叫（讀取原始檔案）返回正常內容
-            # 第二次呼叫（驗證寫入）拋出異常
+            # First call (read original file) returns normal content
+            # Second call (verify write) raises exception
             mock_read.side_effect = [
                 (original, "utf-8"),
                 OSError("Permission denied"),
@@ -1217,7 +1217,7 @@ class TestApplyResponseFormat:
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """成功回應應包含 path 和 trace_id。"""
+        """Success response should include path and trace_id."""
         test_file = tmp_path / "test.py"
         test_file.write_text("original_value_setting = True\nprocess_data_function()\n")
 
@@ -1245,7 +1245,7 @@ class TestApplyResponseFormat:
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """No-op（idempotent）回應也應包含 path。"""
+        """No-op (idempotent) response should also include path."""
         test_file = tmp_path / "test.py"
         original_content = "def existing_function_handler():\n    return process_request_data()\n"
         test_file.write_text(original_content)
@@ -1255,7 +1255,7 @@ class TestApplyResponseFormat:
             "usage": {},
         }
 
-        # 真正的 idempotent 情況
+        # True idempotent case
         result = apply_file_logic(
             client=mock_client,
             file_path=str(test_file),

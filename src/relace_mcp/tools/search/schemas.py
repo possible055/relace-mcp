@@ -12,7 +12,7 @@ from ...config import (
 
 @dataclass(frozen=True, slots=True)
 class GrepSearchParams:
-    """封裝 grep_search 工具參數。"""
+    """Encapsulates grep_search tool parameters."""
 
     query: str
     case_sensitive: bool

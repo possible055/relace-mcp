@@ -23,16 +23,16 @@ logger = logging.getLogger(__name__)
 
 
 class ApplyResult(TypedDict):
-    """fast_apply 回傳結果的結構化型別定義。"""
+    """Structured type definition for fast_apply return result."""
 
     status: str  # "ok" | "error"
     path: str
     trace_id: str
     timing_ms: int
     message: str
-    diff: NotRequired[str | None]  # 僅在 status="ok" 且有變更時存在
-    code: NotRequired[str]  # 僅在 status="error" 時存在
-    detail: NotRequired[dict[str, Any]]  # API 錯誤詳細資訊
+    diff: NotRequired[str | None]  # Only present when status="ok" and changes exist
+    code: NotRequired[str]  # Only present when status="error"
+    detail: NotRequired[dict[str, Any]]  # API error details
 
 
 @dataclass
@@ -65,11 +65,11 @@ def _ok_result(
 def _resolve_path(
     file_path: str, base_dir: str, ctx: ApplyContext
 ) -> tuple[Path, bool, int] | dict[str, Any]:
-    """解析並驗證檔案路徑，檢查檔案狀態。
+    """Resolve and validate file path, check file status.
 
     Returns:
-        成功時返回 (resolved_path, file_exists, file_size)，
-        失敗時返回錯誤 dict。
+        On success returns (resolved_path, file_exists, file_size),
+        on failure returns error dict.
     """
     try:
         normalized = normalize_repo_path(file_path, base_dir)
@@ -119,7 +119,7 @@ def _apply_to_existing_file(
     if not concrete:
         return errors.recoverable_error(
             "NEEDS_MORE_CONTEXT",
-            "edit_snippet 沒有足夠的 anchor lines。請加入 1-3 行真實程式碼作為定位。",
+            "edit_snippet lacks sufficient anchor lines. Please add 1-3 lines of real code for positioning.",
             ctx.file_path,
             ctx.instruction,
             ctx.trace_id,
@@ -135,7 +135,7 @@ def _apply_to_existing_file(
         if not snippet.anchor_precheck(concrete, initial_code):
             return errors.recoverable_error(
                 "NEEDS_MORE_CONTEXT",
-                "edit_snippet 中的 anchor lines 無法在檔案中定位。請確保包含 1-3 行真實存在的程式碼。",
+                "Anchor lines in edit_snippet cannot be located in the file. Ensure you include 1-3 lines of existing code.",
                 ctx.file_path,
                 ctx.instruction,
                 ctx.trace_id,
@@ -198,7 +198,7 @@ def _apply_to_existing_file(
     if not os.access(resolved_path, os.W_OK):
         raise FileNotWritableError(ctx.file_path)
 
-    # EXPERIMENTAL: Post-check 驗證（預設關閉，透過 RELACE_EXPERIMENTAL_POST_CHECK 啟用）
+    # EXPERIMENTAL: Post-check validation (disabled by default, enable via RELACE_EXPERIMENTAL_POST_CHECK)
     if EXPERIMENTAL_POST_CHECK:
         post_check_passed, post_check_reason = snippet.post_check_merged_code(
             edit_snippet, merged_code, initial_code

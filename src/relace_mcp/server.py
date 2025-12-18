@@ -3,6 +3,7 @@ import logging
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastmcp import FastMCP
 
 from .config import EXPERIMENTAL_LOGGING, LOG_PATH, RelaceConfig
@@ -96,12 +97,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    try:
-        from dotenv import load_dotenv
-
-        load_dotenv()
-    except ImportError:
-        pass
+    load_dotenv()
 
     logging.basicConfig(
         level=logging.INFO,

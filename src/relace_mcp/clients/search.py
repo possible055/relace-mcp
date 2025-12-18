@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class RelaceSearchClient:
-    """呼叫 relace-search 模型的 OpenAI-compatible Chat Completions client。"""
+    """OpenAI-compatible Chat Completions client for calling relace-search model."""
 
     def __init__(self, config: RelaceConfig) -> None:
         self._config = config
@@ -30,18 +30,18 @@ class RelaceSearchClient:
         tools: list[dict[str, Any]],
         trace_id: str = "unknown",
     ) -> dict[str, Any]:
-        """送出 chat.completions 請求到 relace-search endpoint。
+        """Send chat.completions request to relace-search endpoint.
 
         Args:
-            messages: OpenAI 格式的 messages 列表。
-            tools: OpenAI function tools schema 列表。
-            trace_id: 用於 logging 的追蹤 ID。
+            messages: OpenAI-format messages list.
+            tools: OpenAI function tools schema list.
+            trace_id: Trace ID for logging.
 
         Returns:
-            Relace Search API 回傳的 JSON dict（OpenAI chat.completions 格式）。
+            JSON dict returned by Relace Search API (OpenAI chat.completions format).
 
         Raises:
-            RuntimeError: API 呼叫失敗時（包含不可重試的錯誤或重試次數用盡）。
+            RuntimeError: When API call fails (non-retryable error or retries exhausted).
         """
         payload: dict[str, Any] = {
             "model": RELACE_SEARCH_MODEL,
@@ -72,7 +72,7 @@ class RelaceSearchClient:
                     raise_for_status(resp)
                 except RelaceAPIError as exc:
                     if not exc.retryable:
-                        # 不可重試的錯誤（4xx 除了 429/423），直接拋出
+                        # Non-retryable error (4xx except 429/423), raise immediately
                         logger.error(
                             "[%s] Relace Search API %s (status=%d, latency=%dms): %s",
                             trace_id,
@@ -85,7 +85,7 @@ class RelaceSearchClient:
                             f"Relace Search API error ({exc.code}): {exc.message}"
                         ) from exc
 
-                    # 可重試的錯誤（429, 423, 5xx）
+                    # Retryable error (429, 423, 5xx)
                     last_exc = exc
                     logger.warning(
                         "[%s] Relace Search API %s (status=%d, latency=%dms, attempt=%d/%d)",
@@ -105,7 +105,7 @@ class RelaceSearchClient:
                         f"Relace Search API error ({exc.code}): {exc.message}"
                     ) from exc
 
-                # 成功
+                # Success
                 logger.info(
                     "[%s] Relace Search API success (status=%d, latency=%dms)",
                     trace_id,
@@ -116,7 +116,7 @@ class RelaceSearchClient:
                 try:
                     return resp.json()
                 except ValueError as exc:
-                    # 2xx 但非 JSON 是服務端異常行為
+                    # 2xx but non-JSON is abnormal server behavior
                     logger.error(
                         "[%s] Relace Search API returned non-JSON response (status=%d)",
                         trace_id,

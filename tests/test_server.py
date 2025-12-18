@@ -36,7 +36,7 @@ class TestServerToolRegistration:
 
     @pytest.mark.asyncio
     async def test_fast_apply_registered(self, mock_config: RelaceConfig) -> None:
-        """透過公開 API Client.list_tools() 驗證 tool 註冊。"""
+        """Verify tool registration via public API Client.list_tools()."""
         server = build_server(config=mock_config)
 
         async with Client(server) as client:
@@ -46,7 +46,7 @@ class TestServerToolRegistration:
 
     @pytest.mark.asyncio
     async def test_fast_search_registered(self, mock_config: RelaceConfig) -> None:
-        """透過公開 API Client.list_tools() 驗證 fast_search 註冊。"""
+        """Verify fast_search registration via public API Client.list_tools()."""
         server = build_server(config=mock_config)
 
         async with Client(server) as client:
@@ -160,7 +160,7 @@ class TestServerIntegration:
             relace_tool = next((t for t in tools if t.name == "fast_apply"), None)
             assert relace_tool is not None
 
-            # 驗證必要參數
+            # Verify required parameters
             schema = relace_tool.inputSchema
             assert "path" in schema.get("properties", {})
             assert "edit_snippet" in schema.get("properties", {})
@@ -179,7 +179,7 @@ class TestServerIntegration:
             base_dir=str(tmp_path),
         )
 
-        # temp_source_file 內容: def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Goodbye')\n
+        # temp_source_file content: def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Goodbye')\n
         merged_code = "def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Modified!')\n"
 
         with patch("relace_mcp.tools.RelaceClient") as mock_client_cls:
@@ -197,7 +197,7 @@ class TestServerIntegration:
                 tools = await client.list_tools()
                 assert len(tools) >= 1
 
-                # Step 2: Call tool（edit_snippet 包含原始檔案中存在的 anchor lines）
+                # Step 2: Call tool (edit_snippet contains anchor lines that exist in original file)
                 result = await client.call_tool(
                     "fast_apply",
                     {
@@ -219,7 +219,7 @@ class TestMain:
     def test_main_stdio_mode(
         self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        """STDIO 模式（預設）呼叫 server.run() 不帶參數。"""
+        """STDIO mode (default) calls server.run() without arguments."""
         import sys
 
         from relace_mcp.server import main
@@ -239,7 +239,7 @@ class TestMain:
     def test_main_http_mode(
         self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        """HTTP 模式透過 CLI 參數呼叫 server.run() 帶正確參數。"""
+        """HTTP mode calls server.run() with correct arguments via CLI."""
         import sys
 
         from relace_mcp.server import main
@@ -278,7 +278,7 @@ class TestMain:
     def test_main_streamable_http_mode(
         self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        """streamable-http 模式透過 -t 短參數。"""
+        """streamable-http mode via -t short flag."""
         import sys
 
         from relace_mcp.server import main
@@ -303,7 +303,7 @@ class TestMain:
     def test_main_invalid_transport(
         self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        """非法 transport 值會被 argparse 拒絕。"""
+        """Invalid transport value is rejected by argparse."""
         import sys
 
         from relace_mcp.server import main

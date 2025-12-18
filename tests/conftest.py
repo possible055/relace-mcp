@@ -110,7 +110,7 @@ def temp_large_file(tmp_path: Path) -> Path:
 @pytest.fixture
 def temp_binary_file(tmp_path: Path) -> Path:
     binary_file = tmp_path / "binary_file.bin"
-    # 使用無法被任何文字編碼解碼的二進制序列（含無效 UTF-8 序列 + 非法 GBK 組合）
+    # Binary sequence that cannot be decoded by any text encoding (invalid UTF-8 + illegal GBK combo)
     binary_file.write_bytes(b"\xfe\xff\x00\x80\xff\xfe\x81\x40")
     return binary_file
 

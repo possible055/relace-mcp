@@ -8,16 +8,16 @@ from typing import Any
 from ...utils import MAX_FILE_SIZE_BYTES, normalize_repo_path, validate_file_path
 from .schemas import GrepSearchParams
 
-# 目錄列出上限
+# Directory listing limit
 MAX_DIR_ITEMS = 250
-# grep 結果上限
+# grep result limit
 MAX_GREP_MATCHES = 50
-# grep 超時（秒）
+# grep timeout (seconds)
 GREP_TIMEOUT_SECONDS = 30
-# Python fallback grep 最大深度
+# Python fallback grep max depth
 MAX_GREP_DEPTH = 10
-# Context 截斷：每個 tool result 最大字元數（分工具類型）
-MAX_TOOL_RESULT_CHARS = 50000  # truncate_for_context 的預設上限
+# Context truncation: max chars per tool result (by tool type)
+MAX_TOOL_RESULT_CHARS = 50000  # default limit for truncate_for_context
 MAX_VIEW_FILE_CHARS = 20000
 MAX_GREP_SEARCH_CHARS = 12000
 MAX_BASH_CHARS = 15000
@@ -25,16 +25,16 @@ MAX_VIEW_DIRECTORY_CHARS = 8000
 
 
 def _timeout_context(seconds: int):
-    """簡易 timeout context manager（僅 Unix）。
+    """Simple timeout context manager (Unix only).
 
     Args:
-        seconds: 超時秒數。
+        seconds: Timeout in seconds.
 
     Yields:
         None
 
     Raises:
-        TimeoutError: 當操作超時時。
+        TimeoutError: When operation times out.
     """
     import signal
     from contextlib import contextmanager
@@ -60,21 +60,21 @@ def _timeout_context(seconds: int):
 
 
 def map_repo_path(path: str, base_dir: str) -> str:
-    """將模型傳來的 /repo/... 路徑轉為實際檔案系統路徑。
+    """Map model-provided /repo/... path to actual filesystem path.
 
-    此函數刻意只接受 /repo 虛擬根目錄格式（/repo 或 /repo/...），
-    用於強制 search agent 一律以 /repo 作為「虛擬 repo root」回傳路徑。
-    內部實作委派給 normalize_repo_path 進行實際路徑轉換。
+    This function intentionally only accepts /repo virtual root format (/repo or /repo/...),
+    to enforce search agent to always return paths using /repo as the "virtual repo root".
+    Internal implementation delegates to normalize_repo_path for actual path conversion.
 
     Args:
-        path: 模型傳來的路徑，預期格式為 /repo 或 /repo/...
-        base_dir: 實際的 repo root 目錄。
+        path: Model-provided path, expected format is /repo or /repo/...
+        base_dir: Actual repo root directory.
 
     Returns:
-        實際檔案系統路徑。
+        Actual filesystem path.
 
     Raises:
-        RuntimeError: 若 path 不以 /repo 開頭。
+        RuntimeError: If path does not start with /repo.
     """
     if path not in ("/repo", "/repo/") and not path.startswith("/repo/"):
         raise RuntimeError(f"Fast Agentic Search expects absolute paths under /repo/, got: {path}")
@@ -82,14 +82,14 @@ def map_repo_path(path: str, base_dir: str) -> str:
 
 
 def _validate_file_for_view(resolved: Path, path: str) -> str | None:
-    """驗證檔案是否可讀取。
+    """Validate if file is readable.
 
     Args:
-        resolved: 解析後的檔案路徑。
-        path: 原始請求路徑。
+        resolved: Resolved file path.
+        path: Original request path.
 
     Returns:
-        錯誤訊息（若有問題），否則 None。
+        Error message (if there's a problem), otherwise None.
     """
     if not resolved.exists():
         return f"Error: File not found: {path}"
@@ -104,14 +104,14 @@ def _validate_file_for_view(resolved: Path, path: str) -> str | None:
 
 
 def _parse_view_range(view_range: list[int], total_lines: int) -> tuple[int, int]:
-    """解析並正規化 view_range。
+    """Parse and normalize view_range.
 
     Args:
-        view_range: [start, end] 範圍。
-        total_lines: 檔案總行數。
+        view_range: [start, end] range.
+        total_lines: Total lines in file.
 
     Returns:
-        (start_idx, end_idx) 0-indexed 範圍。
+        (start_idx, end_idx) 0-indexed range.
     """
     start = view_range[0] if len(view_range) > 0 else 1
     end = view_range[1] if len(view_range) > 1 else 100
@@ -126,15 +126,15 @@ def _parse_view_range(view_range: list[int], total_lines: int) -> tuple[int, int
 
 
 def _format_file_lines(lines: list[str], start_idx: int, end_idx: int) -> str:
-    """格式化檔案行（附帶行號）。
+    """Format file lines (with line numbers).
 
     Args:
-        lines: 檔案所有行。
-        start_idx: 起始索引（0-indexed）。
-        end_idx: 結束索引（0-indexed）。
+        lines: All file lines.
+        start_idx: Start index (0-indexed).
+        end_idx: End index (0-indexed).
 
     Returns:
-        格式化後的內容字串。
+        Formatted content string.
     """
     result_lines = [f"{idx + 1} {lines[idx]}" for idx in range(start_idx, end_idx)]
     result = "\n".join(result_lines)
@@ -146,7 +146,7 @@ def _format_file_lines(lines: list[str], start_idx: int, end_idx: int) -> str:
 
 
 def view_file_handler(path: str, view_range: list[int], base_dir: str) -> str:
-    """view_file 工具實作。"""
+    """view_file tool implementation."""
     try:
         fs_path = map_repo_path(path, base_dir)
         resolved = validate_file_path(fs_path, base_dir, allow_empty=True)
@@ -166,13 +166,13 @@ def view_file_handler(path: str, view_range: list[int], base_dir: str) -> str:
 
 
 def _strip_dot_prefix(path_str: str) -> str:
-    """移除路徑開頭的 './'。
+    """Remove './' prefix from path.
 
     Args:
-        path_str: 路徑字串。
+        path_str: Path string.
 
     Returns:
-        移除前綴後的路徑字串。
+        Path string with prefix removed.
     """
     return path_str[2:] if path_str.startswith("./") else path_str
 
@@ -181,14 +181,14 @@ def _collect_entries(
     current_abs: Path,
     include_hidden: bool,
 ) -> tuple[list[tuple[str, Path]], list[tuple[str, Path]]]:
-    """收集目錄中的檔案和子目錄。
+    """Collect files and subdirectories in directory.
 
     Args:
-        current_abs: 當前目錄絕對路徑。
-        include_hidden: 是否包含隱藏檔案。
+        current_abs: Current directory absolute path.
+        include_hidden: Whether to include hidden files.
 
     Returns:
-        (files_list, dirs_list) tuple，每個列表包含 (name, Path) 元組。
+        (files_list, dirs_list) tuple, each list contains (name, Path) tuples.
     """
     try:
         entries = list(current_abs.iterdir())
@@ -215,14 +215,14 @@ def _collect_entries(
 
 
 def _collect_directory_items(resolved: Path, include_hidden: bool) -> tuple[list[str], bool]:
-    """BFS 收集目錄項目。
+    """BFS collect directory items.
 
     Args:
-        resolved: 目錄絕對路徑。
-        include_hidden: 是否包含隱藏檔案。
+        resolved: Directory absolute path.
+        include_hidden: Whether to include hidden files.
 
     Returns:
-        (items, truncated) tuple，items 為項目列表，truncated 表示是否被截斷。
+        (items, truncated) tuple, items is item list, truncated indicates if output was truncated.
     """
     items: list[str] = []
     queue: deque[tuple[Path, Path]] = deque()
@@ -232,14 +232,14 @@ def _collect_directory_items(resolved: Path, include_hidden: bool) -> tuple[list
         current_abs, current_rel = queue.popleft()
         files_list, dirs_list = _collect_entries(current_abs, include_hidden)
 
-        # 先列出當前層的檔案
+        # List current level files first
         for name, _ in files_list:
             if len(items) >= MAX_DIR_ITEMS:
                 break
             rel_path = current_rel / name
             items.append(_strip_dot_prefix(str(rel_path)))
 
-        # 列出子目錄並加入 queue
+        # List subdirectories and add to queue
         for name, entry in dirs_list:
             if len(items) >= MAX_DIR_ITEMS:
                 break
@@ -252,7 +252,7 @@ def _collect_directory_items(resolved: Path, include_hidden: bool) -> tuple[list
 
 
 def view_directory_handler(path: str, include_hidden: bool, base_dir: str) -> str:
-    """view_directory 工具實作（BFS-like 順序：先列當前層，再遞迴）。"""
+    """view_directory tool implementation (BFS-like order: list current level first, then recurse)."""
     try:
         fs_path = map_repo_path(path, base_dir)
         resolved = validate_file_path(fs_path, base_dir, allow_empty=True)
@@ -275,15 +275,15 @@ def view_directory_handler(path: str, include_hidden: bool, base_dir: str) -> st
 
 
 def _exceeds_max_depth(root: Path, base_path: Path, max_depth: int) -> bool:
-    """檢查目錄深度是否超過限制。
+    """Check if directory depth exceeds limit.
 
     Args:
-        root: 當前目錄路徑。
-        base_path: 基準目錄路徑。
-        max_depth: 最大深度。
+        root: Current directory path.
+        base_path: Base directory path.
+        max_depth: Maximum depth.
 
     Returns:
-        True 若深度超過限制。
+        True if depth exceeds limit.
     """
     try:
         depth = len(Path(root).relative_to(base_path).parts)
@@ -295,15 +295,15 @@ def _exceeds_max_depth(root: Path, base_path: Path, max_depth: int) -> bool:
 def _matches_file_patterns(
     filename: str, include_pattern: str | None, exclude_pattern: str | None
 ) -> bool:
-    """檢查檔名是否符合 include/exclude pattern。
+    """Check if filename matches include/exclude patterns.
 
     Args:
-        filename: 檔案名稱。
-        include_pattern: include pattern (fnmatch 格式)。
-        exclude_pattern: exclude pattern (fnmatch 格式)。
+        filename: File name.
+        include_pattern: include pattern (fnmatch format).
+        exclude_pattern: exclude pattern (fnmatch format).
 
     Returns:
-        True 若檔案符合條件。
+        True if file matches conditions.
     """
     import fnmatch
 
@@ -315,14 +315,14 @@ def _matches_file_patterns(
 
 
 def _compile_search_pattern(query: str, case_sensitive: bool) -> re.Pattern | str:
-    """編譯 regex pattern。
+    """Compile regex pattern.
 
     Args:
-        query: 搜尋 pattern。
-        case_sensitive: 是否區分大小寫。
+        query: Search pattern.
+        case_sensitive: Whether case sensitive.
 
     Returns:
-        編譯後的 Pattern，或錯誤訊息字串。
+        Compiled Pattern, or error message string.
     """
     flags = 0 if case_sensitive else re.IGNORECASE
     try:
@@ -332,13 +332,13 @@ def _compile_search_pattern(query: str, case_sensitive: bool) -> re.Pattern | st
 
 
 def _filter_visible_dirs(dirs: list[str]) -> list[str]:
-    """過濾掉隱藏目錄。
+    """Filter out hidden directories.
 
     Args:
-        dirs: 目錄名稱列表。
+        dirs: Directory name list.
 
     Returns:
-        可見目錄列表。
+        Visible directory list.
     """
     return [d for d in dirs if not d.startswith(".")]
 
@@ -346,15 +346,15 @@ def _filter_visible_dirs(dirs: list[str]) -> list[str]:
 def _is_searchable_file(
     filename: str, include_pattern: str | None, exclude_pattern: str | None
 ) -> bool:
-    """判斷檔案是否應被搜尋。
+    """Determine if file should be searched.
 
     Args:
-        filename: 檔案名稱。
-        include_pattern: include pattern。
-        exclude_pattern: exclude pattern。
+        filename: File name.
+        include_pattern: include pattern.
+        exclude_pattern: exclude pattern.
 
     Returns:
-        True 若檔案應被搜尋。
+        True if file should be searched.
     """
     if filename.startswith("."):
         return False
@@ -366,15 +366,15 @@ def _iter_searchable_files(
     include_pattern: str | None,
     exclude_pattern: str | None,
 ):
-    """產生符合過濾條件的檔案路徑。
+    """Generate file paths matching filter conditions.
 
     Args:
-        base_path: 搜尋起點。
-        include_pattern: 檔案名稱 include pattern (fnmatch)。
-        exclude_pattern: 檔案名稱 exclude pattern (fnmatch)。
+        base_path: Search starting point.
+        include_pattern: Filename include pattern (fnmatch).
+        exclude_pattern: Filename exclude pattern (fnmatch).
 
     Yields:
-        (filepath, rel_path) tuple。
+        (filepath, rel_path) tuple.
     """
     for root, dirs, files in os.walk(base_path):
         if _exceeds_max_depth(Path(root), base_path, MAX_GREP_DEPTH):
@@ -402,16 +402,16 @@ def _search_in_file(
     rel_path: Path,
     limit: int,
 ) -> list[str]:
-    """搜尋單一檔案並返回 match 列表。
+    """Search single file and return match list.
 
     Args:
-        filepath: 檔案絕對路徑。
-        pattern: 編譯後的 regex pattern。
-        rel_path: 檔案相對路徑（用於輸出）。
-        limit: 最多回傳的 match 數量（用於 global cap）。
+        filepath: File absolute path.
+        pattern: Compiled regex pattern.
+        rel_path: File relative path (for output).
+        limit: Maximum matches to return (for global cap).
 
     Returns:
-        Match 列表，格式為 "rel_path:line_num:line"。
+        Match list, format "rel_path:line_num:line".
     """
     if limit <= 0:
         return []
@@ -431,13 +431,13 @@ def _search_in_file(
 
 
 def _build_ripgrep_command(params: GrepSearchParams) -> list[str]:
-    """構建 ripgrep 命令列表。
+    """Build ripgrep command list.
 
     Args:
-        params: grep 搜尋參數。
+        params: grep search parameters.
 
     Returns:
-        ripgrep 命令列表。
+        ripgrep command list.
     """
     cmd = ["rg", "--line-number", "--no-heading", "--color=never"]
 
@@ -458,13 +458,13 @@ def _build_ripgrep_command(params: GrepSearchParams) -> list[str]:
 
 
 def _process_ripgrep_output(stdout: str) -> str:
-    """處理 ripgrep 輸出並截斷至上限。
+    """Process ripgrep output and truncate to limit.
 
     Args:
-        stdout: ripgrep 的 stdout 輸出。
+        stdout: ripgrep stdout output.
 
     Returns:
-        處理後的輸出字串。
+        Processed output string.
     """
     output = stdout.strip()
     if not output:
@@ -480,17 +480,17 @@ def _process_ripgrep_output(stdout: str) -> str:
 
 
 def _try_ripgrep(params: GrepSearchParams) -> str:
-    """嘗試使用 ripgrep 執行搜尋。
+    """Try to execute search using ripgrep.
 
     Args:
-        params: grep 搜尋參數。
+        params: grep search parameters.
 
     Returns:
-        搜尋結果字串。
+        Search result string.
 
     Raises:
-        FileNotFoundError: ripgrep 不可用或執行失敗。
-        subprocess.TimeoutExpired: 搜尋超時。
+        FileNotFoundError: ripgrep not available or execution failed.
+        subprocess.TimeoutExpired: Search timed out.
     """
     cmd = _build_ripgrep_command(params)
 
@@ -512,7 +512,7 @@ def _try_ripgrep(params: GrepSearchParams) -> str:
 
 
 def grep_search_handler(params: GrepSearchParams) -> str:
-    """grep_search 工具實作（使用 ripgrep 或 fallback 到 Python re）。"""
+    """grep_search tool implementation (uses ripgrep or fallback to Python re)."""
     try:
         return _try_ripgrep(params)
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -522,11 +522,11 @@ def grep_search_handler(params: GrepSearchParams) -> str:
 
 
 def _grep_search_python_fallback(params: GrepSearchParams) -> str:
-    """純 Python 的 grep 實作（當 ripgrep 不可用時）。"""
-    # 編譯 pattern
+    """Pure Python grep implementation (when ripgrep not available)."""
+    # Compile pattern
     pattern = _compile_search_pattern(params.query, params.case_sensitive)
     if isinstance(pattern, str):
-        # 編譯失敗，返回錯誤訊息
+        # Compilation failed, return error message
         return pattern
 
     matches: list[str] = []
@@ -560,7 +560,7 @@ def _grep_search_python_fallback(params: GrepSearchParams) -> str:
 
 
 def report_back_handler(explanation: str, files: dict[str, list[list[int]]]) -> dict[str, Any]:
-    """report_back 工具實作，直接回傳結構化結果。"""
+    """report_back tool implementation, returns structured result directly."""
     return {
         "explanation": explanation,
         "files": files,
@@ -570,12 +570,12 @@ def report_back_handler(explanation: str, files: dict[str, list[list[int]]]) -> 
 def truncate_for_context(
     text: str, max_chars: int = MAX_TOOL_RESULT_CHARS, tool_hint: str = ""
 ) -> str:
-    """截斷過長的 tool result 以避免 context overflow。
+    """Truncate overly long tool result to avoid context overflow.
 
     Args:
-        text: 要截斷的文字。
-        max_chars: 最大字元數。
-        tool_hint: 截斷時顯示的工具提示訊息。
+        text: Text to truncate.
+        max_chars: Maximum characters.
+        tool_hint: Tool hint message shown when truncated.
     """
     if len(text) <= max_chars:
         return text
@@ -587,13 +587,13 @@ def truncate_for_context(
 
 
 def estimate_context_size(messages: list[dict[str, Any]]) -> int:
-    """估算 messages 的總字元數。"""
+    """Estimate total character count of messages."""
     total = 0
     for msg in messages:
         content = msg.get("content", "")
         if isinstance(content, str):
             total += len(content)
-        # tool_calls 也佔空間
+        # tool_calls also take space
         tool_calls = msg.get("tool_calls", [])
         for tc in tool_calls:
             func = tc.get("function", {})
@@ -607,10 +607,10 @@ def estimate_context_size(messages: list[dict[str, Any]]) -> int:
 BASH_TIMEOUT_SECONDS = 30
 BASH_MAX_OUTPUT_CHARS = 50000
 
-# 阻止危險命令（黑名單）
+# Block dangerous commands (blacklist)
 BASH_BLOCKED_COMMANDS = frozenset(
     {
-        # 檔案修改
+        # File modification
         "rm",
         "rmdir",
         "unlink",
@@ -627,7 +627,7 @@ BASH_BLOCKED_COMMANDS = frozenset(
         "truncate",
         "ln",
         "mkfifo",
-        # 網路存取
+        # Network access
         "wget",
         "curl",
         "fetch",
@@ -642,16 +642,16 @@ BASH_BLOCKED_COMMANDS = frozenset(
         "netcat",
         "ncat",
         "socat",
-        # 權限提升
+        # Privilege escalation
         "sudo",
         "su",
         "doas",
         "pkexec",
-        # 程序控制
+        # Process control
         "kill",
         "killall",
         "pkill",
-        # 系統管理
+        # System administration
         "reboot",
         "shutdown",
         "halt",
@@ -662,12 +662,12 @@ BASH_BLOCKED_COMMANDS = frozenset(
         "usermod",
         "passwd",
         "crontab",
-        # 危險工具
+        # Dangerous tools
         "dd",
         "eval",
         "exec",
         "source",
-        # 封裝管理（可能觸發網路/安裝）
+        # Package management (may trigger network/ installation)
         "make",
         "cmake",
         "ninja",
@@ -679,22 +679,22 @@ BASH_BLOCKED_COMMANDS = frozenset(
 )
 
 
-# 阻止危險模式（防止繞過）
+# Block dangerous patterns (prevent bypass)
 BASH_BLOCKED_PATTERNS = [
-    r">\s*[^&]",  # 重導向寫入
-    r">>\s*",  # 附加寫入
-    r"\|",  # 管道（可能繞過限制）
-    r"`",  # 命令替換
-    r"\$\(",  # 命令替換
-    r";\s*\w",  # 命令串接
-    r"&&",  # 條件執行
-    r"\|\|",  # 條件執行
-    r"-exec\b",  # find -exec（可能執行危險命令）
+    r">\s*[^&]",  # Redirect write
+    r">>\s*",  # Append write
+    r"\|",  # Pipe (may bypass restrictions)
+    r"`",  # Command substitution
+    r"\$\(",  # Command substitution
+    r";\s*\w",  # Command chaining
+    r"&&",  # Conditional execution
+    r"\|\|",  # Conditional execution
+    r"-exec\b",  # find -exec (may execute dangerous commands)
     r"-delete\b",  # find -delete
-    r"\bsed\b.*-i",  # sed in-place 編輯
+    r"\bsed\b.*-i",  # sed in-place edit
 ]
 
-# Git 允許的 read-only 子命令（白名單策略）
+# Git allowed read-only subcommands (whitelist strategy)
 GIT_ALLOWED_SUBCOMMANDS = frozenset(
     {
         "log",
@@ -718,7 +718,7 @@ GIT_ALLOWED_SUBCOMMANDS = frozenset(
     }
 )
 
-# 允許的讀取命令（白名單：用於阻止未知命令）
+# Allowed read commands (whitelist: block unknown commands)
 BASH_SAFE_COMMANDS = frozenset(
     {
         "ls",
@@ -758,9 +758,9 @@ BASH_SAFE_COMMANDS = frozenset(
     }
 )
 
-# Python 危險模式（用於檢查 python -c 命令中的危險操作）
+# Python dangerous patterns (check dangerous operations in python -c commands)
 PYTHON_DANGEROUS_PATTERNS = [
-    # 檔案操作
+    # File operations
     (r"open\s*\(", "file operations"),
     (r"\bwrite\s*\(", "write operations"),
     (r"\bremove\s*\(", "file removal"),
@@ -770,7 +770,7 @@ PYTHON_DANGEROUS_PATTERNS = [
     (r"\bmkdir\s*\(", "directory creation"),
     (r"\bchmod\s*\(", "permission change"),
     (r"\bchown\s*\(", "ownership change"),
-    # 模組匯入（危險）
+    # Module imports (dangerous)
     (r"os\.remove", "os.remove"),
     (r"os\.unlink", "os.unlink"),
     (r"os\.rmdir", "os.rmdir"),
@@ -781,13 +781,13 @@ PYTHON_DANGEROUS_PATTERNS = [
     (r"shutil\.copy", "shutil.copy"),
     (r"pathlib", "pathlib (file operations)"),
     (r"subprocess", "subprocess execution"),
-    # 網路操作
+    # Network operations
     (r"urllib", "network access"),
     (r"requests\.", "network access"),
     (r"http\.client", "network access"),
     (r"http\.server", "network access"),
     (r"socket", "network access"),
-    # 危險內建函式
+    # Dangerous built-in functions
     (r"\beval\s*\(", "eval"),
     (r"\bexec\s*\(", "exec"),
     (r"__import__", "__import__"),
@@ -796,13 +796,13 @@ PYTHON_DANGEROUS_PATTERNS = [
 
 
 def _is_traversal_token(token: str) -> bool:
-    """檢查 token 是否為路徑穿越模式。
+    """Check if token is a path traversal pattern.
 
     Args:
-        token: 待檢查的 token。
+        token: Token to check.
 
     Returns:
-        True 若為路徑穿越模式。
+        True if it's a path traversal pattern.
     """
     if token in ("..", "./..", ".\\.."):
         return True
@@ -814,31 +814,31 @@ def _is_traversal_token(token: str) -> bool:
 
 
 def _check_absolute_paths(tokens: list[str]) -> tuple[bool, str]:
-    """檢查 tokens 中的絕對路徑是否安全。
+    """Check if absolute paths in tokens are safe.
 
     Args:
-        tokens: 命令 tokens。
+        tokens: Command tokens.
 
     Returns:
-        (is_blocked, reason) tuple。
+        (is_blocked, reason) tuple.
     """
     for token in tokens:
         if token.startswith("/"):
             if token == "/repo" or token.startswith("/repo/"):  # nosec B105
                 continue
-            # 阻止存取系統目錄
+            # Block access to system directories
             return True, f"Absolute path outside /repo not allowed: {token}"
     return False, ""
 
 
 def _check_blocked_patterns(command: str) -> tuple[bool, str]:
-    """檢查命令中的危險模式（pipe, redirect, command substitution 等）。
+    """Check for dangerous patterns in command (pipe, redirect, command substitution, etc.).
 
     Args:
-        command: 待檢查的命令字串。
+        command: Command string to check.
 
     Returns:
-        (is_blocked, reason) tuple。
+        (is_blocked, reason) tuple.
     """
     for pattern in BASH_BLOCKED_PATTERNS:
         if re.search(pattern, command):
@@ -852,69 +852,69 @@ def _check_blocked_patterns(command: str) -> tuple[bool, str]:
 
 
 def _check_path_safety(command: str, tokens: list[str]) -> tuple[bool, str]:
-    """檢查路徑穿越和絕對路徑安全性。
+    """Check path traversal and absolute path safety.
 
     Args:
-        command: 原始命令字串。
-        tokens: 命令 tokens。
+        command: Original command string.
+        tokens: Command tokens.
 
     Returns:
-        (is_blocked, reason) tuple。
+        (is_blocked, reason) tuple.
     """
-    # 檢查路徑穿越
+    # Check path traversal
     if "../" in command or "..\\" in command:
         return True, "Path traversal pattern detected"
 
     if any(_is_traversal_token(t) for t in tokens):
         return True, "Path traversal pattern detected"
 
-    # 檢查絕對路徑
+    # Check absolute paths
     return _check_absolute_paths(tokens)
 
 
 def _check_git_subcommand(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
-    """檢查 git 子命令是否在白名單中。
+    """Check if git subcommand is in whitelist.
 
     Args:
-        tokens: 命令 tokens。
-        base_cmd: 基本命令（應為 'git'）。
+        tokens: Command tokens.
+        base_cmd: Base command (should be 'git').
 
     Returns:
-        (is_blocked, reason) tuple。
+        (is_blocked, reason) tuple.
     """
     if base_cmd != "git":
         return False, ""
 
-    # 特殊處理 git（白名單策略：僅允許明確的 read-only 子命令）
+    # Special handling for git (whitelist strategy: only allow explicit read-only subcommands)
     for token in tokens[1:]:
         if token.startswith("-"):
             continue
         if token not in GIT_ALLOWED_SUBCOMMANDS:
             return True, f"Git subcommand not in allowlist: {token}"
-        # 找到第一個非 flag 的 token 即為子命令，檢查完畢
+        # Found first non-flag token which is the subcommand, check complete
         break
 
     return False, ""
 
 
 def _check_python_code(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
-    """檢查 python -c 代碼中的危險操作。
+    """Check for dangerous operations in python -c code.
 
     Args:
-        tokens: 命令 tokens。
-        base_cmd: 基本命令（應為 'python' 或 'python3'）。
+        tokens: Command tokens.
+        base_cmd: Base command (should be 'python' or 'python3').
 
     Returns:
-        (is_blocked, reason) tuple。
+        (is_blocked, reason) tuple.
     """
     if base_cmd not in ("python", "python3"):
         return False, ""
 
-    # 特殊處理 python（僅允許 -c，且檢查危險模式）
+    # Special handling for python (only allow -c, and check dangerous patterns)
     if len(tokens) < 3 or tokens[1] != "-c":
         return True, "Python without -c flag is not allowed (prevents script execution)"
 
-    # 檢查 -c 中的危險模式（涵蓋所有可能的檔案修改與網路操作）
+    # Check dangerous patterns in -c code (covers all possible file modification and network operations)
     python_code = " ".join(tokens[2:])
     for pattern, desc in PYTHON_DANGEROUS_PATTERNS:
         if re.search(pattern, python_code, re.IGNORECASE):
@@ -924,13 +924,13 @@ def _check_python_code(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
 
 
 def _check_command_in_arguments(tokens: list[str]) -> tuple[bool, str]:
-    """檢查參數中是否藏有危險命令。
+    """Check if dangerous commands are hidden in arguments.
 
     Args:
-        tokens: 命令 tokens。
+        tokens: Command tokens.
 
     Returns:
-        (is_blocked, reason) tuple。
+        (is_blocked, reason) tuple.
     """
     for token in tokens[1:]:
         if token.startswith("-"):
@@ -943,13 +943,13 @@ def _check_command_in_arguments(tokens: list[str]) -> tuple[bool, str]:
 
 
 def _parse_command_tokens(command: str) -> list[str]:
-    """解析命令為 tokens。
+    """Parse command into tokens.
 
     Args:
-        command: 命令字串。
+        command: Command string.
 
     Returns:
-        token 列表。
+        Token list.
     """
     import shlex
 
@@ -960,13 +960,13 @@ def _parse_command_tokens(command: str) -> list[str]:
 
 
 def _validate_command_base(base_cmd: str) -> tuple[bool, str]:
-    """驗證命令基本安全性（黑白名單）。
+    """Validate command base security (blacklist/whitelist).
 
     Args:
-        base_cmd: 基本命令名稱。
+        base_cmd: Base command name.
 
     Returns:
-        (is_blocked, reason) tuple。
+        (is_blocked, reason) tuple.
     """
     if base_cmd in BASH_BLOCKED_COMMANDS:
         return True, f"Blocked command: {base_cmd}"
@@ -978,14 +978,14 @@ def _validate_command_base(base_cmd: str) -> tuple[bool, str]:
 
 
 def _validate_specialized_commands(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
-    """驗證特殊命令（git, python）和參數。
+    """Validate specialized commands (git, python) and arguments.
 
     Args:
-        tokens: 命令 tokens。
-        base_cmd: 基本命令名稱。
+        tokens: Command tokens.
+        base_cmd: Base command name.
 
     Returns:
-        (is_blocked, reason) tuple。
+        (is_blocked, reason) tuple.
     """
     blocked, reason = _check_git_subcommand(tokens, base_cmd)
     if blocked:
@@ -999,52 +999,52 @@ def _validate_specialized_commands(tokens: list[str], base_cmd: str) -> tuple[bo
 
 
 def _is_blocked_command(command: str, base_dir: str) -> tuple[bool, str]:
-    """檢查命令是否違反安全規則。
+    """Check if command violates security rules.
 
     Args:
-        command: 待執行的 bash 命令。
-        base_dir: 命令執行的基準目錄。
+        command: Bash command to execute.
+        base_dir: Base directory for command execution.
 
     Returns:
-        (is_blocked, reason) tuple。
+        (is_blocked, reason) tuple.
     """
     command_stripped = command.strip()
     if not command_stripped:
         return True, "Empty command"
 
-    # 檢查危險模式
+    # Check dangerous patterns
     blocked, reason = _check_blocked_patterns(command)
     if blocked:
         return blocked, reason
 
-    # 解析命令 tokens
+    # Parse command tokens
     tokens = _parse_command_tokens(command)
     if not tokens:
         return True, "Empty command after parsing"
 
-    # 檢查路徑安全
+    # Check path safety
     blocked, reason = _check_path_safety(command, tokens)
     if blocked:
         return blocked, reason
 
-    # 驗證基本命令
+    # Validate base command
     base_cmd = os.path.basename(tokens[0])
     blocked, reason = _validate_command_base(base_cmd)
     if blocked:
         return blocked, reason
 
-    # 驗證特殊命令
+    # Validate specialized commands
     return _validate_specialized_commands(tokens, base_cmd)
 
 
 def _format_bash_result(result: subprocess.CompletedProcess) -> str:
-    """格式化 bash 執行結果。
+    """Format bash execution result.
 
     Args:
-        result: subprocess.CompletedProcess 物件。
+        result: subprocess.CompletedProcess object.
 
     Returns:
-        格式化後的輸出字串。
+        Formatted output string.
     """
     stdout = result.stdout or ""
     stderr = result.stderr or ""
@@ -1065,17 +1065,17 @@ def _format_bash_result(result: subprocess.CompletedProcess) -> str:
 
 
 def bash_handler(command: str, base_dir: str) -> str:
-    """執行 read-only bash 命令（Unix-only）。
+    """Execute read-only bash command (Unix-only).
 
     Platform:
-        Unix/Linux/macOS only. Windows 不支援（無 bash）。
+        Unix/Linux/macOS only. Windows not supported (no bash).
 
     Args:
-        command: 待執行的 bash 命令。
-        base_dir: 命令執行的工作目錄。
+        command: Bash command to execute.
+        base_dir: Working directory for command execution.
 
     Returns:
-        命令輸出或錯誤訊息。
+        Command output or error message.
     """
     blocked, reason = _is_blocked_command(command, base_dir)
 

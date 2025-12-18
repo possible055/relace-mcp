@@ -5,7 +5,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Instant Apply endpoint（支援 env 覆寫）
+# Instant Apply endpoint (supports env override)
 RELACE_ENDPOINT = os.getenv(
     "RELACE_ENDPOINT",
     "https://instantapply.endpoint.relace.run/v1/code/apply",
@@ -24,17 +24,17 @@ RELACE_SEARCH_MODEL = os.getenv("RELACE_SEARCH_MODEL", "relace-search")
 SEARCH_TIMEOUT_SECONDS = float(os.getenv("RELACE_SEARCH_TIMEOUT_SECONDS", "120.0"))
 SEARCH_MAX_TURNS = int(os.getenv("RELACE_SEARCH_MAX_TURNS", "6"))
 
-# Strict mode：強制安全設定
+# Strict mode: enforce safe settings
 RELACE_STRICT_MODE = os.getenv("RELACE_STRICT_MODE", "0") == "1"
 
-# EXPERIMENTAL: Post-check 驗證（驗證 merged_code 語意正確性，預設關閉）
+# EXPERIMENTAL: Post-check validation (validates merged_code semantic correctness, disabled by default)
 EXPERIMENTAL_POST_CHECK = os.getenv("RELACE_EXPERIMENTAL_POST_CHECK", "").lower() in (
     "1",
     "true",
     "yes",
 )
 
-# EXPERIMENTAL: 本地檔案日誌（預設關閉）
+# EXPERIMENTAL: Local file logging (disabled by default)
 EXPERIMENTAL_LOGGING = os.getenv("RELACE_EXPERIMENTAL_LOGGING", "").lower() in (
     "1",
     "true",

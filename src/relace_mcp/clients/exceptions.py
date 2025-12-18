@@ -4,7 +4,7 @@ import httpx
 
 
 class RelaceAPIError(Exception):
-    """Relace API 錯誤。"""
+    """Relace API error."""
 
     def __init__(
         self,
@@ -23,26 +23,26 @@ class RelaceAPIError(Exception):
 
 
 class RelaceNetworkError(Exception):
-    """網路層錯誤，可重試。"""
+    """Network layer error, retryable."""
 
 
 class RelaceTimeoutError(RelaceNetworkError):
-    """請求逾時，可重試。"""
+    """Request timeout, retryable."""
 
 
 def raise_for_status(resp: httpx.Response) -> None:
-    """根據 HTTP status 拋出對應的 RelaceAPIError。
+    """Raise corresponding RelaceAPIError based on HTTP status.
 
     Args:
-        resp: httpx Response 物件。
+        resp: httpx Response object.
 
     Raises:
-        RelaceAPIError: 當 HTTP status 非 2xx 時拋出。
+        RelaceAPIError: Raised when HTTP status is not 2xx.
     """
     if resp.is_success:
         return
 
-    # 解析錯誤回應
+    # Parse error response
     code = "unknown"
     message = resp.text
 
@@ -54,7 +54,7 @@ def raise_for_status(resp: httpx.Response) -> None:
     except (json.JSONDecodeError, TypeError):
         pass
 
-    # 判斷是否可重試
+    # Determine if retryable
     retryable = False
     retry_after: float | None = None
 

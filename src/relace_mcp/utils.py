@@ -1,19 +1,19 @@
 import os
 from pathlib import Path
 
-# 檔案大小上限（10MB），避免記憶體耗盡
+# File size limit (10MB) to prevent memory exhaustion
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
 
 def normalize_repo_path(path: str, base_dir: str) -> str:
-    """正規化路徑，支援 /repo/... 虛擬根目錄格式。
+    """Normalize path, supporting /repo/... virtual root format.
 
     Args:
-        path: 輸入路徑，可為 /repo/...、相對路徑、或絕對路徑。
-        base_dir: 實際的 repo root 目錄。
+        path: Input path, can be /repo/..., relative path, or absolute path.
+        base_dir: The actual repo root directory.
 
     Returns:
-        正規化後的絕對路徑字串。
+        Normalized absolute path string.
     """
     if not path or not path.strip():
         return path

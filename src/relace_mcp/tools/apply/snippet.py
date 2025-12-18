@@ -2,15 +2,15 @@ import re
 
 
 def is_truncation_placeholder(line: str) -> bool:
-    """判斷是否為截斷用的 placeholder（省略標記）。
+    """Determine if line is a truncation placeholder (ellipsis marker).
 
-    注意：// remove Block 是 directive，不是 placeholder。
+    Note: // remove Block is a directive, not a placeholder.
 
     Args:
-        line: 要檢查的行。
+        line: The line to check.
 
     Returns:
-        若為 placeholder 則返回 True，否則 False。
+        True if it's a placeholder, False otherwise.
     """
     s = line.strip()
     if not s:
@@ -21,33 +21,33 @@ def is_truncation_placeholder(line: str) -> bool:
 
 
 def concrete_lines(text: str) -> list[str]:
-    """回傳非 placeholder 的行（包含 remove directive）。
+    """Return non-placeholder lines (including remove directives).
 
     Args:
-        text: 編輯片段文字。
+        text: Edit snippet text.
 
     Returns:
-        非 placeholder 的行列表。
+        List of non-placeholder lines.
     """
     return [line for line in text.splitlines() if not is_truncation_placeholder(line)]
 
 
 def should_run_anchor_precheck(edit_snippet: str, instruction: str | None) -> bool:
-    """判斷是否應該執行 anchor precheck。
+    """Determine if anchor precheck should be run.
 
-    對所有既有檔案編輯都執行 precheck（fail-fast 策略）。
-    僅允許含有明確位置 directive 的 instruction 跳過。
+    Runs precheck for all existing file edits (fail-fast strategy).
+    Only allows skipping for instructions with explicit position directives.
 
     Args:
-        edit_snippet: 編輯片段（未使用，保留參數以維持介面相容）。
-        instruction: 可選的 instruction。
+        edit_snippet: Edit snippet (unused, kept for interface compatibility).
+        instruction: Optional instruction.
 
     Returns:
-        是否應該執行 precheck。
+        Whether precheck should be run.
     """
-    _ = edit_snippet  # 保留參數以維持介面相容
+    _ = edit_snippet  # Kept for interface compatibility
 
-    # 檢查 instruction 是否含有明確位置 directive
+    # Check if instruction contains explicit position directive
     if instruction:
         instruction_lower = instruction.lower()
         position_directives = (
@@ -59,31 +59,31 @@ def should_run_anchor_precheck(edit_snippet: str, instruction: str | None) -> bo
             "insert at the end",
         )
         if any(directive in instruction_lower for directive in position_directives):
-            # 明確位置 directive，允許跳過 precheck
+            # Explicit position directive, allow skipping precheck
             return False
 
-    # 對所有既有檔案編輯都執行 precheck
+    # Run precheck for all existing file edits
     return True
 
 
 def anchor_precheck(concrete_lines_list: list[str], initial_code: str) -> bool:
-    """檢查 concrete lines 是否至少有足夠的 anchor 能在 initial_code 中定位。
+    """Check if concrete lines have sufficient anchors to locate in initial_code.
 
-    使用寬鬆比對（strip() 後），避免因縮排/空白差異被誤判。
-    過濾太短的行（如 }、return）以避免誤判命中。
+    Uses loose matching (after strip()) to avoid false negatives from indentation/whitespace differences.
+    Filters out short lines (like }, return) to avoid false positives.
 
     Args:
-        concrete_lines_list: 非 placeholder 的行。
-        initial_code: 原始檔案內容。
+        concrete_lines_list: Non-placeholder lines.
+        initial_code: Original file content.
 
     Returns:
-        若至少命中 2 行有效 anchor 則 True，否則 False。
+        True if at least 2 valid anchors are found, False otherwise.
     """
     if not concrete_lines_list:
         return False
 
-    # 過濾掉純 directive 行（如 "// remove BlockName"）
-    # 這些行不應該用來定位 anchor
+    # Filter out pure directive lines (like "// remove BlockName")
+    # These should not be used for anchor positioning
     directive_patterns = ("// remove ", "# remove ")
     anchor_lines = [
         line
@@ -92,23 +92,25 @@ def anchor_precheck(concrete_lines_list: list[str], initial_code: str) -> bool:
     ]
 
     if not anchor_lines:
-        # 只有 directive，沒有真實 anchor
+        # Only directives, no real anchors
         return False
 
-    # 統計命中的有效 anchor 數量
-    MIN_ANCHOR_LENGTH = 10  # 最短有效 anchor 長度（避免 }、return 等短行誤判）
-    MIN_ANCHOR_HITS = 2  # 最少需要命中的 anchor 數量
+    # Count valid anchor hits
+    MIN_ANCHOR_LENGTH = (
+        10  # Minimum valid anchor length (avoid false positives from }, return, etc.)
+    )
+    MIN_ANCHOR_HITS = 2  # Minimum number of anchor hits required
 
     hit_count = 0
     for line in anchor_lines:
         stripped = line.strip()
-        # 只計算足夠長的行，避免 }、return、pass 等短行誤判
+        # Only count sufficiently long lines to avoid false positives from }, return, pass, etc.
         if len(stripped) >= MIN_ANCHOR_LENGTH and stripped in initial_code:
             hit_count += 1
             if hit_count >= MIN_ANCHOR_HITS:
                 return True
 
-    # 如果只有一個有效 anchor 但它足夠特殊（長度 >= 20），也接受
+    # If only one valid anchor but it's sufficiently unique (length >= 20), accept it
     if hit_count == 1:
         for line in anchor_lines:
             stripped = line.strip()
@@ -119,19 +121,19 @@ def anchor_precheck(concrete_lines_list: list[str], initial_code: str) -> bool:
 
 
 def _is_trivial_line(line: str) -> bool:
-    """判斷是否為不具辨識度的短行（語法關鍵字/符號）。
+    """Determine if line is a non-distinctive short line (syntax keywords/symbols).
 
-    這些行在程式碼中太常見，不應用於判斷是否預期變更。
+    These lines are too common in code and should not be used to determine expected changes.
     """
     trivial_tokens = {
-        # 括號/符號
+        # Brackets/symbols
         "}",
         "{",
         "]",
         "[",
         ")",
         "(",
-        # Python 關鍵字
+        # Python keywords
         "pass",
         "break",
         "continue",
@@ -147,7 +149,7 @@ def _is_trivial_line(line: str) -> bool:
         "break;",
         "continue;",
         "default:",
-        # 常見短語句
+        # Common short statements
         "return null",
         "return null;",
         "return true",
@@ -159,73 +161,73 @@ def _is_trivial_line(line: str) -> bool:
 
 
 def expects_changes(edit_snippet: str, initial_code: str) -> bool:
-    """判斷 edit_snippet 是否預期會產生變更。
+    """Determine if edit_snippet is expected to produce changes.
 
-    用於區分「本來就相同（idempotent）」和「apply 失敗（should-have-changed）」。
+    Used to distinguish between "already identical (idempotent)" and "apply failed (should-have-changed)".
 
     Args:
-        edit_snippet: 編輯片段。
-        initial_code: 原始檔案內容。
+        edit_snippet: Edit snippet.
+        initial_code: Original file content.
 
     Returns:
-        若編輯預期會產生變更則 True，否則 False。
+        True if edit is expected to produce changes, False otherwise.
     """
     concrete = concrete_lines(edit_snippet)
 
-    # 檢查是否有 remove directive
+    # Check for remove directive
     directive_patterns = ("// remove ", "# remove ")
     has_remove_directive = any(
         line.strip().startswith(pat) for line in concrete for pat in directive_patterns
     )
 
     if has_remove_directive:
-        # 有 remove directive 但沒產生變更，應該是 apply 失敗
+        # Has remove directive but no changes produced, likely apply failure
         return True
 
-    # 建立 initial_code 的行集合（使用 strip() 後的行）
-    # 這樣可以精確比對行，而非子字串搜索
+    # Build line set from initial_code (using stripped lines)
+    # This enables exact line matching rather than substring search
     initial_lines_set = {line.strip() for line in initial_code.splitlines()}
 
-    # 擷取「不在 initial_code 中的非空白行」作為 new_lines_candidates
-    # 降低門檻到 5 字元，同時排除常見語法關鍵字/符號
+    # Extract "lines not in initial_code" as new_lines_candidates
+    # Lower threshold to 5 chars while excluding common syntax keywords/symbols
     MIN_NEW_LINE_LENGTH = 5
     new_lines_candidates = []
     for line in concrete:
         stripped = line.strip()
-        # 過濾掉空白行和 directive 行
+        # Filter out empty lines and directive lines
         if not stripped or any(stripped.startswith(pat) for pat in directive_patterns):
             continue
-        # 過濾掉太短的行和常見語法關鍵字
+        # Filter out short lines and common syntax keywords
         if len(stripped) < MIN_NEW_LINE_LENGTH:
             continue
         if _is_trivial_line(stripped):
             continue
-        # 檢查是否為新行（不在原始檔案的行集合中）
+        # Check if it's a new line (not in original file's line set)
         if stripped not in initial_lines_set:
             new_lines_candidates.append(stripped)
 
-    # 如果有新行候選且它們不在原檔案中，則預期會產生變更
+    # If there are new line candidates not in original file, expect changes
     return len(new_lines_candidates) > 0
 
 
-# EXPERIMENTAL: Post-check 相關常數
+# EXPERIMENTAL: Post-check related constants
 _REMOVE_DIRECTIVE_PATTERNS = ("// remove ", "# remove ")
 _MIN_NEW_LINE_LENGTH_FOR_CHECK = 15
-_MIN_NEW_LINE_PASS_RATIO = 0.6  # 降低門檻以減少 false positive
+_MIN_NEW_LINE_PASS_RATIO = 0.6  # Lower threshold to reduce false positives
 
 
 def extract_remove_targets(edit_snippet: str) -> list[str]:
-    """從 edit_snippet 提取 remove directive 的目標 identifier。
+    """Extract remove directive target identifiers from edit_snippet.
 
-    支援格式：
+    Supported formats:
     - // remove FunctionName
     - # remove ClassName
 
     Args:
-        edit_snippet: 編輯片段。
+        edit_snippet: Edit snippet.
 
     Returns:
-        要移除的 identifier 列表。
+        List of identifiers to remove.
     """
     targets = []
     for line in edit_snippet.splitlines():
@@ -240,14 +242,14 @@ def extract_remove_targets(edit_snippet: str) -> list[str]:
 
 
 def _extract_new_lines(edit_snippet: str, initial_code: str) -> list[str]:
-    """提取 snippet 中的「新增行」（不在 initial_code 中的行）。
+    """Extract "new lines" from snippet (lines not in initial_code).
 
     Args:
-        edit_snippet: 編輯片段。
-        initial_code: 原始檔案內容。
+        edit_snippet: Edit snippet.
+        initial_code: Original file content.
 
     Returns:
-        新增行列表（strip() 後）。
+        List of new lines (after strip()).
     """
     initial_lines_set = {line.strip() for line in initial_code.splitlines()}
     concrete = concrete_lines(edit_snippet)
@@ -274,32 +276,32 @@ def post_check_merged_code(
     merged_code: str,
     initial_code: str,
 ) -> tuple[bool, str | None]:
-    """驗證 merged_code 是否符合 edit_snippet 的預期。
+    """Validate that merged_code matches edit_snippet expectations.
 
-    檢查規則：
-    1. 新增行驗證：snippet 中的非 placeholder、非 directive、長度 >= 15 的行，
-       若不在 initial_code 中（代表是新增的），則必須出現在 merged_code。
-       至少 80% 的新增行必須出現（容許少量 reformat）。
-    2. 刪除驗證：若有 // remove X 或 # remove X directive，
-       則 X（identifier）不應出現在 merged_code 中。
+    Validation rules:
+    1. New line validation: Non-placeholder, non-directive lines with length >= 15,
+       if not in initial_code (i.e., newly added), must appear in merged_code.
+       At least 80% of new lines must be present (allowing minor reformatting).
+    2. Deletion validation: If there's a // remove X or # remove X directive,
+       X (identifier) should not appear in merged_code.
 
     Args:
-        edit_snippet: 編輯片段。
-        merged_code: Relace API 回傳的合併後程式碼。
-        initial_code: 原始檔案內容。
+        edit_snippet: Edit snippet.
+        merged_code: Merged code returned by Relace API.
+        initial_code: Original file content.
 
     Returns:
-        (passed, failure_reason): passed=True 時 failure_reason 為 None。
+        (passed, failure_reason): failure_reason is None when passed=True.
     """
-    # 1. 刪除驗證（使用 word boundary 避免子字串誤判）
+    # 1. Deletion validation (use word boundary to avoid substring false positives)
     remove_targets = extract_remove_targets(edit_snippet)
     for target in remove_targets:
-        # 使用 word boundary 匹配，避免 "Function" 匹配到 "FunctionName"
+        # Use word boundary matching to avoid "Function" matching "FunctionName"
         pattern = rf"\b{re.escape(target)}\b"
         if re.search(pattern, merged_code):
             return False, f"Remove target '{target}' still exists in merged code."
 
-    # 2. 新增行驗證
+    # 2. New line validation
     new_lines = _extract_new_lines(edit_snippet, initial_code)
     if new_lines:
         found_count = sum(1 for line in new_lines if line in merged_code)

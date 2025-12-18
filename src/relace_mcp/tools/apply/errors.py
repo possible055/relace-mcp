@@ -9,18 +9,18 @@ def recoverable_error(
     trace_id: str = "",
     timing_ms: int = 0,
 ) -> dict[str, Any]:
-    """產生可恢復錯誤的回傳訊息（結構化格式）。
+    """Generate recoverable error response message (structured format).
 
     Args:
-        error_code: 錯誤代碼（例如 INVALID_PATH, NEEDS_MORE_CONTEXT）。
-        message: 錯誤訊息。
-        path: 檔案路徑。
-        instruction: 可選的 instruction。
-        trace_id: 追蹤 ID。
-        timing_ms: 耗時（毫秒）。
+        error_code: Error code (e.g., INVALID_PATH, NEEDS_MORE_CONTEXT).
+        message: Error message.
+        path: File path.
+        instruction: Optional instruction.
+        trace_id: Trace ID.
+        timing_ms: Elapsed time (milliseconds).
 
     Returns:
-        結構化的錯誤回應。
+        Structured error response.
     """
     return {
         "status": "error",
@@ -39,27 +39,29 @@ def api_error_to_recoverable(
     trace_id: str = "",
     timing_ms: int = 0,
 ) -> dict[str, Any]:
-    """將 API 相關錯誤轉為可恢復訊息（結構化格式）。
+    """Convert API-related errors to recoverable message (structured format).
 
     Args:
-        exc: API 相關例外（RelaceAPIError / RelaceNetworkError / RelaceTimeoutError）。
-        path: 檔案路徑。
-        instruction: 可選的 instruction。
-        trace_id: 追蹤 ID。
-        timing_ms: 耗時（毫秒）。
+        exc: API-related exception (RelaceAPIError / RelaceNetworkError / RelaceTimeoutError).
+        path: File path.
+        instruction: Optional instruction.
+        trace_id: Trace ID.
+        timing_ms: Elapsed time (milliseconds).
 
     Returns:
-        結構化的可恢復錯誤回應。
+        Structured recoverable error response.
     """
     from ...clients.exceptions import RelaceAPIError, RelaceNetworkError, RelaceTimeoutError
 
     if isinstance(exc, RelaceAPIError):
         if exc.status_code in (401, 403):
             error_code = "AUTH_ERROR"
-            message = "API 認證或權限錯誤。請檢查 API key 設定。"
+            message = "API authentication or permission error. Please check API key settings."
         else:
             error_code = "API_ERROR"
-            message = "Relace API 錯誤。請簡化 edit_snippet 或增加更明確的 anchor lines。"
+            message = (
+                "Relace API error. Please simplify edit_snippet or add more explicit anchor lines."
+            )
 
         return {
             "status": "error",
@@ -82,7 +84,7 @@ def api_error_to_recoverable(
             "path": path,
             "trace_id": trace_id,
             "timing_ms": timing_ms,
-            "message": "請求逾時。請稍後重試。",
+            "message": "Request timed out. Please retry later.",
             "detail": str(exc),
         }
 
@@ -93,13 +95,13 @@ def api_error_to_recoverable(
             "path": path,
             "trace_id": trace_id,
             "timing_ms": timing_ms,
-            "message": "網路錯誤。請檢查網路連線後重試。",
+            "message": "Network error. Please check network connection and retry.",
             "detail": str(exc),
         }
 
     return recoverable_error(
         "UNKNOWN_ERROR",
-        f"未預期的錯誤：{type(exc).__name__}",
+        f"Unexpected error: {type(exc).__name__}",
         path,
         instruction,
         trace_id,

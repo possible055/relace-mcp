@@ -8,35 +8,35 @@ from .exceptions import EncodingDetectionError
 
 logger = logging.getLogger(__name__)
 
-# 優先嘗試的編碼（覆蓋 99% 使用場景）
+# Preferred encodings to try first (covers 99% of use cases)
 PREFERRED_ENCODINGS = ("utf-8", "gbk")
 
 
 def read_text_with_fallback(path: Path) -> tuple[str, str]:
-    """讀取文字檔案，自動偵測編碼。
+    """Read text file with automatic encoding detection.
 
-    優先嘗試 UTF-8 和 GBK（覆蓋絕大多數場景），
-    失敗時使用 charset_normalizer 自動偵測。
+    Tries UTF-8 and GBK first (covers most scenarios),
+    falls back to charset_normalizer auto-detection on failure.
 
     Args:
-        path: 檔案路徑。
+        path: File path.
 
     Returns:
-        (內容, 編碼) 元組。
+        (content, encoding) tuple.
 
     Raises:
-        EncodingDetectionError: 若無法偵測編碼或檔案非文字檔。
+        EncodingDetectionError: If encoding cannot be detected or file is not text.
     """
     raw = path.read_bytes()
 
-    # 優先嘗試常用編碼（快速且準確）
+    # Try preferred encodings first (fast and accurate)
     for enc in PREFERRED_ENCODINGS:
         try:
             return raw.decode(enc), enc
         except (UnicodeDecodeError, LookupError):
             continue
 
-    # Fallback：自動偵測
+    # Fallback: auto-detect
     result = from_bytes(raw)
     best = result.best()
     if best is None or best.coherence < 0.5:
@@ -45,24 +45,24 @@ def read_text_with_fallback(path: Path) -> tuple[str, str]:
 
 
 def atomic_write(path: Path, content: str, encoding: str) -> None:
-    """原子寫入檔案（使用臨時檔案 + os.replace）。
+    """Atomically write to file (using temp file + os.replace).
 
-    原子寫入可避免寫入過程中被中斷導致檔案損壞。
+    Atomic write prevents file corruption if interrupted during write.
 
     Args:
-        path: 目標檔案路徑。
-        content: 要寫入的內容。
-        encoding: 編碼。
+        path: Target file path.
+        content: Content to write.
+        encoding: Encoding.
 
     Raises:
-        OSError: 寫入失敗時拋出。
+        OSError: Raised when write fails.
     """
     temp_path = path.with_suffix(path.suffix + ".tmp")
     try:
         temp_path.write_text(content, encoding=encoding)
-        # os.replace 在 POSIX 系統上是原子操作
+        # os.replace is atomic on POSIX systems
         os.replace(temp_path, path)
     except Exception:
-        # 清理臨時檔案
+        # Clean up temp file
         temp_path.unlink(missing_ok=True)
         raise

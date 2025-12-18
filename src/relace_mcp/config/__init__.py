@@ -23,12 +23,12 @@ from .settings import (
     RelaceConfig,
 )
 
-# 載入 prompts.yaml
+# Load prompts.yaml
 _PROMPTS_PATH = Path(__file__).parent / "prompts.yaml"
 with _PROMPTS_PATH.open(encoding="utf-8") as f:
     _PROMPTS = yaml.safe_load(f)
 
-# Prompt 相關常數
+# Prompt-related constants
 SYSTEM_PROMPT: str = _PROMPTS["system_prompt"].strip()
 USER_PROMPT_TEMPLATE: str = _PROMPTS["user_prompt_template"].strip()
 BUDGET_HINT_TEMPLATE: str = _PROMPTS["budget_hint_template"].strip()

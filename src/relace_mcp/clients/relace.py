@@ -29,21 +29,21 @@ class RelaceClient:
         instruction: str | None = None,
         relace_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """呼叫 Relace API 執行 Instant apply。
+        """Call Relace API to perform Instant apply.
 
         Args:
-            initial_code: 原始檔案內容。
-            edit_snippet: 要套用的程式碼變更片段。
-            instruction: 補充說明，用來協助 disambiguation。
-            relace_metadata: 額外 metadata，會送到 Relace API 用於追蹤。
+            initial_code: Original file content.
+            edit_snippet: Code change snippet to apply.
+            instruction: Supplementary instruction for disambiguation.
+            relace_metadata: Additional metadata sent to Relace API for tracking.
 
         Returns:
-            Relace API 回傳的 JSON dict。
+            JSON dict returned by Relace API.
 
         Raises:
-            RelaceAPIError: API 錯誤（不可重試的錯誤或重試 MAX_RETRIES 次後失敗）。
-            RelaceNetworkError: 網路錯誤（已重試 MAX_RETRIES 次）。
-            RelaceTimeoutError: 請求逾時（已重試 MAX_RETRIES 次）。
+            RelaceAPIError: API error (non-retryable or failed after MAX_RETRIES).
+            RelaceNetworkError: Network error (after MAX_RETRIES attempts).
+            RelaceTimeoutError: Request timeout (after MAX_RETRIES attempts).
         """
         payload: dict[str, Any] = {
             "initial_code": initial_code,
@@ -75,7 +75,7 @@ class RelaceClient:
                     raise_for_status(resp)
                 except RelaceAPIError as exc:
                     if not exc.retryable:
-                        # 不可重試的錯誤，直接拋出
+                        # Non-retryable error, raise immediately
                         logger.error(
                             "[%s] Relace API %s (status=%d, latency=%dms): %s",
                             trace_id,
@@ -86,7 +86,7 @@ class RelaceClient:
                         )
                         raise
 
-                    # 可重試的錯誤 (429, 423, 5xx)
+                    # Retryable error (429, 423, 5xx)
                     last_exc = exc
                     logger.warning(
                         "[%s] Relace API %s (status=%d, latency=%dms, attempt=%d/%d)",
@@ -104,7 +104,7 @@ class RelaceClient:
                         continue
                     raise
 
-                # 成功
+                # Success
                 logger.info(
                     "[%s] Relace API success (status=%d, latency=%dms)",
                     trace_id,
@@ -115,7 +115,7 @@ class RelaceClient:
                 try:
                     return resp.json()
                 except ValueError as exc:
-                    # 2xx 但非 JSON 是服務端異常行為，非用戶端驗證錯誤
+                    # 2xx but non-JSON is abnormal server behavior, not client validation error
                     logger.error(
                         "[%s] Relace API returned non-JSON response (status=%d)",
                         trace_id,

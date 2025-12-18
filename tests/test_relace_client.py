@@ -45,7 +45,7 @@ class TestRelaceClientApply:
             instruction="Add logging to the function",
         )
 
-        # 驗證 payload 包含 instruction
+        # Verify payload contains instruction
         call_args = mock_httpx_success.post.call_args
         payload = call_args.kwargs.get("json") or call_args[1].get("json")
         assert payload["instruction"] == "Add logging to the function"
@@ -158,7 +158,7 @@ class TestRelaceClientErrors:
         with pytest.raises(RelaceAPIError) as exc_info:
             client.apply(initial_code="code", edit_snippet="snippet")
 
-        # 401 錯誤不可重試
+        # 401 error is not retryable
         assert exc_info.value.status_code == 401
         assert not exc_info.value.retryable
 
@@ -202,7 +202,7 @@ class TestRelaceClientErrors:
             with pytest.raises(RelaceAPIError, match="non-JSON response") as exc_info:
                 client.apply(initial_code="code", edit_snippet="snippet")
 
-            # 非 JSON 回應可重試
+            # Non-JSON response is retryable
             assert exc_info.value.retryable
 
 
@@ -227,7 +227,7 @@ class TestRelaceClientTimeout:
 
             client.apply(initial_code="code", edit_snippet="snippet")
 
-            # 驗證 Client 建立時使用了正確的 timeout
+            # Verify Client was created with correct timeout
             mock_client_class.assert_called_once_with(timeout=TIMEOUT_SECONDS)
 
 
@@ -259,16 +259,16 @@ class TestRelaceClientRetry:
                 with pytest.raises(RelaceAPIError) as exc_info:
                     client.apply(initial_code="code", edit_snippet="snippet")
 
-                # 驗證 429 錯誤可重試且有 retry_after
+                # Verify 429 error is retryable with retry_after
                 assert exc_info.value.status_code == 429
                 assert exc_info.value.retryable
                 assert exc_info.value.retry_after == 2.5
 
-                # 驗證 sleep 使用了 retry-after 值（2.5 + jitter）
+                # Verify sleep used retry-after value (2.5 + jitter)
                 from relace_mcp.config import MAX_RETRIES
 
                 assert mock_sleep.call_count == MAX_RETRIES
-                # 第一次 sleep 應該基於 retry-after=2.5
+                # First sleep should be based on retry-after=2.5
                 first_delay = mock_sleep.call_args_list[0][0][0]
                 assert 2.5 <= first_delay < 3.0  # 2.5 + jitter(0~0.5)
 
@@ -301,16 +301,16 @@ class TestRelaceClientRetry:
                 with pytest.raises(RelaceAPIError) as exc_info:
                     client.apply(initial_code="code", edit_snippet="snippet")
 
-                # 驗證 500 錯誤可重試
+                # Verify 500 error is retryable
                 assert exc_info.value.status_code == 500
                 assert exc_info.value.retryable
 
-                # 驗證 exponential backoff：delay = BASE * 2^attempt + jitter
+                # Verify exponential backoff: delay = BASE * 2^attempt + jitter
                 assert mock_sleep.call_count == MAX_RETRIES
                 delays = [call[0][0] for call in mock_sleep.call_args_list]
-                # 第一次: BASE_DELAY * 2^0 + jitter
+                # First: BASE_DELAY * 2^0 + jitter
                 assert RETRY_BASE_DELAY <= delays[0] < RETRY_BASE_DELAY + 0.5
-                # 第二次: BASE_DELAY * 2^1 + jitter
+                # Second: BASE_DELAY * 2^1 + jitter
                 if len(delays) > 1:
                     assert RETRY_BASE_DELAY * 2 <= delays[1] < RETRY_BASE_DELAY * 2 + 0.5
 

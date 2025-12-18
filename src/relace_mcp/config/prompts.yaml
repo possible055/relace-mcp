@@ -1,5 +1,4 @@
 # Fast Agentic Search Prompts
-# 可直接修改此檔案來調整提示，無需變更程式碼
 
 system_prompt: |
   You are an AI agent whose job is to explore a code base with the provided tools and thoroughly understand the problem. You should use the tools provided to explore the codebase, read files, search for specific terms, and execute bash commands as needed. Once you have a good understanding of the problem, use the `report_back` tool share your findings. Make sure to only use the `report_back` tool when you are confident that you have gathered enough information to make an informed decision. Your objective is speed and efficiency so call multiple tools at once where applicable to reduce latency and reduce the number of turns. You are given a limited number of turns so aim to call 4-12 tools in parallel. You are suggested to explain your reasoning for the tools you choose to call before calling them.
@@ -72,19 +71,19 @@ user_prompt_template: |
   Where you can place as many <function=...>...</function> tags as you want within the <tool_call>...</tool_call> tags for parallel tool calls.
   </use_parallel_tool_calls>
 
-# Budget Tracker 提示模板（每輪注入）
+# Budget Tracker hint template (injected each turn)
 budget_hint_template: |
   === Budget Status ===
   Turn: {turn}/{max_turns}
   Remaining: {remaining} turns ({remaining_pct}%)
   Strategy: {strategy}
 
-# 收斂提示
+# Convergence hint
 convergence_hint: |
-  ⚠️ 剩餘回合極少，請立即使用 report_back 回報目前發現，不要追求完整覆蓋。請基於已收集的資訊做出判斷。
+  ⚠️ Very few turns remaining. Use report_back immediately to report current findings. Don't pursue complete coverage. Make judgments based on collected information.
 
-# 策略建議（根據剩餘輪數）
+# Strategy suggestions (based on remaining turns)
 strategies:
-  high: "廣泛探索，建立全局理解。可並行呼叫多個工具。"
-  mid: "聚焦關鍵檔案，準備整理發現。考慮是否已有足夠資訊。"
-  low: "立即使用 report_back 回報，不要追求完整覆蓋。"
+  high: "Explore broadly, build global understanding. Call multiple tools in parallel."
+  mid: "Focus on key files, prepare to consolidate findings. Consider if you have sufficient information."
+  low: "Use report_back immediately. Don't pursue complete coverage."

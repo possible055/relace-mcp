@@ -9,12 +9,12 @@ from ...config import EXPERIMENTAL_LOGGING, LOG_PATH, MAX_LOG_SIZE_BYTES
 
 logger = logging.getLogger(__name__)
 
-# Log rotation：保留的舊 log 數量上限
+# Log rotation: maximum number of old logs to keep
 MAX_ROTATED_LOGS = 5
 
 
 def rotate_log_if_needed() -> None:
-    """若 log 檔案超過大小上限，進行 rotation 並清理舊檔案。"""
+    """Rotate log file if it exceeds size limit and clean up old files."""
     try:
         if LOG_PATH.exists() and LOG_PATH.stat().st_size > MAX_LOG_SIZE_BYTES:
             rotated_path = LOG_PATH.with_suffix(
@@ -23,7 +23,7 @@ def rotate_log_if_needed() -> None:
             LOG_PATH.rename(rotated_path)
             logger.info("Rotated log file to %s", rotated_path)
 
-            # 清理超過上限的舊 log 檔案
+            # Clean up old log files exceeding limit
             rotated_logs = sorted(LOG_PATH.parent.glob("relace_apply.*.log"), reverse=True)
             for old_log in rotated_logs[MAX_ROTATED_LOGS:]:
                 old_log.unlink(missing_ok=True)
@@ -33,10 +33,10 @@ def rotate_log_if_needed() -> None:
 
 
 def log_event(event: dict[str, Any]) -> None:
-    """將單筆 JSON event 寫入本地 log，失敗時不影響主流程。
+    """Write a single JSON event to local log, failures don't affect main flow.
 
     Args:
-        event: 要記錄的事件資料。
+        event: Event data to log.
     """
     if not EXPERIMENTAL_LOGGING:
         return
@@ -65,13 +65,13 @@ def log_event(event: dict[str, Any]) -> None:
 def log_create_success(
     trace_id: str, resolved_path: Path, edit_snippet: str, instruction: str | None
 ) -> None:
-    """記錄新檔案創建成功。
+    """Log successful new file creation.
 
     Args:
-        trace_id: 追蹤 ID。
-        resolved_path: 解析後的檔案路徑。
-        edit_snippet: 編輯片段。
-        instruction: 可選的 instruction。
+        trace_id: Trace ID.
+        resolved_path: Resolved file path.
+        edit_snippet: Edit snippet.
+        instruction: Optional instruction.
     """
     log_event(
         {
@@ -95,16 +95,16 @@ def log_apply_success(
     instruction: str | None,
     usage: dict[str, Any],
 ) -> None:
-    """記錄編輯套用成功。
+    """Log successful edit application.
 
     Args:
-        trace_id: 追蹤 ID。
-        started_at: 開始時間。
-        resolved_path: 解析後的檔案路徑。
-        file_size: 檔案大小。
-        edit_snippet: 編輯片段。
-        instruction: 可選的 instruction。
-        usage: API 使用資訊。
+        trace_id: Trace ID.
+        started_at: Start time.
+        resolved_path: Resolved file path.
+        file_size: File size.
+        edit_snippet: Edit snippet.
+        instruction: Optional instruction.
+        usage: API usage information.
     """
     latency_ms = int((datetime.now(UTC) - started_at).total_seconds() * 1000)
     log_event(
@@ -131,15 +131,15 @@ def log_apply_error(
     instruction: str | None,
     exc: Exception,
 ) -> None:
-    """記錄錯誤（含 latency）。
+    """Log error (with latency).
 
     Args:
-        trace_id: 追蹤 ID。
-        started_at: 開始時間。
-        file_path: 檔案路徑。
-        edit_snippet: 編輯片段。
-        instruction: 可選的 instruction。
-        exc: 例外。
+        trace_id: Trace ID.
+        started_at: Start time.
+        file_path: File path.
+        edit_snippet: Edit snippet.
+        instruction: Optional instruction.
+        exc: Exception.
     """
     latency_ms = int((datetime.now(UTC) - started_at).total_seconds() * 1000)
     log_event(

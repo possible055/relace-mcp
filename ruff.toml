@@ -6,7 +6,7 @@ exclude = [".eggs", ".git", ".ruff_cache", "__pypackages__", "dist"]
 [lint]
 select = ["E", "F", "I", "B", "UP"]
 ignore = [
-    "E501",  # 行長度檢查（交給 formatter 處理）
+    "E501",  # Line length check (handled by formatter)
 ]
 
 [lint.per-file-ignores]

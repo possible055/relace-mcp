@@ -1,5 +1,5 @@
 class ApplyError(Exception):
-    """fast_apply 工具的基礎例外類別。"""
+    """Base exception class for fast_apply tool."""
 
     error_code: str = "APPLY_ERROR"
 
@@ -9,7 +9,7 @@ class ApplyError(Exception):
 
 
 class FileTooLargeError(ApplyError):
-    """檔案超過大小限制。"""
+    """File exceeds size limit."""
 
     error_code = "FILE_TOO_LARGE"
 
@@ -20,7 +20,7 @@ class FileTooLargeError(ApplyError):
 
 
 class EncodingDetectionError(ApplyError):
-    """無法偵測檔案編碼。"""
+    """Cannot detect file encoding."""
 
     error_code = "ENCODING_ERROR"
 
@@ -30,7 +30,7 @@ class EncodingDetectionError(ApplyError):
 
 
 class ApiInvalidResponseError(ApplyError):
-    """API 回傳無效回應。"""
+    """API returned invalid response."""
 
     error_code = "API_INVALID_RESPONSE"
 
@@ -39,7 +39,7 @@ class ApiInvalidResponseError(ApplyError):
 
 
 class FileNotWritableError(ApplyError):
-    """檔案不可寫入。"""
+    """File is not writable."""
 
     error_code = "FILE_NOT_WRITABLE"
 
@@ -49,7 +49,7 @@ class FileNotWritableError(ApplyError):
 
 
 class PostCheckFailedError(ApplyError):
-    """Post-check 驗證 merged_code 失敗。"""
+    """Post-check validation of merged_code failed."""
 
     error_code = "POST_CHECK_FAILED"
 
