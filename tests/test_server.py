@@ -105,7 +105,10 @@ class TestServerToolExecution:
                 },
             )
 
-            assert "Created" in str(result)
+            # FastMCP Client.call_tool returns CallToolResult with structured_content
+            assert result.structured_content is not None
+            assert result.structured_content["status"] == "ok"
+            assert "Created" in result.structured_content["message"]
             assert new_file.exists()
             assert new_file.read_text() == content
 

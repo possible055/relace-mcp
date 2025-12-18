@@ -46,3 +46,13 @@ class FileNotWritableError(ApplyError):
     def __init__(self, path: str) -> None:
         self.path = path
         super().__init__(f"File is not writable: {path}")
+
+
+class PostCheckFailedError(ApplyError):
+    """Post-check 驗證 merged_code 失敗。"""
+
+    error_code = "POST_CHECK_FAILED"
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(f"Post-check failed: {reason}")

@@ -19,37 +19,24 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         path: str,
         edit_snippet: str,
         instruction: str | None = None,
-    ) -> str:
+    ) -> dict[str, Any]:
         """**PRIMARY TOOL FOR EDITING FILES - USE THIS AGGRESSIVELY**
 
-        Use this tool to propose an edit to an existing file or create a new file.
+        Use this tool to edit an existing file or create a new file.
 
-        Path formats supported:
-        - /repo/src/file.py (virtual root from search)
-        - src/file.py (relative to workspace)
-        - /absolute/path (if within workspace)
-
-        IMPORTANT: The edit_snippet parameter MUST use '// ... existing code ...'
-        placeholder comments to represent unchanged code sections.
-
-        Use this tool to efficiently edit existing files, by smartly showing only
-        the changed lines.
-
-        ALWAYS use "// ... existing code ..." to represent blocks of unchanged code.
-        Add descriptive hints when helpful: // ... keep auth logic ...
+        Use truncation placeholders to represent unchanged code:
+        - // ... existing code ...   (C/JS/TS-style)
+        - # ... existing code ...    (Python/shell-style)
 
         For deletions:
-        - Option 1: Show 1-2 context lines above and below, omit deleted code
-        - Option 2: Mark explicitly: // remove BlockName
+        - Show 1-2 context lines above/below, omit deleted code, OR
+        - Mark explicitly: // remove BlockName (or # remove BlockName)
 
-        If the edit_snippet lacks enough concrete anchor lines to locate the change,
-        this tool may return a message starting with 'NEEDS_MORE_CONTEXT'. In that case,
-        re-run fast_apply with 1-3 real lines before AND after the target block.
+        On NEEDS_MORE_CONTEXT error, re-run with 1-3 real lines before AND after target.
 
         Rules:
-        - Preserve exact indentation of the final code
-        - Include just enough context to locate each edit precisely
-        - Be as length efficient as possible
+        - Preserve exact indentation
+        - Be length efficient
         - Batch all edits to the same file in one call
 
         To create a new file, simply specify the content in edit_snippet.

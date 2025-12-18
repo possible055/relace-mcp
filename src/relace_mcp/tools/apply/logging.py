@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ...config import LOG_PATH, MAX_LOG_SIZE_BYTES
+from ...config import EXPERIMENTAL_LOGGING, LOG_PATH, MAX_LOG_SIZE_BYTES
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,9 @@ def log_event(event: dict[str, Any]) -> None:
     Args:
         event: 要記錄的事件資料。
     """
+    if not EXPERIMENTAL_LOGGING:
+        return
+
     try:
         if "timestamp" not in event:
             event["timestamp"] = datetime.now(UTC).isoformat()

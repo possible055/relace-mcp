@@ -59,7 +59,9 @@ Setting `RELACE_BASE_DIR` explicitly ensures the server operates on the correct 
 
 ### `fast_apply`
 
-Apply code edits using `// ... existing code ...` placeholders:
+Apply code edits using truncation placeholders:
+- `// ... existing code ...` (C/JS/TS-style comments)
+- `# ... existing code ...` (Python/shell-style comments)
 
 ```javascript
 // ... existing code ...
@@ -130,7 +132,7 @@ Find relevant code with natural language:
 | `RELACE_SEARCH_ENDPOINT` | `https://search.endpoint.relace.run/v1/search/chat/completions` |
 | `RELACE_SEARCH_MODEL` | `relace-search` |
 | `RELACE_SEARCH_TIMEOUT_SECONDS` | `120` |
-| `RELACE_SEARCH_MAX_TURNS` | `10` |
+| `RELACE_SEARCH_MAX_TURNS` | `6` |
 
 </details>
 
@@ -161,6 +163,8 @@ Additional options: `--host` (default: `0.0.0.0`), `--path` (default: `/mcp`).
 </details>
 
 ## Logging
+
+> **Note:** File logging is experimental. Enable with `RELACE_EXPERIMENTAL_LOGGING=1`.
 
 Operation logs are written to:
 

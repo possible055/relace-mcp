@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastmcp import FastMCP
 
-from .config import LOG_PATH, RelaceConfig
+from .config import EXPERIMENTAL_LOGGING, LOG_PATH, RelaceConfig
 from .tools import register_tools
 
 logger = logging.getLogger(__name__)
@@ -25,15 +25,16 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
     else:
         results["base_dir"] = "ok"
 
-    log_dir = LOG_PATH.parent
-    try:
-        log_dir.mkdir(parents=True, exist_ok=True)
-        if not os.access(log_dir, os.W_OK):
-            errors.append(f"log directory is not writable: {log_dir}")
-        else:
-            results["log_path"] = "ok"
-    except OSError as exc:
-        errors.append(f"cannot create log directory: {exc}")
+    if EXPERIMENTAL_LOGGING:
+        log_dir = LOG_PATH.parent
+        try:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            if not os.access(log_dir, os.W_OK):
+                errors.append(f"log directory is not writable: {log_dir}")
+            else:
+                results["log_path"] = "ok"
+        except OSError as exc:
+            errors.append(f"cannot create log directory: {exc}")
 
     if not config.api_key.startswith("rlc-"):
         logger.warning("API key does not start with 'rlc-', may be invalid")

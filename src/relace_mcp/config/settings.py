@@ -27,12 +27,18 @@ SEARCH_MAX_TURNS = int(os.getenv("RELACE_SEARCH_MAX_TURNS", "6"))
 # Strict mode：強制安全設定
 RELACE_STRICT_MODE = os.getenv("RELACE_STRICT_MODE", "0") == "1"
 
-# Backup：備份機制（預設關閉）
-RELACE_BACKUP_ENABLED = os.getenv("RELACE_BACKUP_ENABLED", "0") == "1"
-BACKUP_DIR = (
-    Path(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")))
-    / "relace"
-    / "backups"
+# EXPERIMENTAL: Post-check 驗證（驗證 merged_code 語意正確性，預設關閉）
+EXPERIMENTAL_POST_CHECK = os.getenv("RELACE_EXPERIMENTAL_POST_CHECK", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
+# EXPERIMENTAL: 本地檔案日誌（預設關閉）
+EXPERIMENTAL_LOGGING = os.getenv("RELACE_EXPERIMENTAL_LOGGING", "").lower() in (
+    "1",
+    "true",
+    "yes",
 )
 
 # Logging

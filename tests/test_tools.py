@@ -59,46 +59,45 @@ class TestValidateFilePath:
 class TestLogEvent:
     """Test log_interaction function."""
 
-    def test_writes_json_line(self, tmp_path: Path) -> None:
+    def test_writes_json_line(self, mock_log_path: Path) -> None:
         """Should write JSON event to log file."""
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.logging.LOG_PATH", log_file):
-            log_event({"kind": "test", "message": "hello"})
-        content = log_file.read_text()
+        log_event({"kind": "test", "message": "hello"})
+        content = mock_log_path.read_text()
         logged = json.loads(content.strip())
         assert logged["kind"] == "test"
         assert logged["message"] == "hello"
         assert "timestamp" in logged
 
-    def test_appends_to_existing_log(self, tmp_path: Path) -> None:
+    def test_appends_to_existing_log(self, mock_log_path: Path) -> None:
         """Should append to existing log file."""
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.logging.LOG_PATH", log_file):
-            log_event({"event": 1})
-            log_event({"event": 2})
-
-        lines = log_file.read_text().strip().split("\n")
+        log_event({"event": 1})
+        log_event({"event": 2})
+        lines = mock_log_path.read_text().strip().split("\n")
         assert len(lines) == 2
 
     def test_creates_parent_directories(self, tmp_path: Path) -> None:
         """Should create parent directories if needed."""
         log_path = tmp_path / "deep" / "nested" / "dir" / "log.json"
-        with patch("relace_mcp.tools.apply.logging.LOG_PATH", log_path):
+        with (
+            patch("relace_mcp.tools.apply.logging.EXPERIMENTAL_LOGGING", True),
+            patch("relace_mcp.tools.apply.logging.LOG_PATH", log_path),
+        ):
             log_event({"test": True})
         assert log_path.exists()
 
-    def test_preserves_existing_timestamp(self, tmp_path: Path) -> None:
+    def test_preserves_existing_timestamp(self, mock_log_path: Path) -> None:
         """Should not overwrite existing timestamp."""
-        log_file = tmp_path / "test.log"
-        with patch("relace_mcp.tools.apply.logging.LOG_PATH", log_file):
-            log_event({"kind": "test", "timestamp": "2024-01-01T00:00:00Z"})
-        logged = json.loads(log_file.read_text().strip())
+        log_event({"kind": "test", "timestamp": "2024-01-01T00:00:00Z"})
+        logged = json.loads(mock_log_path.read_text().strip())
         assert logged["timestamp"] == "2024-01-01T00:00:00Z"
 
     def test_handles_log_failure_gracefully(self, tmp_path: Path) -> None:
         """Should not raise on log write failure (e.g., path is a directory)."""
         # 使用目錄作為 log 路徑會失敗，但不應拋出例外
-        with patch("relace_mcp.tools.apply.logging.LOG_PATH", tmp_path):  # tmp_path 是目錄
+        with (
+            patch("relace_mcp.tools.apply.logging.EXPERIMENTAL_LOGGING", True),
+            patch("relace_mcp.tools.apply.logging.LOG_PATH", tmp_path),
+        ):
             log_event({"test": True})  # 不應拋出例外
 
 
@@ -126,10 +125,11 @@ class TestApplyFileLogicSuccess:
             base_dir=str(tmp_path),
         )
 
-        assert "Applied code changes using Relace API" in result
-        assert "Changes made:" in result
-        assert "--- before" in result
-        assert "+++ after" in result
+        assert result["status"] == "ok"
+        assert result["message"] == "Applied code changes using Relace API."
+        assert result["diff"] is not None
+        assert "--- before" in result["diff"]
+        assert "+++ after" in result["diff"]
 
         # Verify file was written
         assert temp_source_file.read_text() == successful_api_response["mergedCode"]
@@ -176,7 +176,8 @@ class TestApplyFileLogicSuccess:
             base_dir=str(tmp_path),
         )
 
-        assert "Created" in result
+        assert result["status"] == "ok"
+        assert "Created" in result["message"]
         assert new_file.exists()
         assert new_file.read_text() == content
         # API should NOT be called for new files
@@ -205,8 +206,9 @@ class TestApplyFileLogicValidation:
             base_dir=str(tmp_path),
         )
 
-        assert "INVALID_INPUT" in result
-        assert "edit_snippet cannot be empty" in result
+        assert result["status"] == "error"
+        assert result["code"] == "INVALID_INPUT"
+        assert "edit_snippet cannot be empty" in result["message"]
 
     def test_placeholder_only_snippet_returns_error(
         self,
@@ -225,7 +227,8 @@ class TestApplyFileLogicValidation:
             base_dir=str(tmp_path),
         )
 
-        assert "NEEDS_MORE_CONTEXT" in result
+        assert result["status"] == "error"
+        assert result["code"] == "NEEDS_MORE_CONTEXT"
         mock_client.apply.assert_not_called()
 
     def test_empty_path_returns_invalid_path(
@@ -244,8 +247,9 @@ class TestApplyFileLogicValidation:
             base_dir=str(tmp_path),
         )
 
-        assert "INVALID_PATH" in result
-        assert "cannot be empty" in result
+        assert result["status"] == "error"
+        assert result["code"] == "INVALID_PATH"
+        assert "cannot be empty" in result["message"]
         mock_client.apply.assert_not_called()
 
     def test_directory_path_returns_invalid_path(
@@ -264,8 +268,9 @@ class TestApplyFileLogicValidation:
             base_dir=str(tmp_path),
         )
 
-        assert "INVALID_PATH" in result
-        assert "not a file" in result
+        assert result["status"] == "error"
+        assert result["code"] == "INVALID_PATH"
+        assert "not a file" in result["message"]
         mock_client.apply.assert_not_called()
 
     def test_delete_with_remove_directive_is_allowed(
@@ -292,7 +297,7 @@ class TestApplyFileLogicValidation:
 
         # Should call API, not return error
         mock_client.apply.assert_called_once()
-        assert "Applied code changes" in result or "No changes made" in result
+        assert result["status"] == "ok"
 
     def test_no_changes_returns_message(
         self,
@@ -314,8 +319,8 @@ class TestApplyFileLogicValidation:
             base_dir=str(tmp_path),
         )
 
-        assert "OK" in result
-        assert "No changes needed" in result or "already matches" in result
+        assert result["status"] == "ok"
+        assert "No changes needed" in result["message"] or "already matches" in result["message"]
 
 
 class TestApplyFileLogicFileSize:
@@ -338,8 +343,9 @@ class TestApplyFileLogicFileSize:
             base_dir=str(tmp_path),
         )
 
-        assert "FILE_TOO_LARGE" in result
-        assert "File too large" in result
+        assert result["status"] == "error"
+        assert result["code"] == "FILE_TOO_LARGE"
+        assert "File too large" in result["message"]
         mock_client.apply.assert_not_called()
 
     def test_file_at_limit_allowed(
@@ -365,7 +371,7 @@ class TestApplyFileLogicFileSize:
             instruction=None,
             base_dir=str(tmp_path),
         )
-        assert "Applied code changes" in result or "No changes made" in result
+        assert result["status"] == "ok"
 
 
 class TestApplyFileLogicEncoding:
@@ -388,8 +394,9 @@ class TestApplyFileLogicEncoding:
             base_dir=str(tmp_path),
         )
 
-        assert "ENCODING_ERROR" in result
-        assert "Cannot detect encoding" in result
+        assert result["status"] == "error"
+        assert result["code"] == "ENCODING_ERROR"
+        assert "Cannot detect encoding" in result["message"]
         mock_client.apply.assert_not_called()
 
     def test_gbk_file_supported(
@@ -418,7 +425,8 @@ class TestApplyFileLogicEncoding:
             base_dir=str(tmp_path),
         )
 
-        assert "Applied code changes" in result
+        assert result["status"] == "ok"
+        assert "Applied code changes" in result["message"]
         # 確認寫回的檔案仍為 GBK 編碼
         assert gbk_file.read_bytes().decode("gbk") == merged_code
 
@@ -446,8 +454,9 @@ class TestApplyFileLogicBaseDirSecurity:
                 instruction=None,
                 base_dir=str(tmp_path),
             )
-            assert "INVALID_PATH" in result
-            assert "outside allowed directory" in result
+            assert result["status"] == "error"
+            assert result["code"] == "INVALID_PATH"
+            assert "outside allowed directory" in result["message"]
             mock_client.apply.assert_not_called()
         finally:
             outside_file.unlink(missing_ok=True)
@@ -509,8 +518,9 @@ class TestApplyFileLogicApiErrors:
             base_dir=str(tmp_path),
         )
 
-        assert "API_INVALID_RESPONSE" in result
-        assert "did not return 'mergedCode'" in result
+        assert result["status"] == "error"
+        assert result["code"] == "API_INVALID_RESPONSE"
+        assert "did not return 'mergedCode'" in result["message"]
 
 
 class TestApplyFileLogicSnippetPreview:
@@ -521,15 +531,16 @@ class TestApplyFileLogicSnippetPreview:
         mock_config: RelaceConfig,
         mock_client: MagicMock,
         temp_source_file: Path,
-        successful_api_response: dict[str, Any],
         tmp_path: Path,
         mock_log_path: Path,
     ) -> None:
         """Should truncate edit_snippet to 200 chars in log."""
-        mock_client.apply.return_value = successful_api_response
+        # 長 snippet 需包含可定位的 anchor lines，且 mergedCode 應包含新增內容以通過 post_check
+        long_suffix = "x" * 500
+        long_snippet = "def hello():\n    print('Hello')\n" + long_suffix
+        merged_code = "def hello():\n    print('Hello')\n" + long_suffix
 
-        # 長 snippet 需包含可定位的 anchor lines
-        long_snippet = "def hello():\n    print('Hello')\n" + "x" * 500
+        mock_client.apply.return_value = {"mergedCode": merged_code, "usage": {}}
 
         apply_file_logic(
             client=mock_client,
@@ -577,7 +588,8 @@ class TestApplyFileLogicPathNormalization:
             base_dir=str(tmp_path),
         )
 
-        assert "Applied code changes" in result
+        assert result["status"] == "ok"
+        assert "Applied code changes" in result["message"]
         mock_client.apply.assert_called_once()
 
     def test_invalid_path_returns_error(
@@ -596,8 +608,9 @@ class TestApplyFileLogicPathNormalization:
             base_dir=str(tmp_path),
         )
 
-        assert "INVALID_PATH" in result
-        assert "outside allowed directory" in result
+        assert result["status"] == "error"
+        assert result["code"] == "INVALID_PATH"
+        assert "outside allowed directory" in result["message"]
         mock_client.apply.assert_not_called()
 
 
@@ -623,8 +636,9 @@ class TestApplyFileLogicRecoverableErrors:
             base_dir=str(tmp_path),
         )
 
-        assert "NEEDS_MORE_CONTEXT" in result
-        assert "無法在檔案中定位" in result
+        assert result["status"] == "error"
+        assert result["code"] == "NEEDS_MORE_CONTEXT"
+        assert "無法在檔案中定位" in result["message"]
         # API should NOT be called when precheck fails
         mock_client.apply.assert_not_called()
 
@@ -650,7 +664,7 @@ class TestApplyFileLogicRecoverableErrors:
             base_dir=str(tmp_path),
         )
 
-        assert "NEEDS_MORE_CONTEXT" not in result
+        assert result["status"] == "ok"
         mock_client.apply.assert_called_once()
         assert test_file.read_text() == merged
 
@@ -676,7 +690,8 @@ class TestApplyFileLogicRecoverableErrors:
                 base_dir=str(tmp_path),
             )
 
-        assert "PERMISSION_ERROR" in result
+        assert result["status"] == "error"
+        assert result["code"] == "PERMISSION_ERROR"
 
     def test_filesystem_error_returns_fs_error_on_create(
         self,
@@ -699,7 +714,8 @@ class TestApplyFileLogicRecoverableErrors:
                 base_dir=str(tmp_path),
             )
 
-        assert "FS_ERROR" in result
+        assert result["status"] == "error"
+        assert result["code"] == "FS_ERROR"
         assert not new_file.exists()
         mock_client.apply.assert_not_called()
 
@@ -727,7 +743,8 @@ class TestApplyFileLogicRecoverableErrors:
             base_dir=str(tmp_path),
         )
 
-        assert "FILE_NOT_WRITABLE" in result
+        assert result["status"] == "error"
+        assert result["code"] == "FILE_NOT_WRITABLE"
 
     def test_api_auth_error_returns_auth_error(
         self,
@@ -756,11 +773,12 @@ class TestApplyFileLogicRecoverableErrors:
             base_dir=str(tmp_path),
         )
 
-        assert "AUTH_ERROR" in result
-        assert "API 認證或權限錯誤" in result
-        assert "status: 401" in result
-        assert "code: unauthorized" in result
-        assert "Invalid API key" in result
+        assert result["status"] == "error"
+        assert result["code"] == "AUTH_ERROR"
+        assert "API 認證或權限錯誤" in result["message"]
+        assert result["detail"]["status_code"] == 401
+        assert result["detail"]["api_code"] == "unauthorized"
+        assert "Invalid API key" in result["detail"]["api_message"]
 
     def test_api_403_error_returns_auth_error(
         self,
@@ -789,8 +807,9 @@ class TestApplyFileLogicRecoverableErrors:
             base_dir=str(tmp_path),
         )
 
-        assert "AUTH_ERROR" in result
-        assert "status: 403" in result
+        assert result["status"] == "error"
+        assert result["code"] == "AUTH_ERROR"
+        assert result["detail"]["status_code"] == 403
 
     def test_api_other_4xx_returns_api_error(
         self,
@@ -819,11 +838,12 @@ class TestApplyFileLogicRecoverableErrors:
             base_dir=str(tmp_path),
         )
 
-        assert "API_ERROR" in result
-        assert "Relace API 錯誤" in result
-        assert "status: 400" in result
-        assert "code: anchor_not_found" in result
-        assert "Cannot locate anchor lines" in result
+        assert result["status"] == "error"
+        assert result["code"] == "API_ERROR"
+        assert "Relace API 錯誤" in result["message"]
+        assert result["detail"]["status_code"] == 400
+        assert result["detail"]["api_code"] == "anchor_not_found"
+        assert "Cannot locate anchor lines" in result["detail"]["api_message"]
 
     def test_network_error_returns_network_error(
         self,
@@ -847,9 +867,10 @@ class TestApplyFileLogicRecoverableErrors:
             base_dir=str(tmp_path),
         )
 
-        assert "NETWORK_ERROR" in result
-        assert "網路錯誤" in result
-        assert "Connection failed" in result
+        assert result["status"] == "error"
+        assert result["code"] == "NETWORK_ERROR"
+        assert "網路錯誤" in result["message"]
+        assert "Connection failed" in result["detail"]
 
     def test_timeout_error_returns_timeout_error(
         self,
@@ -873,9 +894,10 @@ class TestApplyFileLogicRecoverableErrors:
             base_dir=str(tmp_path),
         )
 
-        assert "TIMEOUT_ERROR" in result
-        assert "請求逾時" in result
-        assert "Request timed out" in result
+        assert result["status"] == "error"
+        assert result["code"] == "TIMEOUT_ERROR"
+        assert "請求逾時" in result["message"]
+        assert "Request timed out" in result["detail"]
 
     def test_anchor_precheck_allows_remove_directives(
         self,
@@ -904,7 +926,7 @@ class TestApplyFileLogicRecoverableErrors:
 
         # Should call API, not return NEEDS_MORE_CONTEXT
         mock_client.apply.assert_called_once()
-        assert "Applied code changes" in result or "No changes made" in result
+        assert result["status"] == "ok"
 
     def test_anchor_precheck_with_indentation_difference(
         self,
@@ -933,7 +955,7 @@ class TestApplyFileLogicRecoverableErrors:
 
         # Should pass precheck and call API
         mock_client.apply.assert_called_once()
-        assert "Applied code changes" in result or "No changes made" in result
+        assert result["status"] == "ok"
 
 
 class TestApplyNoopDetection:
@@ -964,8 +986,9 @@ class TestApplyNoopDetection:
             base_dir=str(tmp_path),
         )
 
-        assert "APPLY_NOOP" in result
-        assert "identical to initial" in result
+        assert result["status"] == "error"
+        assert result["code"] == "APPLY_NOOP"
+        assert "identical to initial" in result["message"]
 
     def test_noop_idempotent_returns_ok(
         self,
@@ -993,9 +1016,8 @@ class TestApplyNoopDetection:
             base_dir=str(tmp_path),
         )
 
-        assert "OK" in result
-        assert "No changes needed" in result or "already matches" in result
-        assert "APPLY_NOOP" not in result
+        assert result["status"] == "ok"
+        assert "No changes needed" in result["message"] or "already matches" in result["message"]
 
     def test_noop_with_remove_directive_returns_apply_noop(
         self,
@@ -1022,7 +1044,8 @@ class TestApplyNoopDetection:
             base_dir=str(tmp_path),
         )
 
-        assert "APPLY_NOOP" in result
+        assert result["status"] == "error"
+        assert result["code"] == "APPLY_NOOP"
 
     def test_noop_with_short_new_line_returns_apply_noop(
         self,
@@ -1050,7 +1073,8 @@ class TestApplyNoopDetection:
             base_dir=str(tmp_path),
         )
 
-        assert "APPLY_NOOP" in result
+        assert result["status"] == "error"
+        assert result["code"] == "APPLY_NOOP"
 
     def test_noop_with_trivial_line_returns_ok(
         self,
@@ -1079,8 +1103,7 @@ class TestApplyNoopDetection:
         )
 
         # return 是 trivial token，不視為預期變更
-        assert "OK" in result
-        assert "APPLY_NOOP" not in result
+        assert result["status"] == "ok"
 
     def test_noop_with_substring_match_returns_apply_noop(
         self,
@@ -1110,7 +1133,8 @@ class TestApplyNoopDetection:
         )
 
         # x = 1 不等於 x = 100，應偵測為預期變更
-        assert "APPLY_NOOP" in result
+        assert result["status"] == "error"
+        assert result["code"] == "APPLY_NOOP"
 
 
 class TestApplyWriteVerification:
@@ -1140,7 +1164,7 @@ class TestApplyWriteVerification:
         )
 
         # 應該成功
-        assert "OK" in result
+        assert result["status"] == "ok"
         # .tmp 檔案不應該存在（原子寫入完成後會被刪除）
         assert not (tmp_path / "test.py.tmp").exists()
         # 內容應該是新的
@@ -1179,47 +1203,9 @@ class TestApplyWriteVerification:
                 base_dir=str(tmp_path),
             )
 
-        assert "WRITE_VERIFY_FAILED" in result
-        assert "Cannot verify file content after write" in result
-
-
-class TestApplyBackup:
-    """Test optional backup mechanism (Defense: rollback safety)."""
-
-    def test_backup_file_created_when_enabled(
-        self,
-        mock_config: RelaceConfig,
-        mock_client: MagicMock,
-        tmp_path: Path,
-    ) -> None:
-        """啟用備份時，應在 BACKUP_DIR/trace_id 下建立原檔備份。"""
-        test_file = tmp_path / "test.py"
-        original = "def hello():\n    print('Hello')\n"
-        test_file.write_text(original)
-
-        merged = "def hello():\n    print('Hello, World!')\n"
-        mock_client.apply.return_value = {"mergedCode": merged, "usage": {}}
-
-        backup_root = tmp_path / "backups"
-        with (
-            patch("relace_mcp.tools.apply.file_io.RELACE_BACKUP_ENABLED", True),
-            patch("relace_mcp.tools.apply.file_io.BACKUP_DIR", backup_root),
-        ):
-            result = apply_file_logic(
-                client=mock_client,
-                file_path=str(test_file),
-                edit_snippet="def hello():\n    print('Hello')\n    print('Hello, World!')\n",
-                instruction=None,
-                base_dir=str(tmp_path),
-            )
-
-        assert "OK" in result
-        trace_dirs = [p for p in backup_root.glob("*") if p.is_dir()]
-        assert len(trace_dirs) == 1
-
-        backup_path = trace_dirs[0] / test_file.name
-        assert backup_path.exists()
-        assert backup_path.read_text() == original
+        assert result["status"] == "error"
+        assert result["code"] == "WRITE_VERIFY_FAILED"
+        assert "Cannot verify file content after write" in result["message"]
 
 
 class TestApplyResponseFormat:
@@ -1248,10 +1234,10 @@ class TestApplyResponseFormat:
             base_dir=str(tmp_path),
         )
 
-        assert "OK" in result
-        assert "path:" in result
-        assert str(test_file) in result
-        assert "trace_id:" in result
+        assert result["status"] == "ok"
+        assert result["path"] == str(test_file)
+        assert result["trace_id"] is not None
+        assert result["timing_ms"] >= 0
 
     def test_noop_response_includes_path(
         self,
@@ -1278,6 +1264,6 @@ class TestApplyResponseFormat:
             base_dir=str(tmp_path),
         )
 
-        assert "OK" in result
-        assert "path:" in result
-        assert str(test_file) in result
+        assert result["status"] == "ok"
+        assert result["path"] == str(test_file)
+        assert result["trace_id"] is not None

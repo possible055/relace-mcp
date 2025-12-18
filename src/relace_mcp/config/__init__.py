@@ -5,12 +5,12 @@ from pathlib import Path
 import yaml
 
 from .settings import (
-    BACKUP_DIR,
+    EXPERIMENTAL_LOGGING,
+    EXPERIMENTAL_POST_CHECK,
     LOG_DIR,
     LOG_PATH,
     MAX_LOG_SIZE_BYTES,
     MAX_RETRIES,
-    RELACE_BACKUP_ENABLED,
     RELACE_ENDPOINT,
     RELACE_MODEL,
     RELACE_SEARCH_ENDPOINT,
@@ -37,12 +37,12 @@ STRATEGIES: dict[str, str] = _PROMPTS["strategies"]
 
 __all__ = [
     # Settings
-    "BACKUP_DIR",
+    "EXPERIMENTAL_LOGGING",
+    "EXPERIMENTAL_POST_CHECK",
     "LOG_DIR",
     "LOG_PATH",
     "MAX_LOG_SIZE_BYTES",
     "MAX_RETRIES",
-    "RELACE_BACKUP_ENABLED",
     "RELACE_ENDPOINT",
     "RELACE_MODEL",
     "RELACE_SEARCH_ENDPOINT",
