@@ -306,6 +306,11 @@ class RelaceRepoClient:
                 headers=self._get_headers(),
             )
             logger.info("[%s] Deleted repo '%s'", trace_id, repo_id)
+
+            # Clear cached ID if we just deleted it
+            if self._cached_repo_id == repo_id:
+                self._cached_repo_id = None
+
             return True
         except RuntimeError as exc:
             logger.error("[%s] Failed to delete repo '%s': %s", trace_id, repo_id, exc)

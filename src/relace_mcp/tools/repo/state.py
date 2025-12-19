@@ -20,6 +20,7 @@ class SyncState:
     repo_head: str
     last_sync: str
     files: dict[str, str] = field(default_factory=dict)
+    skipped_files: set[str] = field(default_factory=set)  # Paths of binary/oversize files
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -28,6 +29,7 @@ class SyncState:
             "repo_head": self.repo_head,
             "last_sync": self.last_sync,
             "files": self.files,
+            "skipped_files": list(self.skipped_files),
         }
 
     @classmethod
@@ -38,6 +40,7 @@ class SyncState:
             repo_head=data.get("repo_head", ""),
             last_sync=data.get("last_sync", ""),
             files=data.get("files", {}),
+            skipped_files=set(data.get("skipped_files", [])),
         )
 
 

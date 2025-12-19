@@ -39,10 +39,11 @@ class TestMapRepoPath:
         result = map_repo_path("/other/path", str(tmp_path))
         assert result == "/other/path"
 
-    def test_passes_through_relative_path(self, tmp_path: Path) -> None:
-        """Relative paths should pass through unchanged."""
+    def test_resolves_relative_path(self, tmp_path: Path) -> None:
+        """Relative paths should be resolved against base_dir."""
         result = map_repo_path("src/file.py", str(tmp_path))
-        assert result == "src/file.py"
+        # Now relative paths are resolved to absolute paths
+        assert result == str((tmp_path / "src" / "file.py").resolve())
 
 
 class TestValidatePath:
