@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+import subprocess  # nosec B404 - used safely with hardcoded commands only
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -19,6 +20,8 @@ class SyncState:
     repo_id: str
     repo_head: str
     last_sync: str
+    git_branch: str = ""  # Git branch name at sync time (e.g., "main", "HEAD" for detached)
+    git_head_sha: str = ""  # Git HEAD commit SHA at sync time
     files: dict[str, str] = field(default_factory=dict)
     skipped_files: set[str] = field(default_factory=set)  # Paths of binary/oversize files
 
@@ -28,17 +31,25 @@ class SyncState:
             "repo_id": self.repo_id,
             "repo_head": self.repo_head,
             "last_sync": self.last_sync,
+            "git_branch": self.git_branch,
+            "git_head_sha": self.git_head_sha,
             "files": self.files,
             "skipped_files": list(self.skipped_files),
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SyncState":
-        """Create SyncState from dictionary."""
+        """Create SyncState from dictionary.
+
+        Backward compatible: old state files without git_branch/git_head_sha
+        will load with empty strings (no crash).
+        """
         return cls(
             repo_id=data.get("repo_id", ""),
             repo_head=data.get("repo_head", ""),
             last_sync=data.get("last_sync", ""),
+            git_branch=data.get("git_branch", ""),
+            git_head_sha=data.get("git_head_sha", ""),
             files=data.get("files", {}),
             skipped_files=set(data.get("skipped_files", [])),
         )
@@ -157,3 +168,50 @@ def clear_sync_state(repo_name: str) -> bool:
     except OSError as exc:
         logger.error("Failed to clear sync state for '%s': %s", repo_name, exc)
         return False
+
+
+def get_current_git_info(base_dir: str) -> tuple[str, str]:
+    """Get current Git branch name and HEAD commit SHA.
+
+    Handles:
+    - Normal branch: returns ("main", "abc123...")
+    - Detached HEAD: returns ("HEAD", "abc123...")
+    - Non-git project or git unavailable: returns ("", "")
+
+    Args:
+        base_dir: Base directory of the repository.
+
+    Returns:
+        Tuple of (branch_name, head_sha). Either or both may be empty strings.
+    """
+    branch = ""
+    head_sha = ""
+
+    try:
+        # Get branch name (symbolic ref)
+        # --abbrev-ref HEAD returns branch name, or "HEAD" if detached
+        result = subprocess.run(  # nosec B603 B607 - hardcoded command
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=base_dir,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            branch = result.stdout.strip()
+
+        # Get HEAD commit SHA
+        result = subprocess.run(  # nosec B603 B607 - hardcoded command
+            ["git", "rev-parse", "HEAD"],
+            cwd=base_dir,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            head_sha = result.stdout.strip()
+
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
+        logger.debug("Failed to get git info from %s: %s", base_dir, exc)
+
+    return branch, head_sha

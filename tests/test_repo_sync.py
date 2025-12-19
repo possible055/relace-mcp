@@ -10,6 +10,7 @@ from relace_mcp.config import RelaceConfig
 from relace_mcp.tools.repo.state import (
     SyncState,
     compute_file_hash,
+    get_current_git_info,
     load_sync_state,
     save_sync_state,
 )
@@ -582,3 +583,268 @@ class TestCodeExtensions:
         """Should include special filenames."""
         special = {"dockerfile", "makefile", "gemfile"}
         assert special.issubset(SPECIAL_FILENAMES)
+
+
+class TestSyncStateMigration:
+    """Test backward compatibility for SyncState git fields."""
+
+    def test_old_state_without_git_fields(self) -> None:
+        """Should load old state without git_branch/git_head_sha without crashing."""
+        old_data = {
+            "repo_id": "test-id",
+            "repo_head": "abc123",
+            "last_sync": "2025-01-01T00:00:00Z",
+            "files": {"main.py": "sha256:abc"},
+            "skipped_files": [],
+        }
+
+        state = SyncState.from_dict(old_data)
+
+        assert state.repo_id == "test-id"
+        assert state.git_branch == ""
+        assert state.git_head_sha == ""
+        assert state.files["main.py"] == "sha256:abc"
+
+    def test_new_state_with_git_fields(self) -> None:
+        """Should correctly load new state with git fields."""
+        new_data = {
+            "repo_id": "test-id",
+            "repo_head": "abc123",
+            "last_sync": "2025-01-01T00:00:00Z",
+            "git_branch": "main",
+            "git_head_sha": "def456789",
+            "files": {"main.py": "sha256:abc"},
+            "skipped_files": [],
+        }
+
+        state = SyncState.from_dict(new_data)
+
+        assert state.git_branch == "main"
+        assert state.git_head_sha == "def456789"
+
+    def test_to_dict_includes_git_fields(self) -> None:
+        """Should serialize git fields to dict."""
+        state = SyncState(
+            repo_id="test-id",
+            repo_head="abc123",
+            last_sync="2025-01-01T00:00:00Z",
+            git_branch="feature-x",
+            git_head_sha="abc123def",
+            files={},
+        )
+
+        data = state.to_dict()
+
+        assert data["git_branch"] == "feature-x"
+        assert data["git_head_sha"] == "abc123def"
+
+
+class TestGetCurrentGitInfo:
+    """Test get_current_git_info function."""
+
+    def test_returns_empty_for_non_git_dir(self, tmp_path: Path) -> None:
+        """Should return empty strings for non-git directory."""
+        branch, head = get_current_git_info(str(tmp_path))
+
+        assert branch == ""
+        assert head == ""
+
+    def test_returns_branch_and_sha_in_git_repo(self, tmp_path: Path) -> None:
+        """Should return branch name and HEAD SHA in git repo."""
+        import subprocess
+
+        # Initialize git repo
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=tmp_path,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"],
+            cwd=tmp_path,
+            capture_output=True,
+        )
+
+        # Create initial commit
+        test_file = tmp_path / "test.py"
+        test_file.write_text("print('hello')")
+        subprocess.run(["git", "add", "test.py"], cwd=tmp_path, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "Initial"], cwd=tmp_path, capture_output=True)
+
+        branch, head = get_current_git_info(str(tmp_path))
+
+        # Default branch could be "main" or "master" depending on git config
+        assert branch in ("main", "master")
+        assert len(head) == 40  # Full SHA
+
+
+class TestRefChangedDetection:
+    """Test git ref change detection in cloud_sync."""
+
+    def test_ref_changed_triggers_safe_full_sync(
+        self, tmp_path: Path, mock_repo_client: MagicMock
+    ) -> None:
+        """Should use safe_full sync when git HEAD changes."""
+        (tmp_path / "main.py").write_text("print('hello')")
+        hashes = _compute_file_hashes(str(tmp_path), ["main.py"])
+
+        # Cached state with different HEAD
+        cached = SyncState(
+            repo_id="test-repo-id",
+            repo_head="abc123",
+            last_sync="",
+            git_branch="main",
+            git_head_sha="old_head_sha_123456789012345678901234",
+            files=hashes.copy(),
+        )
+
+        # Mock git returning a different HEAD
+        with patch("relace_mcp.tools.repo.sync.get_current_git_info") as mock_git:
+            mock_git.return_value = ("main", "new_head_sha_987654321098765432109876")
+            with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
+                with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=cached):
+                    with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+                        result = cloud_sync_logic(mock_repo_client, str(tmp_path))
+
+        assert result["ref_changed"] is True
+        assert result["sync_mode"] == "safe_full"
+        assert result["is_incremental"] is False
+
+
+class TestSafeSyncMode:
+    """Test Safe Full sync mode behavior."""
+
+    def test_ref_change_cleans_zombie_files(
+        self, tmp_path: Path, mock_repo_client: MagicMock
+    ) -> None:
+        """Branch switch should delete zombie files from cloud.
+
+        When git ref changes, files that existed in the old branch but not in the
+        new branch should be deleted from cloud to prevent stale search results.
+        This is the zombie file cleanup behavior.
+        """
+        # Only one file exists now (new branch)
+        (tmp_path / "new.py").write_text("print('new')")
+
+        # Cached state had a file that no longer exists (old branch)
+        cached = SyncState(
+            repo_id="test-repo-id",
+            repo_head="abc123",
+            last_sync="",
+            git_branch="main",
+            git_head_sha="old_head_sha_123456789012345678901234",
+            files={"deleted.py": "sha256:old_hash"},
+        )
+
+        # Mock git returning a different HEAD → triggers safe_full with ref_changed
+        with patch("relace_mcp.tools.repo.sync.get_current_git_info") as mock_git:
+            mock_git.return_value = ("feature", "new_head_sha_987654321098765432109876")
+            with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
+                with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=cached):
+                    with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+                        result = cloud_sync_logic(mock_repo_client, str(tmp_path))
+
+        assert result["sync_mode"] == "safe_full"
+        assert result["ref_changed"] is True
+        # Zombie files should be DELETED (not suppressed) when ref changes
+        assert result["deletes_suppressed"] == 0
+        assert result["files_deleted"] == 1
+
+        # Verify delete operation was sent to API
+        call_args = mock_repo_client.update_repo.call_args
+        operations = call_args[0][1]
+        delete_ops = [op for op in operations if op["type"] == "delete"]
+        assert len(delete_ops) == 1
+        assert delete_ops[0]["filename"] == "deleted.py"
+
+    def test_force_without_ref_change_suppresses_deletes(
+        self, tmp_path: Path, mock_repo_client: MagicMock
+    ) -> None:
+        """force=True without branch switch should suppress delete operations.
+
+        This is a safety measure: user explicitly used force but not mirror,
+        so we don't delete files. User can use mirror=True to clean up if needed.
+        """
+        # File exists
+        (tmp_path / "exists.py").write_text("print('exists')")
+
+        # force=True bypasses cache loading, so diff_state will be None
+        # This means no delete operations will be computed
+        with patch("relace_mcp.tools.repo.sync.get_current_git_info") as mock_git:
+            mock_git.return_value = ("main", "head_sha_12345678901234567890123456")
+            with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
+                with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=None):
+                    with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+                        result = cloud_sync_logic(mock_repo_client, str(tmp_path), force=True)
+
+        assert result["sync_mode"] == "safe_full"
+        # No ref_changed since this is a fresh sync (no cached state)
+        assert result["ref_changed"] is False
+        # No deletes computed because no cached state to compare against
+        assert result["deletes_suppressed"] == 0
+        assert result["files_deleted"] == 0
+
+
+class TestMirrorSyncMode:
+    """Test Mirror Full sync mode behavior."""
+
+    def test_mirror_mode_uses_update_repo_files(
+        self, tmp_path: Path, mock_repo_client: MagicMock
+    ) -> None:
+        """Mirror Full should use update_repo_files with type=files."""
+        (tmp_path / "main.py").write_text("print('hello')")
+
+        mock_repo_client.update_repo_files.return_value = {"repo_head": "new_head_123"}
+
+        with patch("relace_mcp.tools.repo.sync.get_current_git_info") as mock_git:
+            mock_git.return_value = ("main", "head_sha_123456789012345678901234567890")
+            with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
+                with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=None):
+                    with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+                        result = cloud_sync_logic(
+                            mock_repo_client, str(tmp_path), force=True, mirror=True
+                        )
+
+        assert result["sync_mode"] == "mirror_full"
+        mock_repo_client.update_repo_files.assert_called_once()
+        # update_repo should NOT be called in mirror mode
+        mock_repo_client.update_repo.assert_not_called()
+
+    def test_mirror_requires_force(self, tmp_path: Path, mock_repo_client: MagicMock) -> None:
+        """Mirror mode should only activate when force=True."""
+        (tmp_path / "main.py").write_text("print('hello')")
+
+        with patch("relace_mcp.tools.repo.sync.get_current_git_info") as mock_git:
+            mock_git.return_value = ("main", "head_sha_123456789012345678901234567890")
+            with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
+                with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=None):
+                    with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+                        # mirror=True but force=False → should NOT be mirror_full
+                        result = cloud_sync_logic(
+                            mock_repo_client, str(tmp_path), force=False, mirror=True
+                        )
+
+        # Without force, should be safe_full (no cache)
+        assert result["sync_mode"] == "safe_full"
+
+
+class TestSyncDebugFields:
+    """Test debug fields in cloud_sync return value."""
+
+    def test_returns_git_info(self, tmp_path: Path, mock_repo_client: MagicMock) -> None:
+        """Should return local git info in result."""
+        (tmp_path / "main.py").write_text("print('hello')")
+
+        with patch("relace_mcp.tools.repo.sync.get_current_git_info") as mock_git:
+            mock_git.return_value = ("feature-x", "abc123def456789012345678901234567890")
+            with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
+                with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=None):
+                    with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+                        result = cloud_sync_logic(mock_repo_client, str(tmp_path))
+
+        assert result["local_git_branch"] == "feature-x"
+        assert result["local_git_head"] == "abc123de"  # First 8 chars
+        assert result["ref_changed"] is False  # No cache to compare
+        assert result["sync_mode"] == "safe_full"
+        assert result["deletes_suppressed"] == 0
