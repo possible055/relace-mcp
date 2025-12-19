@@ -5,6 +5,86 @@ from pathlib import Path
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
 
+def resolve_repo_path(
+    path: str,
+    base_dir: str,
+    *,
+    allow_relative: bool = True,
+    allow_absolute: bool = True,
+    require_within_base_dir: bool = False,
+) -> str:
+    """Resolve /repo/... virtual path to absolute filesystem path.
+
+    Security:
+        - Normalizes path to prevent /repo// escape attacks
+        - Validates result is within base_dir for /repo and relative paths
+
+    Args:
+        path: Input path (/repo/..., relative, or absolute).
+        base_dir: Repository root directory.
+        allow_relative: Accept relative paths (default True).
+        allow_absolute: Accept non-/repo absolute paths (default True).
+        require_within_base_dir: Require absolute paths to stay within base_dir.
+
+    Returns:
+        Resolved absolute filesystem path.
+
+    Raises:
+        ValueError: If path format is invalid or escapes base_dir.
+    """
+    base_resolved = Path(base_dir).resolve()
+
+    # Handle /repo virtual root
+    if path == "/repo" or path == "/repo/":
+        return str(base_resolved)
+
+    if path.startswith("/repo/"):
+        rel = path[6:]  # Remove "/repo/"
+        # SECURITY: Normalize to prevent /repo//etc/passwd -> /etc/passwd
+        rel = rel.lstrip("/")  # Remove leading slashes
+        if not rel:
+            return str(base_resolved)
+        # Use Path to normalize .. and resolve symlinks
+        try:
+            resolved = (base_resolved / rel).resolve()
+        except (OSError, RuntimeError) as exc:
+            raise ValueError(f"Cannot resolve path (circular symlink?): {path}") from exc
+        # Validate within base_dir
+        try:
+            resolved.relative_to(base_resolved)
+        except ValueError as exc:
+            raise ValueError(f"Path escapes base_dir: {path}") from exc
+        return str(resolved)
+
+    # Handle relative paths
+    if not os.path.isabs(path):
+        if not allow_relative:
+            raise ValueError(f"Relative path not allowed: {path}")
+        try:
+            resolved = (base_resolved / path).resolve()
+        except (OSError, RuntimeError) as exc:
+            raise ValueError(f"Cannot resolve path (circular symlink?): {path}") from exc
+        try:
+            resolved.relative_to(base_resolved)
+        except ValueError as exc:
+            raise ValueError(f"Path escapes base_dir: {path}") from exc
+        return str(resolved)
+
+    # Handle absolute paths
+    if not allow_absolute:
+        raise ValueError(f"Absolute path not allowed: {path}")
+    try:
+        resolved = Path(path).resolve()
+    except (OSError, RuntimeError) as exc:
+        raise ValueError(f"Cannot resolve path (circular symlink?): {path}") from exc
+    if require_within_base_dir:
+        try:
+            resolved.relative_to(base_resolved)
+        except ValueError as exc:
+            raise ValueError(f"Path escapes base_dir: {path}") from exc
+    return str(resolved)
+
+
 def validate_file_path(file_path: str, base_dir: str, *, allow_empty: bool = False) -> Path:
     """Validates and resolves file path, preventing path traversal attacks.
 

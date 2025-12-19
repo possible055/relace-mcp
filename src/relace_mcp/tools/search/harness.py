@@ -8,6 +8,7 @@ from typing import Any
 
 from ...clients import RelaceSearchClient
 from ...config import SEARCH_MAX_TURNS, RelaceConfig
+from ...utils import resolve_repo_path
 from .handlers import (
     MAX_BASH_CHARS,
     MAX_GREP_SEARCH_CHARS,
@@ -320,30 +321,37 @@ class FastAgenticSearchHarness:
             return None
         return [start, end]
 
-    def _to_absolute_path(self, path: str) -> str:
+    def _to_absolute_path(self, path: str) -> str | None:
         """Convert any path format to absolute filesystem path.
 
         Handles: /repo/..., relative paths, and already-absolute paths.
         """
-        if path.startswith("/repo/"):
-            return os.path.join(self._config.base_dir, path[6:])
-        if path in ("/repo", "/repo/"):
-            return self._config.base_dir
-        if os.path.isabs(path):
-            return path
-        return os.path.join(self._config.base_dir, path)
+        try:
+            return resolve_repo_path(
+                path,
+                self._config.base_dir,
+                require_within_base_dir=True,
+            )
+        except ValueError:
+            # Invalid or escaping paths are ignored by callers
+            return None
 
     def _normalize_view_path(self, raw_path: Any) -> str | None:
         """Convert /repo/... path to absolute filesystem path.
 
         Used to record observed files with absolute paths for the final report.
-        Returns None if the path format is invalid.
+        Returns None if the path format is invalid or escapes base_dir.
         """
         if not isinstance(raw_path, str):
             return None
         if not raw_path.startswith("/repo"):
             return None
-        return self._to_absolute_path(raw_path)
+        try:
+            return resolve_repo_path(
+                raw_path, self._config.base_dir, allow_relative=False, allow_absolute=False
+            )
+        except ValueError:
+            return None
 
     def _normalize_report_files(
         self, files: dict[str, list[list[int]]]
@@ -351,7 +359,14 @@ class FastAgenticSearchHarness:
         """Normalize report_back file paths to absolute paths."""
         if not isinstance(files, dict):
             return {}
-        return {self._to_absolute_path(path): ranges for path, ranges in files.items()}
+        normalized: dict[str, list[list[int]]] = {}
+        for path, ranges in files.items():
+            resolved = self._to_absolute_path(path)
+            if not resolved:
+                logger.warning("Filtered out invalid path from report_back: %s", path)
+                continue
+            normalized[resolved] = ranges
+        return normalized
 
     def _maybe_record_observed(
         self, name: str, args: dict[str, Any], result: str | dict[str, Any]

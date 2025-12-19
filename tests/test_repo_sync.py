@@ -236,12 +236,13 @@ class TestComputeDiffOperations:
         (tmp_path / "main.py").write_text("print('hello')")
         hashes = _compute_file_hashes(str(tmp_path), ["main.py"])
 
-        operations, new_hashes = _compute_diff_operations(str(tmp_path), hashes, None)
+        operations, new_hashes, new_skipped = _compute_diff_operations(str(tmp_path), hashes, None)
 
         assert len(operations) == 1
         assert operations[0]["type"] == "write"
         assert operations[0]["filename"] == "main.py"
         assert operations[0]["content"] == "print('hello')"
+        assert len(new_skipped) == 0
 
     def test_unchanged_files_skipped(self, tmp_path: Path) -> None:
         """Unchanged files should not generate operations."""
@@ -256,10 +257,13 @@ class TestComputeDiffOperations:
             files=hashes.copy(),
         )
 
-        operations, new_hashes = _compute_diff_operations(str(tmp_path), hashes, cached)
+        operations, new_hashes, new_skipped = _compute_diff_operations(
+            str(tmp_path), hashes, cached
+        )
 
         assert len(operations) == 0
         assert len(new_hashes) == 1
+        assert len(new_skipped) == 0
 
     def test_modified_files_detected(self, tmp_path: Path) -> None:
         """Modified files should generate write operations."""
@@ -274,11 +278,14 @@ class TestComputeDiffOperations:
             files={"main.py": "sha256:different_hash"},
         )
 
-        operations, new_hashes = _compute_diff_operations(str(tmp_path), hashes, cached)
+        operations, new_hashes, new_skipped = _compute_diff_operations(
+            str(tmp_path), hashes, cached
+        )
 
         assert len(operations) == 1
         assert operations[0]["type"] == "write"
         assert operations[0]["filename"] == "main.py"
+        assert len(new_skipped) == 0
 
     def test_deleted_files_detected(self, tmp_path: Path) -> None:
         """Deleted files should generate delete operations."""
@@ -293,11 +300,14 @@ class TestComputeDiffOperations:
             files={"deleted.py": "sha256:some_hash"},
         )
 
-        operations, new_hashes = _compute_diff_operations(str(tmp_path), hashes, cached)
+        operations, new_hashes, new_skipped = _compute_diff_operations(
+            str(tmp_path), hashes, cached
+        )
 
         assert len(operations) == 1
         assert operations[0]["type"] == "delete"
         assert operations[0]["filename"] == "deleted.py"
+        assert len(new_skipped) == 0
 
     def test_mixed_operations(self, tmp_path: Path) -> None:
         """Should handle mix of create, update, delete."""
@@ -315,7 +325,9 @@ class TestComputeDiffOperations:
             },
         )
 
-        operations, new_hashes = _compute_diff_operations(str(tmp_path), hashes, cached)
+        operations, new_hashes, new_skipped = _compute_diff_operations(
+            str(tmp_path), hashes, cached
+        )
 
         types = {op["type"] for op in operations}
         filenames = {op["filename"] for op in operations}
@@ -325,6 +337,7 @@ class TestComputeDiffOperations:
         assert "new.py" in filenames
         assert "modified.py" in filenames
         assert "deleted.py" in filenames
+        assert len(new_skipped) == 0
 
     def test_skips_delete_when_file_exists_but_hash_failed(self, tmp_path: Path) -> None:
         """Should not delete files that exist but failed to hash."""
@@ -339,7 +352,7 @@ class TestComputeDiffOperations:
             files={"exists.py": "sha256:old_hash"},  # Was synced before
         )
 
-        operations, _ = _compute_diff_operations(str(tmp_path), current_hashes, cached)
+        operations, _, new_skipped = _compute_diff_operations(str(tmp_path), current_hashes, cached)
 
         # File exists, should not be deleted even if hash failed
         assert len(operations) == 0
@@ -356,7 +369,7 @@ class TestComputeDiffOperations:
             files={"truly_deleted.py": "sha256:old_hash"},
         )
 
-        operations, _ = _compute_diff_operations(str(tmp_path), current_hashes, cached)
+        operations, _, new_skipped = _compute_diff_operations(str(tmp_path), current_hashes, cached)
 
         # File does not exist, should be deleted
         assert len(operations) == 1

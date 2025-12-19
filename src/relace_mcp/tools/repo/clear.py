@@ -49,12 +49,29 @@ def cloud_clear_logic(
                 "[%s] No local sync state found for '%s', searching API...", trace_id, repo_name
             )
             repos = client.list_repos(trace_id=trace_id)
+            matching_repos = []
             for r in repos:
                 # Handle different API response structures if necessary
-                r_name = r.get("metadata", {}).get("name") or r.get("name")
+                metadata = r.get("metadata") or {}
+                r_name = metadata.get("name") or r.get("name")
                 if r_name == repo_name:
-                    repo_id = r.get("repo_id") or r.get("id")
-                    break
+                    matching_repos.append(r)
+
+            if len(matching_repos) > 1:
+                logger.error(
+                    "[%s] Multiple repos found with name '%s', aborting unsafe delete",
+                    trace_id,
+                    repo_name,
+                )
+                return {
+                    "status": "error",
+                    "message": f"Multiple repositories found with name '{repo_name}'. Cannot safely delete unambiguously.",
+                    "repo_name": repo_name,
+                }
+
+            if matching_repos:
+                r = matching_repos[0]
+                repo_id = r.get("repo_id") or r.get("id")
 
         if not repo_id:
             logger.info("[%s] No repository found for '%s'", trace_id, repo_name)

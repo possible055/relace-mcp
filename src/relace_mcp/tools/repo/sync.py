@@ -221,7 +221,7 @@ def _compute_diff_operations(
     base_dir: str,
     current_files: dict[str, str],
     cached_state: SyncState | None,
-) -> tuple[list[dict[str, Any]], dict[str, str]]:
+) -> tuple[list[dict[str, Any]], dict[str, str], set[str]]:
     """Compute diff operations between current files and cached state.
 
     Args:
@@ -230,18 +230,23 @@ def _compute_diff_operations(
         cached_state: Previous sync state, or None for full sync.
 
     Returns:
-        Tuple of (operations list, new file hashes for all files).
+        Tuple of (operations list, new file hashes, skipped files set).
     """
     operations: list[dict[str, Any]] = []
     new_hashes: dict[str, str] = {}
+    new_skipped: set[str] = set()
 
-    # Get cached file hashes
+    # Get cached file hashes and skipped files
     cached_files = cached_state.files if cached_state else {}
+    cached_skipped = cached_state.skipped_files if cached_state else set()
 
     # Find files to write (new or modified)
     for rel_path, current_hash in current_files.items():
         cached_hash = cached_files.get(rel_path)
-        if cached_hash != current_hash:
+        was_skipped = rel_path in cached_skipped
+
+        # Need to process if hash changed OR if it was previously skipped (might be text now)
+        if cached_hash != current_hash or was_skipped:
             # File is new or modified, read content
             content = _read_file_content(base_dir, rel_path)
             if content is not None:
@@ -249,8 +254,10 @@ def _compute_diff_operations(
                 try:
                     content_str = content.decode("utf-8")
                 except UnicodeDecodeError:
-                    # Skip binary files that can't be decoded
+                    # Skip binary files that can't be decoded, but record hash to avoid retry
                     logger.debug("Skipping binary file: %s", rel_path)
+                    new_hashes[rel_path] = current_hash
+                    new_skipped.add(rel_path)
                     continue
                 operations.append(
                     {
@@ -260,9 +267,16 @@ def _compute_diff_operations(
                     }
                 )
                 new_hashes[rel_path] = current_hash
+            else:
+                # File couldn't be read (oversize, permission, etc.), record hash
+                new_hashes[rel_path] = current_hash
+                new_skipped.add(rel_path)
         else:
             # File unchanged
             new_hashes[rel_path] = current_hash
+            # Preserve skipped status if file was previously skipped
+            if was_skipped:
+                new_skipped.add(rel_path)
 
     # Find files to delete (in cache but not in current)
     for rel_path in cached_files:
@@ -280,7 +294,7 @@ def _compute_diff_operations(
                 }
             )
 
-    return operations, new_hashes
+    return operations, new_hashes, new_skipped
 
 
 def cloud_sync_logic(
@@ -362,7 +376,9 @@ def cloud_sync_logic(
         current_hashes = _compute_file_hashes(base_dir, files)
 
         # Compute diff operations
-        operations, new_hashes = _compute_diff_operations(base_dir, current_hashes, cached_state)
+        operations, new_hashes, new_skipped = _compute_diff_operations(
+            base_dir, current_hashes, cached_state
+        )
 
         # Count operation types
         writes = [op for op in operations if op["type"] == "write"]
@@ -373,15 +389,18 @@ def cloud_sync_logic(
         files_created = sum(1 for op in writes if op["filename"] not in cached_files)
         files_updated = sum(1 for op in writes if op["filename"] in cached_files)
         files_deleted = len(deletes)
-        files_unchanged = len(new_hashes) - len(writes)
+        files_skipped = len(new_skipped)
+        # Unchanged = total tracked - writes - skipped (skipped files are tracked but not uploaded)
+        files_unchanged = len(new_hashes) - len(writes) - files_skipped
 
         logger.info(
-            "[%s] Diff computed: %d created, %d updated, %d deleted, %d unchanged",
+            "[%s] Diff computed: %d created, %d updated, %d deleted, %d unchanged, %d skipped",
             trace_id,
             files_created,
             files_updated,
             files_deleted,
             files_unchanged,
+            files_skipped,
         )
 
         # Apply changes
@@ -405,6 +424,7 @@ def cloud_sync_logic(
             repo_head=repo_head,
             last_sync="",  # Will be set by save_sync_state
             files=new_hashes,
+            skipped_files=new_skipped,
         )
         save_sync_state(repo_name, new_state)
 
@@ -417,6 +437,7 @@ def cloud_sync_logic(
             "files_updated": files_updated,
             "files_deleted": files_deleted,
             "files_unchanged": files_unchanged,
+            "files_skipped": files_skipped,
             "total_files": len(new_hashes),
         }
 
@@ -431,6 +452,7 @@ def cloud_sync_logic(
             "files_updated": 0,
             "files_deleted": 0,
             "files_unchanged": 0,
+            "files_skipped": 0,
             "total_files": 0,
             "error": str(exc),
         }
