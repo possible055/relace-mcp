@@ -41,6 +41,7 @@ def cloud_search_logic(
         result = client.retrieve(
             repo_id=repo_id,
             query=query,
+            branch="",  # Use API default (no specific branch)
             score_threshold=score_threshold,
             token_limit=token_limit,
             include_content=True,

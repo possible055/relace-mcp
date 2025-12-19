@@ -38,7 +38,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         Rules:
         - Preserve exact indentation
         - Be length efficient
-        - Batch all edits to the same file in one call
+        - ONE contiguous region per call (for non-adjacent edits, make separate calls)
 
         To create a new file, simply specify the content in edit_snippet.
         """
@@ -72,24 +72,18 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
     @mcp.tool
     def cloud_sync(force: bool = False) -> dict[str, Any]:
-        """Synchronize local codebase to Relace Cloud for semantic search.
+        """Upload codebase to Relace Repos for cloud_search semantic indexing.
 
-        This uploads files from base_dir to Relace Repos, enabling cloud-based
-        semantic search via cloud_search. Respects .gitignore patterns.
+        Call this ONCE per session before using cloud_search, or after
+        significant code changes. Incremental sync is fast (only changed files).
 
-        Uses incremental sync by default - only uploads new/modified files
-        and deletes removed files. First sync or after force=True will do
-        a full upload.
-
-        Use this when:
-        - First time setup for cloud semantic search
-        - After code changes to refresh the index (incremental)
-        - With force=True to rebuild from scratch
+        Behavior:
+        - Incremental by default: only uploads new/modified files
+        - Respects .gitignore patterns
+        - Automatically handles file deletions
 
         Args:
-            force: If True, ignore cached state and do full sync.
-
-        Note: This is a cloud operation, not local file manipulation.
+            force: If True, rebuild from scratch (ignore cached state).
         """
         return cloud_sync_logic(repo_client, config.base_dir, force=force)
 
@@ -99,17 +93,16 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         score_threshold: float = 0.3,
         token_limit: int = 30000,
     ) -> dict[str, Any]:
-        """Perform semantic search over the codebase using Relace Cloud.
+        """Semantic code search using Relace Cloud two-stage retrieval.
 
-        Unlike fast_search (local grep-based), this uses AI embeddings to find
-        semantically related code, even when exact keywords don't match.
+        Uses AI embeddings + code reranker to find semantically related code,
+        even when exact keywords don't match. Run cloud_sync once first.
 
-        Best for:
-        - Conceptual queries: "Where is user authentication handled?"
-        - Finding related code: "Show me error handling patterns"
-        - Understanding architecture: "How does the payment flow work?"
+        Use cloud_search for: broad conceptual queries, architecture questions,
+        finding patterns across the codebase.
 
-        For exact pattern matching, use fast_search instead.
+        Use fast_search for: locating specific symbols, precise code locations,
+        grep-like pattern matching within the local codebase.
 
         Args:
             query: Natural language search query.

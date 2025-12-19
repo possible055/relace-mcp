@@ -158,7 +158,7 @@ class RelaceRepoClient:
             url,
             trace_id=trace_id,
             headers=self._get_headers(),
-            params={"page_size": 1000},
+            params={"page_size": 100},
         )
         data = resp.json()
         if isinstance(data, dict):
@@ -314,13 +314,14 @@ class RelaceRepoClient:
             Search results with matching files and content.
         """
         url = f"{self._base_url}/repo/{repo_id}/retrieve"
-        payload = {
+        payload: dict[str, Any] = {
             "query": query,
-            "branch": branch,
             "score_threshold": score_threshold,
             "token_limit": token_limit,
             "include_content": include_content,
         }
+        if branch:
+            payload["branch"] = branch
         resp = self._request_with_retry(
             "POST",
             url,
