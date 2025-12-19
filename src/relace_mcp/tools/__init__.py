@@ -5,7 +5,7 @@ from fastmcp import FastMCP
 from ..clients import RelaceClient, RelaceRepoClient, RelaceSearchClient
 from ..config import RelaceConfig
 from .apply import apply_file_logic
-from .repo import cloud_search_logic, cloud_sync_logic
+from .repo import cloud_info_logic, cloud_list_logic, cloud_search_logic, cloud_sync_logic
 from .search import FastAgenticSearchHarness
 
 __all__ = ["register_tools"]
@@ -71,25 +71,31 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     repo_client = RelaceRepoClient(config)
 
     @mcp.tool
-    def cloud_sync(force: bool = False) -> dict[str, Any]:
+    def cloud_sync(force: bool = False, mirror: bool = False) -> dict[str, Any]:
         """Upload codebase to Relace Repos for cloud_search semantic indexing.
 
         Call this ONCE per session before using cloud_search, or after
         significant code changes. Incremental sync is fast (only changed files).
 
-        Behavior:
-        - Incremental by default: only uploads new/modified files
-        - Respects .gitignore patterns
-        - Automatically handles file deletions
+        Sync Modes:
+        - Incremental (default): only uploads new/modified files, deletes removed files
+        - Safe Full (force=True): uploads all files but does NOT delete cloud files
+        - Mirror Full (force=True, mirror=True): completely overwrites cloud to match local
+
+        Branch switching is automatically detected. When detected, Safe Full mode
+        is used to avoid accidentally deleting files from other branches.
 
         Args:
-            force: If True, rebuild from scratch (ignore cached state).
+            force: If True, force full sync (ignore cached state).
+            mirror: If True (with force=True), use Mirror Full mode to completely
+                    overwrite cloud repo (removes files not in local).
         """
-        return cloud_sync_logic(repo_client, config.base_dir, force=force)
+        return cloud_sync_logic(repo_client, config.base_dir, force=force, mirror=mirror)
 
     @mcp.tool
     def cloud_search(
         query: str,
+        branch: str = "",
         score_threshold: float = 0.3,
         token_limit: int = 30000,
     ) -> dict[str, Any]:
@@ -106,12 +112,14 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         Args:
             query: Natural language search query.
+            branch: Branch to search (empty string uses API default branch).
             score_threshold: Minimum relevance score (0.0-1.0, default 0.3).
             token_limit: Maximum tokens to return (default 30000).
         """
         return cloud_search_logic(
             repo_client,
             query,
+            branch=branch,
             score_threshold=score_threshold,
             token_limit=token_limit,
         )
@@ -130,8 +138,36 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         return cloud_clear_logic(repo_client, config.base_dir, confirm=confirm)
 
+    @mcp.tool
+    def cloud_list() -> dict[str, Any]:
+        """List all repositories in your Relace Cloud account.
+
+        Returns a summary of all repos including repo_id, name, and auto_index status.
+        Use this to see what repos exist and their basic info.
+
+        Note: Results are limited to 100 repos. If has_more is True, there are
+        additional repos not shown.
+        """
+        return cloud_list_logic(repo_client)
+
+    @mcp.tool
+    def cloud_info() -> dict[str, Any]:
+        """Get detailed sync status for the current repository.
+
+        Shows:
+        - local: Current git branch and HEAD
+        - synced: Last sync state (git ref at sync time, tracked files, etc.)
+        - cloud: Cloud repo info (if exists)
+        - status: Whether sync is needed and recommended action
+
+        Use this to understand sync status before running cloud_sync.
+        """
+        return cloud_info_logic(repo_client, config.base_dir)
+
     _ = fast_apply
     _ = fast_search
     _ = cloud_sync
     _ = cloud_search
     _ = cloud_clear
+    _ = cloud_list
+    _ = cloud_info

@@ -8,7 +8,13 @@ from typing import Any
 
 from ...clients.repo import RelaceRepoClient
 from ...config import REPO_SYNC_MAX_FILES
-from .state import SyncState, compute_file_hash, load_sync_state, save_sync_state
+from .state import (
+    SyncState,
+    compute_file_hash,
+    get_current_git_info,
+    load_sync_state,
+    save_sync_state,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -301,6 +307,7 @@ def cloud_sync_logic(
     client: RelaceRepoClient,
     base_dir: str,
     force: bool = False,
+    mirror: bool = False,
 ) -> dict[str, Any]:
     """Synchronize local codebase to Relace Cloud with incremental support.
 
@@ -308,6 +315,8 @@ def cloud_sync_logic(
         client: RelaceRepoClient instance.
         base_dir: Base directory to sync.
         force: If True, force full sync ignoring cached state.
+        mirror: If True (with force=True), use type="files" to completely
+                overwrite cloud repo (removes files not in local).
 
     Returns:
         Dict containing:
@@ -320,10 +329,26 @@ def cloud_sync_logic(
         - files_deleted: Number of deleted files
         - files_unchanged: Number of unchanged files
         - total_files: Total files in sync
+        - local_git_branch: Current git branch name
+        - local_git_head: Current git HEAD SHA (first 8 chars)
+        - ref_changed: Whether git ref changed since last sync
+        - sync_mode: "incremental" | "safe_full" | "mirror_full"
+        - deletes_suppressed: Number of delete operations suppressed (safe_full mode)
         - error: Error message if failed (optional)
     """
     trace_id = str(uuid.uuid4())[:8]
-    logger.info("[%s] Starting cloud sync from %s (force=%s)", trace_id, base_dir, force)
+    logger.info(
+        "[%s] Starting cloud sync from %s (force=%s, mirror=%s)",
+        trace_id,
+        base_dir,
+        force,
+        mirror,
+    )
+
+    # Get current git info
+    current_branch, current_head = get_current_git_info(base_dir)
+    ref_changed = False
+    deletes_suppressed = 0
 
     try:
         # Ensure repo exists
@@ -343,7 +368,32 @@ def cloud_sync_logic(
                 )
                 cached_state = None
 
-        is_incremental = cached_state is not None
+        # Detect git ref change → trigger safe full sync
+        # Keep a reference to cached state for diff calculation even when forcing safe_full
+        force_safe_full = False
+        diff_state = cached_state  # State to use for diff operations
+        if cached_state and current_head:
+            old_head = cached_state.git_head_sha
+            if old_head and old_head != current_head:
+                logger.warning(
+                    "[%s] Git HEAD changed (%s -> %s), switching to safe full sync",
+                    trace_id,
+                    old_head[:8],
+                    current_head[:8],
+                )
+                ref_changed = True
+                force_safe_full = True  # Mark for safe_full mode but keep diff_state
+
+        # Determine sync mode
+        if mirror and force:
+            sync_mode = "mirror_full"
+        elif cached_state is None or force_safe_full:
+            sync_mode = "safe_full"
+        else:
+            sync_mode = "incremental"
+
+        logger.info("[%s] Sync mode: %s", trace_id, sync_mode)
+        is_incremental = sync_mode == "incremental"
 
         # Get file list (prefer git, fallback to directory scan)
         files = _get_git_tracked_files(base_dir)
@@ -375,14 +425,37 @@ def cloud_sync_logic(
         logger.info("[%s] Computing file hashes...", trace_id)
         current_hashes = _compute_file_hashes(base_dir, files)
 
-        # Compute diff operations
+        # Compute diff operations (use diff_state to include deletes even in safe_full mode)
         operations, new_hashes, new_skipped = _compute_diff_operations(
-            base_dir, current_hashes, cached_state
+            base_dir, current_hashes, diff_state
         )
 
-        # Count operation types
+        # Count operation types before filtering
         writes = [op for op in operations if op["type"] == "write"]
         deletes = [op for op in operations if op["type"] == "delete"]
+
+        # Safe Full mode delete handling:
+        # - ref_changed: ALLOW deletes to clean up zombie files from old branch
+        # - force=True (without ref_changed): SUPPRESS deletes for safety
+        if sync_mode == "safe_full" and deletes:
+            if ref_changed:
+                # Branch switch detected: execute deletes to clean zombie files
+                logger.info(
+                    "[%s] Branch switch detected: cleaning %d zombie files from cloud",
+                    trace_id,
+                    len(deletes),
+                )
+                # deletes are kept, no suppression
+            else:
+                # force=True without branch switch: suppress deletes for safety
+                deletes_suppressed = len(deletes)
+                logger.warning(
+                    "[%s] Safe full sync: suppressing %d delete operations",
+                    trace_id,
+                    deletes_suppressed,
+                )
+                operations = [op for op in operations if op["type"] != "delete"]
+                deletes = []
 
         # Determine creates vs updates
         cached_files = cached_state.files if cached_state else {}
@@ -405,7 +478,21 @@ def cloud_sync_logic(
 
         # Apply changes
         repo_head = ""
-        if operations:
+        if sync_mode == "mirror_full":
+            # Mirror mode: use type="files" to completely overwrite
+            logger.info("[%s] Mirror full sync: uploading %d files...", trace_id, len(writes))
+            file_contents = [
+                {"filename": op["filename"], "content": op["content"]} for op in writes
+            ]
+            if file_contents:
+                result = client.update_repo_files(repo_id, file_contents, trace_id=trace_id)
+                repo_head = result.get("repo_head", "")
+            logger.info(
+                "[%s] Mirror sync completed, new head=%s",
+                trace_id,
+                repo_head[:8] if repo_head else "none",
+            )
+        elif operations:
             logger.info("[%s] Applying %d operations via update API...", trace_id, len(operations))
             result = client.update_repo(repo_id, operations, trace_id=trace_id)
             repo_head = result.get("repo_head", "")
@@ -418,11 +505,13 @@ def cloud_sync_logic(
             logger.info("[%s] No changes detected, skipping update", trace_id)
             repo_head = cached_state.repo_head if cached_state else ""
 
-        # Save new sync state
+        # Save new sync state with git info
         new_state = SyncState(
             repo_id=repo_id,
             repo_head=repo_head,
             last_sync="",  # Will be set by save_sync_state
+            git_branch=current_branch,
+            git_head_sha=current_head,
             files=new_hashes,
             skipped_files=new_skipped,
         )
@@ -439,6 +528,12 @@ def cloud_sync_logic(
             "files_unchanged": files_unchanged,
             "files_skipped": files_skipped,
             "total_files": len(new_hashes),
+            # Debug fields
+            "local_git_branch": current_branch,
+            "local_git_head": current_head[:8] if current_head else "",
+            "ref_changed": ref_changed,
+            "sync_mode": sync_mode,
+            "deletes_suppressed": deletes_suppressed,
         }
 
     except Exception as exc:
@@ -454,5 +549,10 @@ def cloud_sync_logic(
             "files_unchanged": 0,
             "files_skipped": 0,
             "total_files": 0,
+            "local_git_branch": current_branch,
+            "local_git_head": current_head[:8] if current_head else "",
+            "ref_changed": ref_changed,
+            "sync_mode": "error",
+            "deletes_suppressed": 0,
             "error": str(exc),
         }

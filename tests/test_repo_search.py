@@ -169,3 +169,55 @@ class TestCloudSearchEdgeCases:
         assert result["query"] == ""
         # API should still be called
         mock_repo_client.retrieve.assert_called_once()
+
+
+class TestCloudSearchBranchParam:
+    """Test branch parameter for cloud_search."""
+
+    def test_branch_param_passed_to_retrieve(self, mock_repo_client: MagicMock) -> None:
+        """Should pass branch parameter to retrieve API."""
+        result = cloud_search_logic(
+            mock_repo_client,
+            query="authentication flow",
+            branch="feature-auth",
+        )
+
+        call_kwargs = mock_repo_client.retrieve.call_args.kwargs
+        assert call_kwargs["branch"] == "feature-auth"
+        assert result["branch"] == "feature-auth"
+
+    def test_empty_branch_uses_default(self, mock_repo_client: MagicMock) -> None:
+        """Should pass empty string to use API default branch."""
+        result = cloud_search_logic(
+            mock_repo_client,
+            query="some query",
+            branch="",
+        )
+
+        call_kwargs = mock_repo_client.retrieve.call_args.kwargs
+        assert call_kwargs["branch"] == ""
+        assert result["branch"] == ""
+
+    def test_branch_default_is_empty(self, mock_repo_client: MagicMock) -> None:
+        """Should default to empty branch when not specified."""
+        result = cloud_search_logic(
+            mock_repo_client,
+            query="some query",
+        )
+
+        call_kwargs = mock_repo_client.retrieve.call_args.kwargs
+        assert call_kwargs["branch"] == ""
+        assert result["branch"] == ""
+
+    def test_branch_in_error_response(self, mock_repo_client: MagicMock) -> None:
+        """Should include branch in error response."""
+        mock_repo_client.retrieve.side_effect = RuntimeError("API error")
+
+        result = cloud_search_logic(
+            mock_repo_client,
+            query="some query",
+            branch="main",
+        )
+
+        assert "error" in result
+        assert result["branch"] == "main"

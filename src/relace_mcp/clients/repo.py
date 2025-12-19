@@ -396,6 +396,43 @@ class RelaceRepoClient:
         )
         return resp.json()
 
+    def update_repo_files(
+        self,
+        repo_id: str,
+        files: list[dict[str, str]],
+        trace_id: str = "unknown",
+    ) -> dict[str, Any]:
+        """Update repo with complete file list (mirror sync).
+
+        This uses type="files" to completely overwrite the repository content.
+        Files not included in the list will be deleted from the cloud repo.
+
+        Args:
+            repo_id: Repository UUID.
+            files: List of file dicts with:
+                - {"filename": "path/to/file.py", "content": "..."}
+            trace_id: Trace ID for logging.
+
+        Returns:
+            Dict containing repo_id and repo_head.
+        """
+        url = f"{self._base_url}/repo/{repo_id}/update"
+        payload = {
+            "source": {
+                "type": "files",
+                "files": files,
+            }
+        }
+        resp = self._request_with_retry(
+            "POST",
+            url,
+            trace_id=trace_id,
+            timeout=REPO_SYNC_TIMEOUT_SECONDS,
+            headers=self._get_headers(),
+            json=payload,
+        )
+        return resp.json()
+
     def get_repo_name_from_base_dir(self) -> str:
         """Derive repository name from base_dir."""
         return Path(self._config.base_dir).name
