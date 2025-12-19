@@ -287,6 +287,30 @@ class RelaceRepoClient:
         self._cached_repo_id = repo_id
         return repo_id
 
+    def delete_repo(self, repo_id: str, trace_id: str = "unknown") -> bool:
+        """Delete a repository.
+
+        Args:
+            repo_id: Repository UUID.
+            trace_id: Trace ID for logging.
+
+        Returns:
+            True if deleted successfully.
+        """
+        url = f"{self._base_url}/repo/{repo_id}"
+        try:
+            self._request_with_retry(
+                "DELETE",
+                url,
+                trace_id=trace_id,
+                headers=self._get_headers(),
+            )
+            logger.info("[%s] Deleted repo '%s'", trace_id, repo_id)
+            return True
+        except RuntimeError as exc:
+            logger.error("[%s] Failed to delete repo '%s': %s", trace_id, repo_id, exc)
+            return False
+
     # === Semantic Retrieval ===
 
     def retrieve(
