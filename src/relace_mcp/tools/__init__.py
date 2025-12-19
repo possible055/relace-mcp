@@ -116,7 +116,22 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             token_limit=token_limit,
         )
 
+    @mcp.tool
+    def cloud_clear(confirm: bool = False) -> dict[str, Any]:
+        """Clear (delete) the cloud repository and local sync state.
+
+        This action is IRREVERSIBLE. It deletes the remote repository
+        and removes the local sync state file.
+
+        Args:
+            confirm: You must set this to True to proceed.
+        """
+        from .repo.clear import cloud_clear_logic
+
+        return cloud_clear_logic(repo_client, config.base_dir, confirm=confirm)
+
     _ = fast_apply
     _ = fast_search
     _ = cloud_sync
     _ = cloud_search
+    _ = cloud_clear

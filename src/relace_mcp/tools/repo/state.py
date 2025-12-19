@@ -134,3 +134,23 @@ def save_sync_state(repo_name: str, state: SyncState) -> bool:
     except OSError as exc:
         logger.error("Failed to save sync state for '%s': %s", repo_name, exc)
         return False
+
+
+def clear_sync_state(repo_name: str) -> bool:
+    """Remove sync state file for a repository.
+
+    Args:
+        repo_name: Repository name.
+
+    Returns:
+        True if removed or didn't exist, False on error.
+    """
+    state_path = _get_state_path(repo_name)
+    try:
+        if state_path.exists():
+            state_path.unlink()
+            return True
+        return True
+    except OSError as exc:
+        logger.error("Failed to clear sync state for '%s': %s", repo_name, exc)
+        return False
