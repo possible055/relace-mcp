@@ -20,6 +20,7 @@ class SyncState:
     repo_id: str
     repo_head: str
     last_sync: str
+    repo_name: str = ""  # Original repo name (for collision detection)
     git_branch: str = ""  # Git branch name at sync time (e.g., "main", "HEAD" for detached)
     git_head_sha: str = ""  # Git HEAD commit SHA at sync time
     files: dict[str, str] = field(default_factory=dict)
@@ -31,6 +32,7 @@ class SyncState:
             "repo_id": self.repo_id,
             "repo_head": self.repo_head,
             "last_sync": self.last_sync,
+            "repo_name": self.repo_name,
             "git_branch": self.git_branch,
             "git_head_sha": self.git_head_sha,
             "files": self.files,
@@ -41,13 +43,14 @@ class SyncState:
     def from_dict(cls, data: dict[str, Any]) -> "SyncState":
         """Create SyncState from dictionary.
 
-        Backward compatible: old state files without git_branch/git_head_sha
+        Backward compatible: old state files without repo_name/git_branch/git_head_sha
         will load with empty strings (no crash).
         """
         return cls(
             repo_id=data.get("repo_id", ""),
             repo_head=data.get("repo_head", ""),
             last_sync=data.get("last_sync", ""),
+            repo_name=data.get("repo_name", ""),
             git_branch=data.get("git_branch", ""),
             git_head_sha=data.get("git_head_sha", ""),
             files=data.get("files", {}),
@@ -89,7 +92,12 @@ def load_sync_state(repo_name: str) -> SyncState | None:
         repo_name: Repository name.
 
     Returns:
-        SyncState if found and valid, None otherwise.
+        SyncState if found, valid, and repo_name matches; None otherwise.
+
+    Note:
+        Returns None if the stored repo_name doesn't match the requested one.
+        This prevents collisions where sanitized filenames overlap
+        (e.g., 'my.project' and 'my_project' both map to 'my_project.json').
     """
     state_path = _get_state_path(repo_name)
 
@@ -101,6 +109,18 @@ def load_sync_state(repo_name: str) -> SyncState | None:
         with open(state_path, encoding="utf-8") as f:
             data = json.load(f)
         state = SyncState.from_dict(data)
+
+        # Validate repo_name matches to prevent collision attacks.
+        # Old state files without repo_name are accepted for backward compat.
+        if state.repo_name and state.repo_name != repo_name:
+            logger.warning(
+                "Sync state collision: requested '%s' but file contains '%s'. "
+                "Treating as not found to prevent cross-repo operations.",
+                repo_name,
+                state.repo_name,
+            )
+            return None
+
         logger.debug(
             "Loaded sync state for '%s': %d files, head=%s",
             repo_name,
@@ -128,6 +148,9 @@ def save_sync_state(repo_name: str, state: SyncState) -> bool:
     try:
         # Ensure directory exists
         state_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Set repo_name for collision detection on load
+        state.repo_name = repo_name
 
         # Update last_sync timestamp
         state.last_sync = datetime.now(UTC).isoformat()

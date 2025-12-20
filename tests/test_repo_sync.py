@@ -639,6 +639,96 @@ class TestSyncStateMigration:
         assert data["git_head_sha"] == "abc123def"
 
 
+class TestSyncStateCollisionDetection:
+    """Test repo_name collision detection in sync state."""
+
+    def test_load_rejects_mismatched_repo_name(self, tmp_path: Path) -> None:
+        """Should return None when stored repo_name doesn't match requested name."""
+        with patch("relace_mcp.tools.repo.state._XDG_STATE_HOME", tmp_path):
+            # Save state for 'my.project'
+            state = SyncState(
+                repo_id="project-a-id",
+                repo_head="abc",
+                last_sync="",
+                repo_name="my.project",
+                files={},
+            )
+            save_sync_state("my.project", state)
+
+            # Try to load with colliding name 'my_project' (maps to same file)
+            loaded = load_sync_state("my_project")
+
+        # Should reject because repo_name doesn't match
+        assert loaded is None
+
+    def test_load_accepts_matching_repo_name(self, tmp_path: Path) -> None:
+        """Should accept state when repo_name matches."""
+        with patch("relace_mcp.tools.repo.state._XDG_STATE_HOME", tmp_path):
+            state = SyncState(
+                repo_id="project-id",
+                repo_head="abc",
+                last_sync="",
+                repo_name="my-project",
+                files={},
+            )
+            save_sync_state("my-project", state)
+
+            loaded = load_sync_state("my-project")
+
+        assert loaded is not None
+        assert loaded.repo_id == "project-id"
+        assert loaded.repo_name == "my-project"
+
+    def test_load_accepts_old_state_without_repo_name(self, tmp_path: Path) -> None:
+        """Should accept old state files without repo_name for backward compat."""
+        import json
+
+        with patch("relace_mcp.tools.repo.state._XDG_STATE_HOME", tmp_path):
+            # Manually create old-format state file without repo_name
+            state_file = tmp_path / "my_project.json"
+            tmp_path.mkdir(parents=True, exist_ok=True)
+            state_file.write_text(
+                json.dumps(
+                    {
+                        "repo_id": "old-id",
+                        "repo_head": "abc",
+                        "last_sync": "",
+                        "files": {},
+                        "skipped_files": [],
+                    }
+                )
+            )
+
+            loaded = load_sync_state("my_project")
+
+        # Should accept (backward compat)
+        assert loaded is not None
+        assert loaded.repo_id == "old-id"
+        assert loaded.repo_name == ""
+
+    def test_save_sets_repo_name_automatically(self, tmp_path: Path) -> None:
+        """Should automatically set repo_name when saving."""
+        with patch("relace_mcp.tools.repo.state._XDG_STATE_HOME", tmp_path):
+            state = SyncState(
+                repo_id="test-id",
+                repo_head="abc",
+                last_sync="",
+                files={},
+            )
+            # repo_name is initially empty
+            assert state.repo_name == ""
+
+            save_sync_state("my-project", state)
+
+            # After save, state should have repo_name set
+            assert state.repo_name == "my-project"
+
+            # And the loaded state should also have it
+            loaded = load_sync_state("my-project")
+            assert loaded is not None
+            assert loaded.repo_name == "my-project"
+
+
 class TestGetCurrentGitInfo:
     """Test get_current_git_info function."""
 
