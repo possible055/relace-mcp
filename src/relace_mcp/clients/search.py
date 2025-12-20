@@ -18,6 +18,9 @@ from .exceptions import RelaceAPIError, raise_for_status
 
 logger = logging.getLogger(__name__)
 
+_OPENAI_DEFAULT_ENDPOINT = "https://api.openai.com/v1/chat/completions"
+_OPENAI_DEFAULT_MODEL = "gpt-4o-mini"
+
 
 class RelaceSearchClient:
     """OpenAI-compatible Chat Completions client for calling relace-search model."""
@@ -44,16 +47,35 @@ class RelaceSearchClient:
         Raises:
             RuntimeError: When API call fails (non-retryable error or retries exhausted).
         """
+        provider = os.getenv("RELACE_SEARCH_PROVIDER", "relace").strip().lower()
+
+        endpoint = os.getenv("RELACE_SEARCH_ENDPOINT")
+        if not endpoint:
+            if provider in ("openai", "openai-compatible"):
+                endpoint = _OPENAI_DEFAULT_ENDPOINT
+            else:
+                endpoint = RELACE_SEARCH_ENDPOINT
+
+        model = os.getenv("RELACE_SEARCH_MODEL")
+        if not model:
+            if provider in ("openai", "openai-compatible"):
+                model = _OPENAI_DEFAULT_MODEL
+            else:
+                model = RELACE_SEARCH_MODEL
+
         payload: dict[str, Any] = {
-            "model": RELACE_SEARCH_MODEL,
+            "model": model,
             "messages": messages,
             "tools": tools,
             "tool_choice": "auto",
             "temperature": 1.0,
             "top_p": 0.95,
-            "top_k": 100,
-            "repetition_penalty": 1.0,
         }
+
+        # Relace Search supports additional sampling params; OpenAI rejects unknown fields.
+        if provider not in ("openai", "openai-compatible"):
+            payload["top_k"] = 100
+            payload["repetition_penalty"] = 1.0
 
         # Allow the model to emit multiple tool calls in a single turn for lower latency.
         # Only include the field when enabled to preserve compatibility with strict providers.
@@ -66,8 +88,15 @@ class RelaceSearchClient:
         ):
             payload["parallel_tool_calls"] = True
 
+        if provider in ("openai", "openai-compatible"):
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                raise RuntimeError("OPENAI_API_KEY is not set when RELACE_SEARCH_PROVIDER=openai.")
+        else:
+            api_key = self._config.api_key
+
         headers = {
-            "Authorization": f"Bearer {self._config.api_key}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
 
@@ -77,7 +106,7 @@ class RelaceSearchClient:
             try:
                 started_at = time.monotonic()
                 with httpx.Client(timeout=SEARCH_TIMEOUT_SECONDS) as client:
-                    resp = client.post(RELACE_SEARCH_ENDPOINT, json=payload, headers=headers)
+                    resp = client.post(endpoint, json=payload, headers=headers)
                 latency_ms = int((time.monotonic() - started_at) * 1000)
 
                 try:

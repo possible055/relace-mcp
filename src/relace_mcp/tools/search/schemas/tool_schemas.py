@@ -242,20 +242,13 @@ def _split_tool_list(raw: str) -> list[str]:
     return [t for t in raw.replace(",", " ").replace(";", " ").split() if t]
 
 
-def _env_bool(name: str, default: bool) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in ("1", "true", "yes", "y", "on")
-
-
 def get_tool_schemas() -> list[dict[str, Any]]:
     """Get enabled tool schemas for Fast Agentic Search.
 
     Environment variables:
         - RELACE_SEARCH_ENABLED_TOOLS: Comma/space-separated allowlist, e.g.
-          "view_file,view_directory,grep_search,glob". `report_back` is always enabled.
-        - RELACE_SEARCH_ENABLE_BASH: If set to 0/false/no, removes `bash` from the default tool set.
+          "view_file,view_directory,grep_search,glob,bash". `report_back` is always enabled.
+          If not set, all tools are enabled by default.
     """
     raw_allowlist = os.getenv("RELACE_SEARCH_ENABLED_TOOLS", "").strip()
 
@@ -263,8 +256,6 @@ def get_tool_schemas() -> list[dict[str, Any]]:
         enabled = {t.strip().lower() for t in _split_tool_list(raw_allowlist)}
     else:
         enabled = {"view_file", "view_directory", "grep_search", "glob", "report_back", "bash"}
-        if not _env_bool("RELACE_SEARCH_ENABLE_BASH", default=True):
-            enabled.discard("bash")
 
     # Always keep report_back so the harness can terminate deterministically.
     enabled.add("report_back")

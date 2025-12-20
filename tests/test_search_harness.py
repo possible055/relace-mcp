@@ -380,25 +380,10 @@ class TestToolSchemas:
         from relace_mcp.tools.search.schemas import get_tool_schemas
 
         monkeypatch.setenv("RELACE_SEARCH_ENABLED_TOOLS", "view_file,grep_search,glob")
-        monkeypatch.delenv("RELACE_SEARCH_ENABLE_BASH", raising=False)
 
         schemas = get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
         assert names == {"view_file", "grep_search", "glob", "report_back"}
-
-    def test_get_tool_schemas_disable_bash_default_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Disabling bash should remove it from the default tool set."""
-        from relace_mcp.tools.search.schemas import get_tool_schemas
-
-        monkeypatch.delenv("RELACE_SEARCH_ENABLED_TOOLS", raising=False)
-        monkeypatch.setenv("RELACE_SEARCH_ENABLE_BASH", "0")
-
-        schemas = get_tool_schemas()
-        names = {t["function"]["name"] for t in schemas}
-        assert "bash" not in names
-        assert {"view_file", "view_directory", "grep_search", "glob", "report_back"} <= names
 
     def test_schema_has_default_per_official_docs(self) -> None:
         """Per Relace official docs, certain params should have default values."""
