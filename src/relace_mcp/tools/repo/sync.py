@@ -179,10 +179,15 @@ def _read_file_content(base_dir: str, rel_path: str) -> bytes | None:
     """Read file content as bytes.
 
     Returns:
-        File content, or None if read fails.
+        File content, or None if read fails or path escapes base_dir.
     """
     try:
-        file_path = Path(base_dir) / rel_path
+        base_path = Path(base_dir).resolve()
+        file_path = (base_path / rel_path).resolve()
+        # Security: reject symlinks pointing outside base_dir
+        if not file_path.is_relative_to(base_path):
+            logger.warning("Blocked path traversal attempt: %s", rel_path)
+            return None
         if not file_path.is_file():
             return None
         if file_path.stat().st_size > MAX_FILE_SIZE_BYTES:
@@ -207,9 +212,14 @@ def _compute_file_hashes(
         Dict mapping relative path to "sha256:..." hash.
     """
     hashes: dict[str, str] = {}
+    base_path = Path(base_dir).resolve()
 
     def hash_file(rel_path: str) -> tuple[str, str | None]:
-        file_path = Path(base_dir) / rel_path
+        file_path = (base_path / rel_path).resolve()
+        # Security: reject symlinks pointing outside base_dir
+        if not file_path.is_relative_to(base_path):
+            logger.warning("Blocked path traversal in hash: %s", rel_path)
+            return (rel_path, None)
         file_hash = compute_file_hash(file_path)
         return (rel_path, file_hash)
 
@@ -278,11 +288,8 @@ def _compute_diff_operations(
                 new_hashes[rel_path] = current_hash
                 new_skipped.add(rel_path)
         else:
-            # File unchanged
+            # File unchanged (hash matches and not previously skipped)
             new_hashes[rel_path] = current_hash
-            # Preserve skipped status if file was previously skipped
-            if was_skipped:
-                new_skipped.add(rel_path)
 
     # Find files to delete (in cache but not in current)
     for rel_path in cached_files:

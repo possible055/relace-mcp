@@ -365,7 +365,7 @@ class FastAgenticSearchHarness:
             if not resolved:
                 logger.warning("Filtered out invalid path from report_back: %s", path)
                 continue
-            normalized[resolved] = ranges
+            normalized.setdefault(resolved, []).extend(ranges)
         return normalized
 
     def _maybe_record_observed(

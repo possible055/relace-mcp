@@ -184,9 +184,7 @@ def clear_sync_state(repo_name: str) -> bool:
     """
     state_path = _get_state_path(repo_name)
     try:
-        if state_path.exists():
-            state_path.unlink()
-            return True
+        state_path.unlink(missing_ok=True)
         return True
     except OSError as exc:
         logger.error("Failed to clear sync state for '%s': %s", repo_name, exc)
