@@ -1,38 +1,5 @@
 import os
-from dataclasses import dataclass
 from typing import Any
-
-from ...config import (
-    BUDGET_HINT_TEMPLATE,
-    CONVERGENCE_HINT,
-    STRATEGIES,
-    SYSTEM_PROMPT,
-    USER_PROMPT_TEMPLATE,
-)
-
-
-@dataclass(frozen=True, slots=True)
-class GrepSearchParams:
-    """Encapsulates grep_search tool parameters."""
-
-    query: str
-    case_sensitive: bool
-    include_pattern: str | None
-    exclude_pattern: str | None
-    base_dir: str
-
-
-# Re-export for backward compatibility
-__all__ = [
-    "GrepSearchParams",
-    "SYSTEM_PROMPT",
-    "USER_PROMPT_TEMPLATE",
-    "BUDGET_HINT_TEMPLATE",
-    "CONVERGENCE_HINT",
-    "STRATEGIES",
-    "get_tool_schemas",
-    "TOOL_SCHEMAS",
-]
 
 _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
