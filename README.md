@@ -5,6 +5,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Unofficial** — Personal project, not affiliated with Relace.
+>
+> **Built with AI** — Developed entirely with AI assistance (Antigravity, Codex, Cursor, Github Copilot, Windsurf).
 
 MCP server for [Relace](https://www.relace.ai/) — AI-powered instant code merging and agentic codebase search.
 
@@ -90,16 +92,6 @@ Search the codebase and return relevant files and line ranges.
 
 Synchronize local codebase to Relace Cloud for semantic search. Uploads source files from `RELACE_BASE_DIR` to Relace Repos.
 
-**Sync Modes:**
-
-| Mode | Trigger | Description |
-|------|---------|-------------|
-| Incremental | (default) | Only uploads new/modified files, deletes removed files |
-| Safe Full | `force=True`, first sync, or HEAD changed | Uploads all files; suppresses deletes unless HEAD changed |
-| Mirror Full | `force=True, mirror=True` | Completely overwrites cloud to match local |
-
-**HEAD Change Detection:** When git HEAD changes since last sync (e.g., branch switch, rebase, commit amend), Safe Full mode automatically cleans up zombie files from the old ref to prevent stale search results.
-
 **Parameters:**
 
 | Parameter | Required | Default | Description |
@@ -113,23 +105,18 @@ Synchronize local codebase to Relace Cloud for semantic search. Uploads source f
 - Skips files > 1MB and common non-source directories (`node_modules`, `__pycache__`, etc.)
 - Sync state stored in `~/.local/state/relace/sync/`
 
-**Returns:**
+<details>
+<summary>Sync Modes (Advanced)</summary>
 
-```json
-{
-  "repo_id": "uuid-of-repository",
-  "repo_name": "project-name",
-  "repo_head": "abc123def456",
-  "is_incremental": true,
-  "sync_mode": "incremental",
-  "files_created": 5,
-  "files_updated": 3,
-  "files_deleted": 2,
-  "files_unchanged": 40,
-  "total_files": 48,
-  "ref_changed": false
-}
-```
+| Mode | Trigger | Description |
+|------|---------|-------------|
+| Incremental | (default) | Only uploads new/modified files, deletes removed files |
+| Safe Full | `force=True`, first sync, or HEAD changed | Uploads all files; suppresses deletes unless HEAD changed |
+| Mirror Full | `force=True, mirror=True` | Completely overwrites cloud to match local |
+
+**HEAD Change Detection:** When git HEAD changes since last sync (e.g., branch switch, rebase, commit amend), Safe Full mode automatically cleans up zombie files from the old ref to prevent stale search results.
+
+</details>
 
 ### `cloud_search`
 
@@ -144,62 +131,17 @@ Semantic code search over the cloud-synced repository. Requires running `cloud_s
 | `score_threshold` | ❌ | `0.3` | Minimum relevance score (0.0-1.0) |
 | `token_limit` | ❌ | `30000` | Maximum tokens to return |
 
-**Returns:**
-
-```json
-{
-  "query": "user authentication logic",
-  "branch": "",
-  "results": [
-    {"path": "src/auth/login.py", "content": "...", "score": 0.85}
-  ],
-  "repo_id": "uuid",
-  "result_count": 5
-}
-```
-
 ### `cloud_list`
 
 List all repositories in your Relace Cloud account.
 
 **Parameters:** None
 
-**Returns:**
-
-```json
-{
-  "count": 3,
-  "repos": [
-    {"repo_id": "uuid-1", "name": "project-a", "auto_index": true},
-    {"repo_id": "uuid-2", "name": "project-b", "auto_index": true}
-  ],
-  "has_more": false
-}
-```
-
 ### `cloud_info`
 
 Get detailed sync status for the current repository. Use before `cloud_sync` to understand what action is needed.
 
 **Parameters:** None
-
-**Returns:**
-
-```json
-{
-  "repo_name": "my-project",
-  "local": {"git_branch": "main", "git_head": "abc123de"},
-  "synced": {
-    "repo_id": "uuid",
-    "repo_head": "def456gh",
-    "git_branch": "main",
-    "git_head": "abc123de",
-    "tracked_files": 48
-  },
-  "cloud": {"repo_id": "uuid", "auto_index": true},
-  "status": {"ref_changed": false, "needs_sync": false}
-}
-```
 
 ### `cloud_clear`
 
