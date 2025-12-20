@@ -1,4 +1,5 @@
 import logging
+import os
 import random
 import time
 from pathlib import Path
@@ -18,6 +19,10 @@ from ..config import (
 from .exceptions import RelaceAPIError, raise_for_status
 
 logger = logging.getLogger(__name__)
+
+# Maximum repos to fetch (configurable via environment variable)
+# Default: 10000 (100 pages * 100 per page)
+REPO_LIST_MAX = int(os.getenv("RELACE_REPO_LIST_MAX", "10000"))
 
 
 class RelaceRepoClient:
@@ -150,6 +155,7 @@ class RelaceRepoClient:
         """List all repositories under the account with automatic pagination.
 
         Uses page_start/next_page cursor-based pagination per Relace API spec.
+        Respects RELACE_REPO_LIST_MAX environment variable for resource limits.
 
         Returns:
             List of repo objects with id, name, etc.
@@ -158,7 +164,7 @@ class RelaceRepoClient:
         all_repos: list[dict[str, Any]] = []
         page_start: int | None = 0
         page_size = 100
-        max_iterations = 100  # Safety limit: 100 pages = 10,000 repos
+        max_iterations = (REPO_LIST_MAX + page_size - 1) // page_size  # Ceiling division
 
         for _ in range(max_iterations):
             params: dict[str, Any] = {"page_size": page_size}
@@ -189,7 +195,15 @@ class RelaceRepoClient:
 
             all_repos.extend(items)
 
-            # Stop if: no next_page cursor or empty response
+            # Stop if: reached limit, no next_page cursor, or empty response
+            if len(all_repos) >= REPO_LIST_MAX:
+                logger.warning(
+                    "[%s] list_repos reached limit (%d repos), truncating results",
+                    trace_id,
+                    REPO_LIST_MAX,
+                )
+                all_repos = all_repos[:REPO_LIST_MAX]
+                break
             if page_start is None or len(items) == 0:
                 break
         else:
