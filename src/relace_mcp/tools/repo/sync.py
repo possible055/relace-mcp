@@ -111,8 +111,8 @@ EXCLUDED_DIRS = {
 # Maximum file size to upload (1MB)
 MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024
 
-# Maximum concurrent uploads
-MAX_UPLOAD_WORKERS = 8
+# Maximum concurrent uploads (configurable via environment variable)
+MAX_UPLOAD_WORKERS = int(os.getenv("RELACE_UPLOAD_MAX_WORKERS", "8"))
 
 
 def _get_git_tracked_files(base_dir: str) -> list[str] | None:
