@@ -2,9 +2,10 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from ..clients import RelaceClient, RelaceSearchClient
+from ..clients import RelaceClient, RelaceRepoClient, RelaceSearchClient
 from ..config import RelaceConfig
 from .apply import apply_file_logic
+from .repo import cloud_info_logic, cloud_list_logic, cloud_search_logic, cloud_sync_logic
 from .search import FastAgenticSearchHarness
 
 __all__ = ["register_tools"]
@@ -37,7 +38,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         Rules:
         - Preserve exact indentation
         - Be length efficient
-        - Batch all edits to the same file in one call
+        - ONE contiguous region per call (for non-adjacent edits, make separate calls)
 
         To create a new file, simply specify the content in edit_snippet.
         """
@@ -66,5 +67,110 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         # Avoid shared mutable state across concurrent calls.
         return FastAgenticSearchHarness(config, search_client).run(query=query)
 
+    # Cloud Repos (Semantic Search & Sync)
+    repo_client = RelaceRepoClient(config)
+
+    @mcp.tool
+    def cloud_sync(force: bool = False, mirror: bool = False) -> dict[str, Any]:
+        """Upload codebase to Relace Repos for cloud_search semantic indexing.
+
+        Call this ONCE per session before using cloud_search, or after
+        significant code changes. Incremental sync is fast (only changed files).
+
+        Sync Modes:
+        - Incremental (default): only uploads new/modified files, deletes removed files
+        - Safe Full: triggered by force=True OR first sync (no cached state) OR
+          git HEAD changed (e.g., branch switch, rebase, commit amend).
+          Uploads all files; suppresses delete operations UNLESS HEAD changed,
+          in which case zombie files from the old ref are deleted to prevent stale results.
+        - Mirror Full (force=True, mirror=True): completely overwrites cloud to match local
+
+        Args:
+            force: If True, force full sync (ignore cached state).
+            mirror: If True (with force=True), use Mirror Full mode to completely
+                    overwrite cloud repo (removes files not in local).
+        """
+        return cloud_sync_logic(repo_client, config.base_dir, force=force, mirror=mirror)
+
+    @mcp.tool
+    def cloud_search(
+        query: str,
+        branch: str = "",
+        score_threshold: float = 0.3,
+        token_limit: int = 30000,
+    ) -> dict[str, Any]:
+        """Semantic code search using Relace Cloud two-stage retrieval.
+
+        Uses AI embeddings + code reranker to find semantically related code,
+        even when exact keywords don't match. Run cloud_sync once first.
+
+        Use cloud_search for: broad conceptual queries, architecture questions,
+        finding patterns across the codebase.
+
+        Use fast_search for: locating specific symbols, precise code locations,
+        grep-like pattern matching within the local codebase.
+
+        Args:
+            query: Natural language search query.
+            branch: Branch to search (empty string uses API default branch).
+            score_threshold: Minimum relevance score (0.0-1.0, default 0.3).
+            token_limit: Maximum tokens to return (default 30000).
+        """
+        return cloud_search_logic(
+            repo_client,
+            query,
+            branch=branch,
+            score_threshold=score_threshold,
+            token_limit=token_limit,
+        )
+
+    @mcp.tool
+    def cloud_clear(confirm: bool = False) -> dict[str, Any]:
+        """Delete the cloud repository and local sync state.
+
+        Use when: switching to a different project, resetting after major
+        codebase restructuring, or cleaning up unused cloud repositories.
+
+        WARNING: This action is IRREVERSIBLE. It permanently deletes the
+        remote repository and removes the local sync state file.
+
+        Args:
+            confirm: Must be True to proceed. Acts as a safety guard.
+        """
+        from .repo.clear import cloud_clear_logic
+
+        return cloud_clear_logic(repo_client, config.base_dir, confirm=confirm)
+
+    @mcp.tool
+    def cloud_list() -> dict[str, Any]:
+        """List all repositories in your Relace Cloud account.
+
+        Use to: discover synced repositories, verify cloud_sync results,
+        or identify repository IDs for debugging.
+
+        Returns a list of repos with: repo_id, name, auto_index status.
+        Auto-paginates up to 10,000 repos (safety limit); `has_more=True` indicates the limit was reached.
+        """
+        return cloud_list_logic(repo_client)
+
+    @mcp.tool
+    def cloud_info() -> dict[str, Any]:
+        """Get detailed sync status for the current repository.
+
+        Use before cloud_sync to understand what action is needed.
+
+        Returns:
+        - local: Current git branch and HEAD commit
+        - synced: Last sync state (git ref, tracked files count)
+        - cloud: Cloud repo info (if exists)
+        - status: Whether sync is needed and recommended action
+        """
+        return cloud_info_logic(repo_client, config.base_dir)
+
     _ = fast_apply
     _ = fast_search
+    _ = cloud_sync
+    _ = cloud_search
+    _ = cloud_clear
+    _ = cloud_list
+    _ = cloud_info

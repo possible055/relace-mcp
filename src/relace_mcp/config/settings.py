@@ -24,6 +24,17 @@ RELACE_SEARCH_MODEL = os.getenv("RELACE_SEARCH_MODEL", "relace-search")
 SEARCH_TIMEOUT_SECONDS = float(os.getenv("RELACE_SEARCH_TIMEOUT_SECONDS", "120.0"))
 SEARCH_MAX_TURNS = int(os.getenv("RELACE_SEARCH_MAX_TURNS", "6"))
 
+# Relace Repos API (Infrastructure Endpoint for cloud sync/search)
+RELACE_API_ENDPOINT = os.getenv(
+    "RELACE_API_ENDPOINT",
+    "https://api.relace.run/v1",
+)
+# Optional: Pre-configured Repo ID (skip list/create if set)
+RELACE_REPO_ID = os.getenv("RELACE_REPO_ID", None)
+# Repo sync settings
+REPO_SYNC_TIMEOUT_SECONDS = float(os.getenv("RELACE_REPO_SYNC_TIMEOUT", "300.0"))
+REPO_SYNC_MAX_FILES = int(os.getenv("RELACE_REPO_SYNC_MAX_FILES", "5000"))
+
 # Strict mode: enforce safe settings
 RELACE_STRICT_MODE = os.getenv("RELACE_STRICT_MODE", "0") == "1"
 
