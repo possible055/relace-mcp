@@ -5,7 +5,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
-from ...utils import MAX_FILE_SIZE_BYTES, validate_file_path
+from ...utils import MAX_FILE_SIZE_BYTES, resolve_repo_path, validate_file_path
 from .schemas import GrepSearchParams
 
 # Directory listing limit
@@ -25,7 +25,11 @@ MAX_VIEW_DIRECTORY_CHARS = 8000
 
 
 def _timeout_context(seconds: int):
-    """Simple timeout context manager (Unix only).
+    """Simple timeout context manager.
+
+    - Main thread (Unix): uses signal.alarm for preemptive timeout
+    - Non-main thread or Windows: no native timeout support, caller must
+      implement manual timeout checks using time.monotonic()
 
     Args:
         seconds: Timeout in seconds.
@@ -34,17 +38,21 @@ def _timeout_context(seconds: int):
         None
 
     Raises:
-        TimeoutError: When operation times out.
+        TimeoutError: When operation times out (main thread + Unix only).
     """
     import signal
+    import threading
     from contextlib import contextmanager
+
+    is_main_thread = threading.current_thread() is threading.main_thread()
 
     @contextmanager
     def timeout_impl():
-        def handler(signum, frame):
-            raise TimeoutError(f"Operation timed out after {seconds}s")
+        if is_main_thread and hasattr(signal, "SIGALRM"):
+            # Main thread on Unix: use signal.alarm
+            def handler(signum, frame):
+                raise TimeoutError(f"Operation timed out after {seconds}s")
 
-        if hasattr(signal, "SIGALRM"):
             old_handler = signal.signal(signal.SIGALRM, handler)
             signal.alarm(seconds)
             try:
@@ -53,7 +61,8 @@ def _timeout_context(seconds: int):
                 signal.alarm(0)
                 signal.signal(signal.SIGALRM, old_handler)
         else:
-            # Windows: no timeout support
+            # Non-main thread or Windows: no native timeout support
+            # Caller must implement manual timeout checks
             yield
 
     return timeout_impl()
@@ -74,13 +83,11 @@ def map_repo_path(path: str, base_dir: str) -> str:
     Returns:
         Actual filesystem absolute path.
     """
-    if path == "/repo" or path == "/repo/":
-        return base_dir
-    if path.startswith("/repo/"):
-        rel = path[len("/repo/") :]
-        return os.path.join(base_dir, rel)
-    # Already absolute or relative - pass through
-    return path
+    try:
+        return resolve_repo_path(path, base_dir)
+    except ValueError:
+        # Fallback: return original path, let validate_file_path handle error
+        return path
 
 
 def _validate_file_for_view(resolved: Path, path: str) -> str | None:
@@ -525,6 +532,8 @@ def grep_search_handler(params: GrepSearchParams) -> str:
 
 def _grep_search_python_fallback(params: GrepSearchParams) -> str:
     """Pure Python grep implementation (when ripgrep not available)."""
+    import time
+
     # Compile pattern
     pattern = _compile_search_pattern(params.query, params.case_sensitive)
     if isinstance(pattern, str):
@@ -533,12 +542,17 @@ def _grep_search_python_fallback(params: GrepSearchParams) -> str:
 
     matches: list[str] = []
     base_path = Path(params.base_dir)
+    start_time = time.monotonic()
 
     try:
         with _timeout_context(GREP_TIMEOUT_SECONDS):
             for filepath, rel_path in _iter_searchable_files(
                 base_path, params.include_pattern, params.exclude_pattern
             ):
+                # Manual timeout check for non-main thread (where signal.alarm doesn't work)
+                if time.monotonic() - start_time > GREP_TIMEOUT_SECONDS:
+                    raise TimeoutError(f"Operation timed out after {GREP_TIMEOUT_SECONDS}s")
+
                 remaining = MAX_GREP_MATCHES - len(matches)
                 if remaining <= 0:
                     break
@@ -1066,6 +1080,46 @@ def _format_bash_result(result: subprocess.CompletedProcess) -> str:
     return output.strip() if output.strip() else "(no output)"
 
 
+def _translate_repo_paths_in_command(command: str, base_dir: str) -> str:
+    """Translate /repo paths in command tokens to base_dir paths.
+
+    Only translates tokens that look like paths (exactly /repo or starting with /repo/).
+    Does not modify strings that happen to contain /repo as substring.
+
+    Security:
+        Uses resolve_repo_path to prevent /repo// escape attacks.
+
+    Args:
+        command: Original command string.
+        base_dir: Base directory to translate /repo to.
+
+    Returns:
+        Command with /repo paths translated.
+    """
+    import shlex
+
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        # Fallback: no translation if parsing fails
+        return command
+
+    translated = []
+    for token in tokens:
+        if token == "/repo" or token.startswith("/repo/"):  # nosec B105
+            try:
+                translated.append(
+                    resolve_repo_path(token, base_dir, allow_relative=False, allow_absolute=False)
+                )
+            except ValueError:
+                # Security: invalid path (escape attempt), keep original (will fail safely)
+                translated.append(token)
+        else:
+            translated.append(token)
+
+    return shlex.join(translated)
+
+
 def bash_handler(command: str, base_dir: str) -> str:
     """Execute read-only bash command (Unix-only).
 
@@ -1079,14 +1133,18 @@ def bash_handler(command: str, base_dir: str) -> str:
     Returns:
         Command output or error message.
     """
+    # Step 1: Security check on ORIGINAL command (before path translation)
     blocked, reason = _is_blocked_command(command, base_dir)
 
     if blocked:
         return f"Error: Command blocked for security reasons. {reason}"
 
+    # Step 2: Translate /repo paths AFTER security check
+    translated_command = _translate_repo_paths_in_command(command, base_dir)
+
     try:
         result = subprocess.run(  # nosec B603 B602 B607
-            ["bash", "-c", command],
+            ["bash", "-c", translated_command],
             cwd=base_dir,
             capture_output=True,
             text=True,
