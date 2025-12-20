@@ -84,8 +84,23 @@ class TestCloudListLogic:
         assert result["count"] == 0
 
     def test_list_detects_pagination(self, mock_repo_client: MagicMock) -> None:
-        """Should detect when there are more repos (pagination limit)."""
-        # Return exactly 100 repos → has_more should be True
+        """Should detect when there are more repos (pagination safety limit).
+
+        list_repos now auto-paginates, so has_more only triggers at 10,000 repos
+        (the safety limit of 100 pages * 100 per page).
+        """
+        # Return 10,000 repos → has_more should be True (safety limit reached)
+        mock_repo_client.list_repos.return_value = [
+            {"repo_id": f"repo-{i}", "metadata": {"name": f"project-{i}"}} for i in range(10000)
+        ]
+
+        result = cloud_list_logic(mock_repo_client)
+
+        assert result["count"] == 10000
+        assert result["has_more"] is True
+
+    def test_list_no_pagination_for_small_list(self, mock_repo_client: MagicMock) -> None:
+        """Should not show has_more for lists under 10,000."""
         mock_repo_client.list_repos.return_value = [
             {"repo_id": f"repo-{i}", "metadata": {"name": f"project-{i}"}} for i in range(100)
         ]
@@ -93,7 +108,7 @@ class TestCloudListLogic:
         result = cloud_list_logic(mock_repo_client)
 
         assert result["count"] == 100
-        assert result["has_more"] is True
+        assert result["has_more"] is False
 
 
 class TestCloudInfoLogic:

@@ -147,25 +147,59 @@ class RelaceRepoClient:
     # === Source Control ===
 
     def list_repos(self, trace_id: str = "unknown") -> list[dict[str, Any]]:
-        """List all repositories under the account.
+        """List all repositories under the account with automatic pagination.
+
+        Uses page_start/next_page cursor-based pagination per Relace API spec.
 
         Returns:
             List of repo objects with id, name, etc.
         """
         url = f"{self._base_url}/repo"
-        resp = self._request_with_retry(
-            "GET",
-            url,
-            trace_id=trace_id,
-            headers=self._get_headers(),
-            params={"page_size": 100},
-        )
-        data = resp.json()
-        if isinstance(data, dict):
-            items = data.get("items")
-            if isinstance(items, list):
-                return items
-        return data if isinstance(data, list) else []
+        all_repos: list[dict[str, Any]] = []
+        page_start: int | None = 0
+        page_size = 100
+        max_iterations = 100  # Safety limit: 100 pages = 10,000 repos
+
+        for _ in range(max_iterations):
+            params: dict[str, Any] = {"page_size": page_size}
+            if page_start is not None and page_start > 0:
+                params["page_start"] = page_start
+
+            resp = self._request_with_retry(
+                "GET",
+                url,
+                trace_id=trace_id,
+                headers=self._get_headers(),
+                params=params,
+            )
+            data = resp.json()
+
+            # Extract items from response
+            items: list[dict[str, Any]] = []
+            if isinstance(data, dict):
+                items = data.get("items", [])
+                if not isinstance(items, list):
+                    items = []
+                # Get next_page cursor from response (omitted if no more pages)
+                page_start = data.get("next_page")
+            elif isinstance(data, list):
+                # Legacy: API returning list directly (no pagination info)
+                items = data
+                page_start = None
+
+            all_repos.extend(items)
+
+            # Stop if: no next_page cursor or empty response
+            if page_start is None or len(items) == 0:
+                break
+        else:
+            logger.warning(
+                "[%s] list_repos reached safety limit (%d pages), stopping pagination",
+                trace_id,
+                max_iterations,
+            )
+
+        return all_repos
 
     def create_repo(
         self,
@@ -295,7 +329,7 @@ class RelaceRepoClient:
             trace_id: Trace ID for logging.
 
         Returns:
-            True if deleted successfully.
+            True if deleted successfully or already deleted (idempotent).
         """
         url = f"{self._base_url}/repo/{repo_id}"
         try:
@@ -313,6 +347,10 @@ class RelaceRepoClient:
 
             return True
         except RuntimeError as exc:
+            # Treat 404 as success (repo already deleted - idempotent)
+            if "404" in str(exc) or "not found" in str(exc).lower():
+                logger.info("[%s] Repo '%s' already deleted (404)", trace_id, repo_id)
+                return True
             logger.error("[%s] Failed to delete repo '%s': %s", trace_id, repo_id, exc)
             return False
 
@@ -322,7 +360,7 @@ class RelaceRepoClient:
         self,
         repo_id: str,
         query: str,
-        branch: str = "main",
+        branch: str = "",
         score_threshold: float = 0.3,
         token_limit: int = 30000,
         include_content: bool = True,
@@ -333,7 +371,7 @@ class RelaceRepoClient:
         Args:
             repo_id: Repository UUID.
             query: Natural language search query.
-            branch: Branch to search (default: "main").
+            branch: Branch to search (empty string uses API default branch).
             score_threshold: Minimum relevance score (0.0-1.0).
             token_limit: Maximum tokens to return.
             include_content: Whether to include file content in results.

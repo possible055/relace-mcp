@@ -79,11 +79,11 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         Sync Modes:
         - Incremental (default): only uploads new/modified files, deletes removed files
-        - Safe Full (force=True): uploads all files but does NOT delete cloud files
+        - Safe Full: triggered by force=True OR first sync (no cached state) OR
+          git HEAD changed (e.g., branch switch, rebase, commit amend).
+          Uploads all files; suppresses delete operations UNLESS HEAD changed,
+          in which case zombie files from the old ref are deleted to prevent stale results.
         - Mirror Full (force=True, mirror=True): completely overwrites cloud to match local
-
-        Branch switching is automatically detected. When detected, Safe Full mode
-        is used to avoid accidentally deleting files from other branches.
 
         Args:
             force: If True, force full sync (ignore cached state).
@@ -126,13 +126,16 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
     @mcp.tool
     def cloud_clear(confirm: bool = False) -> dict[str, Any]:
-        """Clear (delete) the cloud repository and local sync state.
+        """Delete the cloud repository and local sync state.
 
-        This action is IRREVERSIBLE. It deletes the remote repository
-        and removes the local sync state file.
+        Use when: switching to a different project, resetting after major
+        codebase restructuring, or cleaning up unused cloud repositories.
+
+        WARNING: This action is IRREVERSIBLE. It permanently deletes the
+        remote repository and removes the local sync state file.
 
         Args:
-            confirm: You must set this to True to proceed.
+            confirm: Must be True to proceed. Acts as a safety guard.
         """
         from .repo.clear import cloud_clear_logic
 
@@ -142,11 +145,11 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     def cloud_list() -> dict[str, Any]:
         """List all repositories in your Relace Cloud account.
 
-        Returns a summary of all repos including repo_id, name, and auto_index status.
-        Use this to see what repos exist and their basic info.
+        Use to: discover synced repositories, verify cloud_sync results,
+        or identify repository IDs for debugging.
 
-        Note: Results are limited to 100 repos. If has_more is True, there are
-        additional repos not shown.
+        Returns a list of repos with: repo_id, name, auto_index status.
+        Limited to 100 repos; check has_more for pagination.
         """
         return cloud_list_logic(repo_client)
 
@@ -154,13 +157,13 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     def cloud_info() -> dict[str, Any]:
         """Get detailed sync status for the current repository.
 
-        Shows:
-        - local: Current git branch and HEAD
-        - synced: Last sync state (git ref at sync time, tracked files, etc.)
+        Use before cloud_sync to understand what action is needed.
+
+        Returns:
+        - local: Current git branch and HEAD commit
+        - synced: Last sync state (git ref, tracked files count)
         - cloud: Cloud repo info (if exists)
         - status: Whether sync is needed and recommended action
-
-        Use this to understand sync status before running cloud_sync.
         """
         return cloud_info_logic(repo_client, config.base_dir)
 

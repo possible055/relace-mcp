@@ -484,9 +484,15 @@ def cloud_sync_logic(
             file_contents = [
                 {"filename": op["filename"], "content": op["content"]} for op in writes
             ]
-            if file_contents:
-                result = client.update_repo_files(repo_id, file_contents, trace_id=trace_id)
-                repo_head = result.get("repo_head", "")
+            # Always call API even with empty list to ensure cloud repo is cleared
+            # and we get a valid repo_head for consistent sync state
+            result = client.update_repo_files(repo_id, file_contents, trace_id=trace_id)
+            repo_head = result.get("repo_head", "")
+            if not file_contents:
+                logger.warning(
+                    "[%s] Mirror sync with empty file list - cloud repo cleared",
+                    trace_id,
+                )
             logger.info(
                 "[%s] Mirror sync completed, new head=%s",
                 trace_id,
