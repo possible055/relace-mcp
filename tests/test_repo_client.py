@@ -74,6 +74,95 @@ class TestRelaceRepoClientListRepos:
 
         assert len(repos) == 1
 
+    def test_list_repos_paginates_multiple_pages(self, repo_client: RelaceRepoClient) -> None:
+        """Should fetch all pages using page_start/next_page cursor pagination."""
+        # Page 1: 100 items with next_page cursor
+        page1_response = MagicMock()
+        page1_response.status_code = 200
+        page1_response.is_success = True
+        page1_response.json.return_value = {
+            "items": [{"repo_id": f"repo-{i}"} for i in range(100)],
+            "next_page": 100,  # Cursor to next page
+            "total_items": 150,
+        }
+
+        # Page 2: 50 items, no next_page = last page
+        page2_response = MagicMock()
+        page2_response.status_code = 200
+        page2_response.is_success = True
+        page2_response.json.return_value = {
+            "items": [{"repo_id": f"repo-{i}"} for i in range(100, 150)],
+            # No next_page = last page
+            "total_items": 150,
+        }
+
+        with patch.object(
+            repo_client, "_request_with_retry", side_effect=[page1_response, page2_response]
+        ) as mock_request:
+            repos = repo_client.list_repos()
+
+        assert len(repos) == 150
+        assert mock_request.call_count == 2
+        # Verify page_start parameter usage
+        call_args_list = mock_request.call_args_list
+        # First call: no page_start (or page_start=0)
+        assert call_args_list[0].kwargs["params"].get("page_start", 0) == 0
+        # Second call: page_start=100 (from next_page)
+        assert call_args_list[1].kwargs["params"]["page_start"] == 100
+
+    def test_list_repos_stops_when_no_next_page(self, repo_client: RelaceRepoClient) -> None:
+        """Should stop pagination when next_page is omitted (no more pages)."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.is_success = True
+        mock_response.json.return_value = {
+            "items": [{"repo_id": "repo-1"}],
+            # No next_page = only one page
+            "total_items": 1,
+        }
+
+        with patch.object(repo_client, "_request_with_retry", return_value=mock_response):
+            repos = repo_client.list_repos()
+
+        assert len(repos) == 1
+
+    def test_list_repos_stops_on_empty_page(self, repo_client: RelaceRepoClient) -> None:
+        """Should stop pagination when receiving empty response."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.is_success = True
+        mock_response.json.return_value = {"items": [], "total_items": 0}
+
+        with patch.object(repo_client, "_request_with_retry", return_value=mock_response):
+            repos = repo_client.list_repos()
+
+        assert len(repos) == 0
+
+    def test_list_repos_respects_page_limit(self, repo_client: RelaceRepoClient) -> None:
+        """Should stop at 100 pages safety limit to prevent infinite loops."""
+        call_count = 0
+
+        def mock_paginated_response(*args, **kwargs):
+            nonlocal call_count
+            page_start = kwargs.get("params", {}).get("page_start", 0)
+            call_count += 1
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.is_success = True
+            mock_resp.json.return_value = {
+                "items": [{"repo_id": f"repo-{page_start + i}"} for i in range(100)],
+                "next_page": page_start + 100,  # Always return next_page
+                "total_items": 999999,  # Pretend there are many repos
+            }
+            return mock_resp
+
+        with patch.object(repo_client, "_request_with_retry", side_effect=mock_paginated_response):
+            repos = repo_client.list_repos()
+
+        # Should stop at 100 pages = 10,000 repos
+        assert len(repos) == 10000
+        assert call_count == 100
+
 
 class TestRelaceRepoClientUploadFile:
     """Test upload_file method."""

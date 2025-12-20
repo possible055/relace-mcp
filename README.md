@@ -90,13 +90,22 @@ Search the codebase and return relevant files and line ranges.
 
 Synchronize local codebase to Relace Cloud for semantic search. Uploads source files from `RELACE_BASE_DIR` to Relace Repos.
 
-**Incremental Sync:** By default, only uploads new/modified files and deletes removed files. Uses SHA-256 hash comparison for accurate change detection. First sync or `force=True` performs full upload.
+**Sync Modes:**
+
+| Mode | Trigger | Description |
+|------|---------|-------------|
+| Incremental | (default) | Only uploads new/modified files, deletes removed files |
+| Safe Full | `force=True`, first sync, or HEAD changed | Uploads all files; suppresses deletes unless HEAD changed |
+| Mirror Full | `force=True, mirror=True` | Completely overwrites cloud to match local |
+
+**HEAD Change Detection:** When git HEAD changes since last sync (e.g., branch switch, rebase, commit amend), Safe Full mode automatically cleans up zombie files from the old ref to prevent stale search results.
 
 **Parameters:**
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `force` | ❌ | `false` | Force full sync, ignoring cached state |
+| `mirror` | ❌ | `false` | With `force=True`, completely overwrite cloud repo |
 
 **Behavior:**
 - Respects `.gitignore` patterns (uses `git ls-files` when available)
@@ -112,11 +121,13 @@ Synchronize local codebase to Relace Cloud for semantic search. Uploads source f
   "repo_name": "project-name",
   "repo_head": "abc123def456",
   "is_incremental": true,
+  "sync_mode": "incremental",
   "files_created": 5,
   "files_updated": 3,
   "files_deleted": 2,
   "files_unchanged": 40,
-  "total_files": 48
+  "total_files": 48,
+  "ref_changed": false
 }
 ```
 
@@ -129,6 +140,7 @@ Semantic code search over the cloud-synced repository. Requires running `cloud_s
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `query` | ✅ | — | Natural language search query |
+| `branch` | ❌ | `""` | Branch to search (empty uses API default) |
 | `score_threshold` | ❌ | `0.3` | Minimum relevance score (0.0-1.0) |
 | `token_limit` | ❌ | `30000` | Maximum tokens to return |
 
@@ -137,11 +149,75 @@ Semantic code search over the cloud-synced repository. Requires running `cloud_s
 ```json
 {
   "query": "user authentication logic",
+  "branch": "",
   "results": [
     {"path": "src/auth/login.py", "content": "...", "score": 0.85}
   ],
   "repo_id": "uuid",
   "result_count": 5
+}
+```
+
+### `cloud_list`
+
+List all repositories in your Relace Cloud account.
+
+**Parameters:** None
+
+**Returns:**
+
+```json
+{
+  "count": 3,
+  "repos": [
+    {"repo_id": "uuid-1", "name": "project-a", "auto_index": true},
+    {"repo_id": "uuid-2", "name": "project-b", "auto_index": true}
+  ],
+  "has_more": false
+}
+```
+
+### `cloud_info`
+
+Get detailed sync status for the current repository. Use before `cloud_sync` to understand what action is needed.
+
+**Parameters:** None
+
+**Returns:**
+
+```json
+{
+  "repo_name": "my-project",
+  "local": {"git_branch": "main", "git_head": "abc123de"},
+  "synced": {
+    "repo_id": "uuid",
+    "repo_head": "def456gh",
+    "git_branch": "main",
+    "git_head": "abc123de",
+    "tracked_files": 48
+  },
+  "cloud": {"repo_id": "uuid", "auto_index": true},
+  "status": {"ref_changed": false, "needs_sync": false}
+}
+```
+
+### `cloud_clear`
+
+Delete the cloud repository and local sync state. Use when switching projects or resetting after major restructuring.
+
+**Parameters:**
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `confirm` | ✅ | `false` | Must be `true` to proceed (safety guard) |
+
+**Returns:**
+
+```json
+{
+  "deleted": true,
+  "repo_id": "uuid",
+  "state_cleared": true
 }
 ```
 
