@@ -11,11 +11,13 @@ from ...config import SEARCH_MAX_TURNS, RelaceConfig
 from ...utils import resolve_repo_path
 from .handlers import (
     MAX_BASH_CHARS,
+    MAX_GLOB_CHARS,
     MAX_GREP_SEARCH_CHARS,
     MAX_VIEW_DIRECTORY_CHARS,
     MAX_VIEW_FILE_CHARS,
     bash_handler,
     estimate_context_size,
+    glob_handler,
     grep_search_handler,
     report_back_handler,
     truncate_for_context,
@@ -27,9 +29,9 @@ from .schemas import (
     CONVERGENCE_HINT,
     STRATEGIES,
     SYSTEM_PROMPT,
-    TOOL_SCHEMAS,
     USER_PROMPT_TEMPLATE,
     GrepSearchParams,
+    get_tool_schemas,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,7 +40,7 @@ logger = logging.getLogger(__name__)
 MAX_TOTAL_CONTEXT_CHARS = 400000
 
 # Read-only tools safe for parallel execution
-PARALLEL_SAFE_TOOLS = frozenset({"view_file", "view_directory", "grep_search"})
+PARALLEL_SAFE_TOOLS = frozenset({"view_file", "view_directory", "grep_search", "glob"})
 
 # Maximum parallel workers (official recommendation: 4-12 tool calls per turn)
 MAX_PARALLEL_WORKERS = 12
@@ -167,7 +169,7 @@ class FastAgenticSearchHarness:
             # Ensure tool_calls and tool results are paired correctly
             self._repair_tool_call_integrity(messages, trace_id)
 
-            response = self._client.chat(messages, tools=TOOL_SCHEMAS, trace_id=trace_id)
+            response = self._client.chat(messages, tools=get_tool_schemas(), trace_id=trace_id)
 
             # Parse response
             choices = response.get("choices", [])
@@ -517,6 +519,10 @@ class FastAgenticSearchHarness:
                 MAX_GREP_SEARCH_CHARS,
                 "For more matches, use more specific query or include_pattern.",
             ),
+            "glob": (
+                MAX_GLOB_CHARS,
+                "To limit output, narrow the pattern, provide a narrower path, or reduce max_results.",
+            ),
             "bash": (
                 MAX_BASH_CHARS,
                 "To limit output, use head -n / tail -n / --max-count params.",
@@ -725,6 +731,14 @@ class FastAgenticSearchHarness:
                 base_dir=base_dir,
             )
             return grep_search_handler(params)
+        elif name == "glob":
+            return glob_handler(
+                pattern=args.get("pattern", ""),
+                path=args.get("path", "/repo"),
+                include_hidden=args.get("include_hidden", False),
+                max_results=args.get("max_results", 200),
+                base_dir=base_dir,
+            )
 
         elif name == "report_back":
             return report_back_handler(

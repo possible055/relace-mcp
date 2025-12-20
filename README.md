@@ -185,10 +185,17 @@ Delete the cloud repository and local sync state. Use when switching projects or
 | `RELACE_SEARCH_MODEL` | `relace-search` |
 | `RELACE_SEARCH_TIMEOUT_SECONDS` | `120` |
 | `RELACE_SEARCH_MAX_TURNS` | `6` |
+| `RELACE_SEARCH_PARALLEL_TOOL_CALLS` | `1` |
+| `RELACE_SEARCH_ENABLE_BASH` | `1` |
+| `RELACE_SEARCH_ENABLED_TOOLS` | — |
 | `RELACE_API_ENDPOINT` | `https://api.relace.run/v1` (Cloud Repos API) |
 | `RELACE_REPO_ID` | — (Optional: pre-configured repo UUID to skip list/create) |
 | `RELACE_REPO_SYNC_TIMEOUT` | `300` |
 | `RELACE_REPO_SYNC_MAX_FILES` | `5000` |
+
+Fast Search tool control:
+- `RELACE_SEARCH_ENABLED_TOOLS`: comma/space-separated allowlist for internal search tools (`view_file`, `view_directory`, `grep_search`, `glob`, `bash`). (`report_back` is always enabled.)
+- `RELACE_SEARCH_ENABLE_BASH=0`: removes `bash` from the default tool set.
 
 </details>
 
