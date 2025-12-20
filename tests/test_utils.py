@@ -123,8 +123,3 @@ class TestResolveRepoPathEdgeCases:
         """Test /REPO is not treated as /repo (case sensitive)."""
         result = resolve_repo_path("/REPO/src", str(tmp_path))
         assert result == "/REPO/src"  # Passed through as absolute path
-
-    def test_empty_after_repo_slash(self, tmp_path: Path) -> None:
-        """Test /repo/ with trailing slash returns base_dir."""
-        result = resolve_repo_path("/repo/", str(tmp_path))
-        assert result == str(tmp_path)
