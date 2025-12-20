@@ -149,7 +149,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         or identify repository IDs for debugging.
 
         Returns a list of repos with: repo_id, name, auto_index status.
-        Limited to 100 repos; check has_more for pagination.
+        Auto-paginates up to 10,000 repos (safety limit); `has_more=True` indicates the limit was reached.
         """
         return cloud_list_logic(repo_client)
 
