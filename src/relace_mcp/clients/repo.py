@@ -347,9 +347,14 @@ class RelaceRepoClient:
 
             return True
         except RuntimeError as exc:
-            # Treat 404 as success (repo already deleted - idempotent)
-            if "404" in str(exc) or "not found" in str(exc).lower():
+            # Treat 404 as success (repo already deleted - idempotent).
+            # `_request_with_retry` wraps API errors in RuntimeError but preserves
+            # the original `RelaceAPIError` as `__cause__`.
+            cause = exc.__cause__
+            if isinstance(cause, RelaceAPIError) and cause.status_code == 404:
                 logger.info("[%s] Repo '%s' already deleted (404)", trace_id, repo_id)
+                if self._cached_repo_id == repo_id:
+                    self._cached_repo_id = None
                 return True
             logger.error("[%s] Failed to delete repo '%s': %s", trace_id, repo_id, exc)
             return False

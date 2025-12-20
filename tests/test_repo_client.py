@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from relace_mcp.clients.exceptions import RelaceAPIError
 from relace_mcp.clients.repo import RelaceRepoClient
 from relace_mcp.config import RelaceConfig
 
@@ -186,6 +187,7 @@ class TestRelaceRepoClientUploadFile:
             # Verify URL encoding
             call_args = mock_request.call_args
             url = call_args.args[1] if len(call_args.args) > 1 else call_args.kwargs.get("url")
+            assert url is not None
             assert "src%2Fmain.py" in url
 
     def test_upload_file_handles_windows_paths(self, repo_client: RelaceRepoClient) -> None:
@@ -206,6 +208,7 @@ class TestRelaceRepoClientUploadFile:
 
             call_args = mock_request.call_args
             url = call_args.args[1] if len(call_args.args) > 1 else call_args.kwargs.get("url")
+            assert url is not None
             # Should encode as forward slashes
             assert "src%2Fsubdir%2Fmain.py" in url
             assert "\\" not in url
@@ -228,6 +231,7 @@ class TestRelaceRepoClientUploadFile:
 
             call_args = mock_request.call_args
             url = call_args.args[1] if len(call_args.args) > 1 else call_args.kwargs.get("url")
+            assert url is not None
             # Spaces should be encoded
             assert "%20" in url or "+" in url
 
@@ -292,6 +296,7 @@ class TestRelaceRepoClientCreateRepo:
 
             call_args = mock_request.call_args
             payload = call_args.kwargs.get("json")
+            assert payload is not None
             assert payload["metadata"]["name"] == "test-repo"
             assert payload["auto_index"] is True
             assert "source" not in payload
@@ -322,6 +327,7 @@ class TestRelaceRepoClientCreateRepo:
 
             call_args = mock_request.call_args
             payload = call_args.kwargs.get("json")
+            assert payload is not None
             assert payload["source"] == source
             assert payload["source"]["type"] == "files"
             assert len(payload["source"]["files"]) == 1
@@ -351,6 +357,7 @@ class TestRelaceRepoClientCreateRepo:
 
             call_args = mock_request.call_args
             payload = call_args.kwargs.get("json")
+            assert payload is not None
             assert payload["source"]["type"] == "git"
             assert payload["source"]["url"] == "https://github.com/example/repo.git"
             assert payload["auto_index"] is False
@@ -432,6 +439,7 @@ class TestRelaceRepoClientRetrieve:
             # Verify payload
             call_args = mock_request.call_args
             payload = call_args.kwargs.get("json")
+            assert payload is not None
             assert payload["query"] == "user authentication"
             assert payload["score_threshold"] == 0.5
             assert payload["token_limit"] == 10000
@@ -494,3 +502,46 @@ class TestRelaceRepoClientRetry:
 
             with pytest.raises(RuntimeError, match="invalid_api_key"):
                 repo_client.list_repos()
+
+
+class TestRelaceRepoClientDeleteRepo:
+    """Test delete_repo behavior."""
+
+    def test_delete_repo_treats_404_as_success(self, repo_client: RelaceRepoClient) -> None:
+        """Should treat 404 as idempotent success and clear cached repo_id."""
+        repo_client._cached_repo_id = "test-repo-id"
+
+        api_error = RelaceAPIError(
+            status_code=404,
+            code="not_found",
+            message="Repo not found",
+            retryable=False,
+        )
+
+        def raise_not_found(*args, **kwargs):
+            raise RuntimeError("Repos API error (not_found): Repo not found") from api_error
+
+        with patch.object(repo_client, "_request_with_retry", side_effect=raise_not_found):
+            assert repo_client.delete_repo("test-repo-id") is True
+
+        assert repo_client._cached_repo_id is None
+
+    def test_delete_repo_returns_false_on_other_errors(self, repo_client: RelaceRepoClient) -> None:
+        """Should return False for non-404 API errors."""
+        repo_client._cached_repo_id = "test-repo-id"
+
+        api_error = RelaceAPIError(
+            status_code=403,
+            code="forbidden",
+            message="Forbidden",
+            retryable=False,
+        )
+
+        def raise_forbidden(*args, **kwargs):
+            raise RuntimeError("Repos API error (forbidden): Forbidden") from api_error
+
+        with patch.object(repo_client, "_request_with_retry", side_effect=raise_forbidden):
+            assert repo_client.delete_repo("test-repo-id") is False
+
+        # Cached ID should remain unchanged on failure
+        assert repo_client._cached_repo_id == "test-repo-id"
