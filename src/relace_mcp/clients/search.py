@@ -1,4 +1,5 @@
 import logging
+import os
 import random
 import time
 from typing import Any
@@ -53,6 +54,17 @@ class RelaceSearchClient:
             "top_k": 100,
             "repetition_penalty": 1.0,
         }
+
+        # Allow the model to emit multiple tool calls in a single turn for lower latency.
+        # Only include the field when enabled to preserve compatibility with strict providers.
+        if os.getenv("RELACE_SEARCH_PARALLEL_TOOL_CALLS", "1").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "y",
+            "on",
+        ):
+            payload["parallel_tool_calls"] = True
 
         headers = {
             "Authorization": f"Bearer {self._config.api_key}",
