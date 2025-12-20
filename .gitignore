@@ -10,6 +10,7 @@ dist/
 
 # Testing / Coverage
 .pytest_cache/
+.uv-cache
 
 # Linter / formatter cache
 .pylint.d/
