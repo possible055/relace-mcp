@@ -118,6 +118,16 @@ class TestViewFileHandler:
         assert "Error" in result
         assert "Not a file" in result
 
+    def test_empty_range_has_no_truncation_notice(self, tmp_path: Path) -> None:
+        """Empty ranges should not show a confusing truncation message."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("line1\nline2\nline3\n")
+
+        # Out-of-bounds range produces no numbered lines.
+        result = view_file_handler("/repo/test.py", [100, 200], str(tmp_path))
+        assert result.strip() == ""
+        assert "truncated" not in result.lower()
+
 
 class TestViewDirectoryHandler:
     """Test view_directory tool handler."""
@@ -154,6 +164,17 @@ class TestViewDirectoryHandler:
         """Should return error for non-existent directory."""
         result = view_directory_handler("/repo/missing", False, str(tmp_path))
         assert "Error" in result
+
+    def test_does_not_traverse_symlink_directories(self, tmp_path: Path) -> None:
+        """Symlinked directories should not be traversed (prevents escape from base_dir)."""
+        outside = tmp_path.parent / f"outside_dir_{tmp_path.name}"
+        outside.mkdir()
+        (outside / "secret.txt").write_text("secret")
+        (tmp_path / "link").symlink_to(outside, target_is_directory=True)
+
+        result = view_directory_handler("/repo", False, str(tmp_path))
+        assert "link" in result
+        assert "secret.txt" not in result
 
 
 class TestGrepSearchHandler:
@@ -362,6 +383,7 @@ class TestContextTruncation:
         result = truncate_for_context(long_text)
 
         assert len(result) < len(long_text)
+        assert len(result) <= MAX_TOOL_RESULT_CHARS
         assert "truncated" in result
         assert str(len(long_text)) in result
 
@@ -380,6 +402,22 @@ class TestContextTruncation:
 
         size = estimate_context_size(messages)
         assert size == 26
+
+    def test_estimate_context_size_counts_list_content(self) -> None:
+        """Should count text in multimodal list content."""
+        from typing import Any
+
+        messages: list[dict[str, Any]] = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "image_url", "image_url": {"url": "https://example.com/image.png"}},
+                ],
+            }
+        ]
+
+        assert estimate_context_size(messages) == 5
 
 
 class TestGrepTruncation:

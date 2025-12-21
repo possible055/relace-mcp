@@ -145,6 +145,16 @@ class TestWriteOperationBlocking:
         blocked, _ = _is_blocked_command("sed -i 's/old/new/g' file.txt", DEFAULT_BASE_DIR)
         assert blocked
 
+    def test_allows_sed_script_containing_dash_i(self) -> None:
+        """Should not false-positive on '-i' inside sed script text."""
+        blocked, _ = _is_blocked_command("sed 's/this-is-fine/ok/g' file.txt", DEFAULT_BASE_DIR)
+        assert not blocked
+
+    def test_blocks_sed_inplace_combined_short_options(self) -> None:
+        """Should block -i even when combined with other short options."""
+        blocked, _ = _is_blocked_command("sed -nri 's/old/new/g' file.txt", DEFAULT_BASE_DIR)
+        assert blocked
+
     def test_blocks_mkdir(self) -> None:
         """Should block mkdir command."""
         blocked, _ = _is_blocked_command("mkdir newdir", DEFAULT_BASE_DIR)

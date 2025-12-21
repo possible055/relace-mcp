@@ -1,5 +1,4 @@
 import logging
-import os
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -32,7 +31,10 @@ class ObservedFilesMixin:
                 if rel_path.startswith("./"):
                     rel_path = rel_path[2:]
                 # Convert to absolute path
-                abs_path = os.path.join(self._config.base_dir, rel_path)
+                abs_path = self._to_absolute_path(rel_path)
+                if not abs_path:
+                    # Defense-in-depth: ignore any path that escapes base_dir.
+                    continue
                 line_num = int(match.group(2))
 
                 if abs_path not in self._observed_files:
@@ -136,6 +138,23 @@ class ObservedFilesMixin:
         self, files: dict[str, list[list[int]]]
     ) -> dict[str, list[list[int]]]:
         """Normalize report_back file paths to absolute paths."""
+
+        def _normalize_ranges(raw: Any) -> list[list[int]]:
+            if not isinstance(raw, list):
+                return []
+            normalized_ranges: list[list[int]] = []
+            for r in raw:
+                if (
+                    isinstance(r, (list, tuple))
+                    and len(r) == 2
+                    and isinstance(r[0], int)
+                    and isinstance(r[1], int)
+                ):
+                    start, end = r[0], r[1]
+                    if start > 0 and end >= start:
+                        normalized_ranges.append([start, end])
+            return normalized_ranges
+
         if not isinstance(files, dict):
             return {}
         normalized: dict[str, list[list[int]]] = {}
@@ -144,7 +163,10 @@ class ObservedFilesMixin:
             if not resolved:
                 logger.warning("Filtered out invalid path from report_back: %s", path)
                 continue
-            normalized.setdefault(resolved, []).extend(ranges)
+            validated_ranges = _normalize_ranges(ranges)
+            if not validated_ranges:
+                continue
+            normalized.setdefault(resolved, []).extend(validated_ranges)
         return normalized
 
     def _maybe_record_observed(

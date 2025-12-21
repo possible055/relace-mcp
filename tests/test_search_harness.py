@@ -77,6 +77,37 @@ class TestFastAgenticSearchHarness:
         assert expected_path in result["files"]
         assert result["turns_used"] == 1
 
+    def test_report_back_ignores_invalid_ranges_type(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Invalid range payloads should be ignored (no TypeError)."""
+        (tmp_path / "test.py").write_text("def hello(): pass\n")
+
+        mock_client.chat.return_value = {
+            "choices": [
+                {
+                    "message": {
+                        "tool_calls": [
+                            _make_report_back_call(
+                                "call_1",
+                                "Bad ranges should not crash",
+                                {"test.py": "oops"},
+                            )
+                        ]
+                    }
+                }
+            ]
+        }
+
+        harness = FastAgenticSearchHarness(mock_config, mock_client)
+        result = harness.run("Find hello function")
+
+        assert result["explanation"] == "Bad ranges should not crash"
+        assert result["files"] == {}
+
     def test_handles_multiple_turns(
         self,
         mock_config: RelaceConfig,
