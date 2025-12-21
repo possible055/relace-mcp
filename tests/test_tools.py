@@ -318,6 +318,33 @@ class TestApplyFileLogicValidation:
         assert result["status"] == "ok"
 
     @pytest.mark.asyncio
+    async def test_delete_with_hash_remove_directive_is_allowed(
+        self,
+        mock_config: RelaceConfig,
+        mock_backend: AsyncMock,
+        temp_source_file: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Should allow delete with # remove directive (Python-style) when combined with valid anchors."""
+        mock_backend.apply.return_value = ApplyResponse(
+            merged_code="def hello():\n    print('Hello')\n",
+            usage={},
+        )
+
+        # snippet contains real anchor (def hello) and Python-style remove directive
+        result = await apply_file_logic(
+            backend=mock_backend,
+            file_path=str(temp_source_file),
+            edit_snippet="def hello():\n    print('Hello')\n\n# remove goodbye\n",
+            instruction="delete goodbye function",
+            base_dir=str(tmp_path),
+        )
+
+        # Should call API, not return error
+        mock_backend.apply.assert_called_once()
+        assert result["status"] == "ok"
+
+    @pytest.mark.asyncio
     async def test_no_changes_returns_message(
         self,
         mock_config: RelaceConfig,

@@ -35,6 +35,9 @@ dev = [
     "pytest>=8.4.1",
     "pytest-asyncio>=1.3.0",
     "pre-commit>=4.5.1",
+    "pyright>=1.1.390",
+    "interrogate>=1.7.0",
+    "dead>=1.5.2",
 ]
 
 [project.scripts]
@@ -61,3 +64,27 @@ python_version = "3.11"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+include = ["src"]
+exclude = ["**/__pycache__", "tests", "build"]
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportUnusedImport = "warning"
+reportUnusedClass = "warning"
+reportUnusedFunction = "warning"
+reportUnusedVariable = "warning"
+reportDuplicateImport = "error"
+reportIncompatibleMethodOverride = "error"
+reportIncompatibleVariableOverride = "error"
+
+[tool.interrogate]
+ignore-init-method = true
+ignore-init-module = true
+ignore-private = true
+ignore-nested-functions = true
+fail-under = 80
+exclude = ["tests", "build"]
+verbose = 1

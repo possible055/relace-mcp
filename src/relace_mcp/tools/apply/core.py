@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, NotRequired, TypedDict
+from typing import Any
 
 from ...clients.apply import ApplyRequest, ApplyResponse, RelaceApplyClient
 from ...config import EXPERIMENTAL_POST_CHECK
@@ -20,19 +20,6 @@ from .exceptions import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-class ApplyResult(TypedDict):
-    """Structured type definition for fast_apply return result."""
-
-    status: str  # "ok" | "error"
-    path: str
-    trace_id: str
-    timing_ms: int
-    message: str
-    diff: NotRequired[str | None]  # Only present when status="ok" and changes exist
-    code: NotRequired[str]  # Only present when status="error"
-    detail: NotRequired[dict[str, Any]]  # API error details
 
 
 @dataclass
