@@ -2,7 +2,8 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from ..clients import RelaceClient, RelaceRepoClient, RelaceSearchClient
+from ..clients import RelaceRepoClient, RelaceSearchClient
+from ..clients.apply import RelaceApplyClient
 from ..config import RelaceConfig
 from .apply import apply_file_logic
 from .repo import cloud_info_logic, cloud_list_logic, cloud_search_logic, cloud_sync_logic
@@ -13,7 +14,7 @@ __all__ = ["register_tools"]
 
 def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     """Register Relace tools to the FastMCP instance."""
-    client = RelaceClient(config)
+    apply_backend = RelaceApplyClient(config)
 
     @mcp.tool
     async def fast_apply(
@@ -43,7 +44,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         To create a new file, simply specify the content in edit_snippet.
         """
         return await apply_file_logic(
-            client=client,
+            backend=apply_backend,
             file_path=path,
             edit_snippet=edit_snippet,
             instruction=instruction,

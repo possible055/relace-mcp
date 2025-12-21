@@ -34,7 +34,7 @@ class ApiInvalidResponseError(ApplyError):
 
     error_code = "API_INVALID_RESPONSE"
 
-    def __init__(self, detail: str = "Relace API did not return 'mergedCode'") -> None:
+    def __init__(self, detail: str = "Apply API did not return updated code") -> None:
         super().__init__(detail)
 
 
