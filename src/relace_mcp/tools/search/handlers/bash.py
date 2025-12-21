@@ -6,7 +6,7 @@ from .bash_security import _is_blocked_command
 from .constants import BASH_MAX_OUTPUT_CHARS, BASH_TIMEOUT_SECONDS
 
 
-def _format_bash_result(result: subprocess.CompletedProcess) -> str:
+def _format_bash_result(result: subprocess.CompletedProcess[str]) -> str:
     """Format bash execution result.
 
     Args:

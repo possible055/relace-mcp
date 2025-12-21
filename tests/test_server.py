@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastmcp import Client
 
+from relace_mcp.clients.apply import ApplyResponse
 from relace_mcp.config import RelaceConfig
 from relace_mcp.server import build_server
 
@@ -66,11 +67,14 @@ class TestServerToolExecution:
         successful_api_response: dict[str, Any],
     ) -> None:
         """Should execute fast_apply tool successfully."""
-        # Mock the RelaceClient.apply method (now async)
-        with patch("relace_mcp.tools.RelaceClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.apply.return_value = successful_api_response
-            mock_client_cls.return_value = mock_client
+        # Mock the RelaceApplyClient.apply method
+        with patch("relace_mcp.tools.RelaceApplyClient") as mock_backend_cls:
+            mock_backend = AsyncMock()
+            mock_backend.apply.return_value = ApplyResponse(
+                merged_code=successful_api_response["choices"][0]["message"]["content"],
+                usage=successful_api_response.get("usage", {}),
+            )
+            mock_backend_cls.return_value = mock_backend
 
             server = build_server(config=mock_config)
 
@@ -182,13 +186,13 @@ class TestServerIntegration:
         # temp_source_file content: def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Goodbye')\n
         merged_code = "def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Modified!')\n"
 
-        with patch("relace_mcp.tools.RelaceClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.apply.return_value = {
-                "mergedCode": merged_code,
-                "usage": {"total_tokens": 100},
-            }
-            mock_client_cls.return_value = mock_client
+        with patch("relace_mcp.tools.RelaceApplyClient") as mock_backend_cls:
+            mock_backend = AsyncMock()
+            mock_backend.apply.return_value = ApplyResponse(
+                merged_code=merged_code,
+                usage={"total_tokens": 100},
+            )
+            mock_backend_cls.return_value = mock_backend
 
             server = build_server(config=config, run_health_check=False)
 

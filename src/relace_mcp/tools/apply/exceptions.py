@@ -34,7 +34,7 @@ class ApiInvalidResponseError(ApplyError):
 
     error_code = "API_INVALID_RESPONSE"
 
-    def __init__(self, detail: str = "Relace API did not return 'mergedCode'") -> None:
+    def __init__(self, detail: str = "Apply API did not return updated code") -> None:
         super().__init__(detail)
 
 
@@ -46,13 +46,3 @@ class FileNotWritableError(ApplyError):
     def __init__(self, path: str) -> None:
         self.path = path
         super().__init__(f"File is not writable: {path}")
-
-
-class PostCheckFailedError(ApplyError):
-    """Post-check validation of merged_code failed."""
-
-    error_code = "POST_CHECK_FAILED"
-
-    def __init__(self, reason: str) -> None:
-        self.reason = reason
-        super().__init__(f"Post-check failed: {reason}")

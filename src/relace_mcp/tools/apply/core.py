@@ -5,9 +5,9 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, NotRequired, TypedDict
+from typing import Any
 
-from ...clients import RelaceClient
+from ...clients.apply import ApplyRequest, ApplyResponse, RelaceApplyClient
 from ...config import EXPERIMENTAL_POST_CHECK
 from ...utils import MAX_FILE_SIZE_BYTES, validate_file_path
 from . import errors, file_io, snippet
@@ -20,19 +20,6 @@ from .exceptions import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-class ApplyResult(TypedDict):
-    """Structured type definition for fast_apply return result."""
-
-    status: str  # "ok" | "error"
-    path: str
-    trace_id: str
-    timing_ms: int
-    message: str
-    diff: NotRequired[str | None]  # Only present when status="ok" and changes exist
-    code: NotRequired[str]  # Only present when status="error"
-    detail: NotRequired[dict[str, Any]]  # API error details
 
 
 @dataclass
@@ -109,7 +96,7 @@ def _create_new_file(ctx: ApplyContext, resolved_path: Path, edit_snippet: str) 
 
 async def _apply_to_existing_file(
     ctx: ApplyContext,
-    client: RelaceClient,
+    backend: RelaceApplyClient,
     resolved_path: Path,
     edit_snippet: str,
     file_size: int,
@@ -147,22 +134,23 @@ async def _apply_to_existing_file(
                 ctx.elapsed_ms(),
             )
 
-    relace_metadata = {
+    metadata = {
         "source": "fastmcp",
         "tool": "fast_apply",
         "file_path": str(resolved_path),
         "trace_id": ctx.trace_id,
     }
 
-    result = await client.apply(
+    request = ApplyRequest(
         initial_code=initial_code,
         edit_snippet=edit_snippet,
         instruction=ctx.instruction,
-        relace_metadata=relace_metadata,
+        metadata=metadata,
     )
+    response: ApplyResponse = await backend.apply(request)
 
-    merged_code = result.get("mergedCode")
-    usage = result.get("usage", {})
+    merged_code = response.merged_code
+    usage = response.usage
 
     if not isinstance(merged_code, str):
         raise ApiInvalidResponseError()
@@ -185,7 +173,7 @@ async def _apply_to_existing_file(
             )
             return errors.recoverable_error(
                 "APPLY_NOOP",
-                "Relace returned mergedCode identical to initial. Add 1-3 anchor lines before/after target.",
+                "Apply API returned content identical to initial. Add 1-3 anchor lines before/after target.",
                 ctx.file_path,
                 ctx.instruction,
                 ctx.trace_id,
@@ -274,7 +262,7 @@ async def _apply_to_existing_file(
 
 
 async def apply_file_logic(
-    client: RelaceClient,
+    backend: RelaceApplyClient,
     file_path: str,
     edit_snippet: str,
     instruction: str | None,
@@ -283,10 +271,10 @@ async def apply_file_logic(
     """Core logic for fast_apply (testable independently).
 
     Args:
-        client: Relace API client.
+        backend: Apply backend instance.
         file_path: Target file path.
         edit_snippet: Code snippet to apply, using abbreviation comments.
-        instruction: Optional natural language instruction.
+        instruction: Optional natural language instruction forwarded to the apply backend for disambiguation.
         base_dir: Base directory restriction.
 
     Returns:
@@ -317,23 +305,39 @@ async def apply_file_logic(
 
         if not file_exists:
             return _create_new_file(ctx, resolved_path, edit_snippet)
-        return await _apply_to_existing_file(ctx, client, resolved_path, edit_snippet, file_size)
+        return await _apply_to_existing_file(ctx, backend, resolved_path, edit_snippet, file_size)
     except Exception as exc:
-        from ...clients.exceptions import RelaceAPIError, RelaceNetworkError, RelaceTimeoutError
+        import openai
 
         apply_logging.log_apply_error(
             ctx.trace_id, ctx.started_at, file_path, edit_snippet, instruction, exc
         )
 
-        if isinstance(exc, (RelaceAPIError, RelaceNetworkError, RelaceTimeoutError)):
+        if isinstance(exc, openai.APIError):
             logger.warning(
-                "[%s] Relace apply recoverable error for %s: %s",
+                "[%s] Apply API error for %s: %s",
                 ctx.trace_id,
                 file_path,
                 exc,
             )
-            return errors.api_error_to_recoverable(
+            return errors.openai_error_to_recoverable(
                 exc, file_path, instruction, ctx.trace_id, ctx.elapsed_ms()
+            )
+
+        if isinstance(exc, ValueError):
+            logger.warning(
+                "[%s] API response parsing error for %s: %s",
+                ctx.trace_id,
+                file_path,
+                exc,
+            )
+            return errors.recoverable_error(
+                "API_INVALID_RESPONSE",
+                str(exc),
+                file_path,
+                instruction,
+                ctx.trace_id,
+                ctx.elapsed_ms(),
             )
 
         if isinstance(exc, ApplyError):
@@ -372,5 +376,5 @@ async def apply_file_logic(
                 ctx.elapsed_ms(),
             )
 
-        logger.error("[%s] Relace apply failed for %s: %s", ctx.trace_id, file_path, exc)
+        logger.error("[%s] Apply failed for %s: %s", ctx.trace_id, file_path, exc)
         raise
