@@ -4,19 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "relace-mcp"
-version = "0.2.0a4"
+version = "0.2.0a5"
 description = "Unofficial Relace MCP Server - Fast code merging via Relace API"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "possible055" }]
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 keywords = ["relace", "instant-apply", "model-context-protocol", "mcp-server"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Framework :: FastAPI",
     "Environment :: Plugins",
@@ -53,7 +55,7 @@ exclude = ["tests*"]
 exclude_dirs = ["tests"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.11"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
