@@ -77,6 +77,37 @@ class TestFastAgenticSearchHarness:
         assert expected_path in result["files"]
         assert result["turns_used"] == 1
 
+    def test_report_back_ignores_invalid_ranges_type(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Invalid range payloads should be ignored (no TypeError)."""
+        (tmp_path / "test.py").write_text("def hello(): pass\n")
+
+        mock_client.chat.return_value = {
+            "choices": [
+                {
+                    "message": {
+                        "tool_calls": [
+                            _make_report_back_call(
+                                "call_1",
+                                "Bad ranges should not crash",
+                                {"test.py": "oops"},
+                            )
+                        ]
+                    }
+                }
+            ]
+        }
+
+        harness = FastAgenticSearchHarness(mock_config, mock_client)
+        result = harness.run("Find hello function")
+
+        assert result["explanation"] == "Bad ranges should not crash"
+        assert result["files"] == {}
+
     def test_handles_multiple_turns(
         self,
         mock_config: RelaceConfig,
@@ -349,19 +380,41 @@ class TestParallelToolCallsFix:
 class TestToolSchemas:
     """Test tool schema definitions."""
 
-    def test_has_five_tools(self) -> None:
-        """Should have exactly 5 tools (including bash)."""
-        assert len(TOOL_SCHEMAS) == 5
+    def test_has_six_tools(self) -> None:
+        """Should have exactly 6 tools (including bash + glob)."""
+        assert len(TOOL_SCHEMAS) == 6
 
     def test_tool_names(self) -> None:
         """Should have correct tool names."""
         names = {t["function"]["name"] for t in TOOL_SCHEMAS}
-        assert names == {"view_file", "view_directory", "grep_search", "report_back", "bash"}
+        assert names == {
+            "view_file",
+            "view_directory",
+            "grep_search",
+            "glob",
+            "report_back",
+            "bash",
+        }
 
     def test_bash_tool_exists(self) -> None:
         """Should include bash tool for code exploration."""
         names = {t["function"]["name"] for t in TOOL_SCHEMAS}
         assert "bash" in names
+
+    def test_glob_tool_exists(self) -> None:
+        """Should include glob tool for file discovery."""
+        names = {t["function"]["name"] for t in TOOL_SCHEMAS}
+        assert "glob" in names
+
+    def test_get_tool_schemas_allowlist(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Allowlist should restrict tools but always keep report_back."""
+        from relace_mcp.tools.search.schemas import get_tool_schemas
+
+        monkeypatch.setenv("RELACE_SEARCH_ENABLED_TOOLS", "view_file,grep_search,glob")
+
+        schemas = get_tool_schemas()
+        names = {t["function"]["name"] for t in schemas}
+        assert names == {"view_file", "grep_search", "glob", "report_back"}
 
     def test_schema_has_default_per_official_docs(self) -> None:
         """Per Relace official docs, certain params should have default values."""

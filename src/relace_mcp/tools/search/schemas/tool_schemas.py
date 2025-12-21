@@ -1,38 +1,7 @@
-from dataclasses import dataclass
+import os
 from typing import Any
 
-from ...config import (
-    BUDGET_HINT_TEMPLATE,
-    CONVERGENCE_HINT,
-    STRATEGIES,
-    SYSTEM_PROMPT,
-    USER_PROMPT_TEMPLATE,
-)
-
-
-@dataclass(frozen=True, slots=True)
-class GrepSearchParams:
-    """Encapsulates grep_search tool parameters."""
-
-    query: str
-    case_sensitive: bool
-    include_pattern: str | None
-    exclude_pattern: str | None
-    base_dir: str
-
-
-# Re-export for backward compatibility
-__all__ = [
-    "GrepSearchParams",
-    "SYSTEM_PROMPT",
-    "USER_PROMPT_TEMPLATE",
-    "BUDGET_HINT_TEMPLATE",
-    "CONVERGENCE_HINT",
-    "STRATEGIES",
-    "TOOL_SCHEMAS",
-]
-
-TOOL_SCHEMAS: list[dict[str, Any]] = [
+_ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
@@ -146,6 +115,54 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "glob",
+            "strict": True,
+            "description": (
+                "Find files in a directory tree using a glob pattern.\n\n"
+                "Notes:\n"
+                "- Matches are returned as paths relative to the input directory\n"
+                "- Set `include_hidden=true` to match hidden files/directories (e.g. .git)\n"
+                "- For directories only, end the pattern with a trailing slash (e.g. `src/`)\n"
+                "- Output is capped to avoid overwhelming context\n\n"
+                "Examples:\n"
+                "- `**/*.py` (all Python files)\n"
+                "- `src/**/*.ts` (all TS files under src)\n"
+                "- `pyproject.toml` (any file named pyproject.toml)\n"
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["pattern"],
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": (
+                            "Glob pattern to match (relative; no leading '/'; no '..'). "
+                            "Use `**` to match across directories."
+                        ),
+                    },
+                    "path": {
+                        "type": "string",
+                        "default": "/repo",
+                        "description": "Directory to search under, e.g. `/repo` or `/repo/src`.",
+                    },
+                    "include_hidden": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "If true, include hidden files/directories (false by default).",
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "default": 200,
+                        "description": "Maximum number of matches to return (capped for safety).",
+                    },
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "report_back",
             "strict": True,
             "description": (
@@ -218,3 +235,35 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         },
     },
 ]
+
+
+def _split_tool_list(raw: str) -> list[str]:
+    # Accept comma/space/semicolon separated lists.
+    return [t for t in raw.replace(",", " ").replace(";", " ").split() if t]
+
+
+def get_tool_schemas() -> list[dict[str, Any]]:
+    """Get enabled tool schemas for Fast Agentic Search.
+
+    Environment variables:
+        - RELACE_SEARCH_ENABLED_TOOLS: Comma/space-separated allowlist, e.g.
+          "view_file,view_directory,grep_search,glob,bash". `report_back` is always enabled.
+          If not set, all tools are enabled by default.
+    """
+    raw_allowlist = os.getenv("RELACE_SEARCH_ENABLED_TOOLS", "").strip()
+
+    if raw_allowlist:
+        enabled = {t.strip().lower() for t in _split_tool_list(raw_allowlist)}
+    else:
+        enabled = {"view_file", "view_directory", "grep_search", "glob", "report_back", "bash"}
+
+    # Always keep report_back so the harness can terminate deterministically.
+    enabled.add("report_back")
+
+    return [
+        schema for schema in _ALL_TOOL_SCHEMAS if schema.get("function", {}).get("name") in enabled
+    ]
+
+
+# Default export for backward compatibility (computed at import time)
+TOOL_SCHEMAS: list[dict[str, Any]] = get_tool_schemas()
