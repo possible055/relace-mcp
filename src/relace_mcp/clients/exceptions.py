@@ -49,10 +49,24 @@ def raise_for_status(resp: httpx.Response) -> None:
     try:
         data = json.loads(resp.text)
         if isinstance(data, dict):
-            code = data.get("code", data.get("error", "unknown"))
-            message = data.get("message", data.get("detail", resp.text))
+            # Relace format: {"code": "...", "message": "..."}
+            # OpenAI-compatible format: {"error": {"message": "...", "type": "...", "code": "..."}}
+            error = data.get("error")
+            if isinstance(error, dict):
+                code = error.get("code") or error.get("type") or data.get("code", "unknown")
+                message = (
+                    error.get("message") or data.get("message") or data.get("detail") or resp.text
+                )
+            else:
+                code = data.get("code", data.get("error", "unknown"))
+                message = data.get("message", data.get("detail", resp.text))
     except (json.JSONDecodeError, TypeError):
         pass
+
+    if not isinstance(code, str):
+        code = str(code)
+    if not isinstance(message, str):
+        message = str(message)
 
     # Determine if retryable
     retryable = False

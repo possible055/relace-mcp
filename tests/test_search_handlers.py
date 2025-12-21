@@ -6,6 +6,7 @@ from relace_mcp.tools.search.handlers import (
     MAX_TOOL_RESULT_CHARS,
     bash_handler,
     estimate_context_size,
+    glob_handler,
     grep_search_handler,
     map_repo_path,
     truncate_for_context,
@@ -117,6 +118,16 @@ class TestViewFileHandler:
         assert "Error" in result
         assert "Not a file" in result
 
+    def test_empty_range_has_no_truncation_notice(self, tmp_path: Path) -> None:
+        """Empty ranges should not show a confusing truncation message."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("line1\nline2\nline3\n")
+
+        # Out-of-bounds range produces no numbered lines.
+        result = view_file_handler("/repo/test.py", [100, 200], str(tmp_path))
+        assert result.strip() == ""
+        assert "truncated" not in result.lower()
+
 
 class TestViewDirectoryHandler:
     """Test view_directory tool handler."""
@@ -153,6 +164,17 @@ class TestViewDirectoryHandler:
         """Should return error for non-existent directory."""
         result = view_directory_handler("/repo/missing", False, str(tmp_path))
         assert "Error" in result
+
+    def test_does_not_traverse_symlink_directories(self, tmp_path: Path) -> None:
+        """Symlinked directories should not be traversed (prevents escape from base_dir)."""
+        outside = tmp_path.parent / f"outside_dir_{tmp_path.name}"
+        outside.mkdir()
+        (outside / "secret.txt").write_text("secret")
+        (tmp_path / "link").symlink_to(outside, target_is_directory=True)
+
+        result = view_directory_handler("/repo", False, str(tmp_path))
+        assert "link" in result
+        assert "secret.txt" not in result
 
 
 class TestGrepSearchHandler:
@@ -200,6 +222,56 @@ class TestGrepSearchHandler:
         )
         result = grep_search_handler(params)
         assert "No matches" in result
+
+
+class TestGlobHandler:
+    """Test glob tool handler."""
+
+    def test_matches_basename_recursively(self, tmp_path: Path) -> None:
+        """Should match basenames across subdirectories."""
+        (tmp_path / "a.py").write_text("a")
+        (tmp_path / "sub").mkdir()
+        (tmp_path / "sub" / "b.py").write_text("b")
+        (tmp_path / "sub" / "c.txt").write_text("c")
+
+        result = glob_handler("*.py", "/repo", False, 200, str(tmp_path))
+        assert "a.py" in result
+        assert "sub/b.py" in result
+        assert "c.txt" not in result
+
+    def test_allows_repo_prefix_in_pattern(self, tmp_path: Path) -> None:
+        """Should tolerate patterns that accidentally include /repo prefix."""
+        (tmp_path / "a.py").write_text("a")
+
+        result = glob_handler("/repo/*.py", "/repo", False, 200, str(tmp_path))
+        assert "a.py" in result
+
+    def test_matches_segment_patterns(self, tmp_path: Path) -> None:
+        """Segment patterns should not match deeper paths unless using **."""
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "a.py").write_text("a")
+        (tmp_path / "src" / "nested").mkdir()
+        (tmp_path / "src" / "nested" / "b.py").write_text("b")
+
+        result = glob_handler("src/*.py", "/repo", False, 200, str(tmp_path))
+        assert "src/a.py" in result
+        assert "src/nested/b.py" not in result
+
+    def test_hidden_exclusion_and_inclusion(self, tmp_path: Path) -> None:
+        """Should exclude hidden dirs by default and include when requested."""
+        (tmp_path / ".hidden").mkdir()
+        (tmp_path / ".hidden" / "secret.py").write_text("x")
+
+        result = glob_handler("*.py", "/repo", False, 200, str(tmp_path))
+        assert "secret.py" not in result
+
+        result2 = glob_handler("*.py", "/repo", True, 200, str(tmp_path))
+        assert ".hidden/secret.py" in result2
+
+    def test_blocks_traversal_patterns(self, tmp_path: Path) -> None:
+        """Should block ../ traversal in pattern."""
+        result = glob_handler("../*.py", "/repo", False, 200, str(tmp_path))
+        assert "Error" in result
 
 
 class TestBashHandler:
@@ -311,6 +383,7 @@ class TestContextTruncation:
         result = truncate_for_context(long_text)
 
         assert len(result) < len(long_text)
+        assert len(result) <= MAX_TOOL_RESULT_CHARS
         assert "truncated" in result
         assert str(len(long_text)) in result
 
@@ -329,6 +402,22 @@ class TestContextTruncation:
 
         size = estimate_context_size(messages)
         assert size == 26
+
+    def test_estimate_context_size_counts_list_content(self) -> None:
+        """Should count text in multimodal list content."""
+        from typing import Any
+
+        messages: list[dict[str, Any]] = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "image_url", "image_url": {"url": "https://example.com/image.png"}},
+                ],
+            }
+        ]
+
+        assert estimate_context_size(messages) == 5
 
 
 class TestGrepTruncation:

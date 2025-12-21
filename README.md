@@ -174,6 +174,10 @@ Delete the cloud repository and local sync state. Use when switching projects or
 <details>
 <summary>Advanced Settings</summary>
 
+### Developer Overrides
+
+These settings allow temporary overrides when the official API updates before the package catches up:
+
 | Variable | Default |
 |----------|---------|
 | `RELACE_ENDPOINT` | `https://instantapply.endpoint.relace.run/v1/code/apply` |
@@ -185,10 +189,26 @@ Delete the cloud repository and local sync state. Use when switching projects or
 | `RELACE_SEARCH_MODEL` | `relace-search` |
 | `RELACE_SEARCH_TIMEOUT_SECONDS` | `120` |
 | `RELACE_SEARCH_MAX_TURNS` | `6` |
-| `RELACE_API_ENDPOINT` | `https://api.relace.run/v1` (Cloud Repos API) |
-| `RELACE_REPO_ID` | — (Optional: pre-configured repo UUID to skip list/create) |
+| `RELACE_API_ENDPOINT` | `https://api.relace.run/v1` |
+| `RELACE_REPO_ID` | — (pre-configured repo UUID to skip list/create) |
 | `RELACE_REPO_SYNC_TIMEOUT` | `300` |
 | `RELACE_REPO_SYNC_MAX_FILES` | `5000` |
+
+### Fast Search Provider Swap
+
+Switch to OpenAI-compatible providers for `fast_search`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RELACE_SEARCH_PROVIDER` | `relace` | Set to `openai` for OpenAI-compatible mode |
+| `OPENAI_API_KEY` | — | Required when `RELACE_SEARCH_PROVIDER=openai` |
+
+### Fast Search Tool Control
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RELACE_SEARCH_ENABLED_TOOLS` | — | Comma-separated allowlist (`view_file`, `view_directory`, `grep_search`, `glob`, `bash`). `report_back` is always enabled. |
+| `RELACE_SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls for lower latency |
 
 </details>
 
