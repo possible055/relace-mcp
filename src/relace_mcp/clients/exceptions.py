@@ -58,8 +58,8 @@ def raise_for_status(resp: httpx.Response) -> None:
                     error.get("message") or data.get("message") or data.get("detail") or resp.text
                 )
             else:
-                code = data.get("code", data.get("error", "unknown"))
-                message = data.get("message", data.get("detail", resp.text))
+                code = str(data.get("code") or data.get("error") or "unknown")
+                message = str(data.get("message") or data.get("detail") or resp.text)
     except (json.JSONDecodeError, TypeError):
         pass
 

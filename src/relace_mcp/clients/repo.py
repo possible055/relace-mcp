@@ -3,8 +3,7 @@ import os
 import random
 import time
 from pathlib import Path
-from typing import Any
-from urllib.parse import quote
+from typing import Any, cast
 
 import httpx
 
@@ -247,52 +246,7 @@ class RelaceRepoClient:
             headers=self._get_headers(),
             json=payload,
         )
-        return resp.json()
-
-    def upload_file(
-        self,
-        repo_id: str,
-        file_path: str,
-        content: bytes,
-        trace_id: str = "unknown",
-    ) -> dict[str, Any]:
-        """Upload a single file to the repository.
-
-        Args:
-            repo_id: Repository UUID.
-            file_path: File path within the repo (e.g., "src/main.py").
-            content: File content as bytes.
-            trace_id: Trace ID for logging.
-
-        Returns:
-            Upload result from API.
-        """
-        # Normalize path separators (Windows backslash to forward slash)
-        normalized_path = file_path.replace("\\", "/")
-        # URL-encode the entire path (safe="" to encode slashes too)
-        encoded_path = quote(normalized_path, safe="")
-        url = f"{self._base_url}/repo/{repo_id}/file/{encoded_path}"
-        resp = self._request_with_retry(
-            "PUT",
-            url,
-            trace_id=trace_id,
-            timeout=REPO_SYNC_TIMEOUT_SECONDS,
-            headers=self._get_headers("application/octet-stream"),
-            content=content,
-        )
-        # API returns 201 Created with JSON body containing repo_id, repo_head, changed_files
-        # Also handle 204 No Content for backward compatibility
-        if resp.status_code in (200, 201):
-            try:
-                return resp.json()
-            except ValueError:
-                return {"status": "ok", "path": file_path}
-        if resp.status_code == 204:
-            return {"status": "ok", "path": file_path}
-        try:
-            return resp.json()
-        except ValueError:
-            return {"status": "ok", "path": file_path}
+        return cast(dict[str, Any], resp.json())
 
     def ensure_repo(self, name: str, trace_id: str = "unknown") -> str:
         """Ensure a repository exists, creating if necessary.
@@ -324,16 +278,16 @@ class RelaceRepoClient:
                             name,
                         )
                     logger.info("[%s] Found existing repo '%s' with id=%s", trace_id, name, repo_id)
-                    return repo_id
+                    return str(repo_id)
 
         # Create new repo
         logger.info("[%s] Creating new repo '%s'", trace_id, name)
         result = self.create_repo(name, trace_id=trace_id)
-        repo_id = result.get("repo_id", result.get("id", ""))
-        if not repo_id:
+        repo_id_val = result.get("repo_id") or result.get("id") or ""
+        if not repo_id_val:
             raise RuntimeError(f"Failed to create repo: {result}")
-        self._cached_repo_id = repo_id
-        return repo_id
+        self._cached_repo_id = str(repo_id_val)
+        return str(repo_id_val)
 
     def delete_repo(self, repo_id: str, trace_id: str = "unknown") -> bool:
         """Delete a repository.
@@ -415,7 +369,7 @@ class RelaceRepoClient:
             headers=self._get_headers(),
             json=payload,
         )
-        return resp.json()
+        return cast(dict[str, Any], resp.json())
 
     def update_repo(
         self,
@@ -451,7 +405,7 @@ class RelaceRepoClient:
             headers=self._get_headers(),
             json=payload,
         )
-        return resp.json()
+        return cast(dict[str, Any], resp.json())
 
     def update_repo_files(
         self,
@@ -488,7 +442,7 @@ class RelaceRepoClient:
             headers=self._get_headers(),
             json=payload,
         )
-        return resp.json()
+        return cast(dict[str, Any], resp.json())
 
     def get_repo_name_from_base_dir(self) -> str:
         """Derive repository name from base_dir."""

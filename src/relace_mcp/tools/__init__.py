@@ -171,11 +171,3 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         - status: Whether sync is needed and recommended action
         """
         return cloud_info_logic(repo_client, config.base_dir)
-
-    _ = fast_apply
-    _ = fast_search
-    _ = cloud_sync
-    _ = cloud_search
-    _ = cloud_clear
-    _ = cloud_list
-    _ = cloud_info
