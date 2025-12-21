@@ -1,4 +1,4 @@
-# Relace MCP Server
+# Unofficial Relace MCP Server
 
 [![PyPI](https://img.shields.io/pypi/v/relace-mcp.svg)](https://pypi.org/project/relace-mcp/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
@@ -39,6 +39,16 @@ MCP server for [Relace](https://www.relace.ai/) — AI-powered instant code merg
 ```
 
 > **Important:** `RELACE_BASE_DIR` must be set to your project's absolute path. This restricts file access scope and ensures correct operation.
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `RELACE_API_KEY` | ✅ | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
+| `RELACE_BASE_DIR` | ✅ | Absolute path to project root |
+| `RELACE_STRICT_MODE` | ❌ | Set `1` to require explicit base dir (recommended for production) |
+
+> For advanced settings (developer overrides, provider swap, remote deployment), see [docs/advanced.md](docs/advanced.md).
 
 ## Tools
 
@@ -151,16 +161,6 @@ Delete the cloud repository and local sync state. Use when switching projects or
   "state_cleared": true
 }
 ```
-
-## Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `RELACE_API_KEY` | ✅ | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
-| `RELACE_BASE_DIR` | ✅ | Absolute path to project root |
-| `RELACE_STRICT_MODE` | ❌ | Set `1` to require explicit base dir (recommended for production) |
-
-> For advanced settings (developer overrides, provider swap, remote deployment), see [docs/advanced.md](docs/advanced.md).
 
 ## Logging
 
