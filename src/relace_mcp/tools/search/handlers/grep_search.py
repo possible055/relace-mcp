@@ -1,12 +1,14 @@
 import re
 import subprocess  # nosec B404
+from collections.abc import Iterator
+from contextlib import AbstractContextManager
 from pathlib import Path
 
 from ..schemas import GrepSearchParams
 from .constants import GREP_TIMEOUT_SECONDS, MAX_GREP_DEPTH, MAX_GREP_MATCHES
 
 
-def _timeout_context(seconds: int):
+def _timeout_context(seconds: int) -> "AbstractContextManager[None]":
     """Simple timeout context manager.
 
     - Main thread (Unix): uses signal.alarm for preemptive timeout
@@ -29,10 +31,10 @@ def _timeout_context(seconds: int):
     is_main_thread = threading.current_thread() is threading.main_thread()
 
     @contextmanager
-    def timeout_impl():
+    def timeout_impl() -> Iterator[None]:
         if is_main_thread and hasattr(signal, "SIGALRM"):
             # Main thread on Unix: use signal.alarm
-            def handler(signum, frame):
+            def handler(signum: int, frame: object) -> None:
                 raise TimeoutError(f"Operation timed out after {seconds}s")
 
             old_handler = signal.signal(signal.SIGALRM, handler)
@@ -90,7 +92,7 @@ def _matches_file_patterns(
     return True
 
 
-def _compile_search_pattern(query: str, case_sensitive: bool) -> re.Pattern | str:
+def _compile_search_pattern(query: str, case_sensitive: bool) -> re.Pattern[str] | str:
     """Compile regex pattern.
 
     Args:
@@ -141,7 +143,7 @@ def _iter_searchable_files(
     base_path: Path,
     include_pattern: str | None,
     exclude_pattern: str | None,
-):
+) -> Iterator[tuple[Path, Path]]:
     """Generate file paths matching filter conditions.
 
     Args:
@@ -176,7 +178,7 @@ def _iter_searchable_files(
 
 def _search_in_file(
     filepath: Path,
-    pattern: re.Pattern,
+    pattern: re.Pattern[str],
     rel_path: Path,
     limit: int,
 ) -> list[str]:

@@ -2,7 +2,8 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from ..clients import RelaceClient, RelaceRepoClient, RelaceSearchClient
+from ..clients import RelaceRepoClient, RelaceSearchClient
+from ..clients.apply import RelaceApplyClient
 from ..config import RelaceConfig
 from .apply import apply_file_logic
 from .repo import cloud_info_logic, cloud_list_logic, cloud_search_logic, cloud_sync_logic
@@ -13,7 +14,7 @@ __all__ = ["register_tools"]
 
 def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     """Register Relace tools to the FastMCP instance."""
-    client = RelaceClient(config)
+    apply_backend = RelaceApplyClient(config)
 
     @mcp.tool
     async def fast_apply(
@@ -30,7 +31,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         - # ... existing code ...    (Python/shell-style)
 
         For deletions:
-        - Show 1-2 context lines above/below, omit deleted code, OR
+        - ALWAYS include 1-2 context lines above/below, omit deleted code, OR
         - Mark explicitly: // remove BlockName (or # remove BlockName)
 
         On NEEDS_MORE_CONTEXT error, re-run with 1-3 real lines before AND after target.
@@ -43,7 +44,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         To create a new file, simply specify the content in edit_snippet.
         """
         return await apply_file_logic(
-            client=client,
+            backend=apply_backend,
             file_path=path,
             edit_snippet=edit_snippet,
             instruction=instruction,
@@ -60,6 +61,10 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         Use this tool to quickly explore and understand the codebase.
         The search agent will examine files, search for patterns, and report
         back with relevant files and line ranges for the given query.
+
+        Queries can be natural language (e.g., "find where auth is handled")
+        or precise patterns. The agent will autonomously use grep, ls, and
+        file_view tools to investigate.
 
         This is useful before using fast_apply to understand which files
         need to be modified and how they relate to each other.
@@ -166,11 +171,3 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         - status: Whether sync is needed and recommended action
         """
         return cloud_info_logic(repo_client, config.base_dir)
-
-    _ = fast_apply
-    _ = fast_search
-    _ = cloud_sync
-    _ = cloud_search
-    _ = cloud_clear
-    _ = cloud_list
-    _ = cloud_info

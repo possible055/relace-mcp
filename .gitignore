@@ -27,5 +27,4 @@ ruff_cache/
 .env
 
 # --- project-specific rules ---
-/docs/
 relace_apply.log

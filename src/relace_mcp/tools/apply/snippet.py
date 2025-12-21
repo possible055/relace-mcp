@@ -1,5 +1,8 @@
 import re
 
+# Directive patterns for remove operations
+_REMOVE_DIRECTIVE_PATTERNS = ("// remove ", "# remove ")
+
 
 def is_truncation_placeholder(line: str) -> bool:
     """Determine if line is a truncation placeholder (ellipsis marker).
@@ -45,7 +48,7 @@ def should_run_anchor_precheck(edit_snippet: str, instruction: str | None) -> bo
     Returns:
         Whether precheck should be run.
     """
-    _ = edit_snippet  # Kept for interface compatibility
+    del edit_snippet  # Kept for interface compatibility
 
     # Check if instruction contains explicit position directive
     if instruction:
@@ -84,11 +87,10 @@ def anchor_precheck(concrete_lines_list: list[str], initial_code: str) -> bool:
 
     # Filter out pure directive lines (like "// remove BlockName")
     # These should not be used for anchor positioning
-    directive_patterns = ("// remove ", "# remove ")
     anchor_lines = [
         line
         for line in concrete_lines_list
-        if not any(line.strip().startswith(pat) for pat in directive_patterns)
+        if not any(line.strip().startswith(pat) for pat in _REMOVE_DIRECTIVE_PATTERNS)
     ]
 
     if not anchor_lines:
@@ -175,9 +177,8 @@ def expects_changes(edit_snippet: str, initial_code: str) -> bool:
     concrete = concrete_lines(edit_snippet)
 
     # Check for remove directive
-    directive_patterns = ("// remove ", "# remove ")
     has_remove_directive = any(
-        line.strip().startswith(pat) for line in concrete for pat in directive_patterns
+        line.strip().startswith(pat) for line in concrete for pat in _REMOVE_DIRECTIVE_PATTERNS
     )
 
     if has_remove_directive:
@@ -195,7 +196,7 @@ def expects_changes(edit_snippet: str, initial_code: str) -> bool:
     for line in concrete:
         stripped = line.strip()
         # Filter out empty lines and directive lines
-        if not stripped or any(stripped.startswith(pat) for pat in directive_patterns):
+        if not stripped or any(stripped.startswith(pat) for pat in _REMOVE_DIRECTIVE_PATTERNS):
             continue
         # Filter out short lines and common syntax keywords
         if len(stripped) < MIN_NEW_LINE_LENGTH:
@@ -211,7 +212,6 @@ def expects_changes(edit_snippet: str, initial_code: str) -> bool:
 
 
 # EXPERIMENTAL: Post-check related constants
-_REMOVE_DIRECTIVE_PATTERNS = ("// remove ", "# remove ")
 _MIN_NEW_LINE_LENGTH_FOR_CHECK = 15
 _MIN_NEW_LINE_PASS_RATIO = 0.6  # Lower threshold to reduce false positives
 
