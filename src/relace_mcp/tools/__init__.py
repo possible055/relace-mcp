@@ -31,7 +31,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         - # ... existing code ...    (Python/shell-style)
 
         For deletions:
-        - Show 1-2 context lines above/below, omit deleted code, OR
+        - ALWAYS include 1-2 context lines above/below, omit deleted code, OR
         - Mark explicitly: // remove BlockName (or # remove BlockName)
 
         On NEEDS_MORE_CONTEXT error, re-run with 1-3 real lines before AND after target.
@@ -61,6 +61,10 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         Use this tool to quickly explore and understand the codebase.
         The search agent will examine files, search for patterns, and report
         back with relevant files and line ranges for the given query.
+
+        Queries can be natural language (e.g., "find where auth is handled")
+        or precise patterns. The agent will autonomously use grep, ls, and
+        file_view tools to investigate.
 
         This is useful before using fast_apply to understand which files
         need to be modified and how they relate to each other.
