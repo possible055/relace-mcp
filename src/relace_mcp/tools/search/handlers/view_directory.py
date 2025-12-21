@@ -44,7 +44,10 @@ def _collect_entries(
         if not include_hidden and name.startswith("."):
             continue
 
-        if entry.is_dir():
+        # Never follow symlinks (prevents traversal outside base_dir and cycles).
+        if entry.is_symlink():
+            files_list.append((name, entry))
+        elif entry.is_dir():
             dirs_list.append((name, entry))
         elif entry.is_file():
             files_list.append((name, entry))

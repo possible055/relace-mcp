@@ -85,7 +85,6 @@ BASH_BLOCKED_PATTERNS = [
     r"\|\|",  # Conditional execution
     r"-exec\b",  # find -exec (may execute dangerous commands)
     r"-delete\b",  # find -delete
-    r"\bsed\b.*-i",  # sed in-place edit
 ]
 
 # Git allowed read-only subcommands (whitelist strategy)
@@ -317,6 +316,52 @@ def _check_python_code(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
     return False, ""
 
 
+def _check_sed_in_place(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
+    """Block sed in-place editing (-i/--in-place) while allowing safe read-only usage.
+
+    This check is token-based (not regex on the raw command string) to avoid false
+    positives when `-i` appears inside a sed script, e.g. `sed 's/this-is-fine/ok/'`.
+    """
+    if base_cmd != "sed":
+        return False, ""
+
+    # Parse options conservatively and stop at `--`.
+    i = 1
+    while i < len(tokens):
+        token = tokens[i]
+        if token == "--":  # nosec B105 - CLI argument, not password
+            break
+
+        # GNU sed supports --in-place[=SUFFIX]
+        if token == "--in-place" or token.startswith("--in-place="):  # nosec B105
+            return True, "Blocked pattern: sed in-place edit (--in-place)"
+
+        if token.startswith("-") and token != "-" and not token.startswith("--"):  # nosec B105
+            # Fast path: -i[SUFFIX]
+            if token.startswith("-i"):
+                return True, "Blocked pattern: sed in-place edit (-i)"
+
+            # Handle combined short options, while respecting options that consume
+            # arguments (-e/-f). Remainder of token after -e/-f is the argument.
+            j = 1
+            while j < len(token):
+                opt = token[j]
+                if opt == "i":
+                    return True, "Blocked pattern: sed in-place edit (-i)"
+                if opt in ("e", "f"):
+                    # -eSCRIPT or -fFILE: consume remainder as argument.
+                    if j + 1 < len(token):
+                        break
+                    # -e SCRIPT or -f FILE: consume next token as argument.
+                    i += 1
+                    break
+                j += 1
+
+        i += 1
+
+    return False, ""
+
+
 def _check_command_in_arguments(tokens: list[str]) -> tuple[bool, str]:
     """Check if dangerous commands are hidden in arguments.
 
@@ -386,6 +431,10 @@ def _validate_specialized_commands(tokens: list[str], base_cmd: str) -> tuple[bo
         return blocked, reason
 
     blocked, reason = _check_python_code(tokens, base_cmd)
+    if blocked:
+        return blocked, reason
+
+    blocked, reason = _check_sed_in_place(tokens, base_cmd)
     if blocked:
         return blocked, reason
 

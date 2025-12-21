@@ -62,7 +62,7 @@ def _format_file_lines(lines: list[str], start_idx: int, end_idx: int) -> str:
     result_lines = [f"{idx + 1} {lines[idx]}" for idx in range(start_idx, end_idx)]
     result = "\n".join(result_lines)
 
-    if end_idx < len(lines):
+    if result_lines and end_idx < len(lines):
         result += "\n... rest of file truncated ..."
 
     return result
