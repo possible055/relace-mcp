@@ -5,20 +5,20 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Instant Apply endpoint (supports env override)
-RELACE_ENDPOINT = os.getenv(
-    "RELACE_ENDPOINT",
-    "https://instantapply.endpoint.relace.run/v1/code/apply",
+# Fast Apply (OpenAI-compatible base URL; SDK appends /chat/completions automatically)
+RELACE_APPLY_BASE_URL = os.getenv(
+    "RELACE_APPLY_ENDPOINT",
+    "https://instantapply.endpoint.relace.run/v1/apply",
 )
-RELACE_MODEL = os.getenv("RELACE_MODEL", "relace-apply-3")
+RELACE_APPLY_MODEL = os.getenv("RELACE_APPLY_MODEL", "auto")
 TIMEOUT_SECONDS = float(os.getenv("RELACE_TIMEOUT_SECONDS", "60.0"))
 MAX_RETRIES = int(os.getenv("RELACE_MAX_RETRIES", "3"))
 RETRY_BASE_DELAY = float(os.getenv("RELACE_RETRY_BASE_DELAY", "1.0"))
 
-# Fast Agentic Search endpoint
-RELACE_SEARCH_ENDPOINT = os.getenv(
+# Fast Agentic Search (OpenAI-compatible base URL; SDK appends /chat/completions automatically)
+RELACE_SEARCH_BASE_URL = os.getenv(
     "RELACE_SEARCH_ENDPOINT",
-    "https://search.endpoint.relace.run/v1/search/chat/completions",
+    "https://search.endpoint.relace.run/v1/search",
 )
 RELACE_SEARCH_MODEL = os.getenv("RELACE_SEARCH_MODEL", "relace-search")
 SEARCH_TIMEOUT_SECONDS = float(os.getenv("RELACE_SEARCH_TIMEOUT_SECONDS", "120.0"))

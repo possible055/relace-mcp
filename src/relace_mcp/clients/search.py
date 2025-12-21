@@ -1,32 +1,31 @@
 import logging
 import os
-import random
-import time
 from typing import Any
 
-import httpx
+import openai
 
+from ..backend import OPENAI_PROVIDER, OpenAIChatClient
 from ..config import (
-    MAX_RETRIES,
-    RELACE_SEARCH_ENDPOINT,
+    RELACE_SEARCH_BASE_URL,
     RELACE_SEARCH_MODEL,
-    RETRY_BASE_DELAY,
     SEARCH_TIMEOUT_SECONDS,
     RelaceConfig,
 )
-from .exceptions import RelaceAPIError, raise_for_status
 
 logger = logging.getLogger(__name__)
 
-_OPENAI_DEFAULT_ENDPOINT = "https://api.openai.com/v1/chat/completions"
-_OPENAI_DEFAULT_MODEL = "gpt-4o-mini"
-
 
 class RelaceSearchClient:
-    """OpenAI-compatible Chat Completions client for calling relace-search model."""
-
     def __init__(self, config: RelaceConfig) -> None:
-        self._config = config
+        self._chat_client = OpenAIChatClient(
+            config,
+            provider_env="RELACE_SEARCH_PROVIDER",
+            base_url_env="RELACE_SEARCH_ENDPOINT",
+            model_env="RELACE_SEARCH_MODEL",
+            default_base_url=RELACE_SEARCH_BASE_URL,
+            default_model=RELACE_SEARCH_MODEL,
+            timeout_seconds=SEARCH_TIMEOUT_SECONDS,
+        )
 
     def chat(
         self,
@@ -34,51 +33,18 @@ class RelaceSearchClient:
         tools: list[dict[str, Any]],
         trace_id: str = "unknown",
     ) -> dict[str, Any]:
-        """Send chat.completions request to relace-search endpoint.
-
-        Args:
-            messages: OpenAI-format messages list.
-            tools: OpenAI function tools schema list.
-            trace_id: Trace ID for logging.
-
-        Returns:
-            JSON dict returned by Relace Search API (OpenAI chat.completions format).
-
-        Raises:
-            RuntimeError: When API call fails (non-retryable error or retries exhausted).
-        """
-        provider = os.getenv("RELACE_SEARCH_PROVIDER", "relace").strip().lower()
-
-        endpoint = os.getenv("RELACE_SEARCH_ENDPOINT")
-        if not endpoint:
-            if provider in ("openai", "openai-compatible"):
-                endpoint = _OPENAI_DEFAULT_ENDPOINT
-            else:
-                endpoint = RELACE_SEARCH_ENDPOINT
-
-        model = os.getenv("RELACE_SEARCH_MODEL")
-        if not model:
-            if provider in ("openai", "openai-compatible"):
-                model = _OPENAI_DEFAULT_MODEL
-            else:
-                model = RELACE_SEARCH_MODEL
-
-        payload: dict[str, Any] = {
-            "model": model,
-            "messages": messages,
+        extra_body: dict[str, Any] = {
             "tools": tools,
             "tool_choice": "auto",
-            "temperature": 1.0,
             "top_p": 0.95,
         }
 
         # Relace Search supports additional sampling params; OpenAI rejects unknown fields.
-        if provider not in ("openai", "openai-compatible"):
-            payload["top_k"] = 100
-            payload["repetition_penalty"] = 1.0
+        if self._chat_client.provider != OPENAI_PROVIDER:
+            extra_body["top_k"] = 100
+            extra_body["repetition_penalty"] = 1.0
 
         # Allow the model to emit multiple tool calls in a single turn for lower latency.
-        # Only include the field when enabled to preserve compatibility with strict providers.
         if os.getenv("RELACE_SEARCH_PARALLEL_TOOL_CALLS", "1").strip().lower() in (
             "1",
             "true",
@@ -86,117 +52,27 @@ class RelaceSearchClient:
             "y",
             "on",
         ):
-            payload["parallel_tool_calls"] = True
+            extra_body["parallel_tool_calls"] = True
 
-        if provider in ("openai", "openai-compatible"):
-            api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key:
-                raise RuntimeError("OPENAI_API_KEY is not set when RELACE_SEARCH_PROVIDER=openai.")
-        else:
-            api_key = self._config.api_key
-
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-
-        last_exc: Exception | None = None
-
-        for attempt in range(MAX_RETRIES + 1):
-            try:
-                started_at = time.monotonic()
-                with httpx.Client(timeout=SEARCH_TIMEOUT_SECONDS) as client:
-                    resp = client.post(endpoint, json=payload, headers=headers)
-                latency_ms = int((time.monotonic() - started_at) * 1000)
-
-                try:
-                    raise_for_status(resp)
-                except RelaceAPIError as exc:
-                    if not exc.retryable:
-                        # Non-retryable error (4xx except 429/423), raise immediately
-                        logger.error(
-                            "[%s] Relace Search API %s (status=%d, latency=%dms): %s",
-                            trace_id,
-                            exc.code,
-                            resp.status_code,
-                            latency_ms,
-                            exc.message,
-                        )
-                        raise RuntimeError(
-                            f"Relace Search API error ({exc.code}): {exc.message}"
-                        ) from exc
-
-                    # Retryable error (429, 423, 5xx)
-                    last_exc = exc
-                    logger.warning(
-                        "[%s] Relace Search API %s (status=%d, latency=%dms, attempt=%d/%d)",
-                        trace_id,
-                        exc.code,
-                        resp.status_code,
-                        latency_ms,
-                        attempt + 1,
-                        MAX_RETRIES + 1,
-                    )
-                    if attempt < MAX_RETRIES:
-                        delay = exc.retry_after or RETRY_BASE_DELAY * (2**attempt)
-                        delay += random.uniform(0, 0.5)  # nosec B311
-                        time.sleep(delay)
-                        continue
-                    raise RuntimeError(
-                        f"Relace Search API error ({exc.code}): {exc.message}"
-                    ) from exc
-
-                # Success
-                logger.info(
-                    "[%s] Relace Search API success (status=%d, latency=%dms)",
-                    trace_id,
-                    resp.status_code,
-                    latency_ms,
-                )
-
-                try:
-                    return resp.json()
-                except ValueError as exc:
-                    # 2xx but non-JSON is abnormal server behavior
-                    logger.error(
-                        "[%s] Relace Search API returned non-JSON response (status=%d)",
-                        trace_id,
-                        resp.status_code,
-                    )
-                    raise RuntimeError("Relace Search API returned non-JSON response") from exc
-
-            except httpx.TimeoutException as exc:
-                last_exc = exc
-                logger.warning(
-                    "[%s] Relace Search API timeout after %.1fs (attempt=%d/%d)",
-                    trace_id,
-                    SEARCH_TIMEOUT_SECONDS,
-                    attempt + 1,
-                    MAX_RETRIES + 1,
-                )
-                if attempt < MAX_RETRIES:
-                    delay = RETRY_BASE_DELAY * (2**attempt) + random.uniform(0, 0.5)  # nosec B311
-                    time.sleep(delay)
-                    continue
-                raise RuntimeError(
-                    f"Relace Search API request timed out after {SEARCH_TIMEOUT_SECONDS}s."
-                ) from exc
-
-            except httpx.RequestError as exc:
-                last_exc = exc
-                logger.warning(
-                    "[%s] Relace Search API network error: %s (attempt=%d/%d)",
-                    trace_id,
-                    exc,
-                    attempt + 1,
-                    MAX_RETRIES + 1,
-                )
-                if attempt < MAX_RETRIES:
-                    delay = RETRY_BASE_DELAY * (2**attempt) + random.uniform(0, 0.5)  # nosec B311
-                    time.sleep(delay)
-                    continue
-                raise RuntimeError(f"Failed to call Relace Search API: {exc}") from exc
-
-        raise RuntimeError(
-            f"Failed to call Relace Search API after {MAX_RETRIES + 1} attempts"
-        ) from last_exc
+        try:
+            data, _latency_ms = self._chat_client.chat_completions(
+                messages=messages,
+                temperature=1.0,
+                extra_body=extra_body,
+                trace_id=trace_id,
+            )
+            return data
+        except openai.AuthenticationError as exc:
+            raise RuntimeError(f"Relace Search API authentication error: {exc}") from exc
+        except openai.RateLimitError as exc:
+            raise RuntimeError(f"Relace Search API rate limit: {exc}") from exc
+        except openai.APITimeoutError as exc:
+            raise RuntimeError(
+                f"Relace Search API request timed out after {SEARCH_TIMEOUT_SECONDS}s."
+            ) from exc
+        except openai.APIConnectionError as exc:
+            raise RuntimeError(f"Failed to connect to Relace Search API: {exc}") from exc
+        except openai.APIStatusError as exc:
+            raise RuntimeError(
+                f"Relace Search API error (status={exc.status_code}): {exc}"
+            ) from exc

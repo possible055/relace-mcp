@@ -1,10 +1,12 @@
+from .apply import ApplyRequest, ApplyResponse, RelaceApplyClient
 from .exceptions import RelaceAPIError, RelaceNetworkError, RelaceTimeoutError
-from .relace import RelaceClient
 from .repo import RelaceRepoClient
 from .search import RelaceSearchClient
 
 __all__ = [
-    "RelaceClient",
+    "ApplyRequest",
+    "ApplyResponse",
+    "RelaceApplyClient",
     "RelaceRepoClient",
     "RelaceSearchClient",
     "RelaceAPIError",

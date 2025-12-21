@@ -105,18 +105,7 @@ Synchronize local codebase to Relace Cloud for semantic search. Uploads source f
 - Skips files > 1MB and common non-source directories (`node_modules`, `__pycache__`, etc.)
 - Sync state stored in `~/.local/state/relace/sync/`
 
-<details>
-<summary>Sync Modes (Advanced)</summary>
-
-| Mode | Trigger | Description |
-|------|---------|-------------|
-| Incremental | (default) | Only uploads new/modified files, deletes removed files |
-| Safe Full | `force=True`, first sync, or HEAD changed | Uploads all files; suppresses deletes unless HEAD changed |
-| Mirror Full | `force=True, mirror=True` | Completely overwrites cloud to match local |
-
-**HEAD Change Detection:** When git HEAD changes since last sync (e.g., branch switch, rebase, commit amend), Safe Full mode automatically cleans up zombie files from the old ref to prevent stale search results.
-
-</details>
+> For advanced sync modes (incremental, safe full, mirror), see [docs/advanced.md](docs/advanced.md#sync-modes).
 
 ### `cloud_search`
 
@@ -171,72 +160,7 @@ Delete the cloud repository and local sync state. Use when switching projects or
 | `RELACE_BASE_DIR` | ✅ | Absolute path to project root |
 | `RELACE_STRICT_MODE` | ❌ | Set `1` to require explicit base dir (recommended for production) |
 
-<details>
-<summary>Advanced Settings</summary>
-
-### Developer Overrides
-
-These settings allow temporary overrides when the official API updates before the package catches up:
-
-| Variable | Default |
-|----------|---------|
-| `RELACE_ENDPOINT` | `https://instantapply.endpoint.relace.run/v1/code/apply` |
-| `RELACE_MODEL` | `relace-apply-3` |
-| `RELACE_TIMEOUT_SECONDS` | `60` |
-| `RELACE_MAX_RETRIES` | `3` |
-| `RELACE_RETRY_BASE_DELAY` | `1.0` |
-| `RELACE_SEARCH_ENDPOINT` | `https://search.endpoint.relace.run/v1/search/chat/completions` |
-| `RELACE_SEARCH_MODEL` | `relace-search` |
-| `RELACE_SEARCH_TIMEOUT_SECONDS` | `120` |
-| `RELACE_SEARCH_MAX_TURNS` | `6` |
-| `RELACE_API_ENDPOINT` | `https://api.relace.run/v1` |
-| `RELACE_REPO_ID` | — (pre-configured repo UUID to skip list/create) |
-| `RELACE_REPO_SYNC_TIMEOUT` | `300` |
-| `RELACE_REPO_SYNC_MAX_FILES` | `5000` |
-
-### Fast Search Provider Swap
-
-Switch to OpenAI-compatible providers for `fast_search`:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RELACE_SEARCH_PROVIDER` | `relace` | Set to `openai` for OpenAI-compatible mode |
-| `OPENAI_API_KEY` | — | Required when `RELACE_SEARCH_PROVIDER=openai` |
-
-### Fast Search Tool Control
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RELACE_SEARCH_ENABLED_TOOLS` | — | Comma-separated allowlist (`view_file`, `view_directory`, `grep_search`, `glob`, `bash`). `report_back` is always enabled. |
-| `RELACE_SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls for lower latency |
-
-</details>
-
-<details>
-<summary>Remote Deployment (Streamable HTTP)</summary>
-
-For remote deployment, run with streamable-http transport:
-
-```bash
-relace-mcp -t streamable-http -p 8000
-```
-
-Connect via:
-
-```json
-{
-  "mcpServers": {
-    "relace": {
-      "type": "streamable-http",
-      "url": "http://your-server:8000/mcp"
-    }
-  }
-}
-```
-
-Additional options: `--host` (default: `0.0.0.0`), `--path` (default: `/mcp`).
-
-</details>
+> For advanced settings (developer overrides, provider swap, remote deployment), see [docs/advanced.md](docs/advanced.md).
 
 ## Logging
 

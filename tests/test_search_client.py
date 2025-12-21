@@ -1,4 +1,3 @@
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -7,45 +6,50 @@ from relace_mcp.clients import RelaceSearchClient
 from relace_mcp.config import RelaceConfig
 
 
-def _mock_response(payload: dict) -> MagicMock:
-    resp = MagicMock()
-    resp.status_code = 200
-    resp.is_success = True
-    resp.text = json.dumps(payload)
-    resp.headers = {}
-    resp.json.return_value = payload
-    return resp
-
-
-def _mock_httpx_client(resp: MagicMock) -> MagicMock:
-    client = MagicMock()
-    client.__enter__.return_value = client
-    client.__exit__.return_value = None
-    client.post.return_value = resp
-    return client
+def _mock_chat_response(content: str = "ok") -> MagicMock:
+    response = MagicMock()
+    response.choices = [MagicMock()]
+    response.choices[0].message.content = content
+    response.choices[0].finish_reason = "stop"
+    response.model_dump.return_value = {
+        "choices": [{"message": {"content": content}, "finish_reason": "stop"}],
+    }
+    return response
 
 
 def test_relace_provider_uses_config_api_key_by_default(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("RELACE_SEARCH_PROVIDER", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-    config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
-    client = RelaceSearchClient(config)
+    mock_response = _mock_chat_response()
 
-    resp_payload = {"choices": [{"message": {"content": "ok"}}]}
-    resp = _mock_response(resp_payload)
-    mock_http = _mock_httpx_client(resp)
+    with patch("relace_mcp.backend.openai_backend.OpenAI") as mock_openai:
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai.return_value = mock_client
 
-    with patch("relace_mcp.clients.search.httpx.Client", return_value=mock_http):
-        result = client.chat(messages=[{"role": "user", "content": "hi"}], tools=[], trace_id="t")
+        with patch("relace_mcp.backend.openai_backend.AsyncOpenAI"):
+            config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
+            client = RelaceSearchClient(config)
 
-    assert result == resp_payload
-    headers = mock_http.post.call_args.kwargs["headers"]
-    assert headers["Authorization"] == "Bearer rlc-test"
+            result = client.chat(
+                messages=[{"role": "user", "content": "hi"}],
+                tools=[],
+                trace_id="t",
+            )
 
-    payload = mock_http.post.call_args.kwargs["json"]
-    assert "top_k" in payload
-    assert "repetition_penalty" in payload
+    assert result["choices"][0]["message"]["content"] == "ok"
+
+    # Check that OpenAI client was initialized with Relace API key
+    mock_openai.assert_called_once()
+    call_kwargs = mock_openai.call_args.kwargs
+    assert call_kwargs["api_key"] == "rlc-test"
+
+    # Check extra_body includes Relace-specific params
+    create_kwargs = mock_client.chat.completions.create.call_args.kwargs
+    extra_body = create_kwargs.get("extra_body", {})
+    assert extra_body.get("top_k") == 100
+    assert extra_body.get("repetition_penalty") == 1.0
 
 
 def test_openai_provider_uses_openai_api_key_and_compat_payload(tmp_path, monkeypatch) -> None:
@@ -54,25 +58,36 @@ def test_openai_provider_uses_openai_api_key_and_compat_payload(tmp_path, monkey
     monkeypatch.delenv("RELACE_SEARCH_MODEL", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
 
-    config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
-    client = RelaceSearchClient(config)
+    mock_response = _mock_chat_response()
 
-    resp = _mock_response({"choices": [{"message": {"content": "ok"}}]})
-    mock_http = _mock_httpx_client(resp)
+    with patch("relace_mcp.backend.openai_backend.OpenAI") as mock_openai:
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai.return_value = mock_client
 
-    with patch("relace_mcp.clients.search.httpx.Client", return_value=mock_http):
-        client.chat(messages=[{"role": "user", "content": "hi"}], tools=[], trace_id="t")
+        with patch("relace_mcp.backend.openai_backend.AsyncOpenAI"):
+            config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
+            client = RelaceSearchClient(config)
 
-    endpoint = mock_http.post.call_args.args[0]
-    assert endpoint == "https://api.openai.com/v1/chat/completions"
+            client.chat(
+                messages=[{"role": "user", "content": "hi"}],
+                tools=[],
+                trace_id="t",
+            )
 
-    headers = mock_http.post.call_args.kwargs["headers"]
-    assert headers["Authorization"] == "Bearer sk-openai"
+    # Check that OpenAI client was initialized with OpenAI API key and base_url
+    call_kwargs = mock_openai.call_args.kwargs
+    assert call_kwargs["api_key"] == "sk-openai"
+    assert call_kwargs["base_url"] == "https://api.openai.com/v1"
 
-    payload = mock_http.post.call_args.kwargs["json"]
-    assert payload["model"] == "gpt-4o-mini"
-    assert "top_k" not in payload
-    assert "repetition_penalty" not in payload
+    # Check model is gpt-4o (default for openai provider in search)
+    create_kwargs = mock_client.chat.completions.create.call_args.kwargs
+    assert create_kwargs["model"] == "gpt-4o"
+
+    # Check extra_body does NOT include Relace-specific params
+    extra_body = create_kwargs.get("extra_body", {})
+    assert "top_k" not in extra_body
+    assert "repetition_penalty" not in extra_body
 
 
 def test_openai_provider_requires_openai_key(tmp_path, monkeypatch) -> None:
@@ -82,7 +97,6 @@ def test_openai_provider_requires_openai_key(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
-    client = RelaceSearchClient(config)
 
     with pytest.raises(RuntimeError, match="OPENAI_API_KEY is not set"):
-        client.chat(messages=[{"role": "user", "content": "hi"}], tools=[], trace_id="t")
+        RelaceSearchClient(config)

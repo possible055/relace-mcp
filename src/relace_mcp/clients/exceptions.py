@@ -79,8 +79,6 @@ def raise_for_status(resp: httpx.Response) -> None:
                 retry_after = float(resp.headers["retry-after"])
             except ValueError:
                 pass
-    elif resp.status_code == 423:
-        retryable = True
     elif resp.status_code >= 500:
         retryable = True
 
