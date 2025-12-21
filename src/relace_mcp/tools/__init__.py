@@ -171,3 +171,53 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         - status: Whether sync is needed and recommended action
         """
         return cloud_info_logic(repo_client, config.base_dir)
+
+    # === MCP Resources ===
+
+    @mcp.resource("relace://tool_list", mime_type="application/json")
+    def tool_list() -> list[dict[str, Any]]:
+        """List all available tools with their status."""
+        return [
+            {
+                "id": "fast_apply",
+                "name": "Fast Apply",
+                "description": "Edit or create files using fuzzy matching",
+                "enabled": True,
+            },
+            {
+                "id": "fast_search",
+                "name": "Fast Search",
+                "description": "Agentic search over local codebase",
+                "enabled": True,
+            },
+            {
+                "id": "cloud_sync",
+                "name": "Cloud Sync",
+                "description": "Upload codebase for semantic indexing",
+                "enabled": True,
+            },
+            {
+                "id": "cloud_search",
+                "name": "Cloud Search",
+                "description": "Semantic code search using AI embeddings",
+                "enabled": True,
+            },
+            {
+                "id": "cloud_clear",
+                "name": "Cloud Clear",
+                "description": "Delete cloud repository and sync state",
+                "enabled": True,
+            },
+            {
+                "id": "cloud_list",
+                "name": "Cloud List",
+                "description": "List all repositories in Relace Cloud",
+                "enabled": True,
+            },
+            {
+                "id": "cloud_info",
+                "name": "Cloud Info",
+                "description": "Get sync status for current repository",
+                "enabled": True,
+            },
+        ]
