@@ -39,8 +39,9 @@ class TestResolveRepoPath:
 
     def test_absolute_path_passthrough(self, tmp_path: Path) -> None:
         """Test absolute path is passed through."""
-        result = resolve_repo_path("/usr/bin/python", str(tmp_path))
-        assert result == "/usr/bin/python"
+        # Use a non-existent path to avoid symlink resolution issues
+        result = resolve_repo_path("/nonexistent/absolute/path", str(tmp_path))
+        assert result == "/nonexistent/absolute/path"
 
 
 class TestResolveRepoPathSecurity:
