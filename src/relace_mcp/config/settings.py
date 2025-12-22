@@ -38,6 +38,12 @@ REPO_SYNC_MAX_FILES = int(os.getenv("RELACE_REPO_SYNC_MAX_FILES", "5000"))
 # Strict mode: enforce safe settings
 RELACE_STRICT_MODE = os.getenv("RELACE_STRICT_MODE", "0") == "1"
 
+# Encoding detection: explicitly set project default encoding (e.g., "gbk", "big5", "shift_jis")
+# If not set, auto-detection will be attempted at startup
+RELACE_DEFAULT_ENCODING = os.getenv("RELACE_DEFAULT_ENCODING", None)
+# Maximum files to sample for encoding detection (higher = more accurate but slower startup)
+ENCODING_DETECTION_SAMPLE_LIMIT = int(os.getenv("RELACE_ENCODING_SAMPLE_LIMIT", "30"))
+
 # EXPERIMENTAL: Post-check validation (validates merged_code semantic correctness, disabled by default)
 EXPERIMENTAL_POST_CHECK = os.getenv("RELACE_EXPERIMENTAL_POST_CHECK", "").lower() in (
     "1",
@@ -62,6 +68,7 @@ MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024
 class RelaceConfig:
     api_key: str
     base_dir: str
+    default_encoding: str | None = None  # Project-level encoding (detected or env-specified)
 
     @classmethod
     def from_env(cls) -> "RelaceConfig":
@@ -88,4 +95,7 @@ class RelaceConfig:
         if not os.path.isdir(base_dir):
             raise RuntimeError(f"RELACE_BASE_DIR does not exist or is not a directory: {base_dir}")
 
-        return cls(api_key=api_key, base_dir=base_dir)
+        # default_encoding from env (will be overridden by detection if None)
+        default_encoding = RELACE_DEFAULT_ENCODING
+
+        return cls(api_key=api_key, base_dir=base_dir, default_encoding=default_encoding)

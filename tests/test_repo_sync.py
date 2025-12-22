@@ -7,6 +7,7 @@ import pytest
 
 from relace_mcp.clients.repo import RelaceRepoClient
 from relace_mcp.config import RelaceConfig
+from relace_mcp.tools.apply.file_io import set_project_encoding
 from relace_mcp.tools.repo.state import (
     SyncState,
     compute_file_hash,
@@ -375,6 +376,40 @@ class TestComputeDiffOperations:
         assert len(operations) == 1
         assert operations[0]["type"] == "delete"
         assert operations[0]["filename"] == "truly_deleted.py"
+
+    def test_decodes_big5_files_for_upload(self, tmp_path: Path) -> None:
+        """Should decode Big5 files instead of skipping them as binary."""
+        content = "# 繁體中文註解\nprint('世界')\n"
+        (tmp_path / "main.py").write_bytes(content.encode("big5"))
+        hashes = _compute_file_hashes(str(tmp_path), ["main.py"])
+
+        try:
+            set_project_encoding("big5")
+            operations, _, new_skipped = _compute_diff_operations(str(tmp_path), hashes, None)
+            assert len(new_skipped) == 0
+            assert len(operations) == 1
+            assert operations[0]["type"] == "write"
+            assert operations[0]["filename"] == "main.py"
+            assert operations[0]["content"] == content
+        finally:
+            set_project_encoding(None)
+
+    def test_decodes_gbk_files_for_upload(self, tmp_path: Path) -> None:
+        """Should decode GBK files instead of skipping them as binary."""
+        content = "# 这是简体中文注释\nprint('你好')\n"
+        (tmp_path / "main.py").write_bytes(content.encode("gbk"))
+        hashes = _compute_file_hashes(str(tmp_path), ["main.py"])
+
+        try:
+            set_project_encoding("gbk")
+            operations, _, new_skipped = _compute_diff_operations(str(tmp_path), hashes, None)
+            assert len(new_skipped) == 0
+            assert len(operations) == 1
+            assert operations[0]["type"] == "write"
+            assert operations[0]["filename"] == "main.py"
+            assert operations[0]["content"] == content
+        finally:
+            set_project_encoding(None)
 
 
 class TestCloudSyncLogic:

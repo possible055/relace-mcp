@@ -52,6 +52,8 @@
 | `RELACE_API_KEY` | ✅ | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥 |
 | `RELACE_BASE_DIR` | ✅ | 项目根目录的绝对路径 |
 | `RELACE_STRICT_MODE` | ❌ | 设置 `1` 以强制要求显式 base dir（生产环境推荐） |
+| `RELACE_DEFAULT_ENCODING` | ❌ | 强制默认文件编码（如 `gbk`、`big5`），用于支持遗留编码仓库 |
+| `RELACE_ENCODING_SAMPLE_LIMIT` | ❌ | 启动时用于自动检测项目编码的采样文件上限（默认：`30`） |
 
 > 高级设置（开发者覆盖、提供商切换、远程部署）请参见 [docs/advanced.md](docs/advanced.md)。
 
