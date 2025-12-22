@@ -13,7 +13,7 @@ If you discover a security vulnerability in this project, please report it respo
 ### How to Report
 
 1. **Do NOT create a public GitHub issue** for security vulnerabilities.
-2. Please email the maintainers directly or use [GitHub's private vulnerability reporting](https://github.com/anthropics/relace-mcp/security/advisories/new).
+2. Please email the maintainers directly or use [GitHub's private vulnerability reporting](https://github.com/possible055/relace-mcp/security/advisories/new).
 3. Include as much detail as possible:
    - Description of the vulnerability
    - Steps to reproduce
@@ -39,7 +39,6 @@ This project follows security best practices including:
 - Pinned dependencies with commit SHA verification
 - Minimal token permissions in CI/CD workflows
 - Regular dependency updates via Dependabot
-- Static analysis with CodeQL
 - OpenSSF Scorecard monitoring
 
 ## Disclosure Policy
