@@ -3,6 +3,7 @@ from pathlib import Path
 import yaml
 
 from .settings import (
+    ENCODING_DETECTION_SAMPLE_LIMIT,
     EXPERIMENTAL_LOGGING,
     EXPERIMENTAL_POST_CHECK,
     LOG_DIR,
@@ -12,6 +13,7 @@ from .settings import (
     RELACE_API_ENDPOINT,
     RELACE_APPLY_BASE_URL,
     RELACE_APPLY_MODEL,
+    RELACE_DEFAULT_ENCODING,
     RELACE_REPO_ID,
     RELACE_SEARCH_BASE_URL,
     RELACE_SEARCH_MODEL,
@@ -39,6 +41,7 @@ STRATEGIES: dict[str, str] = _PROMPTS["strategies"]
 
 __all__ = [
     # Settings
+    "ENCODING_DETECTION_SAMPLE_LIMIT",
     "EXPERIMENTAL_LOGGING",
     "EXPERIMENTAL_POST_CHECK",
     "LOG_DIR",
@@ -48,6 +51,7 @@ __all__ = [
     "RELACE_API_ENDPOINT",
     "RELACE_APPLY_BASE_URL",
     "RELACE_APPLY_MODEL",
+    "RELACE_DEFAULT_ENCODING",
     "RELACE_REPO_ID",
     "RELACE_SEARCH_BASE_URL",
     "RELACE_SEARCH_MODEL",

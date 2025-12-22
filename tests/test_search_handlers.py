@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from relace_mcp.tools.apply.file_io import set_project_encoding
 from relace_mcp.tools.search.handlers import (
     MAX_TOOL_RESULT_CHARS,
     bash_handler,
@@ -128,6 +129,34 @@ class TestViewFileHandler:
         assert result.strip() == ""
         assert "truncated" not in result.lower()
 
+    def test_reads_big5_encoded_file(self, tmp_path: Path) -> None:
+        """Should correctly render Big5-encoded files."""
+        big5_file = tmp_path / "big5_file.py"
+        content = "# 繁體中文註解\nprint('世界')\n"
+        big5_file.write_bytes(content.encode("big5"))
+
+        try:
+            set_project_encoding("big5")
+            result = view_file_handler("/repo/big5_file.py", [1, 2], str(tmp_path))
+            assert "繁體中文註解" in result
+            assert "print('世界')" in result
+        finally:
+            set_project_encoding(None)
+
+    def test_reads_gbk_encoded_file(self, tmp_path: Path) -> None:
+        """Should correctly render GBK-encoded files."""
+        gbk_file = tmp_path / "gbk_file.py"
+        content = "# 这是简体中文注释\nprint('你好')\n"
+        gbk_file.write_bytes(content.encode("gbk"))
+
+        try:
+            set_project_encoding("gbk")
+            result = view_file_handler("/repo/gbk_file.py", [1, 2], str(tmp_path))
+            assert "这是简体中文注释" in result
+            assert "print('你好')" in result
+        finally:
+            set_project_encoding(None)
+
 
 class TestViewDirectoryHandler:
     """Test view_directory tool handler."""
@@ -222,6 +251,69 @@ class TestGrepSearchHandler:
         )
         result = grep_search_handler(params)
         assert "No matches" in result
+
+    def test_finds_non_ascii_in_big5_file_python_fallback(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Non-ASCII queries should work on Big5 files via Python fallback."""
+        big5_file = tmp_path / "test.py"
+        content = "# 繁體中文註解\nprint('世界')\n"
+        big5_file.write_bytes(content.encode("big5"))
+
+        try:
+            set_project_encoding("big5")
+
+            # Force ripgrep path to fail so handler uses Python fallback deterministically.
+            import relace_mcp.tools.search.handlers.grep_search as grep_mod
+
+            def _raise(*_args: object, **_kwargs: object) -> object:
+                raise FileNotFoundError("rg unavailable")
+
+            monkeypatch.setattr(grep_mod.subprocess, "run", _raise)
+
+            params = GrepSearchParams(
+                query="繁體中文",
+                case_sensitive=True,
+                include_pattern=None,
+                exclude_pattern=None,
+                base_dir=str(tmp_path),
+            )
+            result = grep_search_handler(params)
+            assert "test.py" in result
+            assert "繁體中文" in result
+        finally:
+            set_project_encoding(None)
+
+    def test_finds_non_ascii_in_gbk_file_python_fallback(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Non-ASCII queries should work on GBK files via Python fallback."""
+        gbk_file = tmp_path / "test.py"
+        content = "# 这是简体中文注释\nprint('你好')\n"
+        gbk_file.write_bytes(content.encode("gbk"))
+
+        try:
+            set_project_encoding("gbk")
+
+            import relace_mcp.tools.search.handlers.grep_search as grep_mod
+
+            def _raise(*_args: object, **_kwargs: object) -> object:
+                raise FileNotFoundError("rg unavailable")
+
+            monkeypatch.setattr(grep_mod.subprocess, "run", _raise)
+
+            params = GrepSearchParams(
+                query="简体中文",
+                case_sensitive=True,
+                include_pattern=None,
+                exclude_pattern=None,
+                base_dir=str(tmp_path),
+            )
+            result = grep_search_handler(params)
+            assert "test.py" in result
+            assert "简体中文" in result
+        finally:
+            set_project_encoding(None)
 
 
 class TestGlobHandler:
