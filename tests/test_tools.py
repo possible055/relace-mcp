@@ -8,6 +8,7 @@ import pytest
 from relace_mcp.clients.apply import ApplyResponse
 from relace_mcp.config import RelaceConfig
 from relace_mcp.tools.apply import apply_file_logic
+from relace_mcp.tools.apply.file_io import set_project_encoding
 from relace_mcp.tools.apply.logging import log_event
 from relace_mcp.utils import MAX_FILE_SIZE_BYTES, validate_file_path
 
@@ -482,6 +483,47 @@ class TestApplyFileLogicEncoding:
         assert "Applied code changes" in result["message"]
         # Confirm written file is still GBK encoded
         assert gbk_file.read_bytes().decode("gbk") == merged_code
+
+    @pytest.mark.asyncio
+    async def test_big5_file_supported(
+        self,
+        mock_config: RelaceConfig,
+        mock_backend: AsyncMock,
+        tmp_path: Path,
+    ) -> None:
+        """Should successfully read and write Big5 encoded files."""
+        big5_file = tmp_path / "big5_file.py"
+        # Write Big5 encoded Traditional Chinese content (ensure 2+ sufficiently long anchor lines)
+        big5_content = (
+            "# 繁體中文註解用於測試\ndef process_traditional_data():\n    print('世界')\n"
+        )
+        big5_file.write_bytes(big5_content.encode("big5"))
+
+        merged_code = (
+            "# 繁體中文註解用於測試\ndef process_traditional_data():\n    print('世界您好')\n"
+        )
+        mock_backend.apply.return_value = ApplyResponse(merged_code=merged_code, usage={})
+
+        try:
+            set_project_encoding("big5")
+            result = await apply_file_logic(
+                backend=mock_backend,
+                file_path=str(big5_file),
+                edit_snippet=(
+                    "# 繁體中文註解用於測試\n"
+                    "def process_traditional_data():\n"
+                    "    print('世界您好')\n"
+                ),
+                instruction=None,
+                base_dir=str(tmp_path),
+            )
+        finally:
+            set_project_encoding(None)
+
+        assert result["status"] == "ok"
+        assert "Applied code changes" in result["message"]
+        # Confirm written file is still Big5 encoded
+        assert big5_file.read_bytes().decode("big5") == merged_code
 
 
 class TestApplyFileLogicBaseDirSecurity:

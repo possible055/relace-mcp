@@ -1,13 +1,16 @@
 import argparse
 import logging
 import os
+from dataclasses import replace
 from pathlib import Path
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 
-from .config import EXPERIMENTAL_LOGGING, LOG_PATH, RelaceConfig
+from .config import ENCODING_DETECTION_SAMPLE_LIMIT, EXPERIMENTAL_LOGGING, LOG_PATH, RelaceConfig
 from .tools import register_tools
+from .tools.apply.encoding import detect_project_encoding
+from .tools.apply.file_io import set_project_encoding
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +52,38 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
     return results
 
 
+def detect_and_set_encoding(config: RelaceConfig) -> RelaceConfig:
+    """Detect project encoding and update config.
+
+    If RELACE_DEFAULT_ENCODING is set, use it directly.
+    Otherwise, scan project files to auto-detect the dominant encoding.
+
+    Args:
+        config: Current configuration.
+
+    Returns:
+        Updated configuration with default_encoding set (if detected).
+    """
+    # If already set via environment, just apply it
+    if config.default_encoding:
+        logger.info("Using configured project encoding: %s", config.default_encoding)
+        set_project_encoding(config.default_encoding)
+        return config
+
+    # Auto-detect encoding from project files
+    base_dir = Path(config.base_dir)
+    detected = detect_project_encoding(base_dir, sample_limit=ENCODING_DETECTION_SAMPLE_LIMIT)
+
+    if detected:
+        logger.info("Auto-detected project encoding: %s", detected)
+        set_project_encoding(detected)
+        # Return updated config with detected encoding
+        return replace(config, default_encoding=detected)
+
+    logger.info("No regional encoding detected, using UTF-8 as default")
+    return config
+
+
 def build_server(config: RelaceConfig | None = None, run_health_check: bool = True) -> FastMCP:
     if config is None:
         config = RelaceConfig.from_env()
@@ -60,6 +95,9 @@ def build_server(config: RelaceConfig | None = None, run_health_check: bool = Tr
         except RuntimeError as exc:
             logger.error("Health check failed: %s", exc)
             raise
+
+    # Detect and set project encoding
+    config = detect_and_set_encoding(config)
 
     mcp = FastMCP("Relace Fast Apply MCP")
     register_tools(mcp, config)

@@ -8,6 +8,7 @@ from typing import Any
 
 from ...clients.repo import RelaceRepoClient
 from ...config import REPO_SYNC_MAX_FILES
+from ...tools.apply.file_io import decode_text_best_effort, get_project_encoding
 from .state import (
     SyncState,
     compute_file_hash,
@@ -198,6 +199,24 @@ def _read_file_content(base_dir: str, rel_path: str) -> bytes | None:
         return None
 
 
+def _decode_file_content(content: bytes, *, path: Path | None = None) -> str | None:
+    """Decode file content with project encoding support.
+
+    Args:
+        content: Raw file bytes.
+
+    Returns:
+        Decoded string, or None if decoding fails (binary file).
+    """
+    project_enc = get_project_encoding()
+    return decode_text_best_effort(
+        content,
+        path=path,
+        preferred_encoding=project_enc,
+        errors="replace",
+    )
+
+
 def _compute_file_hashes(
     base_dir: str,
     files: list[str],
@@ -266,11 +285,10 @@ def _compute_diff_operations(
             # File is new or modified, read content
             content = _read_file_content(base_dir, rel_path)
             if content is not None:
-                # Decode to string for API (assuming UTF-8)
-                try:
-                    content_str = content.decode("utf-8")
-                except UnicodeDecodeError:
-                    # Skip binary files that can't be decoded, but record hash to avoid retry
+                # Decode to string for API (with project encoding support)
+                content_str = _decode_file_content(content, path=Path(base_dir) / rel_path)
+                if content_str is None:
+                    # Binary file that can't be decoded, record hash to avoid retry
                     logger.debug("Skipping binary file: %s", rel_path)
                     new_hashes[rel_path] = current_hash
                     new_skipped.add(rel_path)

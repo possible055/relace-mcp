@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from contextlib import AbstractContextManager
 from pathlib import Path
 
+from ....tools.apply.file_io import decode_text_best_effort, get_project_encoding
 from ..schemas import GrepSearchParams
 from .constants import GREP_TIMEOUT_SECONDS, MAX_GREP_DEPTH, MAX_GREP_MATCHES
 
@@ -176,6 +177,29 @@ def _iter_searchable_files(
             yield filepath, rel_path
 
 
+def _read_file_with_encoding(filepath: Path) -> str | None:
+    """Read file content with project encoding support.
+
+    Args:
+        filepath: File path.
+
+    Returns:
+        File content as string, or None if read fails.
+    """
+    try:
+        raw = filepath.read_bytes()
+    except OSError:
+        return None
+
+    project_enc = get_project_encoding()
+    return decode_text_best_effort(
+        raw,
+        path=filepath,
+        preferred_encoding=project_enc,
+        errors="ignore",
+    )
+
+
 def _search_in_file(
     filepath: Path,
     pattern: re.Pattern[str],
@@ -196,16 +220,16 @@ def _search_in_file(
     if limit <= 0:
         return []
 
+    content = _read_file_with_encoding(filepath)
+    if content is None:
+        return []
+
     matches: list[str] = []
-    try:
-        content = filepath.read_text(encoding="utf-8", errors="ignore")
-        for line_num, line in enumerate(content.splitlines(), 1):
-            if pattern.search(line):
-                matches.append(f"{rel_path}:{line_num}:{line}")
-                if len(matches) >= limit:
-                    break
-    except (OSError, UnicodeDecodeError):
-        pass
+    for line_num, line in enumerate(content.splitlines(), 1):
+        if pattern.search(line):
+            matches.append(f"{rel_path}:{line_num}:{line}")
+            if len(matches) >= limit:
+                break
 
     return matches
 
@@ -231,6 +255,7 @@ def _build_ripgrep_command(params: GrepSearchParams) -> list[str]:
         cmd.extend(["-g", f"!{params.exclude_pattern}"])
 
     cmd.extend(["--max-count", "100"])
+    cmd.append("--")
     cmd.append(params.query)
     cmd.append(".")
 
@@ -273,6 +298,16 @@ def _try_ripgrep(params: GrepSearchParams) -> str:
         subprocess.TimeoutExpired: Search timed out.
     """
     cmd = _build_ripgrep_command(params)
+    project_enc = get_project_encoding()
+    if project_enc and project_enc.lower() not in {"utf-8", "utf-8-sig", "ascii", "us-ascii"}:
+        # For regional-encoding projects (e.g., GBK/Big5), force rg to decode correctly.
+        enc = project_enc.lower()
+        if enc == "utf-8-sig":
+            enc = "utf-8"
+        cmd.insert(1, f"--encoding={enc}")
+    elif params.query.isascii():
+        # For ASCII queries, allow searching through non-UTF-8 files safely.
+        cmd.insert(1, "--text")
 
     result = subprocess.run(  # nosec B603
         cmd,
@@ -294,6 +329,10 @@ def _try_ripgrep(params: GrepSearchParams) -> str:
 def grep_search_handler(params: GrepSearchParams) -> str:
     """grep_search tool implementation (uses ripgrep or fallback to Python re)."""
     try:
+        # Non-ASCII patterns cannot be reliably matched across unknown legacy encodings via rg.
+        # Fall back to per-file decoding to support GBK/Big5 mixed repos.
+        if get_project_encoding() is None and not params.query.isascii():
+            return _grep_search_python_fallback(params)
         return _try_ripgrep(params)
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return _grep_search_python_fallback(params)

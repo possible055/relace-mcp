@@ -52,6 +52,8 @@ MCP server for [Relace](https://www.relace.ai/) — AI-powered instant code merg
 | `RELACE_API_KEY` | ✅ | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
 | `RELACE_BASE_DIR` | ✅ | Absolute path to project root |
 | `RELACE_STRICT_MODE` | ❌ | Set `1` to require explicit base dir (recommended for production) |
+| `RELACE_DEFAULT_ENCODING` | ❌ | Force default file encoding (e.g., `gbk`, `big5`) to support legacy-encoded repos |
+| `RELACE_ENCODING_SAMPLE_LIMIT` | ❌ | Max files sampled for auto-detecting project encoding at startup (default: `30`) |
 
 > For advanced settings (developer overrides, provider swap, remote deployment), see [docs/advanced.md](docs/advanced.md).
 

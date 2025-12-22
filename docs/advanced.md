@@ -6,6 +6,7 @@ This document covers advanced configuration options for power users and develope
 
 - [Sync Modes](#sync-modes)
 - [Developer Overrides](#developer-overrides)
+- [Encoding](#encoding)
 - [Fast Apply Provider Swap](#fast-apply-provider-swap)
 - [Fast Search Provider Swap](#fast-search-provider-swap)
 - [Fast Search Tool Control](#fast-search-tool-control)
@@ -48,6 +49,22 @@ These settings allow temporary overrides when the official API updates before th
 | `RELACE_REPO_ID` | — (pre-configured repo UUID to skip list/create) |
 | `RELACE_REPO_SYNC_TIMEOUT` | `300` |
 | `RELACE_REPO_SYNC_MAX_FILES` | `5000` |
+
+---
+
+## Encoding
+
+Relace MCP aims to work with legacy-encoded repos (e.g., GBK/Big5) without crashing tools like `fast_apply`, `view_file`, `grep_search`, and `cloud_sync`.
+
+**Recommended best practice:** convert the repo to UTF-8 (and keep it consistent). If you must keep legacy encodings:
+
+- For Python source, add a PEP 263 coding cookie on the first or second line (e.g., `# -*- coding: gbk -*-`).
+- If your repo is predominantly a single legacy encoding, set `RELACE_DEFAULT_ENCODING` explicitly.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RELACE_DEFAULT_ENCODING` | — | Force the default encoding used when reading/writing project files (e.g., `gbk`, `big5`) |
+| `RELACE_ENCODING_SAMPLE_LIMIT` | `30` | Max files sampled at startup for auto-detecting a dominant project encoding |
 
 ---
 
