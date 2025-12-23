@@ -92,6 +92,9 @@ def detect_project_encoding(
             break
 
         # Skip non-files, hidden files, and common non-source directories
+        # Skip symlinks to prevent path traversal attacks and infinite loops
+        if file_path.is_symlink():
+            continue
         if not file_path.is_file():
             continue
         if any(part.startswith(".") for part in file_path.parts):
