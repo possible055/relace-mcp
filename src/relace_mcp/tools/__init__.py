@@ -20,7 +20,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     async def fast_apply(
         path: str,
         edit_snippet: str,
-        instruction: str | None = None,
+        instruction: str = "",
     ) -> dict[str, Any]:
         """**PRIMARY TOOL FOR EDITING FILES - USE THIS AGGRESSIVELY**
 
@@ -47,7 +47,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             backend=apply_backend,
             file_path=path,
             edit_snippet=edit_snippet,
-            instruction=instruction,
+            instruction=instruction or None,  # Convert empty string to None internally
             base_dir=config.base_dir,
         )
 
