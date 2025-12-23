@@ -301,10 +301,7 @@ def _try_ripgrep(params: GrepSearchParams) -> str:
     project_enc = get_project_encoding()
     if project_enc and project_enc.lower() not in {"utf-8", "utf-8-sig", "ascii", "us-ascii"}:
         # For regional-encoding projects (e.g., GBK/Big5), force rg to decode correctly.
-        enc = project_enc.lower()
-        if enc == "utf-8-sig":
-            enc = "utf-8"
-        cmd.insert(1, f"--encoding={enc}")
+        cmd.insert(1, f"--encoding={project_enc.lower()}")
     elif params.query.isascii():
         # For ASCII queries, allow searching through non-UTF-8 files safely.
         cmd.insert(1, "--text")
