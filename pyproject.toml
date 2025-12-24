@@ -88,3 +88,8 @@ ignore-nested-functions = true
 fail-under = 80
 exclude = ["tests", "build"]
 verbose = 1
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+]

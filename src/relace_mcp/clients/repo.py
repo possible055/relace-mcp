@@ -7,13 +7,13 @@ from typing import Any, cast
 
 import httpx
 
-from ..config import (
+from ..config import RelaceConfig
+from ..config.settings import (
     MAX_RETRIES,
     RELACE_API_ENDPOINT,
     RELACE_REPO_ID,
     REPO_SYNC_TIMEOUT_SECONDS,
     RETRY_BASE_DELAY,
-    RelaceConfig,
 )
 from .exceptions import RelaceAPIError, raise_for_status
 

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ...clients.apply import ApplyRequest, ApplyResponse, RelaceApplyClient
-from ...config import EXPERIMENTAL_POST_CHECK
+from ...config.settings import EXPERIMENTAL_POST_CHECK
 from ...utils import MAX_FILE_SIZE_BYTES, validate_file_path
 from . import errors, file_io, snippet
 from . import logging as apply_logging

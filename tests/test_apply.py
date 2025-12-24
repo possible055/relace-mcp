@@ -178,7 +178,7 @@ class TestRelaceApplyClientErrors:
 class TestRelaceApplyClientRetry:
     @pytest.mark.asyncio
     async def test_rate_limit_retries(self, mock_config: RelaceConfig) -> None:
-        from relace_mcp.config import MAX_RETRIES
+        from relace_mcp.config.settings import MAX_RETRIES
 
         call_count = 0
 
@@ -207,7 +207,7 @@ class TestRelaceApplyClientRetry:
 
     @pytest.mark.asyncio
     async def test_server_error_retries(self, mock_config: RelaceConfig) -> None:
-        from relace_mcp.config import MAX_RETRIES
+        from relace_mcp.config.settings import MAX_RETRIES
 
         call_count = 0
 

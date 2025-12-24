@@ -1,6 +1,9 @@
 import os
 from typing import Any
 
+_TRUTHY = {"1", "true", "yes", "y", "on"}
+_FALSY = {"0", "false", "no", "n", "off"}
+
 _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
@@ -242,6 +245,31 @@ def _split_tool_list(raw: str) -> list[str]:
     return [t for t in raw.replace(",", " ").replace(";", " ").split() if t]
 
 
+def _include_tool_strict() -> bool:
+    raw = os.getenv("RELACE_SEARCH_TOOL_STRICT", "1").strip().lower()
+    if raw in _TRUTHY:
+        return True
+    if raw in _FALSY:
+        return False
+    return True
+
+
+def normalize_tool_schemas(
+    schemas: list[dict[str, Any]], *, include_strict: bool
+) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for schema in schemas:
+        schema_copy = dict(schema)
+        func = schema_copy.get("function")
+        if isinstance(func, dict):
+            func_copy = dict(func)
+            if not include_strict:
+                func_copy.pop("strict", None)
+            schema_copy["function"] = func_copy
+        normalized.append(schema_copy)
+    return normalized
+
+
 def get_tool_schemas() -> list[dict[str, Any]]:
     """Get enabled tool schemas for Fast Agentic Search.
 
@@ -249,6 +277,7 @@ def get_tool_schemas() -> list[dict[str, Any]]:
         - RELACE_SEARCH_ENABLED_TOOLS: Comma/space-separated allowlist, e.g.
           "view_file,view_directory,grep_search,glob,bash". `report_back` is always enabled.
           If not set, all tools are enabled by default.
+        - RELACE_SEARCH_TOOL_STRICT: Set to 0/false to omit the non-standard `strict` field from tool schemas.
     """
     raw_allowlist = os.getenv("RELACE_SEARCH_ENABLED_TOOLS", "").strip()
 
@@ -260,9 +289,10 @@ def get_tool_schemas() -> list[dict[str, Any]]:
     # Always keep report_back so the harness can terminate deterministically.
     enabled.add("report_back")
 
-    return [
+    selected = [
         schema for schema in _ALL_TOOL_SCHEMAS if schema.get("function", {}).get("name") in enabled
     ]
+    return normalize_tool_schemas(selected, include_strict=_include_tool_strict())
 
 
 # Default export for backward compatibility (computed at import time)
