@@ -154,7 +154,8 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             # Parse response
             choices = response.get("choices", [])
             if not choices:
-                raise RuntimeError("Relace Search API returned empty choices")
+                name = self._client._chat_client.provider_display_name
+                raise RuntimeError(f"{name} Search API returned empty choices")
 
             message = choices[0].get("message", {})
             # Defense: some providers/mocks may lack role, avoid breaking block/repair logic
