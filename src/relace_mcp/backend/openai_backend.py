@@ -190,6 +190,13 @@ class OpenAIChatClient:
     def api_compat(self) -> str:
         return self._api_compat
 
+    @property
+    def provider_display_name(self) -> str:
+        """Human-readable provider name for error messages."""
+        if self._provider == RELACE_PROVIDER:
+            return "Relace"
+        return self._provider.replace("_", " ").title()
+
     @retry(
         stop=stop_after_attempt(MAX_RETRIES + 1),
         wait=wait_exponential(multiplier=RETRY_BASE_DELAY, max=60),

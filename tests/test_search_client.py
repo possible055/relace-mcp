@@ -228,3 +228,35 @@ def test_schema_error_retry_disables_parallel_and_strips_strict(tmp_path, monkey
     extra_body = second_call_kwargs.get("extra_body", {})
     assert "parallel_tool_calls" not in extra_body
     assert all("strict" not in t.get("function", {}) for t in extra_body.get("tools", []))
+
+
+def test_error_message_uses_provider_name_not_relace(tmp_path, monkeypatch) -> None:
+    """Error messages should use actual provider name, not hardcoded 'Relace'."""
+    monkeypatch.setenv("RELACE_SEARCH_PROVIDER", "openai")
+    monkeypatch.delenv("RELACE_SEARCH_ENDPOINT", raising=False)
+    monkeypatch.delenv("RELACE_SEARCH_MODEL", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+    with patch("relace_mcp.backend.openai_backend.OpenAI") as mock_openai:
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = openai.AuthenticationError(
+            message="Invalid API key",
+            response=MagicMock(status_code=401),
+            body=None,
+        )
+        mock_openai.return_value = mock_client
+
+        with patch("relace_mcp.backend.openai_backend.AsyncOpenAI"):
+            config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
+            client = RelaceSearchClient(config)
+
+            with pytest.raises(RuntimeError) as exc_info:
+                client.chat(
+                    messages=[{"role": "user", "content": "hi"}],
+                    tools=[],
+                    trace_id="t",
+                )
+
+    # Verify error message uses "Openai" not "Relace"
+    assert "Openai" in str(exc_info.value)
+    assert "Relace" not in str(exc_info.value)

@@ -92,31 +92,38 @@ class RelaceSearchClient:
                     include_parallel_tool_calls=include_parallel_tool_calls,
                 )
             except openai.APIError as retry_exc:
+                name = self._chat_client.provider_display_name
                 raise RuntimeError(
-                    f"Relace Search API request failed after compatibility retry: {retry_exc}"
+                    f"{name} Search API request failed after compatibility retry: {retry_exc}"
                 ) from retry_exc
             if retried is not None:
                 return retried
-            raise RuntimeError(f"Relace Search API request schema rejected: {exc}") from exc
+            name = self._chat_client.provider_display_name
+            raise RuntimeError(f"{name} Search API request schema rejected: {exc}") from exc
         except openai.AuthenticationError as exc:
-            raise RuntimeError(f"Relace Search API authentication error: {exc}") from exc
+            name = self._chat_client.provider_display_name
+            raise RuntimeError(f"{name} Search API authentication error: {exc}") from exc
         except openai.RateLimitError as exc:
-            raise RuntimeError(f"Relace Search API rate limit: {exc}") from exc
+            name = self._chat_client.provider_display_name
+            raise RuntimeError(f"{name} Search API rate limit: {exc}") from exc
         except openai.APITimeoutError as exc:
+            name = self._chat_client.provider_display_name
             raise RuntimeError(
-                f"Relace Search API request timed out after {SEARCH_TIMEOUT_SECONDS}s."
+                f"{name} Search API request timed out after {SEARCH_TIMEOUT_SECONDS}s."
             ) from exc
         except openai.APIConnectionError as exc:
-            raise RuntimeError(f"Failed to connect to Relace Search API: {exc}") from exc
+            name = self._chat_client.provider_display_name
+            raise RuntimeError(f"Failed to connect to {name} Search API: {exc}") from exc
         except openai.APIStatusError as exc:
+            name = self._chat_client.provider_display_name
             if exc.status_code == 404:
                 raise RuntimeError(
-                    "Relace Search API returned 404. If using an OpenAI-compatible endpoint, "
+                    f"{name} Search API returned 404. If using an OpenAI-compatible endpoint, "
                     "set RELACE_SEARCH_ENDPOINT to the provider base URL (do not include "
                     "`/chat/completions`)."
                 ) from exc
             raise RuntimeError(
-                f"Relace Search API error (status={exc.status_code}): {exc}"
+                f"{name} Search API error (status={exc.status_code}): {exc}"
             ) from exc
 
     def _retry_compat_on_schema_error(
