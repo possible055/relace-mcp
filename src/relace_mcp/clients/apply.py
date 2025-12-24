@@ -2,8 +2,13 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..backend import OpenAIChatClient
-from ..config import RELACE_APPLY_BASE_URL, RELACE_APPLY_MODEL, TIMEOUT_SECONDS, RelaceConfig
+from ..backend import RELACE_PROVIDER, OpenAIChatClient
+from ..config import APPLY_SYSTEM_PROMPT, RelaceConfig
+from ..config.settings import (
+    RELACE_APPLY_BASE_URL,
+    RELACE_APPLY_MODEL,
+    TIMEOUT_SECONDS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +41,8 @@ class RelaceApplyClient:
             default_model=RELACE_APPLY_MODEL,
             timeout_seconds=TIMEOUT_SECONDS,
         )
+        # Cache api_compat for conditional system prompt injection
+        self._api_compat = self._chat_client.api_compat
 
     async def apply(self, request: ApplyRequest) -> ApplyResponse:
         """Call Relace Instant Apply API to merge edit_snippet into initial_code.
@@ -77,7 +84,13 @@ class RelaceApplyClient:
         parts.append(f"<update>{request.edit_snippet}</update>")
         user_message = "\n".join(parts)
 
-        return [{"role": "user", "content": user_message}]
+        messages: list[dict[str, Any]] = []
+        # Only inject system prompt for OpenAI-compatible endpoints
+        # Relace native API has built-in system prompt, no need to inject
+        if self._api_compat != RELACE_PROVIDER:
+            messages.append({"role": "system", "content": APPLY_SYSTEM_PROMPT})
+        messages.append({"role": "user", "content": user_message})
+        return messages
 
     def _extract_merged_code(self, data: dict[str, Any]) -> str:
         choices = data.get("choices", [])

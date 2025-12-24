@@ -22,7 +22,8 @@ from .tool_calls import ToolCallsMixin
 
 logger = logging.getLogger(__name__)
 
-_harness_mod = importlib.import_module(__package__)
+_HARNESS_PACKAGE = __package__ or "relace_mcp.tools.search.harness"
+_harness_mod = importlib.import_module(_HARNESS_PACKAGE)
 
 
 class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCallsMixin):
