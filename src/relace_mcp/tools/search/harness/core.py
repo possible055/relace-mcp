@@ -4,7 +4,7 @@ import re
 import uuid
 from typing import Any
 
-from ....clients import RelaceSearchClient
+from ....clients import SearchLLMClient
 from ....config import RelaceConfig
 from ..handlers import estimate_context_size
 from ..schemas import (
@@ -22,7 +22,8 @@ from .tool_calls import ToolCallsMixin
 
 logger = logging.getLogger(__name__)
 
-_harness_mod = importlib.import_module(__package__)
+_HARNESS_PACKAGE = __package__ or "relace_mcp.tools.search.harness"
+_harness_mod = importlib.import_module(_HARNESS_PACKAGE)
 
 
 class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCallsMixin):
@@ -32,7 +33,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
     processing tool calls and terminating upon receiving report_back.
     """
 
-    def __init__(self, config: RelaceConfig, client: RelaceSearchClient) -> None:
+    def __init__(self, config: RelaceConfig, client: SearchLLMClient) -> None:
         self._config = config
         self._client = client
         self._observed_files: dict[str, list[list[int]]] = {}
@@ -153,7 +154,8 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             # Parse response
             choices = response.get("choices", [])
             if not choices:
-                raise RuntimeError("Relace Search API returned empty choices")
+                name = self._client._chat_client.provider_display_name
+                raise RuntimeError(f"{name} Search API returned empty choices")
 
             message = choices[0].get("message", {})
             # Defense: some providers/mocks may lack role, avoid breaking block/repair logic

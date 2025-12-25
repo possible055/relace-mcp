@@ -2,71 +2,39 @@ from pathlib import Path
 
 import yaml
 
-from .settings import (
-    ENCODING_DETECTION_SAMPLE_LIMIT,
-    EXPERIMENTAL_LOGGING,
-    EXPERIMENTAL_POST_CHECK,
-    LOG_DIR,
-    LOG_PATH,
-    MAX_LOG_SIZE_BYTES,
-    MAX_RETRIES,
-    RELACE_API_ENDPOINT,
-    RELACE_APPLY_BASE_URL,
-    RELACE_APPLY_MODEL,
-    RELACE_DEFAULT_ENCODING,
-    RELACE_REPO_ID,
-    RELACE_SEARCH_BASE_URL,
-    RELACE_SEARCH_MODEL,
-    RELACE_STRICT_MODE,
-    REPO_SYNC_MAX_FILES,
-    REPO_SYNC_TIMEOUT_SECONDS,
-    RETRY_BASE_DELAY,
-    SEARCH_MAX_TURNS,
-    SEARCH_TIMEOUT_SECONDS,
-    TIMEOUT_SECONDS,
-    RelaceConfig,
-)
+# Public API: RelaceConfig is the main configuration class
+from .settings import RelaceConfig
 
-# Load prompts.yaml
-_PROMPTS_PATH = Path(__file__).parent / "prompts.yaml"
+# Load search_prompts.yaml (Fast Agentic Search)
+_PROMPTS_PATH = Path(__file__).parent / "search_prompts.yaml"
 with _PROMPTS_PATH.open(encoding="utf-8") as f:
     _PROMPTS = yaml.safe_load(f)
 
-# Prompt-related constants
-SYSTEM_PROMPT: str = _PROMPTS["system_prompt"].strip()
-USER_PROMPT_TEMPLATE: str = _PROMPTS["user_prompt_template"].strip()
-BUDGET_HINT_TEMPLATE: str = _PROMPTS["budget_hint_template"].strip()
-CONVERGENCE_HINT: str = _PROMPTS["convergence_hint"].strip()
-STRATEGIES: dict[str, str] = _PROMPTS["strategies"]
+# Search prompt constants (prefixed for consistency with APPLY_SYSTEM_PROMPT)
+SEARCH_SYSTEM_PROMPT: str = _PROMPTS["system_prompt"].strip()
+SEARCH_USER_PROMPT_TEMPLATE: str = _PROMPTS["user_prompt_template"].strip()
+SEARCH_BUDGET_HINT_TEMPLATE: str = _PROMPTS["budget_hint_template"].strip()
+SEARCH_CONVERGENCE_HINT: str = _PROMPTS["convergence_hint"].strip()
+SEARCH_STRATEGIES: dict[str, str] = _PROMPTS["strategies"]
 
+# Load apply_prompts.yaml (Fast Apply for OpenAI-compatible endpoints)
+_APPLY_PROMPTS_PATH = Path(__file__).parent / "apply_prompts.yaml"
+with _APPLY_PROMPTS_PATH.open(encoding="utf-8") as f:
+    _APPLY_PROMPTS = yaml.safe_load(f)
+
+# Apply prompt constant (only injected for non-Relace endpoints)
+APPLY_SYSTEM_PROMPT: str = _APPLY_PROMPTS["apply_system_prompt"].strip()
+
+# Public API exports only
+# Internal constants should be imported directly from config.settings
 __all__ = [
-    # Settings
-    "ENCODING_DETECTION_SAMPLE_LIMIT",
-    "EXPERIMENTAL_LOGGING",
-    "EXPERIMENTAL_POST_CHECK",
-    "LOG_DIR",
-    "LOG_PATH",
-    "MAX_LOG_SIZE_BYTES",
-    "MAX_RETRIES",
-    "RELACE_API_ENDPOINT",
-    "RELACE_APPLY_BASE_URL",
-    "RELACE_APPLY_MODEL",
-    "RELACE_DEFAULT_ENCODING",
-    "RELACE_REPO_ID",
-    "RELACE_SEARCH_BASE_URL",
-    "RELACE_SEARCH_MODEL",
-    "RELACE_STRICT_MODE",
-    "REPO_SYNC_MAX_FILES",
-    "REPO_SYNC_TIMEOUT_SECONDS",
-    "RETRY_BASE_DELAY",
-    "SEARCH_MAX_TURNS",
-    "SEARCH_TIMEOUT_SECONDS",
-    "TIMEOUT_SECONDS",
+    # Public API
     "RelaceConfig",
-    # Prompts
-    "SYSTEM_PROMPT",
-    "USER_PROMPT_TEMPLATE",
-    "BUDGET_HINT_TEMPLATE",
-    "CONVERGENCE_HINT",
-    "STRATEGIES",
+    # Prompts (for internal submodule use)
+    "SEARCH_SYSTEM_PROMPT",
+    "SEARCH_USER_PROMPT_TEMPLATE",
+    "SEARCH_BUDGET_HINT_TEMPLATE",
+    "SEARCH_CONVERGENCE_HINT",
+    "SEARCH_STRATEGIES",
+    "APPLY_SYSTEM_PROMPT",
 ]

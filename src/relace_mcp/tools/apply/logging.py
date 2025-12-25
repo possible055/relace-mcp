@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ...config import EXPERIMENTAL_LOGGING, LOG_PATH, MAX_LOG_SIZE_BYTES
+from ...config.settings import EXPERIMENTAL_LOGGING, LOG_PATH, MAX_LOG_SIZE_BYTES
 
 logger = logging.getLogger(__name__)
 

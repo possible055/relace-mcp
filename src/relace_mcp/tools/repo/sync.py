@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
-from ...config import REPO_SYNC_MAX_FILES
+from ...config.settings import REPO_SYNC_MAX_FILES
 from ...tools.apply.file_io import decode_text_best_effort, get_project_encoding
 from .state import (
     SyncState,

@@ -67,8 +67,8 @@ class TestServerToolExecution:
         successful_api_response: dict[str, Any],
     ) -> None:
         """Should execute fast_apply tool successfully."""
-        # Mock the RelaceApplyClient.apply method
-        with patch("relace_mcp.tools.RelaceApplyClient") as mock_backend_cls:
+        # Mock the ApplyLLMClient.apply method
+        with patch("relace_mcp.tools.ApplyLLMClient") as mock_backend_cls:
             mock_backend = AsyncMock()
             mock_backend.apply.return_value = ApplyResponse(
                 merged_code=successful_api_response["choices"][0]["message"]["content"],
@@ -186,7 +186,7 @@ class TestServerIntegration:
         # temp_source_file content: def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Goodbye')\n
         merged_code = "def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Modified!')\n"
 
-        with patch("relace_mcp.tools.RelaceApplyClient") as mock_backend_cls:
+        with patch("relace_mcp.tools.ApplyLLMClient") as mock_backend_cls:
             mock_backend = AsyncMock()
             mock_backend.apply.return_value = ApplyResponse(
                 merged_code=merged_code,
