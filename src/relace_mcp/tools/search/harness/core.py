@@ -4,7 +4,7 @@ import re
 import uuid
 from typing import Any
 
-from ....clients import RelaceSearchClient
+from ....clients import SearchLLMClient
 from ....config import RelaceConfig
 from ..handlers import estimate_context_size
 from ..schemas import (
@@ -33,7 +33,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
     processing tool calls and terminating upon receiving report_back.
     """
 
-    def __init__(self, config: RelaceConfig, client: RelaceSearchClient) -> None:
+    def __init__(self, config: RelaceConfig, client: SearchLLMClient) -> None:
         self._config = config
         self._client = client
         self._observed_files: dict[str, list[list[int]]] = {}

@@ -28,7 +28,24 @@ def _strip_tool_strict(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return stripped
 
 
-class RelaceSearchClient:
+class SearchLLMClient:
+    """Search client for Fast Agentic Search.
+
+    Supports Relace and OpenAI-compatible providers (OpenAI, OpenRouter, Cerebras, etc.).
+
+    Environment variables:
+        RELACE_SEARCH_PROVIDER: Provider name (default: relace)
+        RELACE_SEARCH_ENDPOINT: API base URL
+        RELACE_SEARCH_MODEL: Model name
+        RELACE_SEARCH_API_KEY: API key (or use provider-specific key)
+        RELACE_SEARCH_PARALLEL_TOOL_CALLS: Enable parallel tool calls (default: true)
+        RELACE_SEARCH_TOOL_STRICT: Include strict field in tool schemas (default: true)
+
+    Note:
+        When using OpenAI-compatible providers with strict=true, parallel_tool_calls
+        is automatically disabled to comply with OpenAI Structured Outputs limitations.
+    """
+
     def __init__(self, config: RelaceConfig) -> None:
         self._chat_client = OpenAIChatClient(
             config,
@@ -59,6 +76,24 @@ class RelaceSearchClient:
             _env_bool("RELACE_SEARCH_PARALLEL_TOOL_CALLS", default=True)
             and not self._disable_parallel_tool_calls
         )
+
+        # OpenAI Structured Outputs 與 parallel_tool_calls 不相容
+        # 當使用 OpenAI-compatible provider 且 tools 含 strict=true 時，自動禁用 parallel_tool_calls
+        if self._chat_client.api_compat != RELACE_PROVIDER and include_parallel_tool_calls:
+            tool_has_strict = any(
+                isinstance(t, dict)
+                and isinstance(t.get("function"), dict)
+                and t.get("function", {}).get("strict")
+                for t in tools
+            )
+            if tool_has_strict:
+                logger.warning(
+                    "[%s] OpenAI Structured Outputs does not support parallel_tool_calls "
+                    "with strict=true. Disabling parallel_tool_calls for compatibility. "
+                    "Set RELACE_SEARCH_PARALLEL_TOOL_CALLS=0 to suppress this warning.",
+                    trace_id,
+                )
+                include_parallel_tool_calls = False
 
         extra_body: dict[str, Any] = {
             "tools": tools,
@@ -137,7 +172,10 @@ class RelaceSearchClient:
         include_parallel_tool_calls: bool,
     ) -> dict[str, Any] | None:
         had_strict = any(
-            isinstance(t.get("function"), dict) and "strict" in t.get("function", {}) for t in tools
+            isinstance(t, dict)
+            and isinstance(t.get("function"), dict)
+            and "strict" in t.get("function", {})
+            for t in tools
         )
         if not include_relace_sampling and not include_parallel_tool_calls and not had_strict:
             return None

@@ -2,8 +2,8 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from ..clients import RelaceRepoClient, RelaceSearchClient
-from ..clients.apply import RelaceApplyClient
+from ..clients import RelaceRepoClient, SearchLLMClient
+from ..clients.apply import ApplyLLMClient
 from ..config import RelaceConfig
 from .apply import apply_file_logic
 from .repo import cloud_info_logic, cloud_list_logic, cloud_search_logic, cloud_sync_logic
@@ -14,7 +14,7 @@ __all__ = ["register_tools"]
 
 def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     """Register Relace tools to the FastMCP instance."""
-    apply_backend = RelaceApplyClient(config)
+    apply_backend = ApplyLLMClient(config)
 
     @mcp.tool
     async def fast_apply(
@@ -52,7 +52,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         )
 
     # Fast Agentic Search
-    search_client = RelaceSearchClient(config)
+    search_client = SearchLLMClient(config)
 
     @mcp.tool
     def fast_search(query: str) -> dict[str, Any]:

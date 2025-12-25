@@ -3,7 +3,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import openai
 import pytest
 
-from relace_mcp.clients.apply import ApplyRequest, RelaceApplyClient
+from relace_mcp.clients import ApplyLLMClient
+from relace_mcp.clients.apply import ApplyRequest
 from relace_mcp.config import RelaceConfig
 
 
@@ -23,7 +24,7 @@ def _mock_chat_response(content: str, usage: dict | None = None) -> MagicMock:
     return response
 
 
-class TestRelaceApplyClientApply:
+class TestApplyLLMClientApply:
     @pytest.mark.asyncio
     async def test_successful_apply(self, mock_config: RelaceConfig) -> None:
         mock_response = _mock_chat_response(
@@ -37,7 +38,7 @@ class TestRelaceApplyClientApply:
             mock_async_openai.return_value = mock_client
 
             with patch("relace_mcp.backend.openai_backend.OpenAI"):
-                backend = RelaceApplyClient(mock_config)
+                backend = ApplyLLMClient(mock_config)
                 request = ApplyRequest(
                     initial_code="def hello(): pass",
                     edit_snippet="def hello(): print('hi')",
@@ -60,7 +61,7 @@ class TestRelaceApplyClientApply:
             mock_async_openai.return_value = mock_client
 
             with patch("relace_mcp.backend.openai_backend.OpenAI"):
-                backend = RelaceApplyClient(mock_config)
+                backend = ApplyLLMClient(mock_config)
                 request = ApplyRequest(
                     initial_code="def hello(): pass",
                     edit_snippet="def hello(): print('hi')",
@@ -70,7 +71,7 @@ class TestRelaceApplyClientApply:
         assert response.merged_code == "def hello():\n    print('Hello, World!')\n"
 
 
-class TestRelaceApplyClientPayload:
+class TestApplyLLMClientPayload:
     @pytest.mark.asyncio
     async def test_payload_structure(self, mock_config: RelaceConfig) -> None:
         mock_response = _mock_chat_response("code")
@@ -81,7 +82,7 @@ class TestRelaceApplyClientPayload:
             mock_async_openai.return_value = mock_client
 
             with patch("relace_mcp.backend.openai_backend.OpenAI"):
-                backend = RelaceApplyClient(mock_config)
+                backend = ApplyLLMClient(mock_config)
                 request = ApplyRequest(initial_code="initial", edit_snippet="edit")
 
                 await backend.apply(request)
@@ -104,7 +105,7 @@ class TestRelaceApplyClientPayload:
             mock_async_openai.return_value = mock_client
 
             with patch("relace_mcp.backend.openai_backend.OpenAI"):
-                backend = RelaceApplyClient(mock_config)
+                backend = ApplyLLMClient(mock_config)
                 request = ApplyRequest(
                     initial_code="initial",
                     edit_snippet="edit",
@@ -121,7 +122,7 @@ class TestRelaceApplyClientPayload:
                 )
 
 
-class TestRelaceApplyClientErrors:
+class TestApplyLLMClientErrors:
     @pytest.mark.asyncio
     async def test_api_error_response(self, mock_config: RelaceConfig) -> None:
         with patch("relace_mcp.backend.openai_backend.AsyncOpenAI") as mock_async_openai:
@@ -136,7 +137,7 @@ class TestRelaceApplyClientErrors:
             mock_async_openai.return_value = mock_client
 
             with patch("relace_mcp.backend.openai_backend.OpenAI"):
-                backend = RelaceApplyClient(mock_config)
+                backend = ApplyLLMClient(mock_config)
                 request = ApplyRequest(initial_code="code", edit_snippet="snippet")
 
                 with pytest.raises(openai.AuthenticationError):
@@ -152,7 +153,7 @@ class TestRelaceApplyClientErrors:
             mock_async_openai.return_value = mock_client
 
             with patch("relace_mcp.backend.openai_backend.OpenAI"):
-                backend = RelaceApplyClient(mock_config)
+                backend = ApplyLLMClient(mock_config)
                 request = ApplyRequest(initial_code="code", edit_snippet="snippet")
 
                 with pytest.raises(openai.APITimeoutError):
@@ -168,14 +169,14 @@ class TestRelaceApplyClientErrors:
             mock_async_openai.return_value = mock_client
 
             with patch("relace_mcp.backend.openai_backend.OpenAI"):
-                backend = RelaceApplyClient(mock_config)
+                backend = ApplyLLMClient(mock_config)
                 request = ApplyRequest(initial_code="code", edit_snippet="snippet")
 
                 with pytest.raises(openai.APIConnectionError):
                     await backend.apply(request)
 
 
-class TestRelaceApplyClientRetry:
+class TestApplyLLMClientRetry:
     @pytest.mark.asyncio
     async def test_rate_limit_retries(self, mock_config: RelaceConfig) -> None:
         from relace_mcp.config.settings import MAX_RETRIES
@@ -197,7 +198,7 @@ class TestRelaceApplyClientRetry:
             mock_async_openai.return_value = mock_client
 
             with patch("relace_mcp.backend.openai_backend.OpenAI"):
-                backend = RelaceApplyClient(mock_config)
+                backend = ApplyLLMClient(mock_config)
                 request = ApplyRequest(initial_code="code", edit_snippet="snippet")
 
                 with pytest.raises(openai.RateLimitError):
@@ -226,7 +227,7 @@ class TestRelaceApplyClientRetry:
             mock_async_openai.return_value = mock_client
 
             with patch("relace_mcp.backend.openai_backend.OpenAI"):
-                backend = RelaceApplyClient(mock_config)
+                backend = ApplyLLMClient(mock_config)
                 request = ApplyRequest(initial_code="code", edit_snippet="snippet")
 
                 with pytest.raises(openai.InternalServerError):

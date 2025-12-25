@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import openai
 import pytest
 
-from relace_mcp.clients import RelaceSearchClient
+from relace_mcp.clients import SearchLLMClient
 from relace_mcp.config import RelaceConfig
 
 
@@ -31,7 +31,7 @@ def test_relace_provider_uses_config_api_key_by_default(tmp_path, monkeypatch) -
 
         with patch("relace_mcp.backend.openai_backend.AsyncOpenAI"):
             config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
-            client = RelaceSearchClient(config)
+            client = SearchLLMClient(config)
 
             result = client.chat(
                 messages=[{"role": "user", "content": "hi"}],
@@ -68,7 +68,7 @@ def test_openai_provider_uses_openai_api_key_and_compat_payload(tmp_path, monkey
 
         with patch("relace_mcp.backend.openai_backend.AsyncOpenAI"):
             config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
-            client = RelaceSearchClient(config)
+            client = SearchLLMClient(config)
 
             client.chat(
                 messages=[{"role": "user", "content": "hi"}],
@@ -100,7 +100,7 @@ def test_openai_provider_requires_openai_key(tmp_path, monkeypatch) -> None:
     config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
 
     with pytest.raises(RuntimeError, match="OPENAI_API_KEY is not set"):
-        RelaceSearchClient(config)
+        SearchLLMClient(config)
 
 
 def test_openrouter_provider_uses_openrouter_api_key_and_openai_payload(
@@ -108,7 +108,7 @@ def test_openrouter_provider_uses_openrouter_api_key_and_openai_payload(
 ) -> None:
     monkeypatch.setenv("RELACE_SEARCH_PROVIDER", "openrouter")
     monkeypatch.delenv("RELACE_SEARCH_ENDPOINT", raising=False)
-    monkeypatch.delenv("RELACE_SEARCH_MODEL", raising=False)
+    monkeypatch.setenv("RELACE_SEARCH_MODEL", "openai/gpt-4o")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
 
@@ -121,7 +121,7 @@ def test_openrouter_provider_uses_openrouter_api_key_and_openai_payload(
 
         with patch("relace_mcp.backend.openai_backend.AsyncOpenAI"):
             config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
-            client = RelaceSearchClient(config)
+            client = SearchLLMClient(config)
             client.chat(
                 messages=[{"role": "user", "content": "hi"}],
                 tools=[],
@@ -141,7 +141,7 @@ def test_openrouter_provider_uses_openrouter_api_key_and_openai_payload(
 def test_openrouter_provider_endpoint_is_normalized(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("RELACE_SEARCH_PROVIDER", "openrouter")
     monkeypatch.setenv("RELACE_SEARCH_ENDPOINT", "https://openrouter.ai/api/v1/chat/completions")
-    monkeypatch.delenv("RELACE_SEARCH_MODEL", raising=False)
+    monkeypatch.setenv("RELACE_SEARCH_MODEL", "openai/gpt-4o")
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
 
     mock_response = _mock_chat_response()
@@ -153,7 +153,7 @@ def test_openrouter_provider_endpoint_is_normalized(tmp_path, monkeypatch) -> No
 
         with patch("relace_mcp.backend.openai_backend.AsyncOpenAI"):
             config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
-            client = RelaceSearchClient(config)
+            client = SearchLLMClient(config)
             client.chat(
                 messages=[{"role": "user", "content": "hi"}],
                 tools=[],
@@ -166,6 +166,7 @@ def test_openrouter_provider_endpoint_is_normalized(tmp_path, monkeypatch) -> No
 
 def test_openrouter_provider_requires_provider_key(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("RELACE_SEARCH_PROVIDER", "openrouter")
+    monkeypatch.setenv("RELACE_SEARCH_MODEL", "openai/gpt-4o")
     monkeypatch.delenv("RELACE_SEARCH_API_KEY", raising=False)
     monkeypatch.delenv("RELACE_SEARCH_API_KEY_ENV", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
@@ -173,14 +174,16 @@ def test_openrouter_provider_requires_provider_key(tmp_path, monkeypatch) -> Non
     config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
 
     with pytest.raises(RuntimeError, match="No API key found.*RELACE_SEARCH_API_KEY"):
-        RelaceSearchClient(config)
+        SearchLLMClient(config)
 
 
 def test_schema_error_retry_disables_parallel_and_strips_strict(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("RELACE_SEARCH_PROVIDER", "openrouter")
     monkeypatch.delenv("RELACE_SEARCH_ENDPOINT", raising=False)
-    monkeypatch.delenv("RELACE_SEARCH_MODEL", raising=False)
+    monkeypatch.setenv("RELACE_SEARCH_MODEL", "openai/gpt-4o")
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    # Disable parallel_tool_calls to test strict-only retry path
+    monkeypatch.setenv("RELACE_SEARCH_PARALLEL_TOOL_CALLS", "0")
 
     tool_with_strict = [
         {"type": "function", "function": {"name": "report_back", "strict": True, "parameters": {}}}
@@ -191,8 +194,7 @@ def test_schema_error_retry_disables_parallel_and_strips_strict(tmp_path, monkey
         extra_body = kwargs.get("extra_body", {})
         tools = extra_body.get("tools", [])
         has_strict = any("strict" in t.get("function", {}) for t in tools if isinstance(t, dict))
-        has_parallel = "parallel_tool_calls" in extra_body
-        if has_strict or has_parallel:
+        if has_strict:
             raise openai.BadRequestError(
                 message="schema rejected",
                 response=MagicMock(status_code=400),
@@ -207,22 +209,25 @@ def test_schema_error_retry_disables_parallel_and_strips_strict(tmp_path, monkey
 
         with patch("relace_mcp.backend.openai_backend.AsyncOpenAI"):
             config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
-            client = RelaceSearchClient(config)
+            client = SearchLLMClient(config)
 
-            # First call triggers compatibility retry.
+            # First call triggers compatibility retry (strict=true rejected -> retry without strict).
             client.chat(
                 messages=[{"role": "user", "content": "hi"}],
                 tools=tool_with_strict,
                 trace_id="t1",
             )
 
-            # Second call should not include parallel_tool_calls and should not send strict.
+            # Second call should not send strict (already stripped after first retry).
             client.chat(
                 messages=[{"role": "user", "content": "hi"}],
                 tools=tool_with_strict,
                 trace_id="t2",
             )
 
+    # First call: 1 fail (strict) + 1 retry (stripped) = 2 calls
+    # Second call: 1 success (already stripped) = 1 call
+    # Total: 3 calls
     assert mock_client.chat.completions.create.call_count == 3
     second_call_kwargs = mock_client.chat.completions.create.call_args_list[-1].kwargs
     extra_body = second_call_kwargs.get("extra_body", {})
@@ -248,7 +253,7 @@ def test_error_message_uses_provider_name_not_relace(tmp_path, monkeypatch) -> N
 
         with patch("relace_mcp.backend.openai_backend.AsyncOpenAI"):
             config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
-            client = RelaceSearchClient(config)
+            client = SearchLLMClient(config)
 
             with pytest.raises(RuntimeError) as exc_info:
                 client.chat(

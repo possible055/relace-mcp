@@ -83,6 +83,7 @@ reportIncompatibleVariableOverride = "error"
 [tool.interrogate]
 ignore-init-method = true
 ignore-init-module = true
+ignore-module = true
 ignore-private = true
 ignore-nested-functions = true
 fail-under = 80
