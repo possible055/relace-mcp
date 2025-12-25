@@ -132,7 +132,7 @@ class TestApplyFileLogicSuccess:
         )
 
         assert result["status"] == "ok"
-        assert result["message"] == "Applied code changes using Relace API."
+        assert result["message"] == "Applied code changes successfully."
         assert result["diff"] is not None
         assert "--- before" in result["diff"]
         assert "+++ after" in result["diff"]

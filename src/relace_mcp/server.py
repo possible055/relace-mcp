@@ -7,7 +7,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 
-from .config import ENCODING_DETECTION_SAMPLE_LIMIT, EXPERIMENTAL_LOGGING, LOG_PATH, RelaceConfig
+from .config import RelaceConfig
+from .config.settings import ENCODING_DETECTION_SAMPLE_LIMIT, EXPERIMENTAL_LOGGING, LOG_PATH
 from .tools import register_tools
 from .tools.apply.encoding import detect_project_encoding
 from .tools.apply.file_io import set_project_encoding

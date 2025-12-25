@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from relace_mcp.clients.apply import RelaceApplyClient
+from relace_mcp.clients import ApplyLLMClient
 from relace_mcp.config import RelaceConfig
 
 
@@ -74,7 +74,7 @@ def temp_binary_file(tmp_path: Path) -> Path:
 @pytest.fixture
 def mock_apply_backend(
     mock_config: RelaceConfig,
-) -> Generator[RelaceApplyClient, None, None]:
+) -> Generator[ApplyLLMClient, None, None]:
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
     mock_response.choices[0].message.content = "def hello():\n    print('Hello, World!')\n"
@@ -95,13 +95,13 @@ def mock_apply_backend(
         mock_async_openai.return_value = mock_client
 
         with patch("relace_mcp.backend.openai_backend.OpenAI"):
-            yield RelaceApplyClient(mock_config)
+            yield ApplyLLMClient(mock_config)
 
 
 @pytest.fixture
 def mock_backend_with_response(
     mock_config: RelaceConfig, successful_api_response: dict[str, Any]
-) -> Generator[RelaceApplyClient, None, None]:
+) -> Generator[ApplyLLMClient, None, None]:
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
     mock_response.choices[0].message.content = successful_api_response["choices"][0]["message"][
@@ -116,12 +116,12 @@ def mock_backend_with_response(
         mock_async_openai.return_value = mock_client
 
         with patch("relace_mcp.backend.openai_backend.OpenAI"):
-            yield RelaceApplyClient(mock_config)
+            yield ApplyLLMClient(mock_config)
 
 
 @pytest.fixture
 def mock_backend() -> AsyncMock:
-    return AsyncMock(spec=RelaceApplyClient)
+    return AsyncMock(spec=ApplyLLMClient)
 
 
 @pytest.fixture

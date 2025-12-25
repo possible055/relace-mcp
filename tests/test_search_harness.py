@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from relace_mcp.clients import RelaceSearchClient
+from relace_mcp.clients import SearchLLMClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.tools.search import FastAgenticSearchHarness
 from relace_mcp.tools.search.schemas import TOOL_SCHEMAS
@@ -41,7 +41,7 @@ class TestFastAgenticSearchHarness:
 
     @pytest.fixture
     def mock_client(self) -> MagicMock:
-        return MagicMock(spec=RelaceSearchClient)
+        return MagicMock(spec=SearchLLMClient)
 
     def test_completes_on_report_back(
         self,
@@ -268,7 +268,7 @@ class TestParallelToolCallsFix:
 
     @pytest.fixture
     def mock_client(self) -> MagicMock:
-        return MagicMock(spec=RelaceSearchClient)
+        return MagicMock(spec=SearchLLMClient)
 
     def test_report_back_not_last_still_processes_all(
         self,

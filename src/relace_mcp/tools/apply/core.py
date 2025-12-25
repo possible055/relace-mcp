@@ -7,8 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ...clients.apply import ApplyRequest, ApplyResponse, RelaceApplyClient
-from ...config import EXPERIMENTAL_POST_CHECK
+from ...clients.apply import ApplyLLMClient, ApplyRequest, ApplyResponse
+from ...config.settings import EXPERIMENTAL_POST_CHECK
 from ...utils import MAX_FILE_SIZE_BYTES, validate_file_path
 from . import errors, file_io, snippet
 from . import logging as apply_logging
@@ -96,7 +96,7 @@ def _create_new_file(ctx: ApplyContext, resolved_path: Path, edit_snippet: str) 
 
 async def _apply_to_existing_file(
     ctx: ApplyContext,
-    backend: RelaceApplyClient,
+    backend: ApplyLLMClient,
     resolved_path: Path,
     edit_snippet: str,
     file_size: int,
@@ -247,7 +247,7 @@ async def _apply_to_existing_file(
         ctx.trace_id, ctx.started_at, resolved_path, file_size, edit_snippet, ctx.instruction, usage
     )
     logger.info(
-        "[%s] Applied Relace edit to %s (latency=%dms)",
+        "[%s] Applied edit to %s (latency=%dms)",
         ctx.trace_id,
         resolved_path,
         ctx.elapsed_ms(),
@@ -256,13 +256,13 @@ async def _apply_to_existing_file(
     return _ok_result(
         ctx,
         str(resolved_path),
-        "Applied code changes using Relace API.",
+        "Applied code changes successfully.",
         diff=diff,
     )
 
 
 async def apply_file_logic(
-    backend: RelaceApplyClient,
+    backend: ApplyLLMClient,
     file_path: str,
     edit_snippet: str,
     instruction: str | None,
