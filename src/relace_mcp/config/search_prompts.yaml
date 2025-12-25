@@ -76,6 +76,7 @@ budget_hint_template: |
   === Budget Status ===
   Turn: {turn}/{max_turns}
   Remaining: {remaining} turns ({remaining_pct}%)
+  Context: {chars_used}K / {max_chars}K chars ({chars_pct}%)
   Strategy: {strategy}
 
 # Convergence hint
