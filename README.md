@@ -22,6 +22,30 @@ MCP server for [Relace](https://www.relace.ai/) — AI-powered instant code merg
 - **Cloud Sync** — Upload local codebase to Relace Cloud for semantic search
 - **Cloud Search** — Semantic code search over cloud-synced repositories
 
+## Prerequisites
+
+| Tool | Required | Purpose | Installation |
+|------|----------|---------|--------------|
+| Python 3.11+ | ✅ | Runtime | [python.org](https://www.python.org/downloads/) |
+| uv | ✅ | Package manager | `pip install uv` or [astral.sh/uv](https://docs.astral.sh/uv/getting-started/installation/) |
+| Git | ⚠️ | `cloud_sync` | [git-scm.com](https://git-scm.com/downloads) |
+| ripgrep | ⚠️ | `fast_search` performance | [github.com/BurntSushi/ripgrep](https://github.com/BurntSushi/ripgrep#installation) |
+
+> ⚠️ = Optional but recommended for full functionality.
+
+### Platform Notes
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Linux | ✅ Full | All features supported |
+| macOS | ✅ Full | All features supported |
+| Windows | ⚠️ Partial | `bash` tool disabled by default; requires Git for Windows |
+
+**State directory locations:**
+- Linux: `~/.local/state/relace/`
+- macOS: `~/Library/Application Support/relace/`
+- Windows: `%LOCALAPPDATA%\relace\`
+
 ## Quick Start
 
 1. Get your API key from [Relace Dashboard](https://app.relace.ai/settings/billing)

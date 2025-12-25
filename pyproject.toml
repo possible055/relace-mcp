@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "relace-mcp"
-version = "0.2.1.dev1"
+version = "0.2.1a1"
 description = "Unofficial Relace MCP Server - Fast code merging via Relace API"
 readme = "README.md"
 license = { text = "MIT" }
@@ -23,7 +23,16 @@ classifiers = [
     "Framework :: FastAPI",
     "Environment :: Plugins",
 ]
-dependencies = ["fastmcp>=2.0.0", "httpx>=0.28.0", "python-dotenv>=1.0.0", "charset-normalizer>=3.0.0", "PyYAML>=6.0.0", "openai>=1.0.0", "tenacity>=8.0.0"]
+dependencies = [
+    "fastmcp>=2.0.0",
+    "httpx>=0.28.0",
+    "python-dotenv>=1.0.0",
+    "charset-normalizer>=3.0.0",
+    "PyYAML>=6.0.0",
+    "openai>=1.0.0",
+    "tenacity>=8.0.0",
+    "platformdirs>=4.0.0",
+]
 
 [project.urls]
 Repository = "https://github.com/possible055/relace-mcp"
@@ -64,7 +73,6 @@ python_version = "3.11"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-
 
 [tool.interrogate]
 ignore-init-method = true

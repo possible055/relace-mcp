@@ -3,6 +3,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from platformdirs import user_state_dir
+
 logger = logging.getLogger(__name__)
 
 # Fast Apply (OpenAI-compatible base URL; SDK appends /chat/completions automatically)
@@ -59,7 +61,11 @@ EXPERIMENTAL_LOGGING = os.getenv("RELACE_EXPERIMENTAL_LOGGING", "").lower() in (
 )
 
 # Logging
-LOG_DIR = Path(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state"))) / "relace"
+# Cross-platform log directory:
+# - Linux: ~/.local/state/relace
+# - macOS: ~/Library/Application Support/relace
+# - Windows: %LOCALAPPDATA%\relace
+LOG_DIR = Path(user_state_dir("relace", ensure_exists=True))
 LOG_PATH = LOG_DIR / "relace_apply.log"
 MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024
 
