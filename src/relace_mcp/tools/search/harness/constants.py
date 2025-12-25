@@ -11,3 +11,7 @@ MAX_PARALLEL_WORKERS = 12
 BUDGET_HIGH_THRESHOLD = 4  # Remaining 4+ turns: broad exploration
 BUDGET_MID_THRESHOLD = 2  # Remaining 2-3 turns: focus and prepare
 # Remaining < 2 turns: report immediately
+
+# Chars Budget Tracking (reference: MorphLLM Warp Grep implementation)
+# 160K chars ≈ 40K tokens, recommended context budget for search agent
+MAX_CONTEXT_BUDGET_CHARS = 160_000
