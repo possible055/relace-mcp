@@ -276,8 +276,7 @@ def get_tool_schemas() -> list[dict[str, Any]]:
     Environment variables:
         - RELACE_SEARCH_ENABLED_TOOLS: Comma/space-separated allowlist, e.g.
           "view_file,view_directory,grep_search,glob,bash". `report_back` is always enabled.
-          If not set, defaults to: view_file, view_directory, grep_search, glob.
-          Note: `bash` is opt-in only (Unix-only, not enabled by default).
+          If not set, all tools are enabled by default.
         - RELACE_SEARCH_TOOL_STRICT: Set to 0/false to omit the non-standard `strict` field from tool schemas.
     """
     raw_allowlist = os.getenv("RELACE_SEARCH_ENABLED_TOOLS", "").strip()
@@ -285,7 +284,7 @@ def get_tool_schemas() -> list[dict[str, Any]]:
     if raw_allowlist:
         enabled = {t.strip().lower() for t in _split_tool_list(raw_allowlist)}
     else:
-        enabled = {"view_file", "view_directory", "grep_search", "glob", "report_back"}
+        enabled = {"view_file", "view_directory", "grep_search", "glob", "report_back", "bash"}
 
     # Always keep report_back so the harness can terminate deterministically.
     enabled.add("report_back")
