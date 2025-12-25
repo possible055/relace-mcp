@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # - Linux: ~/.local/state/relace/sync
 # - macOS: ~/Library/Application Support/relace/sync
 # - Windows: %LOCALAPPDATA%\relace\sync
-_STATE_DIR = Path(user_state_dir("relace")) / "sync"
+_STATE_DIR = Path(user_state_dir("relace", appauthor=False)) / "sync"
 
 
 @dataclass
