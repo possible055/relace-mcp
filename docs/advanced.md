@@ -41,7 +41,7 @@ These settings allow temporary overrides when the official API updates before th
 | `RELACE_TIMEOUT_SECONDS` | `60` |
 | `RELACE_MAX_RETRIES` | `3` |
 | `RELACE_RETRY_BASE_DELAY` | `1.0` |
-| `RELACE_SEARCH_ENDPOINT` | `https://search.endpoint.relace.run/v1/search/chat/completions` |
+| `RELACE_SEARCH_ENDPOINT` | `https://search.endpoint.relace.run/v1/search` |
 | `RELACE_SEARCH_MODEL` | `relace-search` |
 | `RELACE_SEARCH_TIMEOUT_SECONDS` | `120` |
 | `RELACE_SEARCH_MAX_TURNS` | `6` |
@@ -74,10 +74,15 @@ Switch to OpenAI-compatible providers for `fast_apply`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RELACE_APPLY_PROVIDER` | `relace` | Set to `openai` for OpenAI-compatible mode |
-| `RELACE_APPLY_ENDPOINT` | — | Optional override base URL (posts to `/chat/completions`) |
+| `RELACE_APPLY_PROVIDER` | `relace` | Provider label. `relace` uses `RELACE_API_KEY`; other values use the provider's API key. |
+| `RELACE_APPLY_ENDPOINT` | — | Optional override base URL (SDK posts to `/chat/completions`; trailing `/chat/completions` is auto-stripped). |
 | `RELACE_APPLY_MODEL` | — | Optional override model |
-| `OPENAI_API_KEY` | — | Required when `RELACE_APPLY_PROVIDER=openai` |
+| `RELACE_APPLY_API_KEY` | — | Optional direct API key override (recommended for non-Relace providers) |
+| `RELACE_APPLY_API_KEY_ENV` | — | Optional: env var name holding the API key |
+| `RELACE_APPLY_HEADERS` | — | Optional JSON object for default headers (e.g. `{\"HTTP-Referer\":\"...\",\"X-Title\":\"...\"}`) |
+| `OPENAI_API_KEY` | — | Used when `RELACE_APPLY_PROVIDER=openai` and no `RELACE_APPLY_API_KEY*` is set |
+| `OPENROUTER_API_KEY` | — | Used when `RELACE_APPLY_PROVIDER=openrouter` and no `RELACE_APPLY_API_KEY*` is set |
+| `CEREBRAS_API_KEY` | — | Used when `RELACE_APPLY_PROVIDER=cerebras` and no `RELACE_APPLY_API_KEY*` is set |
 
 ---
 
@@ -87,8 +92,17 @@ Switch to OpenAI-compatible providers for `fast_search`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RELACE_SEARCH_PROVIDER` | `relace` | Set to `openai` for OpenAI-compatible mode |
-| `OPENAI_API_KEY` | — | Required when `RELACE_SEARCH_PROVIDER=openai` |
+| `RELACE_SEARCH_PROVIDER` | `relace` | Provider label. `relace` uses `RELACE_API_KEY`; other values use the provider's API key. |
+| `RELACE_SEARCH_ENDPOINT` | — | Optional override base URL (SDK posts to `/chat/completions`; trailing `/chat/completions` is auto-stripped). |
+| `RELACE_SEARCH_MODEL` | — | Optional override model |
+| `RELACE_SEARCH_API_KEY` | — | Optional direct API key override (recommended for non-Relace providers) |
+| `RELACE_SEARCH_API_KEY_ENV` | — | Optional: env var name holding the API key |
+| `RELACE_SEARCH_HEADERS` | — | Optional JSON object for default headers (e.g. `{\"HTTP-Referer\":\"...\",\"X-Title\":\"...\"}`) |
+| `RELACE_SEARCH_API_COMPAT` | — | Optional: force request schema (`openai` or `relace`) |
+| `RELACE_SEARCH_TOOL_STRICT` | `1` | Set to `0` to omit the non-standard `strict` field from tool schemas |
+| `OPENAI_API_KEY` | — | Used when `RELACE_SEARCH_PROVIDER=openai` and no `RELACE_SEARCH_API_KEY*` is set |
+| `OPENROUTER_API_KEY` | — | Used when `RELACE_SEARCH_PROVIDER=openrouter` and no `RELACE_SEARCH_API_KEY*` is set |
+| `CEREBRAS_API_KEY` | — | Used when `RELACE_SEARCH_PROVIDER=cerebras` and no `RELACE_SEARCH_API_KEY*` is set |
 
 ---
 
@@ -98,6 +112,17 @@ Switch to OpenAI-compatible providers for `fast_search`:
 |----------|---------|-------------|
 | `RELACE_SEARCH_ENABLED_TOOLS` | — | Comma-separated allowlist (`view_file`, `view_directory`, `grep_search`, `glob`, `bash`). `report_back` is always enabled. |
 | `RELACE_SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls for lower latency |
+
+### OpenAI Structured Outputs Compatibility
+
+When using OpenAI or OpenAI-compatible providers (not `relace`) with `RELACE_SEARCH_TOOL_STRICT=1` (default), `parallel_tool_calls` is automatically disabled to comply with [OpenAI's Structured Outputs limitations](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/structured-outputs).
+
+To use parallel tool calls with OpenAI providers, disable strict mode:
+
+```bash
+export RELACE_SEARCH_TOOL_STRICT=0
+export RELACE_SEARCH_PARALLEL_TOOL_CALLS=1
+```
 
 ---
 
