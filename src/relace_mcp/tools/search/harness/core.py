@@ -158,8 +158,8 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 messages.append({"role": "user", "content": CONVERGENCE_HINT})
                 logger.info("[%s] Injected convergence hint at turn %d", trace_id, turn + 1)
 
-            # Check context size (use pre-calculated chars_used, re-calculate if needed)
-            ctx_size = chars_used if turn > 0 else estimate_context_size(messages)
+            # Check context size (recalculate after all messages added this turn)
+            ctx_size = estimate_context_size(messages)
 
             if ctx_size > MAX_TOTAL_CONTEXT_CHARS:
                 logger.warning(
