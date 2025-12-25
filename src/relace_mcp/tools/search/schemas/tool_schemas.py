@@ -284,7 +284,9 @@ def get_tool_schemas() -> list[dict[str, Any]]:
     if raw_allowlist:
         enabled = {t.strip().lower() for t in _split_tool_list(raw_allowlist)}
     else:
-        enabled = {"view_file", "view_directory", "grep_search", "glob", "report_back", "bash"}
+        # Default tools exclude `bash` for security (opt-in only via env var)
+        # bash requires Unix shell and poses higher security risk
+        enabled = {"view_file", "view_directory", "grep_search", "glob", "report_back"}
 
     # Always keep report_back so the harness can terminate deterministically.
     enabled.add("report_back")
