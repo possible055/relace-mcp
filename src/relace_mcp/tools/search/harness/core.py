@@ -138,16 +138,18 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             )
 
             # Budget Tracker: inject budget state each turn (starting from turn 2)
-            # Calculate chars before injecting hint (for accurate budget display)
-            chars_used = estimate_context_size(messages)
+            # Calculate chars BEFORE injecting hint (for accurate budget display to model)
             if turn > 0:
-                budget_hint = self._get_budget_hint(turn, _harness_mod.SEARCH_MAX_TURNS, chars_used)
+                chars_for_hint = estimate_context_size(messages)
+                budget_hint = self._get_budget_hint(
+                    turn, _harness_mod.SEARCH_MAX_TURNS, chars_for_hint
+                )
                 messages.append({"role": "user", "content": budget_hint})
                 logger.debug(
                     "[%s] Injected budget hint at turn %d (chars: %d/%d)",
                     trace_id,
                     turn + 1,
-                    chars_used,
+                    chars_for_hint,
                     MAX_CONTEXT_BUDGET_CHARS,
                 )
 
@@ -158,8 +160,8 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 messages.append({"role": "user", "content": CONVERGENCE_HINT})
                 logger.info("[%s] Injected convergence hint at turn %d", trace_id, turn + 1)
 
-            # Check context size (use pre-calculated chars_used, re-calculate if needed)
-            ctx_size = chars_used if turn > 0 else estimate_context_size(messages)
+            # Check context size AFTER all user messages are added
+            ctx_size = estimate_context_size(messages)
 
             if ctx_size > MAX_TOTAL_CONTEXT_CHARS:
                 logger.warning(
