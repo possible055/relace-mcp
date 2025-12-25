@@ -28,7 +28,7 @@ MCP server for [Relace](https://www.relace.ai/) — AI-powered instant code merg
 | macOS | ✅ Fully supported | All features available |
 | Windows | ⚠️ Partial | `bash` tool unavailable; use WSL for full functionality |
 
-> **Windows users:** The `bash` tool requires a Unix shell. Install [WSL](https://docs.microsoft.com/windows/win32/wsl/) for full feature parity, or use other exploration tools (`view_file`, `grep_search`, `glob`).
+> **Windows users:** The `bash` tool requires a Unix shell. Install [WSL](https://learn.microsoft.com/windows/wsl/install) for full feature parity, or use other exploration tools (`view_file`, `grep_search`, `glob`).
 
 ## Features
 
