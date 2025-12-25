@@ -276,7 +276,8 @@ def get_tool_schemas() -> list[dict[str, Any]]:
     Environment variables:
         - RELACE_SEARCH_ENABLED_TOOLS: Comma/space-separated allowlist, e.g.
           "view_file,view_directory,grep_search,glob,bash". `report_back` is always enabled.
-          If not set, all tools are enabled by default.
+          If not set, all tools except `bash` are enabled by default (bash requires explicit
+          opt-in for security reasons).
         - RELACE_SEARCH_TOOL_STRICT: Set to 0/false to omit the non-standard `strict` field from tool schemas.
     """
     raw_allowlist = os.getenv("RELACE_SEARCH_ENABLED_TOOLS", "").strip()

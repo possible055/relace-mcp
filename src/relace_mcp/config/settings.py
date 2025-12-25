@@ -65,7 +65,7 @@ EXPERIMENTAL_LOGGING = os.getenv("RELACE_EXPERIMENTAL_LOGGING", "").lower() in (
 # - macOS: ~/Library/Application Support/relace
 # - Windows: %LOCALAPPDATA%\relace
 # Note: Directory is created lazily in logging.py when actually writing logs
-LOG_DIR = Path(user_state_dir("relace"))
+LOG_DIR = Path(user_state_dir("relace", appauthor=False))
 LOG_PATH = LOG_DIR / "relace_apply.log"
 MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024
 
