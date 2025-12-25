@@ -110,7 +110,7 @@ Switch to OpenAI-compatible providers for `fast_search`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RELACE_SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob` | Comma-separated allowlist. `report_back` is always enabled. Add `bash` to enable shell commands (Unix only). |
+| `RELACE_SEARCH_ENABLED_TOOLS` | — | Comma-separated allowlist (`view_file`, `view_directory`, `grep_search`, `glob`, `bash`). `report_back` is always enabled. |
 | `RELACE_SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls for lower latency |
 
 ### OpenAI Structured Outputs Compatibility
