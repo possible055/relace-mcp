@@ -1,10 +1,11 @@
-"""Tests for RelaceApplyClient system prompt injection."""
+"""Tests for ApplyLLMClient system prompt injection."""
 
 from unittest.mock import patch
 
 import pytest
 
-from relace_mcp.clients.apply import ApplyRequest, RelaceApplyClient
+from relace_mcp.clients import ApplyLLMClient
+from relace_mcp.clients.apply import ApplyRequest
 from relace_mcp.config import APPLY_SYSTEM_PROMPT, RelaceConfig
 
 
@@ -25,7 +26,7 @@ class TestApplyClientSystemPrompt:
                 "OPENAI_API_KEY": "sk-test",
             },
         ):
-            client = RelaceApplyClient(mock_config)
+            client = ApplyLLMClient(mock_config)
             # Verify api_compat is 'openai'
             assert client._api_compat == "openai"
 
@@ -53,7 +54,7 @@ class TestApplyClientSystemPrompt:
             },
             clear=False,
         ):
-            client = RelaceApplyClient(mock_config)
+            client = ApplyLLMClient(mock_config)
             # Verify api_compat is 'relace'
             assert client._api_compat == "relace"
 
@@ -79,7 +80,7 @@ class TestApplyClientSystemPrompt:
 
             orig_provider = os.environ.pop("RELACE_APPLY_PROVIDER", None)
             try:
-                client = RelaceApplyClient(mock_config)
+                client = ApplyLLMClient(mock_config)
                 # Default api_compat should be 'relace'
                 assert client._api_compat == "relace"
 
@@ -103,7 +104,7 @@ class TestApplyClientSystemPrompt:
 
             orig_provider = os.environ.pop("RELACE_APPLY_PROVIDER", None)
             try:
-                client = RelaceApplyClient(mock_config)
+                client = ApplyLLMClient(mock_config)
 
                 request = ApplyRequest(
                     initial_code="original",
@@ -127,7 +128,7 @@ class TestApplyClientSystemPrompt:
 
             orig_provider = os.environ.pop("RELACE_APPLY_PROVIDER", None)
             try:
-                client = RelaceApplyClient(mock_config)
+                client = ApplyLLMClient(mock_config)
 
                 request = ApplyRequest(
                     initial_code="original",

@@ -126,6 +126,14 @@ class OpenAIChatClient:
             "gpt-4o" if self._provider == OPENAI_PROVIDER else default_model
         )
 
+        # 驗證 provider/model 組合合理性
+        if self._provider != RELACE_PROVIDER and self._model.startswith("relace-"):
+            raise RuntimeError(
+                f"Model '{self._model}' appears to be a Relace-specific model, "
+                f"but provider is set to '{self._provider}'. "
+                f"Please set {model_env} to a model supported by your provider."
+            )
+
         api_key = ""
         api_key_env = f"{prefix}_API_KEY" if prefix else ""
         api_key_env_env = f"{prefix}_API_KEY_ENV" if prefix else ""

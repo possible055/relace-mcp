@@ -28,8 +28,17 @@ class ApplyResponse:
     latency_ms: float = 0.0
 
 
-class RelaceApplyClient:
-    """Client for Relace Instant Apply API to merge code snippets into original files."""
+class ApplyLLMClient:
+    """LLM-based client for code merging (Instant Apply).
+
+    Supports Relace and OpenAI-compatible providers (OpenAI, OpenRouter, Cerebras, etc.).
+
+    Environment variables:
+        RELACE_APPLY_PROVIDER: Provider name (default: relace)
+        RELACE_APPLY_ENDPOINT: API base URL
+        RELACE_APPLY_MODEL: Model name
+        RELACE_APPLY_API_KEY: API key (or use provider-specific key)
+    """
 
     def __init__(self, config: RelaceConfig) -> None:
         self._chat_client = OpenAIChatClient(

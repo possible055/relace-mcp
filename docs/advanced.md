@@ -113,6 +113,17 @@ Switch to OpenAI-compatible providers for `fast_search`:
 | `RELACE_SEARCH_ENABLED_TOOLS` | — | Comma-separated allowlist (`view_file`, `view_directory`, `grep_search`, `glob`, `bash`). `report_back` is always enabled. |
 | `RELACE_SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls for lower latency |
 
+### OpenAI Structured Outputs Compatibility
+
+When using OpenAI or OpenAI-compatible providers (not `relace`) with `RELACE_SEARCH_TOOL_STRICT=1` (default), `parallel_tool_calls` is automatically disabled to comply with [OpenAI's Structured Outputs limitations](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/structured-outputs).
+
+To use parallel tool calls with OpenAI providers, disable strict mode:
+
+```bash
+export RELACE_SEARCH_TOOL_STRICT=0
+export RELACE_SEARCH_PARALLEL_TOOL_CALLS=1
+```
+
 ---
 
 ## Remote Deployment (Streamable HTTP)
