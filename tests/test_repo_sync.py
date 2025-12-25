@@ -577,7 +577,7 @@ class TestSyncState:
     def test_save_and_load_sync_state(self, tmp_path: Path) -> None:
         """Should save and load sync state."""
         # Override XDG state dir for test
-        with patch("relace_mcp.tools.repo.state._XDG_STATE_HOME", tmp_path):
+        with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
             state = SyncState(
                 repo_id="test-id",
                 repo_head="abc123",
@@ -594,7 +594,7 @@ class TestSyncState:
 
     def test_load_sync_state_missing(self, tmp_path: Path) -> None:
         """Should return None for missing state."""
-        with patch("relace_mcp.tools.repo.state._XDG_STATE_HOME", tmp_path):
+        with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
             loaded = load_sync_state("nonexistent-project")
 
         assert loaded is None
@@ -678,7 +678,7 @@ class TestSyncStateCollisionDetection:
 
     def test_load_rejects_mismatched_repo_name(self, tmp_path: Path) -> None:
         """Should return None when stored repo_name doesn't match requested name."""
-        with patch("relace_mcp.tools.repo.state._XDG_STATE_HOME", tmp_path):
+        with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
             # Save state for 'my.project'
             state = SyncState(
                 repo_id="project-a-id",
@@ -697,7 +697,7 @@ class TestSyncStateCollisionDetection:
 
     def test_load_accepts_matching_repo_name(self, tmp_path: Path) -> None:
         """Should accept state when repo_name matches."""
-        with patch("relace_mcp.tools.repo.state._XDG_STATE_HOME", tmp_path):
+        with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
             state = SyncState(
                 repo_id="project-id",
                 repo_head="abc",
@@ -717,7 +717,7 @@ class TestSyncStateCollisionDetection:
         """Should accept old state files without repo_name for backward compat."""
         import json
 
-        with patch("relace_mcp.tools.repo.state._XDG_STATE_HOME", tmp_path):
+        with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
             # Manually create old-format state file without repo_name
             state_file = tmp_path / "my_project.json"
             tmp_path.mkdir(parents=True, exist_ok=True)
@@ -742,7 +742,7 @@ class TestSyncStateCollisionDetection:
 
     def test_save_sets_repo_name_automatically(self, tmp_path: Path) -> None:
         """Should automatically set repo_name when saving."""
-        with patch("relace_mcp.tools.repo.state._XDG_STATE_HOME", tmp_path):
+        with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
             state = SyncState(
                 repo_id="test-id",
                 repo_head="abc",
