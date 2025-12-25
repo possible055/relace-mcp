@@ -15,6 +15,22 @@
 
 [Relace](https://www.relace.ai/) 的 MCP 服务器 — AI 驱动的即时代码合并和智能代码库搜索。
 
+## 前置需求
+
+- [uv](https://docs.astral.sh/uv/) — Python 包管理器
+- [Git](https://git-scm.com/) — 用于让 `cloud_sync` 遵循 `.gitignore`
+- [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) — 推荐用于 `fast_search`（未安装时会退化为 Python 正则匹配）
+
+### 平台支持
+
+| 平台 | 状态 | 备注 |
+|------|------|------|
+| Linux | ✅ 完全支持 | 主要开发平台 |
+| macOS | ✅ 完全支持 | 所有功能可用 |
+| Windows | ⚠️ 部分支持 | `bash` 工具不可用；使用 WSL 以获得完整功能 |
+
+> **Windows 用户：** `bash` 工具需要 Unix shell。安装 [WSL](https://learn.microsoft.com/windows/wsl/install) 以获得完整功能，或使用其他探索工具（`view_file`、`grep_search`、`glob`）。
+
 ## 功能特性
 
 - **快速应用** — 通过 Relace API 以 10,000+ tokens/秒的速度应用代码编辑
@@ -87,7 +103,7 @@
 
 搜索代码库并返回相关文件和行范围。
 
-**参数：** `query` — 自然语言搜索查询
+**参数：** `query` —— 自然语言搜索查询
 
 **响应示例：**
 
@@ -103,7 +119,7 @@
 ```
 
 **参数：**
-- `query` — 自然语言搜索查询
+- `query` —— 自然语言搜索查询
 
 ### `cloud_sync`
 

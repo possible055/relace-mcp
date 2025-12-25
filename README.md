@@ -17,8 +17,9 @@ MCP server for [Relace](https://www.relace.ai/) — AI-powered instant code merg
 
 ## Prerequisites
 
-- **Python 3.11+** and [uv](https://docs.astral.sh/uv/) or pip
-- **Git** (recommended, for `cloud_sync` to respect `.gitignore`)
+- [uv](https://docs.astral.sh/uv/) — Python package manager
+- [Git](https://git-scm.com/) — for `cloud_sync` to respect `.gitignore`
+- [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) — recommended for `fast_search` (falls back to Python regex if unavailable)
 
 ### Platform Notes
 
