@@ -380,12 +380,12 @@ class TestParallelToolCallsFix:
 class TestToolSchemas:
     """Test tool schema definitions."""
 
-    def test_has_six_tools(self) -> None:
-        """Should have exactly 6 tools (including bash + glob)."""
-        assert len(TOOL_SCHEMAS) == 6
+    def test_has_five_default_tools(self) -> None:
+        """Should have exactly 5 default tools (bash is opt-in only)."""
+        assert len(TOOL_SCHEMAS) == 5
 
     def test_tool_names(self) -> None:
-        """Should have correct tool names."""
+        """Should have correct default tool names (bash is opt-in only)."""
         names = {t["function"]["name"] for t in TOOL_SCHEMAS}
         assert names == {
             "view_file",
@@ -393,12 +393,20 @@ class TestToolSchemas:
             "grep_search",
             "glob",
             "report_back",
-            "bash",
         }
 
-    def test_bash_tool_exists(self) -> None:
-        """Should include bash tool for code exploration."""
-        names = {t["function"]["name"] for t in TOOL_SCHEMAS}
+    def test_bash_tool_opt_in(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """bash tool should only be enabled when explicitly added to allowlist."""
+        from relace_mcp.tools.search.schemas import get_tool_schemas
+
+        # Without explicit enablement, bash should not be present
+        default_names = {t["function"]["name"] for t in TOOL_SCHEMAS}
+        assert "bash" not in default_names
+
+        # With explicit enablement, bash should be present
+        monkeypatch.setenv("RELACE_SEARCH_ENABLED_TOOLS", "view_file,bash")
+        schemas = get_tool_schemas()
+        names = {t["function"]["name"] for t in schemas}
         assert "bash" in names
 
     def test_glob_tool_exists(self) -> None:

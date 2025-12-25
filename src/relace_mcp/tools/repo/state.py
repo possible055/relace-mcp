@@ -7,10 +7,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from platformdirs import user_state_dir
+
 logger = logging.getLogger(__name__)
 
 # XDG state directory for sync state files
-_XDG_STATE_HOME = Path.home() / ".local" / "state" / "relace" / "sync"
+# Cross-platform state directory:
+# - Linux: ~/.local/state/relace/sync
+# - macOS: ~/Library/Application Support/relace/sync
+# - Windows: %LOCALAPPDATA%\relace\sync
+_STATE_DIR = Path(user_state_dir("relace", ensure_exists=True)) / "sync"
 
 
 @dataclass
@@ -62,7 +68,7 @@ def _get_state_path(repo_name: str) -> Path:
     """Get the path to the sync state file for a repository."""
     # Sanitize repo name for filesystem
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in repo_name)
-    return _XDG_STATE_HOME / f"{safe_name}.json"
+    return _STATE_DIR / f"{safe_name}.json"
 
 
 def compute_file_hash(file_path: Path) -> str | None:
