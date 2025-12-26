@@ -81,8 +81,8 @@ class TestLogEvent:
         """Should create parent directories if needed."""
         log_path = tmp_path / "deep" / "nested" / "dir" / "log.json"
         with (
-            patch("relace_mcp.tools.apply.logging.EXPERIMENTAL_LOGGING", True),
-            patch("relace_mcp.tools.apply.logging.LOG_PATH", log_path),
+            patch("relace_mcp.config.settings.RELACE_LOGGING", True),
+            patch("relace_mcp.config.settings.LOG_PATH", log_path),
         ):
             log_event({"test": True})
         assert log_path.exists()
@@ -97,8 +97,8 @@ class TestLogEvent:
         """Should not raise on log write failure (e.g., path is a directory)."""
         # Using directory as log path will fail, but should not raise exception
         with (
-            patch("relace_mcp.tools.apply.logging.EXPERIMENTAL_LOGGING", True),
-            patch("relace_mcp.tools.apply.logging.LOG_PATH", tmp_path),
+            patch("relace_mcp.config.settings.RELACE_LOGGING", True),
+            patch("relace_mcp.config.settings.LOG_PATH", tmp_path),
         ):
             log_event({"test": True})  # Should not raise exception
 

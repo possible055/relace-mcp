@@ -3,10 +3,6 @@ from .exceptions import RelaceAPIError, RelaceNetworkError, RelaceTimeoutError
 from .repo import RelaceRepoClient
 from .search import SearchLLMClient
 
-# Backward-compatible aliases (deprecated, will be removed in a future version)
-RelaceApplyClient = ApplyLLMClient
-RelaceSearchClient = SearchLLMClient
-
 __all__ = [
     # New names
     "ApplyLLMClient",
@@ -20,7 +16,4 @@ __all__ = [
     "RelaceAPIError",
     "RelaceNetworkError",
     "RelaceTimeoutError",
-    # Deprecated aliases (backward compatibility)
-    "RelaceApplyClient",
-    "RelaceSearchClient",
 ]
