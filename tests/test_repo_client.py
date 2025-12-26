@@ -300,6 +300,25 @@ class TestRelaceRepoClientEnsureRepo:
 
         assert repo_id == "new-repo-id"
 
+    def test_ensure_repo_caches_per_name(self, repo_client: RelaceRepoClient) -> None:
+        """Should cache repo IDs per repo name (not globally)."""
+        with patch.object(
+            repo_client,
+            "list_repos",
+            side_effect=[
+                [{"repo_id": "id-a", "metadata": {"name": "repo-a"}}],
+                [{"repo_id": "id-b", "metadata": {"name": "repo-b"}}],
+            ],
+        ) as mock_list:
+            repo_id_a = repo_client.ensure_repo("repo-a")
+            repo_id_b = repo_client.ensure_repo("repo-b")
+            repo_id_a_again = repo_client.ensure_repo("repo-a")
+
+        assert repo_id_a == "id-a"
+        assert repo_id_b == "id-b"
+        assert repo_id_a_again == "id-a"
+        assert mock_list.call_count == 2
+
 
 class TestRelaceRepoClientRetrieve:
     """Test retrieve (semantic search) method."""
@@ -398,7 +417,7 @@ class TestRelaceRepoClientDeleteRepo:
 
     def test_delete_repo_treats_404_as_success(self, repo_client: RelaceRepoClient) -> None:
         """Should treat 404 as idempotent success and clear cached repo_id."""
-        repo_client._cached_repo_id = "test-repo-id"
+        repo_client._cached_repo_ids["test-repo"] = "test-repo-id"
 
         api_error = RelaceAPIError(
             status_code=404,
@@ -413,11 +432,11 @@ class TestRelaceRepoClientDeleteRepo:
         with patch.object(repo_client, "_request_with_retry", side_effect=raise_not_found):
             assert repo_client.delete_repo("test-repo-id") is True
 
-        assert repo_client._cached_repo_id is None
+        assert "test-repo" not in repo_client._cached_repo_ids
 
     def test_delete_repo_returns_false_on_other_errors(self, repo_client: RelaceRepoClient) -> None:
         """Should return False for non-404 API errors."""
-        repo_client._cached_repo_id = "test-repo-id"
+        repo_client._cached_repo_ids["test-repo"] = "test-repo-id"
 
         api_error = RelaceAPIError(
             status_code=403,
@@ -433,4 +452,4 @@ class TestRelaceRepoClientDeleteRepo:
             assert repo_client.delete_repo("test-repo-id") is False
 
         # Cached ID should remain unchanged on failure
-        assert repo_client._cached_repo_id == "test-repo-id"
+        assert repo_client._cached_repo_ids["test-repo"] == "test-repo-id"
