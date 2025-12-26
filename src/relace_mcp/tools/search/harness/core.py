@@ -1,12 +1,19 @@
 import importlib
 import logging
 import re
+import time
 import uuid
 from typing import Any
 
 from ....clients import SearchLLMClient
 from ....config import RelaceConfig
 from ..handlers import estimate_context_size
+from ..logging import (
+    log_search_complete,
+    log_search_error,
+    log_search_start,
+    log_search_turn,
+)
 from ..schemas import (
     BUDGET_HINT_TEMPLATE,
     CONVERGENCE_HINT,
@@ -104,14 +111,26 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         # Safe query truncation (avoid cutting in middle of multi-byte characters)
         query_preview = query[:100] if len(query) <= 100 else query[:97] + "..."
         logger.info("[%s] Starting Fast Agentic Search: %s", trace_id, query_preview)
+        log_search_start(trace_id, query)
+        start_time = time.perf_counter()
 
         # Reset observed_files (used to accumulate explored files)
         self._observed_files = {}
 
         try:
-            return self._run_search_loop(query, trace_id)
+            result = self._run_search_loop(query, trace_id)
+            total_ms = (time.perf_counter() - start_time) * 1000
+            log_search_complete(
+                trace_id,
+                result.get("turns_used", 0),
+                len(result.get("files", {})),
+                result.get("partial", False),
+                total_ms,
+            )
+            return result
         except Exception as exc:
             logger.error("[%s] Search failed with error: %s", trace_id, exc)
+            log_search_error(trace_id, str(exc))
             merged_files = self._merge_observed_ranges()
             return {
                 "query": query,
@@ -188,6 +207,15 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             # Defense: some providers/mocks may lack role, avoid breaking block/repair logic
             message.setdefault("role", "assistant")
             tool_calls = message.get("tool_calls", [])
+
+            # Log turn state after getting response
+            log_search_turn(
+                trace_id,
+                turn + 1,
+                _harness_mod.SEARCH_MAX_TURNS,
+                ctx_size,
+                len(tool_calls),
+            )
 
             # If no tool_calls, check for content (model may respond directly)
             if not tool_calls:

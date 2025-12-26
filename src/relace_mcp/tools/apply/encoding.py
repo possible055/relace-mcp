@@ -1,9 +1,3 @@
-"""Project-level encoding detection.
-
-This module provides encoding detection for project files to ensure
-consistent handling of non-UTF-8 encoded files (e.g., GBK, Big5, Shift_JIS).
-"""
-
 import logging
 from collections import Counter
 from pathlib import Path
