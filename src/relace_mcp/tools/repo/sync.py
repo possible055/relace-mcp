@@ -171,7 +171,9 @@ def _scan_directory(base_dir: str) -> list[str]:
             except OSError:
                 continue
 
-            files.append(str(rel_path))
+            # Normalize to POSIX separators for cross-platform consistency
+            # (git uses forward slashes even on Windows).
+            files.append(rel_path.as_posix())
 
     return files
 
@@ -374,10 +376,10 @@ def cloud_sync_logic(
     current_branch, current_head = get_current_git_info(base_dir)
     ref_changed = False
     deletes_suppressed = 0
+    repo_name = client.get_repo_name_from_base_dir(base_dir)
 
     try:
         # Ensure repo exists
-        repo_name = client.get_repo_name_from_base_dir()
         repo_id = client.ensure_repo(repo_name, trace_id=trace_id)
         logger.info("[%s] Using repo '%s' (id=%s)", trace_id, repo_name, repo_id)
 
@@ -571,7 +573,7 @@ def cloud_sync_logic(
         logger.error("[%s] Cloud sync failed: %s", trace_id, exc)
         return {
             "repo_id": None,
-            "repo_name": client.get_repo_name_from_base_dir(),
+            "repo_name": repo_name,
             "repo_head": None,
             "is_incremental": False,
             "files_created": 0,

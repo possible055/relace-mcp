@@ -42,6 +42,13 @@ class TestUriToPath:
         # The test should be flexible
         assert "C:" in result and "Users" in result
 
+    def test_unc_style_uri(self) -> None:
+        # UNC paths in URI form: file://server/share/folder
+        result = uri_to_path("file://server/share/folder")
+        # On POSIX: //server/share/folder
+        # On Windows: \\server\share\folder
+        assert "server" in result and "share" in result
+
     def test_non_file_scheme(self) -> None:
         # Should return unquoted string if not file://
         assert uri_to_path("http://example.com/path") == "http://example.com/path"
