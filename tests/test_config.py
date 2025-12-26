@@ -20,12 +20,13 @@ class TestRelaceConfigFromEnv:
 
 
 class TestRelaceConfigBaseDir:
-    def test_missing_base_dir_raises(
+    def test_missing_base_dir_returns_none(
         self, clean_env: None, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        """When RELACE_BASE_DIR is not set, base_dir should be None (resolved at runtime)."""
         monkeypatch.setenv("RELACE_API_KEY", "test-key")
-        with pytest.raises(RuntimeError, match="RELACE_BASE_DIR is not set"):
-            RelaceConfig.from_env()
+        config = RelaceConfig.from_env()
+        assert config.base_dir is None
 
     def test_base_dir_is_resolved_to_absolute(
         self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

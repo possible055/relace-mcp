@@ -30,7 +30,7 @@ def cloud_info_logic(
         - error: Error message if failed (optional)
     """
     trace_id = str(uuid.uuid4())[:8]
-    repo_name = client.get_repo_name_from_base_dir()
+    repo_name = client.get_repo_name_from_base_dir(base_dir)
     logger.info("[%s] Getting cloud info for '%s'", trace_id, repo_name)
 
     try:

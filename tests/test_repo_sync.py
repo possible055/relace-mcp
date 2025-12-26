@@ -509,6 +509,16 @@ class TestCloudSyncLogic:
         assert "error" in result
         assert "API error" in result["error"]
 
+    def test_sync_does_not_require_config_base_dir(self, tmp_path: Path) -> None:
+        """Should work when RelaceConfig.base_dir is None (dynamic base_dir resolution)."""
+        client = RelaceRepoClient(RelaceConfig(api_key="rlc-test-api-key", base_dir=None))
+        with patch.object(client, "ensure_repo", side_effect=RuntimeError("API error")):
+            result = cloud_sync_logic(client, str(tmp_path))
+
+        assert result["repo_id"] is None
+        assert result["repo_name"] == tmp_path.name
+        assert "API error" in result.get("error", "")
+
     def test_sync_respects_file_limit(self, tmp_path: Path, mock_repo_client: MagicMock) -> None:
         """Should respect REPO_SYNC_MAX_FILES limit."""
         # Create many files

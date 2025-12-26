@@ -259,7 +259,10 @@ def atomic_write(path: Path, content: str, encoding: str) -> None:
     unique_suffix = f".{uuid.uuid4().hex[:8]}.tmp"
     temp_path = path.with_suffix(path.suffix + unique_suffix)
     try:
-        temp_path.write_text(content, encoding=encoding)
+        # Use open with newline='' to preserve original line endings on all platforms.
+        # Without this, Windows would convert \n to \r\n in text mode.
+        with temp_path.open("w", encoding=encoding, newline="") as f:
+            f.write(content)
         # os.replace is atomic on POSIX systems
         os.replace(temp_path, path)
     except Exception:

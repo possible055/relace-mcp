@@ -1,4 +1,5 @@
 import os
+import shutil
 from typing import Any
 
 _TRUTHY = {"1", "true", "yes", "y", "on"}
@@ -291,6 +292,10 @@ def get_tool_schemas() -> list[dict[str, Any]]:
 
     # Always keep report_back so the harness can terminate deterministically.
     enabled.add("report_back")
+
+    # Platform/tool availability: only expose bash when it's actually runnable.
+    if "bash" in enabled and shutil.which("bash") is None:
+        enabled.discard("bash")
 
     selected = [
         schema for schema in _ALL_TOOL_SCHEMAS if schema.get("function", {}).get("name") in enabled
