@@ -446,4 +446,7 @@ class RelaceRepoClient:
 
     def get_repo_name_from_base_dir(self) -> str:
         """Derive repository name from base_dir."""
-        return Path(self._config.base_dir).name
+        base_dir = self._config.base_dir
+        if base_dir is None:
+            raise RuntimeError("base_dir is not configured")
+        return Path(base_dir).name
