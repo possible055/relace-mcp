@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -15,25 +16,56 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def validate_base_dir(path: str) -> bool:
+def validate_base_dir(path: str, *, require_write: bool = False) -> bool:
     """Validate if path is a valid project base directory.
 
     Args:
         path: Directory path to validate
+        require_write: If True, ensure directory is writable
 
     Returns:
         True if valid, False otherwise
     """
     p = Path(path)
-    if not p.exists():
-        logger.debug("Path does not exist: %s", path)
+    try:
+        if not p.exists():
+            logger.debug("Path does not exist: %s", path)
+            return False
+        if not p.is_dir():
+            logger.debug("Path is not a directory: %s", path)
+            return False
+    except OSError as exc:
+        logger.debug("Path is not accessible: %s (%s)", path, exc)
         return False
-    if not p.is_dir():
-        logger.debug("Path is not a directory: %s", path)
-        return False
+
+    # Permission sanity checks: require directory to be traversable and listable.
+    # `os.access` is best-effort across platforms; `scandir` provides a stronger runtime check.
     if not os.access(p, os.R_OK):
         logger.debug("Path is not readable: %s", path)
         return False
+    if not os.access(p, os.X_OK):
+        logger.debug("Path is not traversable: %s", path)
+        return False
+    try:
+        with os.scandir(p) as it:
+            next(it, None)
+    except OSError as exc:
+        logger.debug("Path is not listable: %s (%s)", path, exc)
+        return False
+
+    if require_write:
+        if not os.access(p, os.W_OK):
+            logger.debug("Path is not writable: %s", path)
+            return False
+        try:
+            # Create and auto-delete a temp file to validate real write permissions.
+            # Uses a short-lived file to avoid leaving artifacts.
+            with tempfile.NamedTemporaryFile(dir=p, prefix=".relace_write_test_", delete=True):
+                pass
+        except OSError as exc:
+            logger.debug("Path is not writable (tempfile failed): %s (%s)", path, exc)
+            return False
+
     return True
 
 
@@ -183,7 +215,14 @@ async def resolve_base_dir(
             roots = await ctx.list_roots()
             if roots:
                 path, source = await resolve_base_dir_from_roots(roots)
-                return str(Path(path).resolve()), source
+                resolved = str(Path(path).resolve())
+                if validate_base_dir(resolved):
+                    return resolved, source
+                logger.warning(
+                    "MCP Roots resolved to invalid base_dir: %s (source=%s). Falling back...",
+                    resolved,
+                    source,
+                )
         except Exception as e:
             logger.debug("MCP Roots unavailable: %s", e)
 

@@ -1,5 +1,6 @@
 """Tests for dynamic base_dir resolution with MCP Roots support."""
 
+import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -234,3 +235,59 @@ class TestResolveBaseDir:
         base_dir, source = await resolve_base_dir(None, ctx)
         assert base_dir == str(tmp_path)
         assert "Git root" in source
+
+    @pytest.mark.asyncio
+    async def test_single_invalid_mcp_root_falls_back_to_git_root(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Single MCP Root may be invalid; should fall back to Git root."""
+        (tmp_path / ".git").mkdir()
+        cwd = tmp_path / "src"
+        cwd.mkdir()
+        monkeypatch.chdir(cwd)
+
+        invalid_root = tmp_path / "does-not-exist"
+        ctx = MagicMock()
+        ctx.list_roots = AsyncMock(
+            return_value=[MagicMock(uri=f"file://{invalid_root}", name="Invalid Root")]
+        )
+
+        base_dir, source = await resolve_base_dir(None, ctx)
+        assert base_dir == str(tmp_path)
+        assert "Git root" in source
+
+    @pytest.mark.asyncio
+    async def test_multiple_invalid_mcp_roots_falls_back_to_git_root(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Multiple MCP Roots may all be invalid; should fall back to Git root."""
+        (tmp_path / ".git").mkdir()
+        cwd = tmp_path / "src"
+        cwd.mkdir()
+        monkeypatch.chdir(cwd)
+
+        invalid_root1 = tmp_path / "does-not-exist-1"
+        invalid_root2 = tmp_path / "does-not-exist-2"
+        ctx = MagicMock()
+        ctx.list_roots = AsyncMock(
+            return_value=[
+                MagicMock(uri=f"file://{invalid_root1}", name="Invalid 1"),
+                MagicMock(uri=f"file://{invalid_root2}", name="Invalid 2"),
+            ]
+        )
+
+        base_dir, source = await resolve_base_dir(None, ctx)
+        assert base_dir == str(tmp_path)
+        assert "Git root" in source
+
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX permissions only")
+    def test_validate_base_dir_rejects_non_traversable_directory(self, tmp_path: Path) -> None:
+        """Directory without execute/traverse permission should be invalid."""
+        d = tmp_path / "no_traverse"
+        d.mkdir()
+        try:
+            d.chmod(0o444)  # read-only, no execute
+            assert validate_base_dir(str(d)) is False
+        finally:
+            # Ensure cleanup is possible even if the assertion fails
+            d.chmod(0o755)

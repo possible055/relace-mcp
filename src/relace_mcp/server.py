@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import tempfile
 from dataclasses import replace
 from pathlib import Path
 
@@ -27,10 +28,20 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
             errors.append(f"base_dir does not exist: {config.base_dir}")
         elif not os.access(base_dir, os.R_OK):
             errors.append(f"base_dir is not readable: {config.base_dir}")
+        elif not os.access(base_dir, os.X_OK):
+            errors.append(f"base_dir is not traversable: {config.base_dir}")
         elif not os.access(base_dir, os.W_OK):
             errors.append(f"base_dir is not writable: {config.base_dir}")
         else:
-            results["base_dir"] = "ok"
+            try:
+                with tempfile.NamedTemporaryFile(
+                    dir=base_dir, prefix=".relace_healthcheck_", delete=True
+                ):
+                    pass
+            except OSError as exc:
+                errors.append(f"base_dir is not writable (tempfile failed): {exc}")
+            else:
+                results["base_dir"] = "ok"
     else:
         results["base_dir"] = "deferred (will resolve from MCP Roots)"
 
