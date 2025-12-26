@@ -191,7 +191,15 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 常见问题：
 - `RELACE_API_KEY is not set`：在环境变量或 MCP 配置中设置密钥。
 - `RELACE_BASE_DIR does not exist` / `INVALID_PATH`：确保路径存在且在 `RELACE_BASE_DIR` 范围内。
-- `NEEDS_MORE_CONTEXT`：在目标块前后包含 1-3 行真实的锚定行。
+- `NEEDS_MORE_CONTEXT` / `APPLY_NOOP`：在目标块前后包含 1-3 行真实的锚定行。
+- `FILE_TOO_LARGE`：文件超过 1MB 大小限制；拆分大文件或增加限制。
+- `ENCODING_ERROR`：无法检测文件编码；显式设置 `RELACE_DEFAULT_ENCODING`。
+- `FILE_NOT_WRITABLE` / `PERMISSION_ERROR`：检查文件和目录的写入权限。
+- `AUTH_ERROR`：验证 `RELACE_API_KEY` 是否有效且未过期。
+- `RATE_LIMIT`：请求过多；稍后重试。
+- `TIMEOUT_ERROR` / `NETWORK_ERROR`：检查网络连接；通过 `RELACE_TIMEOUT_SECONDS` 增加超时时间。
+
+> **Windows 用户：** `fast_search` 中的 `bash` 工具在 Windows 上不可用。请使用 WSL 或依赖其他探索工具。
 
 ## 开发
 
