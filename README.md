@@ -156,6 +156,8 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 > 1. MCP Roots (workspace info from your editor)
 > 2. Git repository root (if found)
 > 3. Current working directory (fallback)
+>
+> ⚠️ **Warning:** Fallback to CWD/Git can be unstable if MCP Roots fail. Explicit `RELACE_BASE_DIR` is recommended.
 
 > For advanced settings, see [docs/advanced.md](docs/advanced.md).
 
