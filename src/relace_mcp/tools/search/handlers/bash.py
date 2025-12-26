@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess  # nosec B404
 
 from ....utils import resolve_repo_path
@@ -61,9 +62,13 @@ def _translate_repo_paths_in_command(command: str, base_dir: str) -> str:
     for token in tokens:
         if token == "/repo" or token.startswith("/repo/"):  # nosec B105
             try:
-                translated.append(
-                    resolve_repo_path(token, base_dir, allow_relative=False, allow_absolute=False)
+                resolved = resolve_repo_path(
+                    token, base_dir, allow_relative=False, allow_absolute=False
                 )
+                # Git Bash on Windows generally prefers forward slashes (C:/Users/...).
+                if os.name == "nt":
+                    resolved = resolved.replace("\\", "/")
+                translated.append(resolved)
             except ValueError:
                 # Security: invalid path (escape attempt), keep original (will fail safely)
                 translated.append(token)
@@ -96,8 +101,15 @@ def bash_handler(command: str, base_dir: str) -> str:
     translated_command = _translate_repo_paths_in_command(command, base_dir)
 
     try:
+        bash_path = shutil.which("bash")
+        if bash_path is None:
+            return (
+                "Error: bash is not available on this system. "
+                "Install a bash shell (Linux/macOS) or use WSL/Git Bash on Windows."
+            )
+
         result = subprocess.run(  # nosec B603 B602 B607
-            ["bash", "-c", translated_command],
+            [bash_path, "-c", translated_command],
             cwd=base_dir,
             capture_output=True,
             text=True,

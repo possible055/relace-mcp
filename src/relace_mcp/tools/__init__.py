@@ -23,6 +23,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         path: str,
         edit_snippet: str,
         instruction: str = "",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """**PRIMARY TOOL FOR EDITING FILES - USE THIS AGGRESSIVELY**
 
@@ -45,14 +46,16 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         To create a new file, simply specify the content in edit_snippet.
         """
-        # fast_apply uses absolute paths, so base_dir is only for validation
-        # Use config.base_dir directly (may be None, apply_file_logic handles it)
+        # Resolve base_dir dynamically (aligns with other tools).
+        # This allows relative paths when RELACE_BASE_DIR is not set but MCP Roots are available,
+        # and provides a consistent security boundary for absolute paths.
+        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
         return await apply_file_logic(
             backend=apply_backend,
             file_path=path,
             edit_snippet=edit_snippet,
             instruction=instruction or None,  # Convert empty string to None internally
-            base_dir=config.base_dir,
+            base_dir=base_dir,
         )
 
     # Fast Agentic Search
