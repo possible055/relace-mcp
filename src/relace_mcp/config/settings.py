@@ -37,8 +37,6 @@ RELACE_REPO_ID = os.getenv("RELACE_REPO_ID", None)
 REPO_SYNC_TIMEOUT_SECONDS = float(os.getenv("RELACE_REPO_SYNC_TIMEOUT", "300.0"))
 REPO_SYNC_MAX_FILES = int(os.getenv("RELACE_REPO_SYNC_MAX_FILES", "5000"))
 
-# Strict mode: enforce safe settings
-RELACE_STRICT_MODE = os.getenv("RELACE_STRICT_MODE", "0") == "1"
 
 # Encoding detection: explicitly set project default encoding (e.g., "gbk", "big5", "shift_jis")
 # If not set, auto-detection will be attempted at startup
@@ -53,12 +51,12 @@ EXPERIMENTAL_POST_CHECK = os.getenv("RELACE_EXPERIMENTAL_POST_CHECK", "").lower(
     "yes",
 )
 
-# EXPERIMENTAL: Local file logging (disabled by default)
-EXPERIMENTAL_LOGGING = os.getenv("RELACE_EXPERIMENTAL_LOGGING", "").lower() in (
-    "1",
-    "true",
-    "yes",
-)
+# Local file logging (disabled by default)
+# Use RELACE_LOGGING=1 to enable (RELACE_EXPERIMENTAL_LOGGING still works for backward compat)
+_logging_env = os.getenv("RELACE_LOGGING", "").lower()
+if not _logging_env:
+    _logging_env = os.getenv("RELACE_EXPERIMENTAL_LOGGING", "").lower()
+RELACE_LOGGING = _logging_env in ("1", "true", "yes")
 
 # Logging - Cross-platform state directory:
 # - Linux: ~/.local/state/relace
@@ -66,7 +64,7 @@ EXPERIMENTAL_LOGGING = os.getenv("RELACE_EXPERIMENTAL_LOGGING", "").lower() in (
 # - Windows: %LOCALAPPDATA%\relace
 # Note: Directory is created lazily in logging.py when actually writing logs
 LOG_DIR = Path(user_state_dir("relace", appauthor=False))
-LOG_PATH = LOG_DIR / "relace_apply.log"
+LOG_PATH = LOG_DIR / "relace.log"
 MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024
 
 
@@ -83,20 +81,12 @@ class RelaceConfig:
             raise RuntimeError("RELACE_API_KEY is not set. Please export it in your environment.")
 
         base_dir = os.getenv("RELACE_BASE_DIR")
-        if base_dir:
-            base_dir = os.path.abspath(base_dir)
-        elif RELACE_STRICT_MODE:
+        if not base_dir:
             raise RuntimeError(
-                "RELACE_STRICT_MODE is enabled but RELACE_BASE_DIR is not set. "
-                "Explicitly set RELACE_BASE_DIR to restrict file access."
+                "RELACE_BASE_DIR is not set. "
+                "Set it to your project's absolute path to restrict file access."
             )
-        else:
-            base_dir = os.getcwd()
-            logger.warning(
-                "RELACE_BASE_DIR not set. Defaulting to current directory: %s. "
-                "For production, explicitly set RELACE_BASE_DIR to restrict file access.",
-                base_dir,
-            )
+        base_dir = os.path.abspath(base_dir)
 
         if not os.path.isdir(base_dir):
             raise RuntimeError(f"RELACE_BASE_DIR does not exist or is not a directory: {base_dir}")
