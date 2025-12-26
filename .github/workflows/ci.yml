@@ -13,6 +13,9 @@ jobs:
     name: Test ${{ matrix.os }} Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
 
+    env:
+      UV_HTTP_TIMEOUT: 120
+
     permissions:
       contents: read
 
