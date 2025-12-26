@@ -7,6 +7,7 @@
 - [同步模式](#同步模式)
 - [开发者覆盖](#开发者覆盖)
 - [编码](#编码)
+- [日志](#日志)
 - [Fast Apply 提供商切换](#fast-apply-提供商切换)
 - [Fast Search 提供商切换](#fast-search-提供商切换)
 - [Fast Search 工具控制](#fast-search-工具控制)
@@ -68,6 +69,56 @@ Relace MCP 旨在支持遗留编码仓库（如 GBK/Big5），不会导致 `fast
 
 ---
 
+## 日志
+
+文件日志为可选功能。使用 `RELACE_LOGGING=1` 启用。
+
+### 日志位置
+
+日志写入跨平台状态目录：
+
+| 平台 | 路径 |
+|------|------|
+| Linux | `~/.local/state/relace/relace.log` |
+| macOS | `~/Library/Application Support/relace/relace.log` |
+| Windows | `%LOCALAPPDATA%\relace\relace.log` |
+
+### 日志格式
+
+日志以 JSON Lines (JSONL) 格式写入，每行一个 JSON 对象：
+
+```json
+{"kind":"apply_success","level":"info","trace_id":"a1b2c3d4","started_at":"2025-01-01T00:00:00+00:00","latency_ms":150,"file_path":"/path/to/file.py","file_size_bytes":1234,"instruction":"fix bug","edit_snippet_preview":"def foo():...","usage":{"prompt_tokens":100,"completion_tokens":50},"timestamp":"2025-01-01T00:00:00.150000+00:00"}
+```
+
+### 事件类型
+
+| 事件类型 | 描述 |
+|----------|------|
+| `create_success` | 新文件创建成功 |
+| `apply_success` | 编辑应用成功 |
+| `apply_error` | 编辑应用失败 |
+| `search_start` | 搜索开始 |
+| `search_turn` | Agent 循环回合状态 |
+| `tool_call` | 工具调用（含计时） |
+| `search_complete` | 搜索完成 |
+| `search_error` | 搜索失败 |
+
+### 日志轮转
+
+- 超过 **10 MB** 时自动轮转
+- 最多保留 **5** 个轮转日志文件
+- 旧文件命名格式：`relace.YYYYMMDD_HHMMSS.log`
+
+### 环境变量
+
+| 变量 | 默认值 | 描述 |
+|------|--------|------|
+| `RELACE_LOGGING` | `0` | 设为 `1` 启用文件日志 |
+| `RELACE_EXPERIMENTAL_LOGGING` | — | `RELACE_LOGGING` 的弃用别名（向后兼容） |
+
+---
+
 ## Fast Apply 提供商切换
 
 切换到 OpenAI 兼容提供商用于 `fast_apply`：
@@ -98,7 +149,6 @@ Relace MCP 旨在支持遗留编码仓库（如 GBK/Big5），不会导致 `fast
 | `RELACE_SEARCH_API_KEY` | — | 可选直接 API key 覆盖（非 Relace 提供商推荐使用） |
 | `RELACE_SEARCH_API_KEY_ENV` | — | 可选：持有 API key 的环境变量名 |
 | `RELACE_SEARCH_HEADERS` | — | 可选 JSON 对象用于默认 headers（如 `{\"HTTP-Referer\":\"...\",\"X-Title\":\"...\"}`) |
-| `RELACE_SEARCH_API_COMPAT` | — | 可选：强制请求 schema（`openai` 或 `relace`） |
 | `RELACE_SEARCH_TOOL_STRICT` | `1` | 设为 `0` 可从 tool schemas 中省略非标准的 `strict` 字段 |
 | `OPENAI_API_KEY` | — | 当 `RELACE_SEARCH_PROVIDER=openai` 且未设置 `RELACE_SEARCH_API_KEY*` 时使用 |
 | `OPENROUTER_API_KEY` | — | 当 `RELACE_SEARCH_PROVIDER=openrouter` 且未设置 `RELACE_SEARCH_API_KEY*` 时使用 |
