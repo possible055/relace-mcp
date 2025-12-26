@@ -49,10 +49,9 @@ def api_error_response() -> dict[str, Any]:
 @pytest.fixture
 def temp_source_file(tmp_path: Path) -> Path:
     source_file = tmp_path / "test_source.py"
-    source_file.write_text(
-        "def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Goodbye')\n",
-        encoding="utf-8",
-    )
+    content = "def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Goodbye')\n"
+    # Use binary write to avoid Windows converting \n to \r\n
+    source_file.write_bytes(content.encode("utf-8"))
     return source_file
 
 
@@ -60,7 +59,8 @@ def temp_source_file(tmp_path: Path) -> Path:
 def temp_large_file(tmp_path: Path) -> Path:
     large_file = tmp_path / "large_file.py"
     content = "x" * (11 * 1024 * 1024)
-    large_file.write_text(content, encoding="utf-8")
+    # Use binary write to avoid Windows newline conversion
+    large_file.write_bytes(content.encode("utf-8"))
     return large_file
 
 

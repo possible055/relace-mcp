@@ -47,6 +47,7 @@ class TestCloudSearchLogic:
         """Should return search results."""
         result = cloud_search_logic(
             mock_repo_client,
+            base_dir="/tmp/project",
             query="user authentication",
         )
 
@@ -59,6 +60,7 @@ class TestCloudSearchLogic:
         """Should pass score_threshold and token_limit to retrieve."""
         cloud_search_logic(
             mock_repo_client,
+            base_dir="/tmp/project",
             query="error handling",
             score_threshold=0.5,
             token_limit=10000,
@@ -75,6 +77,7 @@ class TestCloudSearchLogic:
         """Should use default parameters when not specified."""
         cloud_search_logic(
             mock_repo_client,
+            base_dir="/tmp/project",
             query="database connection",
         )
 
@@ -88,6 +91,7 @@ class TestCloudSearchLogic:
 
         result = cloud_search_logic(
             mock_repo_client,
+            base_dir="/tmp/project",
             query="nonexistent code pattern",
         )
 
@@ -100,6 +104,7 @@ class TestCloudSearchLogic:
 
         result = cloud_search_logic(
             mock_repo_client,
+            base_dir="/tmp/project",
             query="some query",
         )
 
@@ -113,6 +118,7 @@ class TestCloudSearchLogic:
 
         result = cloud_search_logic(
             mock_repo_client,
+            base_dir="/tmp/project",
             query="some query",
         )
 
@@ -125,6 +131,7 @@ class TestCloudSearchLogic:
 
         result = cloud_search_logic(
             mock_repo_client,
+            base_dir="/tmp/project",
             query=long_query,
         )
 
@@ -143,6 +150,7 @@ class TestCloudSearchEdgeCases:
 
         result = cloud_search_logic(
             mock_repo_client,
+            base_dir="/tmp/project",
             query=unicode_query,
         )
 
@@ -154,6 +162,7 @@ class TestCloudSearchEdgeCases:
 
         result = cloud_search_logic(
             mock_repo_client,
+            base_dir="/tmp/project",
             query=special_query,
         )
 
@@ -163,6 +172,7 @@ class TestCloudSearchEdgeCases:
         """Should handle empty query."""
         result = cloud_search_logic(
             mock_repo_client,
+            base_dir="/tmp/project",
             query="",
         )
 
@@ -178,6 +188,7 @@ class TestCloudSearchBranchParam:
         """Should pass branch parameter to retrieve API."""
         result = cloud_search_logic(
             mock_repo_client,
+            base_dir="/tmp/project",
             query="authentication flow",
             branch="feature-auth",
         )
@@ -190,6 +201,7 @@ class TestCloudSearchBranchParam:
         """Should pass empty string to use API default branch."""
         result = cloud_search_logic(
             mock_repo_client,
+            base_dir="/tmp/project",
             query="some query",
             branch="",
         )
@@ -202,6 +214,7 @@ class TestCloudSearchBranchParam:
         """Should default to empty branch when not specified."""
         result = cloud_search_logic(
             mock_repo_client,
+            base_dir="/tmp/project",
             query="some query",
         )
 
@@ -215,6 +228,7 @@ class TestCloudSearchBranchParam:
 
         result = cloud_search_logic(
             mock_repo_client,
+            base_dir="/tmp/project",
             query="some query",
             branch="main",
         )

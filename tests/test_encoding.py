@@ -169,7 +169,8 @@ class TestReadTextWithFallbackProjectEncoding:
         """ASCII files should be detected as UTF-8."""
         ascii_file = tmp_path / "test.py"
         content = "# ASCII only\nprint('hello')\n"
-        ascii_file.write_text(content, encoding="utf-8")
+        # Use binary write to avoid platform-dependent newline conversion
+        ascii_file.write_bytes(content.encode("utf-8"))
 
         # Even with GBK as project encoding, ASCII works with both
         set_project_encoding("gbk")

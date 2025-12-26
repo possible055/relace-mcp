@@ -71,7 +71,7 @@ MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024
 @dataclass(frozen=True)
 class RelaceConfig:
     api_key: str
-    base_dir: str
+    base_dir: str | None = None  # Optional; resolved dynamically from MCP Roots if not set
     default_encoding: str | None = None  # Project-level encoding (detected or env-specified)
 
     @classmethod
@@ -81,15 +81,15 @@ class RelaceConfig:
             raise RuntimeError("RELACE_API_KEY is not set. Please export it in your environment.")
 
         base_dir = os.getenv("RELACE_BASE_DIR")
-        if not base_dir:
-            raise RuntimeError(
-                "RELACE_BASE_DIR is not set. "
-                "Set it to your project's absolute path to restrict file access."
-            )
-        base_dir = os.path.abspath(base_dir)
-
-        if not os.path.isdir(base_dir):
-            raise RuntimeError(f"RELACE_BASE_DIR does not exist or is not a directory: {base_dir}")
+        if base_dir:
+            base_dir = os.path.abspath(base_dir)
+            if not os.path.isdir(base_dir):
+                raise RuntimeError(
+                    f"RELACE_BASE_DIR does not exist or is not a directory: {base_dir}"
+                )
+            logger.info("Using RELACE_BASE_DIR: %s", base_dir)
+        else:
+            logger.info("RELACE_BASE_DIR not set; will resolve from MCP Roots or cwd at runtime")
 
         # default_encoding from env (will be overridden by detection if None)
         default_encoding = RELACE_DEFAULT_ENCODING

@@ -397,6 +397,8 @@ class TestToolSchemas:
 
     def test_bash_tool_opt_in(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """bash should be available when explicitly enabled."""
+        import shutil
+
         from relace_mcp.tools.search.schemas import get_tool_schemas
 
         monkeypatch.setenv(
@@ -404,6 +406,8 @@ class TestToolSchemas:
         )
         schemas = get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
+        if shutil.which("bash") is None:
+            pytest.skip("bash is not available on this platform")
         assert "bash" in names
 
     def test_glob_tool_exists(self) -> None:

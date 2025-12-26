@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 def cloud_search_logic(
     client: RelaceRepoClient,
+    base_dir: str,
     query: str,
     branch: str = "",
     score_threshold: float = 0.3,
@@ -39,7 +40,7 @@ def cloud_search_logic(
 
     try:
         # Get or create repo based on base_dir name
-        repo_name = client.get_repo_name_from_base_dir()
+        repo_name = client.get_repo_name_from_base_dir(base_dir)
         repo_id = client.ensure_repo(repo_name, trace_id=trace_id)
 
         # Execute semantic retrieval

@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 import pytest
@@ -39,7 +40,9 @@ class TestMapRepoPath:
     def test_passes_through_absolute_path(self, tmp_path: Path) -> None:
         """Non-/repo absolute paths should pass through unchanged."""
         result = map_repo_path("/other/path", str(tmp_path))
-        assert result == "/other/path"
+        # On Windows, Path.resolve() adds drive letter prefix
+        expected = str(Path("/other/path").resolve())
+        assert result == expected
 
     def test_resolves_relative_path(self, tmp_path: Path) -> None:
         """Relative paths should be resolved against base_dir."""
@@ -366,6 +369,7 @@ class TestGlobHandler:
         assert "Error" in result
 
 
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash is not available on this platform")
 class TestBashHandler:
     """Test bash tool handler and security."""
 

@@ -221,6 +221,13 @@ def _check_absolute_paths(tokens: list[str]) -> tuple[bool, str]:
                 continue
             # Block access to system directories
             return True, f"Absolute path outside /repo not allowed: {token}"
+        # Windows absolute paths and UNC paths (defense-in-depth for Git Bash / MSYS).
+        # Examples:
+        # - C:\Windows\System32
+        # - C:/Windows/System32
+        # - \\server\share
+        if re.match(r"^[A-Za-z]:[\\/]", token) or token.startswith("\\\\"):
+            return True, f"Absolute path outside /repo not allowed: {token}"
     return False, ""
 
 

@@ -34,7 +34,8 @@ class RelaceRepoClient:
     def __init__(self, config: RelaceConfig) -> None:
         self._config = config
         self._base_url = RELACE_API_ENDPOINT.rstrip("/")
-        self._cached_repo_id: str | None = RELACE_REPO_ID
+        self._forced_repo_id: str | None = RELACE_REPO_ID
+        self._cached_repo_ids: dict[str, str] = {}
 
     def _get_headers(self, content_type: str = "application/json") -> dict[str, str]:
         """Build request headers with authorization."""
@@ -258,27 +259,38 @@ class RelaceRepoClient:
         Returns:
             Repository ID (UUID).
         """
-        # Use cached repo ID if available
-        if self._cached_repo_id:
-            return self._cached_repo_id
+        # Use forced repo ID if configured (ignore name)
+        if self._forced_repo_id:
+            return self._forced_repo_id
+
+        # Use cached repo ID for this repo name if available
+        cached = self._cached_repo_ids.get(name)
+        if cached:
+            return cached
 
         # Search existing repos
         repos = self.list_repos(trace_id=trace_id)
         for repo in repos:
             metadata = repo.get("metadata")
             repo_name = metadata.get("name") if isinstance(metadata, dict) else repo.get("name")
-            if repo_name == name:
-                repo_id = repo.get("repo_id", repo.get("id", ""))
-                if repo_id:
-                    self._cached_repo_id = repo_id
-                    if repo.get("auto_index") is False:
-                        logger.warning(
-                            "[%s] Repo '%s' has auto_index=false; semantic retrieval may not work",
-                            trace_id,
-                            name,
-                        )
-                    logger.info("[%s] Found existing repo '%s' with id=%s", trace_id, name, repo_id)
-                    return str(repo_id)
+            if repo_name != name:
+                continue
+
+            repo_id = repo.get("repo_id") or repo.get("id") or ""
+            if not repo_id:
+                continue
+
+            self._cached_repo_ids[name] = str(repo_id)
+
+            if repo.get("auto_index") is False:
+                logger.warning(
+                    "[%s] Repo '%s' has auto_index=false; semantic retrieval may not work",
+                    trace_id,
+                    name,
+                )
+
+            logger.info("[%s] Found existing repo '%s' with id=%s", trace_id, name, repo_id)
+            return str(repo_id)
 
         # Create new repo
         logger.info("[%s] Creating new repo '%s'", trace_id, name)
@@ -286,7 +298,7 @@ class RelaceRepoClient:
         repo_id_val = result.get("repo_id") or result.get("id") or ""
         if not repo_id_val:
             raise RuntimeError(f"Failed to create repo: {result}")
-        self._cached_repo_id = str(repo_id_val)
+        self._cached_repo_ids[name] = str(repo_id_val)
         return str(repo_id_val)
 
     def delete_repo(self, repo_id: str, trace_id: str = "unknown") -> bool:
@@ -309,9 +321,10 @@ class RelaceRepoClient:
             )
             logger.info("[%s] Deleted repo '%s'", trace_id, repo_id)
 
-            # Clear cached ID if we just deleted it
-            if self._cached_repo_id == repo_id:
-                self._cached_repo_id = None
+            # Clear cached IDs if we just deleted them
+            self._cached_repo_ids = {
+                name: rid for name, rid in self._cached_repo_ids.items() if rid != repo_id
+            }
 
             return True
         except RuntimeError as exc:
@@ -321,8 +334,9 @@ class RelaceRepoClient:
             cause = exc.__cause__
             if isinstance(cause, RelaceAPIError) and cause.status_code == 404:
                 logger.info("[%s] Repo '%s' already deleted (404)", trace_id, repo_id)
-                if self._cached_repo_id == repo_id:
-                    self._cached_repo_id = None
+                self._cached_repo_ids = {
+                    name: rid for name, rid in self._cached_repo_ids.items() if rid != repo_id
+                }
                 return True
             logger.error("[%s] Failed to delete repo '%s': %s", trace_id, repo_id, exc)
             return False
@@ -444,6 +458,14 @@ class RelaceRepoClient:
         )
         return cast(dict[str, Any], resp.json())
 
-    def get_repo_name_from_base_dir(self) -> str:
-        """Derive repository name from base_dir."""
-        return Path(self._config.base_dir).name
+    def get_repo_name_from_base_dir(self, base_dir: str | None = None) -> str:
+        """Derive repository name from base_dir.
+
+        Args:
+            base_dir: Optional base_dir override (useful when base_dir is resolved dynamically
+                from MCP Roots and not stored in config).
+        """
+        base_dir = base_dir or self._config.base_dir
+        if base_dir is None:
+            raise RuntimeError("base_dir is not configured")
+        return Path(base_dir).name
