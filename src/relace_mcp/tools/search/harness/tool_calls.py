@@ -1,8 +1,10 @@
 import json
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any
 
+from ....config import settings
 from ..handlers import (
     bash_handler,
     glob_handler,
@@ -11,6 +13,7 @@ from ..handlers import (
     view_directory_handler,
     view_file_handler,
 )
+from ..logging import log_tool_call
 from ..schemas import GrepSearchParams
 from .constants import MAX_PARALLEL_WORKERS, PARALLEL_SAFE_TOOLS
 
@@ -129,7 +132,9 @@ class ToolCallsMixin:
                         tool_results.append((tc_id, func_name, "Error: Missing arguments"))
                         continue
                     logger.debug("[%s] Tool call (parallel): %s", trace_id, func_name)
-                    future = executor.submit(self._dispatch_tool, func_name, func_args)
+                    future = executor.submit(
+                        self._dispatch_tool_with_logging, func_name, func_args, trace_id
+                    )
                     futures[future] = (tc_id, func_name, func_args)
 
                 for future in as_completed(futures):
@@ -172,7 +177,7 @@ class ToolCallsMixin:
 
             logger.debug("[%s] Tool call (sequential): %s", trace_id, func_name)
             try:
-                result = self._dispatch_tool(func_name, func_args)
+                result = self._dispatch_tool_with_logging(func_name, func_args, trace_id)
             except Exception as exc:
                 logger.error("[%s] Tool %s raised exception: %s", trace_id, func_name, exc)
                 result = f"Error: {exc}"
@@ -185,6 +190,31 @@ class ToolCallsMixin:
             tool_results.append((tc_id, func_name, result))
 
         return tool_results, report_back_result
+
+    def _dispatch_tool_with_logging(
+        self, name: str, args: dict[str, Any], trace_id: str
+    ) -> str | dict[str, Any]:
+        """Dispatch tool call with timing and logging."""
+        if not settings.RELACE_LOGGING:
+            return self._dispatch_tool(name, args)
+
+        start = time.perf_counter()
+        result = self._dispatch_tool(name, args)
+        latency_ms = (time.perf_counter() - start) * 1000
+
+        try:
+            success = not (isinstance(result, str) and result.startswith("Error:"))
+
+            if isinstance(result, str):
+                result_preview = result[:300]
+            else:
+                result_preview = json.dumps(result, ensure_ascii=False, default=str)[:300]
+
+            log_tool_call(trace_id, name, args, result_preview, latency_ms, success)
+        except Exception:
+            # Logging failure should never break tool execution
+            logger.debug("Failed to log tool call for %s", name, exc_info=True)
+        return result
 
     def _dispatch_tool(self, name: str, args: dict[str, Any]) -> str | dict[str, Any]:
         """Dispatch tool call to corresponding handler and accumulate observed_files."""

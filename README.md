@@ -7,6 +7,7 @@
 [![PyPI](https://img.shields.io/pypi/v/relace-mcp.svg)](https://pypi.org/project/relace-mcp/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![100% AI-Generated](https://img.shields.io/badge/100%25%20AI-Generated-ff69b4.svg)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/possible055/relace-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/possible055/relace-mcp)
 
 > **Unofficial** — Personal project, not affiliated with Relace.
@@ -18,7 +19,7 @@ MCP server for [Relace](https://www.relace.ai/) — AI-powered instant code merg
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/) — Python package manager
-- [Git](https://git-scm.com/) — for `cloud_sync` to respect `.gitignore`
+- [git](https://git-scm.com/) — for `cloud_sync` to respect `.gitignore`
 - [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) — recommended for `fast_search` (falls back to Python regex if unavailable)
 
 ### Platform Notes
@@ -31,18 +32,14 @@ MCP server for [Relace](https://www.relace.ai/) — AI-powered instant code merg
 
 > **Windows users:** The `bash` tool requires a Unix shell. Install [WSL](https://learn.microsoft.com/windows/wsl/install) for full feature parity, or use other exploration tools (`view_file`, `grep_search`, `glob`).
 
-## Features
-
-- **Fast Apply** — Apply code edits at 10,000+ tokens/sec via Relace API
-- **Fast Search** — Agentic codebase exploration with natural language queries
-- **Cloud Sync** — Upload local codebase to Relace Cloud for semantic search
-- **Cloud Search** — Semantic code search over cloud-synced repositories
-
 ## Quick Start
 
-1. Get your API key from [Relace Dashboard](https://app.relace.ai/settings/billing)
+Get your API key from [Relace Dashboard](https://app.relace.ai/settings/billing), then add to your MCP client:
 
-2. Add to your MCP config:
+<details>
+<summary><strong>Cursor</strong></summary>
+
+`~/.cursor/mcp.json`
 
 ```json
 {
@@ -59,7 +56,92 @@ MCP server for [Relace](https://www.relace.ai/) — AI-powered instant code merg
 }
 ```
 
-> **Important:** `RELACE_BASE_DIR` must be set to your project's absolute path. This restricts file access scope and ensures correct operation.
+</details>
+
+<details>
+<summary><strong>Claude Code</strong></summary>
+
+```bash
+claude mcp add relace \
+  --env RELACE_API_KEY=rlc-your-api-key \
+  --env RELACE_BASE_DIR=/absolute/path/to/your/project \
+  -- uv tool run relace-mcp
+```
+
+</details>
+
+<details>
+<summary><strong>Windsurf</strong></summary>
+
+`~/.codeium/windsurf/mcp_config.json`
+
+```json
+{
+  "mcpServers": {
+    "relace": {
+      "command": "uv",
+      "args": ["tool", "run", "relace-mcp"],
+      "env": {
+        "RELACE_API_KEY": "rlc-your-api-key",
+        "RELACE_BASE_DIR": "/absolute/path/to/your/project"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>VS Code</strong></summary>
+
+`.vscode/mcp.json`
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "relace": {
+        "type": "stdio",
+        "command": "uv",
+        "args": ["tool", "run", "relace-mcp"],
+        "env": {
+          "RELACE_API_KEY": "rlc-your-api-key",
+          "RELACE_BASE_DIR": "${workspaceFolder}"
+        }
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Codex CLI</strong></summary>
+
+`~/.codex/config.toml`
+
+```toml
+[mcp_servers.relace]
+command = "uv"
+args = ["tool", "run", "relace-mcp"]
+
+[mcp_servers.relace.env]
+RELACE_API_KEY = "rlc-your-api-key"
+RELACE_BASE_DIR = "/absolute/path/to/your/project"
+```
+
+</details>
+
+> **Note:** `RELACE_BASE_DIR` must be an absolute path to your project root.
+
+## Features
+
+- **Fast Apply** — Apply code edits at 10,000+ tokens/sec via Relace API
+- **Fast Search** — Agentic codebase exploration with natural language queries
+- **Cloud Sync** — Upload local codebase to Relace Cloud for semantic search
+- **Cloud Search** — Semantic code search over cloud-synced repositories
 
 ## Environment Variables
 
@@ -67,129 +149,35 @@ MCP server for [Relace](https://www.relace.ai/) — AI-powered instant code merg
 |----------|----------|-------------|
 | `RELACE_API_KEY` | ✅ | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
 | `RELACE_BASE_DIR` | ✅ | Absolute path to project root |
-| `RELACE_STRICT_MODE` | ❌ | Set `1` to require explicit base dir (recommended for production) |
-| `RELACE_DEFAULT_ENCODING` | ❌ | Force default file encoding (e.g., `gbk`, `big5`) to support legacy-encoded repos |
-| `RELACE_ENCODING_SAMPLE_LIMIT` | ❌ | Max files sampled for auto-detecting project encoding at startup (default: `30`) |
+| `RELACE_DEFAULT_ENCODING` | ❌ | Force file encoding (e.g., `gbk`, `big5`) for legacy repos |
+| `RELACE_ENCODING_SAMPLE_LIMIT` | ❌ | Max files for auto-detecting encoding (default: `30`) |
 
-> For advanced settings (developer overrides, provider swap, remote deployment), see [docs/advanced.md](docs/advanced.md).
+> For advanced settings, see [docs/advanced.md](docs/advanced.md).
 
 ## Tools
 
-### `fast_apply`
+| Tool | Description |
+|------|-------------|
+| `fast_apply` | Apply code edits at 10,000+ tokens/sec |
+| `fast_search` | Agentic codebase search with natural language |
+| `cloud_sync` | Upload local codebase to Relace Cloud |
+| `cloud_search` | Semantic search over cloud-synced repos |
+| `cloud_list` | List cloud repositories |
+| `cloud_info` | Get sync status |
+| `cloud_clear` | Delete cloud repo and local state |
 
-Apply edits to a file (or create a new file). Use truncation placeholders like `// ... existing code ...` or `# ... existing code ...`.
-
-**Parameters:**
-
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `path` | ✅ | Absolute path within `RELACE_BASE_DIR` |
-| `edit_snippet` | ✅ | Code with abbreviation placeholders |
-| `instruction` | ❌ | Hint for disambiguation |
-
-**Example:**
-
-```json
-{
-  "path": "/home/user/project/src/file.py",
-  "edit_snippet": "// ... existing code ...\nfunction newFeature() {}\n// ... existing code ...",
-  "instruction": "Add new feature"
-}
-```
-
-**Returns:** UDiff of changes, or confirmation for new files.
-
-### `fast_search`
-
-Search the codebase and return relevant files and line ranges.
-
-**Parameters:** `query` — Natural language search query
-
-**Example response:**
-
-```json
-{
-  "query": "How is authentication implemented?",
-  "explanation": "Auth logic is in src/auth/...",
-  "files": {
-    "/home/user/project/src/auth/login.py": [[10, 80]]
-  },
-  "turns_used": 4
-}
-```
-
-**Parameters:**
-- `query` — Natural language search query
-
-### `cloud_sync`
-
-Synchronize local codebase to Relace Cloud for semantic search. Uploads source files from `RELACE_BASE_DIR` to Relace Repos.
-
-**Parameters:**
-
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| `force` | ❌ | `false` | Force full sync, ignoring cached state |
-| `mirror` | ❌ | `false` | With `force=True`, completely overwrite cloud repo |
-
-**Behavior:**
-- Respects `.gitignore` patterns (uses `git ls-files` when available)
-- Supports 60+ common source code file types (`.py`, `.js`, `.ts`, `.java`, etc.)
-- Skips files > 1MB and common non-source directories (`node_modules`, `__pycache__`, etc.)
-- Sync state stored in `~/.local/state/relace/sync/`
-
-> For advanced sync modes (incremental, safe full, mirror), see [docs/advanced.md](docs/advanced.md#sync-modes).
-
-### `cloud_search`
-
-Semantic code search over the cloud-synced repository. Requires running `cloud_sync` first.
-
-**Parameters:**
-
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| `query` | ✅ | — | Natural language search query |
-| `branch` | ❌ | `""` | Branch to search (empty uses API default) |
-| `score_threshold` | ❌ | `0.3` | Minimum relevance score (0.0-1.0) |
-| `token_limit` | ❌ | `30000` | Maximum tokens to return |
-
-### `cloud_list`
-
-List all repositories in your Relace Cloud account.
-
-**Parameters:** None
-
-### `cloud_info`
-
-Get detailed sync status for the current repository. Use before `cloud_sync` to understand what action is needed.
-
-**Parameters:** None
-
-### `cloud_clear`
-
-Delete the cloud repository and local sync state. Use when switching projects or resetting after major restructuring.
-
-**Parameters:**
-
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| `confirm` | ✅ | `false` | Must be `true` to proceed (safety guard) |
-
-**Returns:**
-
-```json
-{
-  "deleted": true,
-  "repo_id": "uuid",
-  "state_cleared": true
-}
-```
+> For detailed parameters and examples, see [docs/tools.md](docs/tools.md).
 
 ## Logging
 
-> **Note:** File logging is experimental. Enable with `RELACE_EXPERIMENTAL_LOGGING=1`.
+> **Note:** File logging is opt-in. Enable with `RELACE_LOGGING=1`.
 
-Operation logs are written to `~/.local/state/relace/relace_apply.log`.
+Operation logs are written to a cross-platform state directory:
+- **Linux**: `~/.local/state/relace/relace.log`
+- **macOS**: `~/Library/Application Support/relace/relace.log`
+- **Windows**: `%LOCALAPPDATA%\relace\relace.log`
+
+> For log format and advanced options, see [docs/advanced.md](docs/advanced.md#logging).
 
 ## Troubleshooting
 

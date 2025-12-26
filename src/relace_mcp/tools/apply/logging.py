@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ...config.settings import EXPERIMENTAL_LOGGING, LOG_PATH, MAX_LOG_SIZE_BYTES
+from ...config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -16,15 +16,18 @@ MAX_ROTATED_LOGS = 5
 def rotate_log_if_needed() -> None:
     """Rotate log file if it exceeds size limit and clean up old files."""
     try:
-        if LOG_PATH.exists() and LOG_PATH.stat().st_size > MAX_LOG_SIZE_BYTES:
-            rotated_path = LOG_PATH.with_suffix(
+        if (
+            settings.LOG_PATH.exists()
+            and settings.LOG_PATH.stat().st_size > settings.MAX_LOG_SIZE_BYTES
+        ):
+            rotated_path = settings.LOG_PATH.with_suffix(
                 f".{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.log"
             )
-            LOG_PATH.rename(rotated_path)
+            settings.LOG_PATH.rename(rotated_path)
             logger.info("Rotated log file to %s", rotated_path)
 
             # Clean up old log files exceeding limit
-            rotated_logs = sorted(LOG_PATH.parent.glob("relace_apply.*.log"), reverse=True)
+            rotated_logs = sorted(settings.LOG_PATH.parent.glob("relace.*.log"), reverse=True)
             for old_log in rotated_logs[MAX_ROTATED_LOGS:]:
                 old_log.unlink(missing_ok=True)
                 logger.debug("Cleaned up old log file: %s", old_log)
@@ -38,7 +41,7 @@ def log_event(event: dict[str, Any]) -> None:
     Args:
         event: Event data to log.
     """
-    if not EXPERIMENTAL_LOGGING:
+    if not settings.RELACE_LOGGING:
         return
 
     try:
@@ -47,16 +50,17 @@ def log_event(event: dict[str, Any]) -> None:
         if "trace_id" not in event:
             event["trace_id"] = str(uuid.uuid4())[:8]
         if "level" not in event:
-            event["level"] = "info" if event.get("kind", "").endswith("success") else "error"
+            kind = str(event.get("kind", "")).lower()
+            event["level"] = "error" if kind.endswith("error") else "info"
 
-        if LOG_PATH.is_dir():
-            logger.warning("Log path is a directory, skipping log write: %s", LOG_PATH)
+        if settings.LOG_PATH.is_dir():
+            logger.warning("Log path is a directory, skipping log write: %s", settings.LOG_PATH)
             return
-        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        settings.LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
         rotate_log_if_needed()
 
-        with open(LOG_PATH, "a", encoding="utf-8") as f:
+        with open(settings.LOG_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(event, ensure_ascii=False) + "\n")
     except Exception as exc:
         logger.warning("Failed to write Relace log: %s", exc)

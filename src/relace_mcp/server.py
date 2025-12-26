@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from fastmcp import FastMCP
 
 from .config import RelaceConfig
-from .config.settings import ENCODING_DETECTION_SAMPLE_LIMIT, EXPERIMENTAL_LOGGING, LOG_PATH
+from .config.settings import ENCODING_DETECTION_SAMPLE_LIMIT, LOG_PATH, RELACE_LOGGING
 from .tools import register_tools
 from .tools.apply.encoding import detect_project_encoding
 from .tools.apply.file_io import set_project_encoding
@@ -30,7 +30,7 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
     else:
         results["base_dir"] = "ok"
 
-    if EXPERIMENTAL_LOGGING:
+    if RELACE_LOGGING:
         log_dir = LOG_PATH.parent
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
