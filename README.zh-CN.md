@@ -134,7 +134,7 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 
 </details>
 
-> **注意：** `RELACE_BASE_DIR` 必须是项目根目录的绝对路径。
+> **注意：** `RELACE_BASE_DIR` 可选。若未设置，服务器会自动检测项目根目录（通过 MCP Roots 或 Git 仓库）。
 
 ## 功能特性
 
@@ -148,9 +148,16 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 | 变量 | 必需 | 描述 |
 |------|------|------|
 | `RELACE_API_KEY` | ✅ | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥 |
-| `RELACE_BASE_DIR` | ✅ | 项目根目录的绝对路径 |
+| `RELACE_BASE_DIR` | ❌ | 项目根目录的绝对路径（未设置时自动通过 MCP Roots 检测） |
 | `RELACE_DEFAULT_ENCODING` | ❌ | 强制文件编码（如 `gbk`、`big5`），用于遗留编码仓库 |
 | `RELACE_ENCODING_SAMPLE_LIMIT` | ❌ | 自动检测编码的采样文件上限（默认：`30`） |
+
+> **注意：** 当 `RELACE_BASE_DIR` 未设置时，服务器会自动检测项目根目录：
+> 1. MCP Roots（编辑器提供的工作区信息）
+> 2. Git 仓库根目录（若存在）
+> 3. 当前工作目录（后备方案）
+>
+> ⚠️ **警告：** 若 MCP Roots 获取失败，隐式回退到 CWD 可能导致不稳定。建议显式设置 `RELACE_BASE_DIR`。
 
 > 高级设置请参见 [docs/advanced.zh-CN.md](docs/advanced.zh-CN.md)。
 
@@ -184,7 +191,15 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 常见问题：
 - `RELACE_API_KEY is not set`：在环境变量或 MCP 配置中设置密钥。
 - `RELACE_BASE_DIR does not exist` / `INVALID_PATH`：确保路径存在且在 `RELACE_BASE_DIR` 范围内。
-- `NEEDS_MORE_CONTEXT`：在目标块前后包含 1-3 行真实的锚定行。
+- `NEEDS_MORE_CONTEXT` / `APPLY_NOOP`：在目标块前后包含 1-3 行真实的锚定行。
+- `FILE_TOO_LARGE`：文件超过 1MB 大小限制；拆分大文件或增加限制。
+- `ENCODING_ERROR`：无法检测文件编码；显式设置 `RELACE_DEFAULT_ENCODING`。
+- `FILE_NOT_WRITABLE` / `PERMISSION_ERROR`：检查文件和目录的写入权限。
+- `AUTH_ERROR`：验证 `RELACE_API_KEY` 是否有效且未过期。
+- `RATE_LIMIT`：请求过多；稍后重试。
+- `TIMEOUT_ERROR` / `NETWORK_ERROR`：检查网络连接；通过 `RELACE_TIMEOUT_SECONDS` 增加超时时间。
+
+> **Windows 用户：** `fast_search` 中的 `bash` 工具在 Windows 上不可用。请使用 WSL 或依赖其他探索工具。
 
 ## 开发
 

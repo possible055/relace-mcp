@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "relace-mcp"
-version = "0.2.1a1"
+version = "0.2.1a2"
 description = "Unofficial Relace MCP Server - Fast code merging via Relace API"
 readme = "README.md"
 license = { text = "MIT" }
@@ -47,6 +47,8 @@ dev = [
     "mypy>=1.19.1",
     "interrogate>=1.7.0",
     "dead>=1.5.2",
+    "ruff>=0.1.0",
+    "build>=1.0.0",
 ]
 
 [project.scripts]

@@ -2,6 +2,8 @@ from pathlib import Path
 
 import yaml
 
+from .base_dir import resolve_base_dir
+
 # Public API: RelaceConfig is the main configuration class
 from .settings import RelaceConfig
 
@@ -30,6 +32,7 @@ APPLY_SYSTEM_PROMPT: str = _APPLY_PROMPTS["apply_system_prompt"].strip()
 __all__ = [
     # Public API
     "RelaceConfig",
+    "resolve_base_dir",
     # Prompts (for internal submodule use)
     "SEARCH_SYSTEM_PROMPT",
     "SEARCH_USER_PROMPT_TEMPLATE",

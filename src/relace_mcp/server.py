@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import tempfile
 from dataclasses import replace
 from pathlib import Path
 
@@ -20,15 +21,29 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
     results: dict[str, str] = {}
     errors: list[str] = []
 
-    base_dir = Path(config.base_dir)
-    if not base_dir.is_dir():
-        errors.append(f"base_dir does not exist: {config.base_dir}")
-    elif not os.access(base_dir, os.R_OK):
-        errors.append(f"base_dir is not readable: {config.base_dir}")
-    elif not os.access(base_dir, os.W_OK):
-        errors.append(f"base_dir is not writable: {config.base_dir}")
+    # base_dir is optional; if not set, it will be resolved from MCP Roots at runtime
+    if config.base_dir:
+        base_dir = Path(config.base_dir)
+        if not base_dir.is_dir():
+            errors.append(f"base_dir does not exist: {config.base_dir}")
+        elif not os.access(base_dir, os.R_OK):
+            errors.append(f"base_dir is not readable: {config.base_dir}")
+        elif not os.access(base_dir, os.X_OK):
+            errors.append(f"base_dir is not traversable: {config.base_dir}")
+        elif not os.access(base_dir, os.W_OK):
+            errors.append(f"base_dir is not writable: {config.base_dir}")
+        else:
+            try:
+                with tempfile.NamedTemporaryFile(
+                    dir=base_dir, prefix=".relace_healthcheck_", delete=True
+                ):
+                    pass
+            except OSError as exc:
+                errors.append(f"base_dir is not writable (tempfile failed): {exc}")
+            else:
+                results["base_dir"] = "ok"
     else:
-        results["base_dir"] = "ok"
+        results["base_dir"] = "deferred (will resolve from MCP Roots)"
 
     if RELACE_LOGGING:
         log_dir = LOG_PATH.parent
@@ -69,6 +84,11 @@ def detect_and_set_encoding(config: RelaceConfig) -> RelaceConfig:
     if config.default_encoding:
         logger.info("Using configured project encoding: %s", config.default_encoding)
         set_project_encoding(config.default_encoding)
+        return config
+
+    # Cannot auto-detect encoding without a base_dir
+    if not config.base_dir:
+        logger.debug("Skipping encoding detection: base_dir not set")
         return config
 
     # Auto-detect encoding from project files
