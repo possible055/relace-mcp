@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import pytest
@@ -11,19 +10,22 @@ class TestRelaceConfigFromEnv:
         with pytest.raises(RuntimeError, match="RELACE_API_KEY is not set"):
             RelaceConfig.from_env()
 
-    def test_loads_api_key(self, clean_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_loads_api_key(
+        self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         monkeypatch.setenv("RELACE_API_KEY", "my-secret-key")
+        monkeypatch.setenv("RELACE_BASE_DIR", str(tmp_path))
         config = RelaceConfig.from_env()
         assert config.api_key == "my-secret-key"
 
 
 class TestRelaceConfigBaseDir:
-    def test_default_base_dir_is_cwd(
+    def test_missing_base_dir_raises(
         self, clean_env: None, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("RELACE_API_KEY", "test-key")
-        config = RelaceConfig.from_env()
-        assert config.base_dir == os.getcwd()
+        with pytest.raises(RuntimeError, match="RELACE_BASE_DIR is not set"):
+            RelaceConfig.from_env()
 
     def test_base_dir_is_resolved_to_absolute(
         self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
