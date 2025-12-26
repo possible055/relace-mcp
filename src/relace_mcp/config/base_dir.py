@@ -146,7 +146,10 @@ def select_best_root(roots: Sequence[Root]) -> str:
     if not root_paths:
         # If no valid roots found, fallback to first one anyway as a last resort
         # even if it might fail validation later
-        return uri_to_path(str(roots[0].uri))
+        try:
+            return uri_to_path(str(roots[0].uri))
+        except Exception as e:
+            raise ValueError(f"All MCP Roots are invalid or unparseable: {e}") from e
 
     # Priority 1: .git
     for path in root_paths:

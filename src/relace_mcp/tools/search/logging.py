@@ -96,8 +96,8 @@ def _sanitize_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
     safe = dict(args)
     if tool_name == "bash" and "command" in safe:
         cmd = safe["command"]
-        safe["command"] = cmd[:200] + "..." if len(cmd) > 200 else cmd
+        safe["command"] = cmd[:197] + "..." if len(cmd) > 200 else cmd
     if tool_name == "grep_search" and "query" in safe:
         q = safe["query"]
-        safe["query"] = q[:100] + "..." if len(q) > 100 else q
+        safe["query"] = q[:97] + "..." if len(q) > 100 else q
     return safe
