@@ -107,10 +107,13 @@ class ObservedFilesMixin:
 
         Handles: /repo/..., relative paths, and already-absolute paths.
         """
+        base_dir = self._config.base_dir
+        if base_dir is None:
+            return None
         try:
             return resolve_repo_path(
                 path,
-                self._config.base_dir,
+                base_dir,
                 require_within_base_dir=True,
             )
         except ValueError:
@@ -127,10 +130,11 @@ class ObservedFilesMixin:
             return None
         if not raw_path.startswith("/repo"):
             return None
+        base_dir = self._config.base_dir
+        if base_dir is None:
+            return None
         try:
-            return resolve_repo_path(
-                raw_path, self._config.base_dir, allow_relative=False, allow_absolute=False
-            )
+            return resolve_repo_path(raw_path, base_dir, allow_relative=False, allow_absolute=False)
         except ValueError:
             return None
 

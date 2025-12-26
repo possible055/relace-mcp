@@ -1,10 +1,12 @@
+from dataclasses import replace
 from typing import Any
 
 from fastmcp import FastMCP
+from fastmcp.server.context import Context
 
 from ..clients import RelaceRepoClient, SearchLLMClient
 from ..clients.apply import ApplyLLMClient
-from ..config import RelaceConfig
+from ..config import RelaceConfig, resolve_base_dir
 from .apply import apply_file_logic
 from .repo import cloud_info_logic, cloud_list_logic, cloud_search_logic, cloud_sync_logic
 from .search import FastAgenticSearchHarness
@@ -43,6 +45,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         To create a new file, simply specify the content in edit_snippet.
         """
+        # fast_apply uses absolute paths, so base_dir is only for validation
+        # Use config.base_dir directly (may be None, apply_file_logic handles it)
         return await apply_file_logic(
             backend=apply_backend,
             file_path=path,
@@ -55,7 +59,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     search_client = SearchLLMClient(config)
 
     @mcp.tool
-    def fast_search(query: str) -> dict[str, Any]:
+    async def fast_search(query: str, ctx: Context) -> dict[str, Any]:
         """Run Fast Agentic Search over the configured base_dir.
 
         Use this tool to quickly explore and understand the codebase.
@@ -69,14 +73,19 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         This is useful before using fast_apply to understand which files
         need to be modified and how they relate to each other.
         """
+        # Resolve base_dir dynamically from MCP Roots if not configured
+        base_dir, source = await resolve_base_dir(config.base_dir, ctx)
+        effective_config = replace(config, base_dir=base_dir)
         # Avoid shared mutable state across concurrent calls.
-        return FastAgenticSearchHarness(config, search_client).run(query=query)
+        return FastAgenticSearchHarness(effective_config, search_client).run(query=query)
 
     # Cloud Repos (Semantic Search & Sync)
     repo_client = RelaceRepoClient(config)
 
     @mcp.tool
-    def cloud_sync(force: bool = False, mirror: bool = False) -> dict[str, Any]:
+    async def cloud_sync(
+        force: bool = False, mirror: bool = False, ctx: Context | None = None
+    ) -> dict[str, Any]:
         """Upload codebase to Relace Repos for cloud_search semantic indexing.
 
         Call this ONCE per session before using cloud_search, or after
@@ -95,7 +104,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             mirror: If True (with force=True), use Mirror Full mode to completely
                     overwrite cloud repo (removes files not in local).
         """
-        return cloud_sync_logic(repo_client, config.base_dir, force=force, mirror=mirror)
+        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+        return cloud_sync_logic(repo_client, base_dir, force=force, mirror=mirror)
 
     @mcp.tool
     def cloud_search(
@@ -130,7 +140,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         )
 
     @mcp.tool
-    def cloud_clear(confirm: bool = False) -> dict[str, Any]:
+    async def cloud_clear(confirm: bool = False, ctx: Context | None = None) -> dict[str, Any]:
         """Delete the cloud repository and local sync state.
 
         Use when: switching to a different project, resetting after major
@@ -144,7 +154,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         """
         from .repo.clear import cloud_clear_logic
 
-        return cloud_clear_logic(repo_client, config.base_dir, confirm=confirm)
+        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+        return cloud_clear_logic(repo_client, base_dir, confirm=confirm)
 
     @mcp.tool
     def cloud_list() -> dict[str, Any]:
@@ -159,7 +170,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         return cloud_list_logic(repo_client)
 
     @mcp.tool
-    def cloud_info() -> dict[str, Any]:
+    async def cloud_info(ctx: Context | None = None) -> dict[str, Any]:
         """Get detailed sync status for the current repository.
 
         Use before cloud_sync to understand what action is needed.
@@ -170,7 +181,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         - cloud: Cloud repo info (if exists)
         - status: Whether sync is needed and recommended action
         """
-        return cloud_info_logic(repo_client, config.base_dir)
+        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+        return cloud_info_logic(repo_client, base_dir)
 
     # === MCP Resources ===
 

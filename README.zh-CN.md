@@ -134,7 +134,7 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 
 </details>
 
-> **注意：** `RELACE_BASE_DIR` 必须是项目根目录的绝对路径。
+> **注意：** `RELACE_BASE_DIR` 可选。若未设置，服务器会自动检测项目根目录（通过 MCP Roots 或 Git 仓库）。
 
 ## 功能特性
 
@@ -148,9 +148,14 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 | 变量 | 必需 | 描述 |
 |------|------|------|
 | `RELACE_API_KEY` | ✅ | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥 |
-| `RELACE_BASE_DIR` | ✅ | 项目根目录的绝对路径 |
+| `RELACE_BASE_DIR` | ❌ | 项目根目录的绝对路径（未设置时自动通过 MCP Roots 检测） |
 | `RELACE_DEFAULT_ENCODING` | ❌ | 强制文件编码（如 `gbk`、`big5`），用于遗留编码仓库 |
 | `RELACE_ENCODING_SAMPLE_LIMIT` | ❌ | 自动检测编码的采样文件上限（默认：`30`） |
+
+> **注意：** 当 `RELACE_BASE_DIR` 未设置时，服务器会自动检测项目根目录：
+> 1. MCP Roots（编辑器提供的工作区信息）
+> 2. Git 仓库根目录（若存在）
+> 3. 当前工作目录（后备方案）
 
 > 高级设置请参见 [docs/advanced.zh-CN.md](docs/advanced.zh-CN.md)。
 
