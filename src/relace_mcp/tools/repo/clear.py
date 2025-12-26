@@ -34,7 +34,7 @@ def cloud_clear_logic(
         }
 
     try:
-        repo_name = client.get_repo_name_from_base_dir()
+        repo_name = client.get_repo_name_from_base_dir(base_dir)
 
         # 1. Try to get repo_id from local sync state (safest)
         repo_id = None

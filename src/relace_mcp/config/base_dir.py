@@ -52,8 +52,14 @@ def uri_to_path(uri: str) -> str:
         # but let's be safe and try to parse it.
         return unquote(uri)
 
-    # url2pathname handles Windows drive letters correctly
-    path = url2pathname(parsed.path)
+    # file:// URIs may include a netloc for UNC paths: file://server/share/folder
+    # Reconstruct as //server/share/folder so url2pathname can handle it on Windows.
+    raw_path = parsed.path
+    if parsed.netloc and parsed.netloc != "localhost":
+        raw_path = f"//{parsed.netloc}{parsed.path}"
+
+    # url2pathname handles Windows drive letters correctly on Windows.
+    path = url2pathname(raw_path)
 
     # On some systems, url2pathname might leave a leading slash on Windows paths
     # like /C:/Users -> C:\Users. Path() usually handles this, but let's be explicit.

@@ -108,11 +108,12 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         return cloud_sync_logic(repo_client, base_dir, force=force, mirror=mirror)
 
     @mcp.tool
-    def cloud_search(
+    async def cloud_search(
         query: str,
         branch: str = "",
         score_threshold: float = 0.3,
         token_limit: int = 30000,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Semantic code search using Relace Cloud two-stage retrieval.
 
@@ -131,8 +132,11 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             score_threshold: Minimum relevance score (0.0-1.0, default 0.3).
             token_limit: Maximum tokens to return (default 30000).
         """
+        # Resolve base_dir dynamically from MCP Roots if not configured
+        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
         return cloud_search_logic(
             repo_client,
+            base_dir,
             query,
             branch=branch,
             score_threshold=score_threshold,
