@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 import pytest
@@ -366,6 +367,7 @@ class TestGlobHandler:
         assert "Error" in result
 
 
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash is not available on this platform")
 class TestBashHandler:
     """Test bash tool handler and security."""
 
