@@ -170,9 +170,14 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 
 ## 日志
 
-> **注意：** 文件日志功能为实验性功能。使用 `RELACE_EXPERIMENTAL_LOGGING=1` 启用。
+> **注意：** 文件日志为可选功能。使用 `RELACE_LOGGING=1` 启用。
 
-操作日志写入 `~/.local/state/relace/relace_apply.log`。
+操作日志写入跨平台状态目录：
+- **Linux**: `~/.local/state/relace/relace.log`
+- **macOS**: `~/Library/Application Support/relace/relace.log`
+- **Windows**: `%LOCALAPPDATA%\relace\relace.log`
+
+> 日志格式和进阶选项请参见 [docs/advanced.zh-CN.md](docs/advanced.zh-CN.md#日志)。
 
 ## 故障排除
 

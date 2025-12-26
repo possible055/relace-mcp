@@ -170,9 +170,14 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 
 ## Logging
 
-> **Note:** File logging is experimental. Enable with `RELACE_EXPERIMENTAL_LOGGING=1`.
+> **Note:** File logging is opt-in. Enable with `RELACE_LOGGING=1`.
 
-Operation logs are written to `~/.local/state/relace/relace_apply.log`.
+Operation logs are written to a cross-platform state directory:
+- **Linux**: `~/.local/state/relace/relace.log`
+- **macOS**: `~/Library/Application Support/relace/relace.log`
+- **Windows**: `%LOCALAPPDATA%\relace\relace.log`
+
+> For log format and advanced options, see [docs/advanced.md](docs/advanced.md#logging).
 
 ## Troubleshooting
 
