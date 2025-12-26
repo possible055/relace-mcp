@@ -189,9 +189,17 @@ Operation logs are written to a cross-platform state directory:
 ## Troubleshooting
 
 Common issues:
-- `RELACE_API_KEY is not set`: set the key in your environment or MCP config.
-- `RELACE_BASE_DIR does not exist` / `INVALID_PATH`: ensure the path exists and is within `RELACE_BASE_DIR`.
-- `NEEDS_MORE_CONTEXT`: include 1–3 real anchor lines before and after the target block.
+- `RELACE_API_KEY is not set`: Set the key in your environment or MCP config.
+- `RELACE_BASE_DIR does not exist` / `INVALID_PATH`: Ensure the path exists and is within `RELACE_BASE_DIR`.
+- `NEEDS_MORE_CONTEXT` / `APPLY_NOOP`: Include 1–3 real anchor lines before and after the target block.
+- `FILE_TOO_LARGE`: File exceeds the 1MB size limit; split large files or increase limit.
+- `ENCODING_ERROR`: Cannot detect file encoding; set `RELACE_DEFAULT_ENCODING` explicitly.
+- `FILE_NOT_WRITABLE` / `PERMISSION_ERROR`: Check file and directory write permissions.
+- `AUTH_ERROR`: Verify your `RELACE_API_KEY` is valid and not expired.
+- `RATE_LIMIT`: Too many requests; wait and retry later.
+- `TIMEOUT_ERROR` / `NETWORK_ERROR`: Check network connectivity; increase timeout via `RELACE_TIMEOUT_SECONDS`.
+
+> **Windows users:** The `bash` tool in `fast_search` is unavailable on Windows. Use WSL or rely on other exploration tools.
 
 ## Development
 
