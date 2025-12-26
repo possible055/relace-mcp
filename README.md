@@ -134,7 +134,7 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 
 </details>
 
-> **Note:** `RELACE_BASE_DIR` must be an absolute path to your project root.
+> **Note:** `RELACE_BASE_DIR` is optional. If not set, the server auto-detects via MCP Roots or Git. If set, it must be an absolute path.
 
 ## Features
 
@@ -148,9 +148,14 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `RELACE_API_KEY` | ✅ | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
-| `RELACE_BASE_DIR` | ✅ | Absolute path to project root |
+| `RELACE_BASE_DIR` | ❌ | Absolute path to project root (auto-detected via MCP Roots if not set) |
 | `RELACE_DEFAULT_ENCODING` | ❌ | Force file encoding (e.g., `gbk`, `big5`) for legacy repos |
 | `RELACE_ENCODING_SAMPLE_LIMIT` | ❌ | Max files for auto-detecting encoding (default: `30`) |
+
+> **Note:** When `RELACE_BASE_DIR` is not set, the server automatically detects your project root using:
+> 1. MCP Roots (workspace info from your editor)
+> 2. Git repository root (if found)
+> 3. Current working directory (fallback)
 
 > For advanced settings, see [docs/advanced.md](docs/advanced.md).
 

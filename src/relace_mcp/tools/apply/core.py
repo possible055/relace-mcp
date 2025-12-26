@@ -50,20 +50,43 @@ def _ok_result(
 
 
 def _resolve_path(
-    file_path: str, base_dir: str, ctx: ApplyContext
+    file_path: str, base_dir: str | None, ctx: ApplyContext
 ) -> tuple[Path, bool, int] | dict[str, Any]:
     """Resolve and validate file path, check file status.
+
+    Args:
+        file_path: Target file path (absolute or relative).
+        base_dir: Base directory restriction. If None, only absolute paths are accepted.
+        ctx: Apply context for error reporting.
 
     Returns:
         On success returns (resolved_path, file_exists, file_size),
         on failure returns error dict.
     """
-    try:
-        resolved_path = validate_file_path(file_path, base_dir)
-    except RuntimeError as e:
-        return errors.recoverable_error(
-            "INVALID_PATH", str(e), file_path, ctx.instruction, ctx.trace_id, ctx.elapsed_ms()
-        )
+    # When base_dir is None, require absolute paths (no boundary restriction)
+    if base_dir is None:
+        if not os.path.isabs(file_path):
+            return errors.recoverable_error(
+                "INVALID_PATH",
+                "Relative paths require RELACE_BASE_DIR to be set. Use absolute path or set RELACE_BASE_DIR.",
+                file_path,
+                ctx.instruction,
+                ctx.trace_id,
+                ctx.elapsed_ms(),
+            )
+        try:
+            resolved_path = Path(file_path).resolve()
+        except (OSError, ValueError) as e:
+            return errors.recoverable_error(
+                "INVALID_PATH", str(e), file_path, ctx.instruction, ctx.trace_id, ctx.elapsed_ms()
+            )
+    else:
+        try:
+            resolved_path = validate_file_path(file_path, base_dir)
+        except RuntimeError as e:
+            return errors.recoverable_error(
+                "INVALID_PATH", str(e), file_path, ctx.instruction, ctx.trace_id, ctx.elapsed_ms()
+            )
 
     file_exists = resolved_path.exists()
     if file_exists and not resolved_path.is_file():
@@ -266,7 +289,7 @@ async def apply_file_logic(
     file_path: str,
     edit_snippet: str,
     instruction: str | None,
-    base_dir: str,
+    base_dir: str | None,
 ) -> dict[str, Any]:
     """Core logic for fast_apply (testable independently).
 
@@ -275,7 +298,7 @@ async def apply_file_logic(
         file_path: Target file path.
         edit_snippet: Code snippet to apply, using abbreviation comments.
         instruction: Optional natural language instruction forwarded to the apply backend for disambiguation.
-        base_dir: Base directory restriction.
+        base_dir: Base directory restriction. If None, only absolute paths are accepted.
 
     Returns:
         A structured dict with status, path, trace_id, timing_ms, diff, and message.
