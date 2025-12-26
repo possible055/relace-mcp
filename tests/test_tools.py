@@ -408,7 +408,8 @@ class TestApplyFileLogicFileSize:
         # Create file exactly at limit (10MB) with recognizable anchor content
         limit_file = tmp_path / "limit.py"
         content = "def placeholder_function():\n" + "x" * (MAX_FILE_SIZE_BYTES - 30)
-        limit_file.write_text(content)
+        # Use binary write to avoid Windows newline conversion
+        limit_file.write_bytes(content.encode("utf-8"))
 
         mock_backend.apply.return_value = ApplyResponse(
             merged_code=successful_api_response["choices"][0]["message"]["content"],
@@ -540,7 +541,8 @@ class TestApplyFileLogicBaseDirSecurity:
 
         # Attempt to access file outside base_dir
         outside_file = tmp_path.parent / "outside.py"
-        outside_file.write_text("content")
+        # Use binary write to avoid Windows newline conversion
+        outside_file.write_bytes(b"content")
 
         try:
             result = await apply_file_logic(
@@ -661,7 +663,8 @@ class TestApplyFileLogicPathNormalization:
         """Should accept relative path and map to base_dir."""
         test_file = tmp_path / "src" / "file.py"
         test_file.parent.mkdir(parents=True, exist_ok=True)
-        test_file.write_text("original_value = True\n")
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(b"original_value = True\n")
 
         mock_backend.apply.return_value = ApplyResponse(
             merged_code="modified_value = True\n", usage={}
@@ -689,7 +692,8 @@ class TestApplyFileLogicPathNormalization:
         """Should accept absolute path within base_dir."""
         test_file = tmp_path / "src" / "file.py"
         test_file.parent.mkdir(parents=True, exist_ok=True)
-        test_file.write_text("original_value = True\n")
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(b"original_value = True\n")
 
         mock_backend.apply.return_value = ApplyResponse(
             merged_code="modified_value = True\n", usage={}
@@ -742,7 +746,8 @@ class TestApplyFileLogicRecoverableErrors:
     ) -> None:
         """Should return NEEDS_MORE_CONTEXT when anchor lines don't match file content."""
         test_file = tmp_path / "test.py"
-        test_file.write_text("def existing_function():\n    return 42\n")
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(b"def existing_function():\n    return 42\n")
 
         # edit_snippet contains ellipsis markers (triggers precheck) but anchor cannot be located
         result = await apply_file_logic(
@@ -769,7 +774,8 @@ class TestApplyFileLogicRecoverableErrors:
         """Instruction with explicit position directive should skip precheck to avoid false blocking."""
         test_file = tmp_path / "test.py"
         original = "def existing_function():\n    return 42\n"
-        test_file.write_text(original)
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(original.encode("utf-8"))
 
         merged = original + "\n# appended\n"
         mock_backend.apply.return_value = ApplyResponse(merged_code=merged, usage={})
@@ -795,7 +801,8 @@ class TestApplyFileLogicRecoverableErrors:
     ) -> None:
         """PermissionError should convert to PERMISSION_ERROR (avoid MCP tool crash)."""
         test_file = tmp_path / "test.py"
-        test_file.write_text("def existing_function():\n    return 42\n")
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(b"def existing_function():\n    return 42\n")
 
         with patch(
             "relace_mcp.tools.apply.core.file_io.read_text_with_fallback",
@@ -848,7 +855,8 @@ class TestApplyFileLogicRecoverableErrors:
     ) -> None:
         """Unwritable file should convert to FILE_NOT_WRITABLE (avoid MCP tool crash)."""
         test_file = tmp_path / "readonly.py"
-        test_file.write_text("original_value_setting = True\nprocess_data_function()\n")
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(b"original_value_setting = True\nprocess_data_function()\n")
         test_file.chmod(0o444)
 
         mock_backend.apply.return_value = ApplyResponse(
@@ -878,7 +886,8 @@ class TestApplyFileLogicRecoverableErrors:
         import openai
 
         test_file = tmp_path / "test.py"
-        test_file.write_text("def authenticate_user():\n    return validate_credentials()\n")
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(b"def authenticate_user():\n    return validate_credentials()\n")
 
         mock_backend.apply.side_effect = openai.AuthenticationError(
             message="Invalid API key",
@@ -910,7 +919,8 @@ class TestApplyFileLogicRecoverableErrors:
         import openai
 
         test_file = tmp_path / "test.py"
-        test_file.write_text("def authenticate_user():\n    return validate_credentials()\n")
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(b"def authenticate_user():\n    return validate_credentials()\n")
 
         mock_backend.apply.side_effect = openai.PermissionDeniedError(
             message="Access denied",
@@ -941,7 +951,8 @@ class TestApplyFileLogicRecoverableErrors:
         import openai
 
         test_file = tmp_path / "test.py"
-        test_file.write_text("def authenticate_user():\n    return validate_credentials()\n")
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(b"def authenticate_user():\n    return validate_credentials()\n")
 
         mock_backend.apply.side_effect = openai.BadRequestError(
             message="Cannot locate anchor lines",
@@ -973,7 +984,8 @@ class TestApplyFileLogicRecoverableErrors:
         import openai
 
         test_file = tmp_path / "test.py"
-        test_file.write_text("def authenticate_user():\n    return validate_credentials()\n")
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(b"def authenticate_user():\n    return validate_credentials()\n")
 
         mock_backend.apply.side_effect = openai.APIConnectionError(request=MagicMock())
 
@@ -1000,7 +1012,8 @@ class TestApplyFileLogicRecoverableErrors:
         import openai
 
         test_file = tmp_path / "test.py"
-        test_file.write_text("def authenticate_user():\n    return validate_credentials()\n")
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(b"def authenticate_user():\n    return validate_credentials()\n")
 
         mock_backend.apply.side_effect = openai.APITimeoutError(request=MagicMock())
 
@@ -1025,8 +1038,9 @@ class TestApplyFileLogicRecoverableErrors:
     ) -> None:
         """Should allow snippets with remove directives if they have valid anchors."""
         test_file = tmp_path / "test.py"
-        test_file.write_text(
-            "def main_function():\n    return process_data()\n\ndef helper_function():\n    return compute_result()\n"
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(
+            b"def main_function():\n    return process_data()\n\ndef helper_function():\n    return compute_result()\n"
         )
 
         mock_backend.apply.return_value = ApplyResponse(
@@ -1055,7 +1069,8 @@ class TestApplyFileLogicRecoverableErrors:
     ) -> None:
         """Should use strip() for lenient matching despite indentation differences."""
         test_file = tmp_path / "test.py"
-        test_file.write_text("def process_data_handler():\n    return calculate_result_value()\n")
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(b"def process_data_handler():\n    return calculate_result_value()\n")
 
         mock_backend.apply.return_value = ApplyResponse(
             merged_code="def process_data_handler():\n    return calculate_result_v2()\n",
@@ -1090,7 +1105,8 @@ class TestApplyNoopDetection:
         """Snippet contains new lines but merge produces no changes, should return APPLY_NOOP."""
         test_file = tmp_path / "test.py"
         original_content = "def process_data_from_input():\n    return calculate_result_value()\n"
-        test_file.write_text(original_content)
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(original_content.encode("utf-8"))
 
         # API returns same content as original file (simulating apply failure)
         mock_backend.apply.return_value = ApplyResponse(merged_code=original_content, usage={})
@@ -1117,7 +1133,8 @@ class TestApplyNoopDetection:
         """Snippet already exists in file, should return OK (idempotent)."""
         test_file = tmp_path / "test.py"
         original_content = "def process_data_from_input():\n    return calculate_result_value()\n"
-        test_file.write_text(original_content)
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(original_content.encode("utf-8"))
 
         # API returns same content as original file
         mock_backend.apply.return_value = ApplyResponse(merged_code=original_content, usage={})
@@ -1144,7 +1161,8 @@ class TestApplyNoopDetection:
         """Has remove directive but no changes, should return APPLY_NOOP."""
         test_file = tmp_path / "test.py"
         original_content = "def main_function_handler():\n    return process_request()\n\ndef helper_utility_function():\n    return compute_value()\n"
-        test_file.write_text(original_content)
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(original_content.encode("utf-8"))
 
         # API returns same content as original file (remove failed)
         mock_backend.apply.return_value = ApplyResponse(merged_code=original_content, usage={})
@@ -1170,7 +1188,8 @@ class TestApplyNoopDetection:
         """Adding short line (e.g., x = 1) but merge produces no changes, should return APPLY_NOOP."""
         test_file = tmp_path / "test.py"
         original_content = "def process_data_handler():\n    return calculate_result()\n"
-        test_file.write_text(original_content)
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(original_content.encode("utf-8"))
 
         # API returns same content as original file (apply failed)
         mock_backend.apply.return_value = ApplyResponse(merged_code=original_content, usage={})
@@ -1197,7 +1216,8 @@ class TestApplyNoopDetection:
         """Adding trivial line (e.g., return) is treated as idempotent, should return OK."""
         test_file = tmp_path / "test.py"
         original_content = "def process_data_handler():\n    calculate_result()\n"
-        test_file.write_text(original_content)
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(original_content.encode("utf-8"))
 
         # API returns same content as original file
         mock_backend.apply.return_value = ApplyResponse(merged_code=original_content, usage={})
@@ -1225,7 +1245,8 @@ class TestApplyNoopDetection:
         test_file = tmp_path / "test.py"
         # x = 100 contains x = 1 as substring
         original_content = "def process_data_handler():\n    x = 100\n    return x\n"
-        test_file.write_text(original_content)
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(original_content.encode("utf-8"))
 
         # API returns same content as original file (apply failed)
         mock_backend.apply.return_value = ApplyResponse(merged_code=original_content, usage={})
@@ -1256,7 +1277,8 @@ class TestApplyWriteVerification:
     ) -> None:
         """Atomic write should complete normally without leaving .tmp file."""
         test_file = tmp_path / "test.py"
-        test_file.write_text("original_content_value = True\nprocess_data_function()\n")
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(b"original_content_value = True\nprocess_data_function()\n")
 
         mock_backend.apply.return_value = ApplyResponse(
             merged_code="modified_content_value = False\nprocess_data_function()\n",
@@ -1288,7 +1310,8 @@ class TestApplyWriteVerification:
         """Post-write verification failure should return WRITE_VERIFY_FAILED."""
         test_file = tmp_path / "test.py"
         original = "original_content_value = True\nprocess_data_function()\n"
-        test_file.write_text(original)
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(original.encode("utf-8"))
 
         mock_backend.apply.return_value = ApplyResponse(
             merged_code="modified_content_value = False\nprocess_data_function()\n",
@@ -1329,7 +1352,8 @@ class TestApplyResponseFormat:
     ) -> None:
         """Success response should include path and trace_id."""
         test_file = tmp_path / "test.py"
-        test_file.write_text("original_value_setting = True\nprocess_data_function()\n")
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(b"original_value_setting = True\nprocess_data_function()\n")
 
         mock_backend.apply.return_value = ApplyResponse(
             merged_code="modified_value_setting = False\nprocess_data_function()\n",
@@ -1359,7 +1383,8 @@ class TestApplyResponseFormat:
         """No-op (idempotent) response should also include path."""
         test_file = tmp_path / "test.py"
         original_content = "def existing_function_handler():\n    return process_request_data()\n"
-        test_file.write_text(original_content)
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(original_content.encode("utf-8"))
 
         mock_backend.apply.return_value = ApplyResponse(merged_code=original_content, usage={})
 

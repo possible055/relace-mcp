@@ -30,10 +30,20 @@ class TestValidateBaseDir:
 
 class TestUriToPath:
     def test_simple_file_uri(self) -> None:
-        assert uri_to_path("file:///home/user/project") == "/home/user/project"
+        result = uri_to_path("file:///home/user/project")
+        # On Windows url2pathname uses backslashes; on POSIX it uses forward slashes
+        if os.name == "nt":
+            # Windows: strips leading slash, so result is '\home\user\project' without drive
+            assert result == "\\home\\user\\project"
+        else:
+            assert result == "/home/user/project"
 
     def test_uri_with_spaces(self) -> None:
-        assert uri_to_path("file:///path/with%20spaces") == "/path/with spaces"
+        result = uri_to_path("file:///path/with%20spaces")
+        if os.name == "nt":
+            assert result == "\\path\\with spaces"
+        else:
+            assert result == "/path/with spaces"
 
     def test_windows_style_uri(self) -> None:
         # Windows paths in URI form
@@ -140,8 +150,13 @@ class TestResolveBaseDir:
     @pytest.mark.asyncio
     async def test_uses_config_base_dir_when_set(self) -> None:
         """Explicit config takes highest priority."""
+        # On Windows, Path.resolve() adds drive letter, so we use a real temp path
+        # or check normalized paths
         base_dir, source = await resolve_base_dir("/explicit/path", ctx=None)
-        assert base_dir == "/explicit/path"
+        # Path.resolve() will convert to platform-specific format with drive on Windows
+        # The key is that it should be resolved from the input
+        expected = str(Path("/explicit/path").resolve())
+        assert base_dir == expected
         assert source == "RELACE_BASE_DIR"
 
     @pytest.mark.asyncio
