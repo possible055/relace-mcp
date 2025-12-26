@@ -41,7 +41,9 @@ class TestResolveRepoPath:
         """Test absolute path is passed through."""
         # Use a non-existent path to avoid symlink resolution issues
         result = resolve_repo_path("/nonexistent/absolute/path", str(tmp_path))
-        assert result == "/nonexistent/absolute/path"
+        # On Windows, Path.resolve() adds drive letter prefix to absolute paths
+        expected = str(Path("/nonexistent/absolute/path").resolve())
+        assert result == expected
 
 
 class TestResolveRepoPathSecurity:
@@ -118,9 +120,13 @@ class TestResolveRepoPathEdgeCases:
         """Test /repofake is not treated as /repo prefix."""
         # /repofake is an absolute path, should pass through
         result = resolve_repo_path("/repofake/etc", str(tmp_path))
-        assert result == "/repofake/etc"
+        # On Windows, Path.resolve() adds drive letter prefix
+        expected = str(Path("/repofake/etc").resolve())
+        assert result == expected
 
     def test_repo_lowercase_only(self, tmp_path: Path) -> None:
         """Test /REPO is not treated as /repo (case sensitive)."""
         result = resolve_repo_path("/REPO/src", str(tmp_path))
-        assert result == "/REPO/src"  # Passed through as absolute path
+        # On Windows, Path.resolve() adds drive letter prefix
+        expected = str(Path("/REPO/src").resolve())
+        assert result == expected  # Passed through as absolute path
