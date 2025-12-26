@@ -53,12 +53,12 @@ EXPERIMENTAL_POST_CHECK = os.getenv("RELACE_EXPERIMENTAL_POST_CHECK", "").lower(
     "yes",
 )
 
-# EXPERIMENTAL: Local file logging (disabled by default)
-EXPERIMENTAL_LOGGING = os.getenv("RELACE_EXPERIMENTAL_LOGGING", "").lower() in (
-    "1",
-    "true",
-    "yes",
-)
+# Local file logging (disabled by default)
+# Use RELACE_LOGGING=1 to enable (RELACE_EXPERIMENTAL_LOGGING still works for backward compat)
+_logging_env = os.getenv("RELACE_LOGGING", "").lower()
+if not _logging_env:
+    _logging_env = os.getenv("RELACE_EXPERIMENTAL_LOGGING", "").lower()
+RELACE_LOGGING = _logging_env in ("1", "true", "yes")
 
 # Logging - Cross-platform state directory:
 # - Linux: ~/.local/state/relace
@@ -66,7 +66,7 @@ EXPERIMENTAL_LOGGING = os.getenv("RELACE_EXPERIMENTAL_LOGGING", "").lower() in (
 # - Windows: %LOCALAPPDATA%\relace
 # Note: Directory is created lazily in logging.py when actually writing logs
 LOG_DIR = Path(user_state_dir("relace", appauthor=False))
-LOG_PATH = LOG_DIR / "relace_apply.log"
+LOG_PATH = LOG_DIR / "relace.log"
 MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024
 
 
