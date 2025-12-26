@@ -4,6 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any
 
+from ....config import settings
 from ..handlers import (
     bash_handler,
     glob_handler,
@@ -194,20 +195,25 @@ class ToolCallsMixin:
         self, name: str, args: dict[str, Any], trace_id: str
     ) -> str | dict[str, Any]:
         """Dispatch tool call with timing and logging."""
+        if not settings.RELACE_LOGGING:
+            return self._dispatch_tool(name, args)
+
         start = time.perf_counter()
         result = self._dispatch_tool(name, args)
         latency_ms = (time.perf_counter() - start) * 1000
 
-        # Determine success
-        success = not (isinstance(result, str) and result.startswith("Error:"))
+        try:
+            success = not (isinstance(result, str) and result.startswith("Error:"))
 
-        # Create result preview
-        if isinstance(result, str):
-            result_preview = result[:300]
-        else:
-            result_preview = json.dumps(result, ensure_ascii=False)[:300]
+            if isinstance(result, str):
+                result_preview = result[:300]
+            else:
+                result_preview = json.dumps(result, ensure_ascii=False, default=str)[:300]
 
-        log_tool_call(trace_id, name, args, result_preview, latency_ms, success)
+            log_tool_call(trace_id, name, args, result_preview, latency_ms, success)
+        except Exception:
+            # Logging failure should never break tool execution
+            logger.debug("Failed to log tool call for %s", name, exc_info=True)
         return result
 
     def _dispatch_tool(self, name: str, args: dict[str, Any]) -> str | dict[str, Any]:
