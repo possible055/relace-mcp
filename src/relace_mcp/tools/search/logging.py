@@ -7,11 +7,12 @@ from ..apply.logging import log_event
 
 def log_search_start(trace_id: str, query: str) -> None:
     """Record search start event."""
+    q = query or ""
     log_event(
         {
             "kind": "search_start",
             "trace_id": trace_id,
-            "query_preview": query[:500] if len(query) > 500 else query,
+            "query_preview": q[:500] if len(q) > 500 else q,
         }
     )
 
@@ -52,7 +53,7 @@ def log_tool_call(
             "trace_id": trace_id,
             "tool_name": tool_name,
             "args": safe_args,
-            "result_preview": result_preview[:300],
+            "result_preview": (result_preview or "")[:300],
             "latency_ms": round(latency_ms, 1),
             "success": success,
         }
