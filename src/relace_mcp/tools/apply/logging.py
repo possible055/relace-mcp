@@ -50,7 +50,8 @@ def log_event(event: dict[str, Any]) -> None:
         if "trace_id" not in event:
             event["trace_id"] = str(uuid.uuid4())[:8]
         if "level" not in event:
-            event["level"] = "info" if event.get("kind", "").endswith("success") else "error"
+            kind = str(event.get("kind", "")).lower()
+            event["level"] = "error" if kind.endswith("error") else "info"
 
         if settings.LOG_PATH.is_dir():
             logger.warning("Log path is a directory, skipping log write: %s", settings.LOG_PATH)

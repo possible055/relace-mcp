@@ -19,9 +19,12 @@ class TestBuildServer:
         assert server is not None
         assert server.name == "Relace Fast Apply MCP"
 
-    def test_build_from_env(self, clean_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_build_from_env(
+        self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """Should build server from environment variables."""
         monkeypatch.setenv("RELACE_API_KEY", "test-key")
+        monkeypatch.setenv("RELACE_BASE_DIR", str(tmp_path))
 
         server = build_server()
         assert server is not None
