@@ -113,9 +113,17 @@ Switch to OpenAI-compatible providers for `fast_search`:
 | `RELACE_SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob` | Comma-separated allowlist. `report_back` is always enabled. Add `bash` to enable shell commands (Unix only). |
 | `RELACE_SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls for lower latency |
 
-> **Note:** The `bash` tool is disabled by default for security. To enable it on Unix systems:
-> ```bash
-> export RELACE_SEARCH_ENABLED_TOOLS=view_file,view_directory,grep_search,glob,bash
+> **Note:** The `bash` tool is disabled by default for security. To enable it on Unix systems, add to your MCP configuration:
+> ```json
+> {
+>   "mcpServers": {
+>     "relace": {
+>       "env": {
+>         "RELACE_SEARCH_ENABLED_TOOLS": "view_file,view_directory,grep_search,glob,bash"
+>       }
+>     }
+>   }
+> }
 > ```
 
 ### OpenAI Structured Outputs Compatibility
