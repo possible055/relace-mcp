@@ -156,6 +156,8 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 > 1. MCP Roots（编辑器提供的工作区信息）
 > 2. Git 仓库根目录（若存在）
 > 3. 当前工作目录（后备方案）
+>
+> ⚠️ **警告：** 若 MCP Roots 获取失败，隐式回退到 CWD 可能导致不稳定。建议显式设置 `RELACE_BASE_DIR`。
 
 > 高级设置请参见 [docs/advanced.zh-CN.md](docs/advanced.zh-CN.md)。
 
