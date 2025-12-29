@@ -7,12 +7,23 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from relace_mcp.config.base_dir import (
+    PROJECT_MARKERS,
     find_git_root,
+    invalidate_roots_cache,
     resolve_base_dir,
     select_best_root,
     uri_to_path,
     validate_base_dir,
+    validate_project_directory,
 )
+
+
+@pytest.fixture(autouse=True)
+def clear_roots_cache():
+    """Clear the roots cache before and after each test."""
+    invalidate_roots_cache()
+    yield
+    invalidate_roots_cache()
 
 
 class TestValidateBaseDir:
@@ -26,6 +37,47 @@ class TestValidateBaseDir:
         f = tmp_path / "file.txt"
         f.touch()
         assert validate_base_dir(str(f)) is False
+
+
+class TestValidateProjectDirectory:
+    """Tests for validate_project_directory safety checks."""
+
+    def test_rejects_root_directory(self) -> None:
+        """Root directory should be rejected as unsafe."""
+        is_safe, reason = validate_project_directory("/")
+        assert is_safe is False
+        assert "system directory" in reason
+
+    def test_rejects_no_project_marker(self, tmp_path: Path) -> None:
+        """Directory without project markers should be rejected."""
+        is_safe, reason = validate_project_directory(str(tmp_path))
+        assert is_safe is False
+        assert "no project markers" in reason
+
+    def test_accepts_valid_project_with_git(self, tmp_path: Path) -> None:
+        """Valid project with .git should be accepted."""
+        (tmp_path / ".git").mkdir()
+        is_safe, reason = validate_project_directory(str(tmp_path))
+        assert is_safe is True
+        assert reason == ""
+
+    def test_accepts_valid_project_with_pyproject(self, tmp_path: Path) -> None:
+        """Valid project with pyproject.toml should be accepted."""
+        (tmp_path / "pyproject.toml").touch()
+        is_safe, reason = validate_project_directory(str(tmp_path))
+        assert is_safe is True
+        assert reason == ""
+
+    def test_accepts_valid_project_with_package_json(self, tmp_path: Path) -> None:
+        """Valid project with package.json should be accepted."""
+        (tmp_path / "package.json").touch()
+        is_safe, reason = validate_project_directory(str(tmp_path))
+        assert is_safe is True
+        assert reason == ""
+
+    def test_project_markers_constant_is_tuple(self) -> None:
+        """PROJECT_MARKERS should be a tuple for immutability."""
+        assert isinstance(PROJECT_MARKERS, tuple)
 
 
 class TestUriToPath:

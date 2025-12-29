@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 import os
 import tempfile
@@ -14,6 +12,56 @@ if TYPE_CHECKING:
     from mcp.types import Root
 
 logger = logging.getLogger(__name__)
+
+# Roots cache: stores resolved (base_dir, source) from MCP Roots.
+# None = invalid/empty. Set to tuple when resolved, cleared on roots/list_changed.
+_roots_cache: tuple[str, str] | None = None
+
+
+def invalidate_roots_cache() -> None:
+    """Invalidate the cached MCP Roots resolution.
+
+    Called by RootsMiddleware when receiving notifications/roots/list_changed.
+    The next call to resolve_base_dir() will fetch fresh roots from the client.
+    """
+    global _roots_cache
+    if _roots_cache is not None:
+        logger.info("[base_dir] Roots cache invalidated due to roots/list_changed notification")
+        _roots_cache = None
+
+
+# Root directory should never be used as project root (explicit check for clear error message)
+DANGEROUS_PATHS = frozenset(["/"])
+
+# Markers that indicate a directory is a project root
+PROJECT_MARKERS = (".git", "pyproject.toml", "package.json", "Cargo.toml", "go.mod", ".project")
+
+
+def validate_project_directory(path: str) -> tuple[bool, str]:
+    """Validate path is a safe project directory, not a system directory.
+
+    This function checks for potentially dangerous paths that could lead to
+    accidental file operations on system directories.
+
+    Args:
+        path: Directory path to validate
+
+    Returns:
+        Tuple of (is_safe, reason_if_unsafe). If is_safe is True, reason is empty.
+    """
+    resolved = Path(path).resolve()
+    resolved_str = str(resolved)
+
+    # Check 1: Root directory is never valid
+    if resolved_str in DANGEROUS_PATHS:
+        return False, f"system directory: {resolved_str}"
+
+    # Check 2: Project markers - at least one should exist
+    has_marker = any((resolved / marker).exists() for marker in PROJECT_MARKERS)
+    if not has_marker:
+        return False, f"no project markers found ({', '.join(PROJECT_MARKERS)})"
+
+    return True, ""
 
 
 def validate_base_dir(path: str, *, require_write: bool = False) -> bool:
@@ -86,6 +134,7 @@ def uri_to_path(uri: str) -> str:
 
     # file:// URIs may include a netloc for UNC paths: file://server/share/folder
     # Reconstruct as //server/share/folder so url2pathname can handle it on Windows.
+    # Note: parsed.path is str when input is str (Python guarantees this)
     raw_path = parsed.path
     if parsed.netloc and parsed.netloc != "localhost":
         raw_path = f"//{parsed.netloc}{parsed.path}"
@@ -118,7 +167,7 @@ def find_git_root(start: str) -> Path | None:
     return None
 
 
-def select_best_root(roots: Sequence[Root]) -> str:
+def select_best_root(roots: "Sequence[Root]") -> str:
     """Select best root from multiple MCP Roots using heuristics.
 
     Priority:
@@ -167,7 +216,7 @@ def select_best_root(roots: Sequence[Root]) -> str:
     return root_paths[0]
 
 
-async def resolve_base_dir_from_roots(roots: Sequence[Root]) -> tuple[str, str]:
+async def resolve_base_dir_from_roots(roots: "Sequence[Root]") -> tuple[str, str]:
     """Resolve base_dir from MCP Roots.
 
     Args:
@@ -188,17 +237,34 @@ async def resolve_base_dir_from_roots(roots: Sequence[Root]) -> tuple[str, str]:
     return path, f"MCP Root (selected from {len(roots)} roots)"
 
 
+def _check_project_safety(resolved: str, source: str) -> None:
+    """Log warning if resolved path is potentially unsafe.
+
+    This is called for auto-resolved paths (MCP Roots, Git root, cwd).
+    Explicit RELACE_BASE_DIR is trusted and skips this check.
+    """
+    is_safe, reason = validate_project_directory(resolved)
+    if not is_safe:
+        logger.warning(
+            "Potentially unsafe project directory (%s): %s - %s",
+            source,
+            resolved,
+            reason,
+        )
+
+
 async def resolve_base_dir(
     config_base_dir: str | None,
-    ctx: Context | None = None,
+    ctx: "Context | None" = None,
 ) -> tuple[str, str]:
     """Resolve base_dir with fallback chain.
 
     Priority:
-    1. RELACE_BASE_DIR env var (explicit config takes priority)
-    2. MCP Roots from client (dynamic, per-workspace)
-    3. Git repository root detection (fallback)
-    4. Current working directory (last resort with warning)
+    1. RELACE_BASE_DIR env var (explicit config takes priority, trusted)
+    2. Cached MCP Roots (invalidated by notifications/roots/list_changed)
+    3. Fresh MCP Roots from client (dynamic, per-workspace)
+    4. Git repository root detection (fallback)
+    5. Current working directory (last resort with warning)
 
     Args:
         config_base_dir: Base directory from config (may be None)
@@ -207,12 +273,19 @@ async def resolve_base_dir(
     Returns:
         Tuple of (base_dir, source_description)
     """
-    # 1. Explicit config takes priority
+    # 1. Explicit config takes priority - trusted, no safety check
     if config_base_dir:
         resolved_path = str(Path(config_base_dir).resolve())
+        logger.info("[base_dir] Using RELACE_BASE_DIR: %s", resolved_path)
         return resolved_path, "RELACE_BASE_DIR"
 
-    # 2. Try MCP Roots
+    # 2. Try cached MCP Roots first (invalidated by RootsMiddleware on change)
+    global _roots_cache
+    if _roots_cache is not None:
+        logger.debug("[base_dir] Using cached roots: %s", _roots_cache[0])
+        return _roots_cache
+
+    # 3. Try MCP Roots from client
     if ctx is not None:
         try:
             roots = await ctx.list_roots()
@@ -220,6 +293,9 @@ async def resolve_base_dir(
                 path, source = await resolve_base_dir_from_roots(roots)
                 resolved = str(Path(path).resolve())
                 if validate_base_dir(resolved):
+                    logger.info("[base_dir] Resolved from %s: %s", source, resolved)
+                    _check_project_safety(resolved, source)
+                    _roots_cache = (resolved, source)
                     return resolved, source
                 logger.warning(
                     "MCP Roots resolved to invalid base_dir: %s (source=%s). Falling back...",
@@ -227,9 +303,9 @@ async def resolve_base_dir(
                     source,
                 )
         except Exception as e:
-            logger.debug("MCP Roots unavailable: %s", e)
+            logger.info("MCP Roots unavailable (client may not support roots): %s", e)
 
-    # 3. Try Git root detection from cwd
+    # 4. Try Git root detection from cwd
     try:
         cwd = Path.cwd().resolve()
     except Exception:
@@ -237,15 +313,21 @@ async def resolve_base_dir(
         cwd = Path(".").resolve()
 
     if git_root := find_git_root(str(cwd)):
+        resolved = str(git_root.resolve())
+        source = "Git root (fallback)"
+        logger.info("[base_dir] Resolved from %s: %s (cwd: %s)", source, resolved, cwd)
         logger.warning(
-            "RELACE_BASE_DIR not set and MCP Roots unavailable. Using Git root: %s (from cwd: %s)",
-            git_root,
-            cwd,
+            "RELACE_BASE_DIR not set and MCP Roots unavailable. Using Git root: %s",
+            resolved,
         )
-        return str(git_root.resolve()), "Git root (fallback)"
+        _check_project_safety(resolved, source)
+        return resolved, source
 
-    # 4. Fallback to cwd with warning
-    if not validate_base_dir(str(cwd)):
+    # 5. Fallback to cwd with warning
+    resolved = str(cwd)
+    source = "cwd (fallback)"
+    logger.info("[base_dir] Resolved from %s: %s", source, resolved)
+    if not validate_base_dir(resolved):
         logger.error("Final fallback CWD is invalid or inaccessible: %s", cwd)
 
     logger.warning(
@@ -253,4 +335,5 @@ async def resolve_base_dir(
         "Using cwd: %s (may be unreliable)",
         cwd,
     )
-    return str(cwd), "cwd (fallback)"
+    _check_project_safety(resolved, source)
+    return resolved, source
