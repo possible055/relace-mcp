@@ -195,7 +195,10 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             # Ensure tool_calls and tool results are paired correctly
             self._repair_tool_call_integrity(messages, trace_id)
 
+            # Track LLM API latency
+            llm_start = time.perf_counter()
             response = self._client.chat(messages, tools=get_tool_schemas(), trace_id=trace_id)
+            llm_latency_ms = (time.perf_counter() - llm_start) * 1000
 
             # Parse response
             choices = response.get("choices", [])
@@ -208,13 +211,14 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             message.setdefault("role", "assistant")
             tool_calls = message.get("tool_calls", [])
 
-            # Log turn state after getting response
+            # Log turn state after getting response (includes LLM latency)
             log_search_turn(
                 trace_id,
                 turn + 1,
                 _harness_mod.SEARCH_MAX_TURNS,
                 ctx_size,
                 len(tool_calls),
+                llm_latency_ms=llm_latency_ms,
             )
 
             # If no tool_calls, check for content (model may respond directly)
@@ -235,7 +239,9 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             messages.append(message)
 
             # Execute tool calls in parallel and collect results
-            tool_results, report_back_result = self._execute_tools_parallel(tool_calls, trace_id)
+            tool_results, report_back_result = self._execute_tools_parallel(
+                tool_calls, trace_id, turn=turn + 1
+            )
 
             # Add all tool results to messages (per OpenAI protocol)
             self._append_tool_results_to_messages(messages, tool_results)
