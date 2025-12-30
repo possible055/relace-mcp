@@ -1,5 +1,7 @@
+import io
 import logging
 import os
+import tokenize
 import uuid
 from pathlib import Path
 
@@ -82,9 +84,6 @@ def _detect_declared_encoding(path: Path, raw: bytes) -> str | None:
     # tokenize.detect_encoding is the canonical implementation for Python source encoding.
     # It handles UTF-8 BOM and coding cookies on the first two lines.
     try:
-        import io
-        import tokenize
-
         encoding, _ = tokenize.detect_encoding(io.BytesIO(raw).readline)
         return encoding.lower() if encoding else None
     except Exception:

@@ -74,7 +74,7 @@ class LSPServerManager:
                 fut.result(timeout=LSP_TIMEOUT_SECONDS)
             except FuturesTimeoutError:
                 try:
-                    fut.cancel()
+                    fut.cancel()  # pyright: ignore
                 except Exception:  # nosec B110 - cleanup best-effort
                     pass
                 logger.warning(
@@ -104,22 +104,22 @@ class LSPServerManager:
     def _kill_process_tree(self, pid: int) -> None:
         try:
             import psutil
-        except Exception:
+        except ImportError:
             return
 
         try:
             parent = psutil.Process(pid)
-        except Exception:
+        except psutil.Error:
             return
 
         for child in parent.children(recursive=True):
             try:
                 child.kill()
-            except Exception:  # nosec B110 - cleanup best-effort
+            except psutil.Error:
                 pass
         try:
             parent.kill()
-        except Exception:  # nosec B110 - cleanup best-effort
+        except psutil.Error:
             pass
 
     def _force_stop(self, server: Any, loop: asyncio.AbstractEventLoop) -> None:
@@ -191,6 +191,8 @@ class LSPServerManager:
                 cast(Any, server).loop = loop
 
                 context = server.language_server.start_server()
+                if context is None:
+                    raise RuntimeError("start_server() returned None")
                 fut = asyncio.run_coroutine_threadsafe(context.__aenter__(), loop)
                 fut.result(timeout=LSP_TIMEOUT_SECONDS)
 
@@ -268,12 +270,12 @@ class LSPServerManager:
 
 @dataclass
 class LSPQueryParams:
-    """Parameters for lsp_query tool."""
+    """Parameters for find_symbol tool."""
 
     action: str  # "definition" | "references"
     file: str
-    line: int
-    column: int
+    line: int  # 0-indexed
+    column: int  # 0-indexed
 
 
 def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
@@ -294,12 +296,6 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
 
     if params.column < 0:
         return "Error: column must be >= 0 (0-indexed)."
-
-    # Check multilspy availability
-    try:
-        import multilspy  # noqa: F401
-    except ImportError:
-        return "Error: multilspy not installed. Run: pip install multilspy"
 
     # Path validation and mapping
     try:

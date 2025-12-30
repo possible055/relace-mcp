@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import openai
+
 from ...clients.apply import ApplyLLMClient, ApplyRequest, ApplyResponse
 from ...config.settings import EXPERIMENTAL_POST_CHECK
 from ...utils import MAX_FILE_SIZE_BYTES, validate_file_path
@@ -330,8 +332,6 @@ async def apply_file_logic(
             return _create_new_file(ctx, resolved_path, edit_snippet)
         return await _apply_to_existing_file(ctx, backend, resolved_path, edit_snippet, file_size)
     except Exception as exc:
-        import openai
-
         apply_logging.log_apply_error(
             ctx.trace_id, ctx.started_at, file_path, edit_snippet, instruction, exc
         )
