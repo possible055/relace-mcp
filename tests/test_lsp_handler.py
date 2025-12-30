@@ -38,7 +38,7 @@ class TestFormatLSPResults:
 
         results = [Location(uri="file:///base/src/main.py", line=10, character=4)]
         result = _format_lsp_results(results, "/base")
-        assert "/repo/src/main.py:11:4" in result
+        assert "/repo/src/main.py:11:5" in result
 
     def test_multiple_results(self) -> None:
         from relace_mcp.lsp import Location
@@ -50,8 +50,8 @@ class TestFormatLSPResults:
         result = _format_lsp_results(results, "/base")
         lines = result.split("\n")
         assert len(lines) == 2
-        assert "/repo/a.py:2:0" in lines[0]
-        assert "/repo/b.py:3:5" in lines[1]
+        assert "/repo/a.py:2:1" in lines[0]
+        assert "/repo/b.py:3:6" in lines[1]
 
     def test_result_capping(self) -> None:
         from relace_mcp.lsp import Location
@@ -73,7 +73,7 @@ class TestFormatLSPResults:
         results = [Location(uri="file:///home/user/project123/file.py", line=0, character=0)]
         result = _format_lsp_results(results, "/home/user/project")
         # Should NOT be transformed to /repo/... since project123 != project
-        assert result == "/home/user/project123/file.py:1:0"
+        assert result == "/home/user/project123/file.py:1:1"
 
     def test_base_dir_with_trailing_slash(self) -> None:
         """base_dir with trailing slash should work correctly."""
@@ -81,7 +81,7 @@ class TestFormatLSPResults:
 
         results = [Location(uri="file:///base/src/main.py", line=5, character=10)]
         result = _format_lsp_results(results, "/base/")
-        assert "/repo/src/main.py:6:10" in result
+        assert "/repo/src/main.py:6:11" in result
 
 
 class TestLSPQueryHandler:
@@ -208,7 +208,7 @@ class TestLSPQueryHandler:
         result = lsp_query_handler(params, str(tmp_path))
 
         mock_client.definition.assert_called_once()
-        assert "test.py:1:4" in result
+        assert "test.py:1:5" in result
 
     @patch("relace_mcp.lsp.LSPClientManager")
     def test_timeout_returns_error(self, mock_manager_cls: MagicMock, tmp_path: Path) -> None:
