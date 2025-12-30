@@ -23,18 +23,20 @@ def log_search_turn(
     max_turns: int,
     chars_used: int,
     tool_calls_count: int,
+    llm_latency_ms: float | None = None,
 ) -> None:
-    """Record agent loop turn state."""
-    log_event(
-        {
-            "kind": "search_turn",
-            "trace_id": trace_id,
-            "turn": turn,
-            "max_turns": max_turns,
-            "chars_used": chars_used,
-            "tool_calls_count": tool_calls_count,
-        }
-    )
+    """Record agent loop turn state with LLM API timing."""
+    event: dict[str, Any] = {
+        "kind": "search_turn",
+        "trace_id": trace_id,
+        "turn": turn,
+        "max_turns": max_turns,
+        "chars_used": chars_used,
+        "tool_calls_count": tool_calls_count,
+    }
+    if llm_latency_ms is not None:
+        event["llm_latency_ms"] = round(llm_latency_ms, 1)
+    log_event(event)
 
 
 def log_tool_call(
@@ -44,20 +46,22 @@ def log_tool_call(
     result_preview: str,
     latency_ms: float,
     success: bool,
+    turn: int | None = None,
 ) -> None:
-    """Record single tool call with timing."""
+    """Record single tool call with timing and turn context."""
     safe_args = _sanitize_args(tool_name, args)
-    log_event(
-        {
-            "kind": "tool_call",
-            "trace_id": trace_id,
-            "tool_name": tool_name,
-            "args": safe_args,
-            "result_preview": (result_preview or "")[:300],
-            "latency_ms": round(latency_ms, 1),
-            "success": success,
-        }
-    )
+    event: dict[str, Any] = {
+        "kind": "tool_call",
+        "trace_id": trace_id,
+        "tool_name": tool_name,
+        "args": safe_args,
+        "result_preview": (result_preview or "")[:300],
+        "latency_ms": round(latency_ms, 1),
+        "success": success,
+    }
+    if turn is not None:
+        event["turn"] = turn
+    log_event(event)
 
 
 def log_search_complete(
