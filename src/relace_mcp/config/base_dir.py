@@ -22,9 +22,18 @@ def _roots_cache_key(ctx: "Context | None") -> str | None:
     """Derive a stable cache key for the current client/session (best-effort)."""
     if ctx is None:
         return None
-    session_id = getattr(ctx, "session_id", None)
+
+    # FastMCP Context.session_id raises if request_context is not yet available.
+    session_id: str | None = None
+    if getattr(ctx, "request_context", None) is not None:
+        try:
+            session_id = ctx.session_id
+        except Exception:
+            session_id = None
     if isinstance(session_id, str) and session_id:
         return session_id
+
+    # client_id is optional and returns None when request_context/meta is missing.
     client_id = getattr(ctx, "client_id", None)
     if isinstance(client_id, str) and client_id:
         return f"client:{client_id}"
