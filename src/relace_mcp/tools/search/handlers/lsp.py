@@ -48,7 +48,10 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
     # Path validation and mapping
     try:
         fs_path = map_repo_path(params.file, base_dir)
-        abs_path = Path(fs_path).resolve()
+        fs_path_obj = Path(fs_path)
+        if fs_path_obj.is_symlink():
+            return f"Error: Symlinks not allowed: {params.file}"
+        abs_path = fs_path_obj.resolve()
         resolved_base_dir = str(Path(base_dir).resolve())
 
         # Validate path is within base_dir FIRST to prevent information disclosure

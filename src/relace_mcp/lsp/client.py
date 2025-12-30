@@ -391,7 +391,22 @@ class LSPClient:
 
     def _open_file(self, file_path: str) -> str:
         """Open a file and return its URI."""
-        abs_path = (Path(self._workspace) / file_path).resolve()
+        # Defense-in-depth: reject absolute paths
+        if os.path.isabs(file_path):
+            raise LSPError(f"Absolute path not allowed: {file_path}")
+
+        target = Path(self._workspace) / file_path
+        # Check symlink before resolve to prevent path escape
+        if target.is_symlink():
+            raise LSPError(f"Symlinks not allowed: {file_path}")
+
+        abs_path = target.resolve()
+        workspace_resolved = Path(self._workspace).resolve()
+
+        # Validate resolved path is within workspace
+        if not abs_path.is_relative_to(workspace_resolved):
+            raise LSPError(f"Path escapes workspace: {file_path}")
+
         uri = abs_path.as_uri()
 
         try:
