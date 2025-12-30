@@ -53,8 +53,8 @@ class Location:
 
         if path_cmp.startswith(base_prefix_cmp):
             path = "/repo/" + path[len(base_prefix) :]
-        # Line is 1-indexed in output
-        return f"{path}:{self.line + 1}:{self.character}"
+        # Line and column are 1-indexed in output (standard grep format)
+        return f"{path}:{self.line + 1}:{self.character + 1}"
 
 
 @dataclass

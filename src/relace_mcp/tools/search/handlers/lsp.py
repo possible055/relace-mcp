@@ -51,12 +51,16 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
         abs_path = Path(fs_path).resolve()
         resolved_base_dir = str(Path(base_dir).resolve())
 
+        # Validate path is within base_dir FIRST to prevent information disclosure
+        try:
+            rel_path = str(abs_path.relative_to(resolved_base_dir))
+        except ValueError:
+            return f"Error: Invalid path: {params.file}"
+
         if not abs_path.exists():
             return f"Error: File not found: {params.file}"
         if abs_path.suffix not in (".py", ".pyi"):
             return f"Error: find_symbol only supports Python files, got: {abs_path.suffix}"
-
-        rel_path = str(abs_path.relative_to(resolved_base_dir))
     except ValueError as e:
         return f"Error: Invalid path: {e}"
 

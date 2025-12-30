@@ -50,7 +50,9 @@ def decode_header(data: bytes) -> tuple[int, int] | None:
     for line in header_part.split(HEADER_LINE_SEPARATOR):
         if line.startswith(CONTENT_LENGTH):
             try:
-                content_length = int(line.split(":", 1)[1].strip())
+                value = int(line.split(":", 1)[1].strip())
+                if value > 0:
+                    content_length = value
             except (ValueError, IndexError):
                 pass
 

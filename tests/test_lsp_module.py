@@ -12,32 +12,32 @@ class TestLocation:
     def test_to_grep_format_within_base_dir(self) -> None:
         loc = Location(uri="file:///home/user/project/src/main.py", line=10, character=5)
         result = loc.to_grep_format("/home/user/project")
-        assert result == "/repo/src/main.py:11:5"
+        assert result == "/repo/src/main.py:11:6"
 
     def test_to_grep_format_outside_base_dir(self) -> None:
         loc = Location(uri="file:///other/path/file.py", line=0, character=0)
         result = loc.to_grep_format("/home/user/project")
-        assert result == "/other/path/file.py:1:0"
+        assert result == "/other/path/file.py:1:1"
 
     def test_to_grep_format_trailing_slash(self) -> None:
         loc = Location(uri="file:///home/user/project/lib.py", line=5, character=3)
         result = loc.to_grep_format("/home/user/project/")
-        assert result == "/repo/lib.py:6:3"
+        assert result == "/repo/lib.py:6:4"
 
     def test_to_grep_format_windows_drive_letter(self) -> None:
         loc = Location(uri="file:///C:/Users/me/project/src/main.py", line=10, character=5)
         result = loc.to_grep_format("C:/Users/me/project")
-        assert result == "/repo/src/main.py:11:5"
+        assert result == "/repo/src/main.py:11:6"
 
     def test_to_grep_format_windows_backslashes_base_dir(self) -> None:
         loc = Location(uri="file:///C:/Users/me/project/src/main.py", line=0, character=0)
         result = loc.to_grep_format(r"C:\Users\me\project")
-        assert result == "/repo/src/main.py:1:0"
+        assert result == "/repo/src/main.py:1:1"
 
     def test_to_grep_format_windows_outside_base_dir(self) -> None:
         loc = Location(uri="file:///C:/Other/file.py", line=0, character=0)
         result = loc.to_grep_format("C:/Users/me/project")
-        assert result == "C:/Other/file.py:1:0"
+        assert result == "C:/Other/file.py:1:1"
 
 
 class TestLSPError:
