@@ -392,7 +392,7 @@ class TestToolSchemas:
             "view_directory",
             "grep_search",
             "glob",
-            "lsp_query",
+            "find_symbol",
             "report_back",
         }
 
@@ -425,6 +425,17 @@ class TestToolSchemas:
         schemas = get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
         assert names == {"view_file", "grep_search", "glob", "report_back"}
+
+    def test_lsp_query_backward_compat(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """lsp_query in allowlist should map to find_symbol for backward compatibility."""
+        from relace_mcp.tools.search.schemas import get_tool_schemas
+
+        monkeypatch.setenv("RELACE_SEARCH_ENABLED_TOOLS", "view_file,lsp_query")
+
+        schemas = get_tool_schemas()
+        names = {t["function"]["name"] for t in schemas}
+        assert "find_symbol" in names
+        assert "lsp_query" not in names
 
     def test_schema_has_default_per_official_docs(self) -> None:
         """Per Relace official docs, certain params should have default values."""

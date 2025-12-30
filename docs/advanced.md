@@ -163,7 +163,7 @@ Switch to OpenAI-compatible providers for `fast_search`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RELACE_SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,lsp_query` | Comma-separated allowlist. `report_back` is always enabled. Add `bash` to enable shell commands (Unix only). |
+| `RELACE_SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,find_symbol` | Comma-separated allowlist. `report_back` is always enabled. Add `bash` to enable shell commands (Unix only). |
 | `RELACE_SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls for lower latency |
 
 > **Note:** The `bash` tool is disabled by default for security. To enable it on Unix systems, add to your MCP configuration:
@@ -172,7 +172,7 @@ Switch to OpenAI-compatible providers for `fast_search`:
 >   "mcpServers": {
 >     "relace": {
 >       "env": {
->         "RELACE_SEARCH_ENABLED_TOOLS": "view_file,view_directory,grep_search,glob,lsp_query,bash"
+>         "RELACE_SEARCH_ENABLED_TOOLS": "view_file,view_directory,grep_search,glob,find_symbol,bash"
 >       }
 >     }
 >   }
@@ -181,7 +181,7 @@ Switch to OpenAI-compatible providers for `fast_search`:
 
 ### LSP Tool
 
-The `lsp_query` tool provides semantic code queries using Language Server Protocol for Python files. It supports:
+The `find_symbol` tool provides semantic code queries using Language Server Protocol for Python files. It supports:
 - `definition`: Jump to the definition of a symbol
 - `references`: Find all references to a symbol
 

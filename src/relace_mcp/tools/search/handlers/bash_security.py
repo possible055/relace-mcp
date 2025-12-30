@@ -1,5 +1,6 @@
 import os
 import re
+import shlex
 
 # Block dangerous commands (blacklist)
 BASH_BLOCKED_COMMANDS = frozenset(
@@ -397,8 +398,6 @@ def _parse_command_tokens(command: str) -> list[str]:
     Returns:
         Token list.
     """
-    import shlex
-
     try:
         return shlex.split(command)
     except ValueError:
