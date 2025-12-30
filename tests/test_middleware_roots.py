@@ -121,6 +121,28 @@ class TestRootsCacheInvalidation:
 
         assert base_dir_module._roots_cache == {"session-2": ("/test/path/2", "MCP Root (2)")}
 
+    def test_invalidate_does_not_touch_session_id_when_request_context_missing(self) -> None:
+        """Cache keying should not raise when session_id is unavailable."""
+
+        class CtxNoRequest:
+            request_context = None
+
+            @property
+            def session_id(self) -> str:
+                raise RuntimeError("session_id not available")
+
+            @property
+            def client_id(self) -> str:
+                return "client-1"
+
+        base_dir_module._roots_cache = {
+            "client:client-1": ("/test/path/1", "MCP Root (1)"),
+            "session-2": ("/test/path/2", "MCP Root (2)"),
+        }
+
+        base_dir_module.invalidate_roots_cache(CtxNoRequest())
+        assert base_dir_module._roots_cache == {"session-2": ("/test/path/2", "MCP Root (2)")}
+
 
 class TestResolveBaseDirWithCache:
     """Tests for resolve_base_dir with caching behavior."""
