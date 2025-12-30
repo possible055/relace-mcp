@@ -1,4 +1,5 @@
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 from fastmcp import FastMCP
@@ -9,6 +10,7 @@ from ..clients.apply import ApplyLLMClient
 from ..config import RelaceConfig, resolve_base_dir
 from .apply import apply_file_logic
 from .repo import cloud_info_logic, cloud_list_logic, cloud_search_logic, cloud_sync_logic
+from .repo.state import load_sync_state
 from .search import FastAgenticSearchHarness
 
 __all__ = ["register_tools"]
@@ -240,3 +242,36 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 "enabled": True,
             },
         ]
+
+    @mcp.resource("relace://cloud/status", mime_type="application/json")
+    def cloud_status() -> dict[str, Any]:
+        """Current cloud sync status - lightweight read from local state file.
+
+        Returns sync state without making API calls. Use this to quickly check
+        if cloud_sync has been run and what the current sync status is.
+        """
+        if not config.base_dir:
+            return {
+                "synced": False,
+                "error": "base_dir not configured",
+                "message": "Set RELACE_BASE_DIR or use MCP Roots to enable cloud status",
+            }
+
+        repo_name = Path(config.base_dir).name
+        state = load_sync_state(repo_name)
+
+        if state is None:
+            return {
+                "synced": False,
+                "repo_name": repo_name,
+                "message": "No sync state found. Run cloud_sync to upload codebase.",
+            }
+
+        return {
+            "synced": True,
+            "repo_id": state.repo_id,
+            "repo_name": state.repo_name or repo_name,
+            "git_ref": f"{state.git_branch}@{state.git_head_sha[:8]}" if state.git_head_sha else "",
+            "files_count": len(state.files),
+            "last_sync": state.last_sync,
+        }

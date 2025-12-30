@@ -60,6 +60,11 @@ class SearchLLMClient:
         self._disable_parallel_tool_calls = False
         self._strip_tool_strict = False
 
+    @property
+    def api_compat(self) -> str:
+        """Return the API compatibility mode (relace or openai)."""
+        return self._chat_client.api_compat
+
     def chat(
         self,
         messages: list[dict[str, Any]],
