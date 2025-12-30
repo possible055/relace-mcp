@@ -1,3 +1,5 @@
+import os
+
 # Directory listing limit
 MAX_DIR_ITEMS = 250
 # glob result limit
@@ -29,3 +31,30 @@ BASH_MAX_OUTPUT_CHARS = 50000
 # === LSP Tool ===
 # Maximum number of results returned from LSP queries (definition/references)
 MAX_LSP_RESULTS = 50
+
+
+def _parse_positive_float_env(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    raw = raw.strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    if value <= 0:
+        return default
+    return value
+
+
+# Hard upper bound for LSP startup/shutdown/requests (seconds).
+# Use RELACE_LSP_TIMEOUT_SECONDS to override.
+LSP_TIMEOUT_SECONDS = _parse_positive_float_env("RELACE_LSP_TIMEOUT_SECONDS", 15.0)
+
+# Watchdog for stopping the LSP loop thread (seconds).
+# Use RELACE_LSP_LOOP_STOP_TIMEOUT_SECONDS to override.
+LSP_LOOP_STOP_TIMEOUT_SECONDS = _parse_positive_float_env(
+    "RELACE_LSP_LOOP_STOP_TIMEOUT_SECONDS", 3.0
+)
