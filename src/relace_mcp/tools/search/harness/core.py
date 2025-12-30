@@ -16,14 +16,12 @@ from ..logging import (
     log_search_turn,
 )
 from ..schemas import (
-    BUDGET_HINT_TEMPLATE,
-    BUDGET_HINT_TEMPLATE_OPENAI,
-    CONVERGENCE_HINT,
-    CONVERGENCE_HINT_OPENAI,
-    STRATEGIES,
-    STRATEGIES_OPENAI,
     SYSTEM_PROMPT,
     SYSTEM_PROMPT_OPENAI,
+    TURN_HINT_TEMPLATE,
+    TURN_HINT_TEMPLATE_OPENAI,
+    TURN_INSTRUCTIONS,
+    TURN_INSTRUCTIONS_OPENAI,
     USER_PROMPT_TEMPLATE,
     USER_PROMPT_TEMPLATE_OPENAI,
     get_tool_schemas,
@@ -61,21 +59,18 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         if client.api_compat == RELACE_PROVIDER:
             self._system_prompt = SYSTEM_PROMPT
             self._user_prompt_template = USER_PROMPT_TEMPLATE
-            self._budget_hint_template = BUDGET_HINT_TEMPLATE
-            self._convergence_hint = CONVERGENCE_HINT
-            self._strategies = STRATEGIES
+            self._turn_hint_template = TURN_HINT_TEMPLATE
+            self._turn_instructions = TURN_INSTRUCTIONS
         else:
             self._system_prompt = SYSTEM_PROMPT_OPENAI
             self._user_prompt_template = USER_PROMPT_TEMPLATE_OPENAI
-            self._budget_hint_template = BUDGET_HINT_TEMPLATE_OPENAI
-            self._convergence_hint = CONVERGENCE_HINT_OPENAI
-            self._strategies = STRATEGIES_OPENAI
+            self._turn_hint_template = TURN_HINT_TEMPLATE_OPENAI
+            self._turn_instructions = TURN_INSTRUCTIONS_OPENAI
 
-    def _get_budget_hint(self, turn: int, max_turns: int, chars_used: int) -> str:
-        """Generate Budget Tracker hint message.
+    def _get_turn_hint(self, turn: int, max_turns: int, chars_used: int) -> str:
+        """Generate unified turn hint message.
 
-        Provides strategy suggestions based on remaining turns and context usage
-        to help model converge autonomously.
+        Provides urgency-based instructions to guide model behavior.
 
         Args:
             turn: Current turn number (0-indexed).
@@ -83,27 +78,23 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             chars_used: Total characters used in context so far.
         """
         remaining = max_turns - turn
-        remaining_pct = 100 - (turn / max_turns) * 100
 
         if remaining >= BUDGET_HIGH_THRESHOLD:
-            strategy = self._strategies["high"]
+            urgency = "low"
         elif remaining >= BUDGET_MID_THRESHOLD:
-            strategy = self._strategies["mid"]
+            urgency = "medium"
         else:
-            strategy = self._strategies["low"]
+            urgency = "high"
 
-        # Chars budget tracking (reference: MorphLLM Warp Grep)
+        instruction = self._turn_instructions[urgency]
         chars_pct = int((chars_used / MAX_CONTEXT_BUDGET_CHARS) * 100)
 
-        return self._budget_hint_template.format(
+        return self._turn_hint_template.format(
             turn=turn + 1,
             max_turns=max_turns,
-            remaining=remaining,
-            remaining_pct=f"{remaining_pct:.0f}",
+            urgency=urgency,
             chars_pct=chars_pct,
-            chars_used=chars_used // 1000,
-            max_chars=MAX_CONTEXT_BUDGET_CHARS // 1000,
-            strategy=strategy,
+            instruction=instruction,
         )
 
     def run(self, query: str) -> dict[str, Any]:
@@ -176,28 +167,18 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 _harness_mod.SEARCH_MAX_TURNS,
             )
 
-            # Budget Tracker: inject budget state each turn (starting from turn 2)
-            # Calculate chars BEFORE injecting hint (for accurate budget display to model)
+            # Inject unified turn hint (from turn 2 onwards)
             if turn > 0:
                 chars_for_hint = estimate_context_size(messages)
-                budget_hint = self._get_budget_hint(
-                    turn, _harness_mod.SEARCH_MAX_TURNS, chars_for_hint
-                )
-                messages.append({"role": "user", "content": budget_hint})
+                turn_hint = self._get_turn_hint(turn, _harness_mod.SEARCH_MAX_TURNS, chars_for_hint)
+                messages.append({"role": "user", "content": turn_hint})
                 logger.debug(
-                    "[%s] Injected budget hint at turn %d (chars: %d/%d)",
+                    "[%s] Injected turn hint at turn %d (chars: %d/%d)",
                     trace_id,
                     turn + 1,
                     chars_for_hint,
                     MAX_CONTEXT_BUDGET_CHARS,
                 )
-
-            # Progressive convergence hint: start from midpoint (not last 2 turns)
-            remaining = _harness_mod.SEARCH_MAX_TURNS - turn
-            if remaining < BUDGET_MID_THRESHOLD:
-                # Last 2 turns: force convergence
-                messages.append({"role": "user", "content": self._convergence_hint})
-                logger.info("[%s] Injected convergence hint at turn %d", trace_id, turn + 1)
 
             # Check context size AFTER all user messages are added
             ctx_size = estimate_context_size(messages)
