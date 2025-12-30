@@ -1,6 +1,9 @@
 import os
 import re
 import shlex
+from pathlib import Path
+
+from ....utils import resolve_repo_path
 
 # Block dangerous commands (blacklist)
 BASH_BLOCKED_COMMANDS = frozenset(
@@ -81,6 +84,7 @@ BASH_BLOCKED_PATTERNS = [
     r"\|",  # Pipe (may bypass restrictions)
     r"`",  # Command substitution
     r"\$\(",  # Command substitution
+    r"[\r\n]",  # Multi-line commands (command chaining)
     r";\s*\w",  # Command chaining
     r"&&",  # Conditional execution
     r"\|\|",  # Conditional execution
@@ -187,6 +191,138 @@ PYTHON_DANGEROUS_PATTERNS = [
     (r"__import__", "__import__"),
     (r"compile\s*\(", "compile"),
 ]
+
+
+_COMMANDS_WITH_PATH_ARGS = frozenset(
+    {
+        "ls",
+        "find",
+        "cat",
+        "head",
+        "tail",
+        "wc",
+        "file",
+        "stat",
+        "tree",
+        "grep",
+        "egrep",
+        "fgrep",
+        "rg",
+        "ag",
+        "awk",
+        "sed",
+        "diff",
+        "basename",
+        "dirname",
+        "realpath",
+        "readlink",
+        "test",
+        "[",
+    }
+)
+
+
+def _expand_home_token(token: str, base_dir: str) -> str:
+    """Expand a small set of HOME/tilde forms that bash will expand at runtime.
+
+    This keeps our token-level path validation aligned with the actual execution
+    environment where HOME is set to base_dir.
+    """
+    if token == "~":  # nosec B105 - not a password, shell home symbol
+        return base_dir
+    if token.startswith("~/"):
+        return os.path.join(base_dir, token[2:])
+    if token.startswith("$HOME/"):
+        return os.path.join(base_dir, token[6:])
+    if token.startswith("${HOME}/"):
+        return os.path.join(base_dir, token[8:])
+    return token
+
+
+def _check_symlink_follow_flags(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
+    """Block flags that make tools follow symlinks during traversal."""
+    if base_cmd == "find":
+        if any(t in {"-L", "-H"} for t in tokens[1:]):  # nosec B105 - CLI flags
+            return True, "Blocked find symlink-follow flag (-L/-H)"
+        if any(t == "-follow" for t in tokens[1:]):  # nosec B105 - find expression
+            return True, "Blocked find symlink-follow expression (-follow)"
+
+    if base_cmd == "rg":
+        if any(t == "--follow" for t in tokens[1:]):  # nosec B105 - CLI flag
+            return True, "Blocked rg symlink-follow flag (--follow)"
+        for t in tokens[1:]:
+            if t.startswith("-") and "L" in t[1:]:  # nosec B105 - CLI flag
+                return True, "Blocked rg symlink-follow flag (-L)"
+
+    if base_cmd in {"grep", "egrep", "fgrep"}:
+        if any(
+            t in {"--recursive", "--dereference-recursive"}
+            for t in tokens[1:]  # nosec B105
+        ):
+            return True, "Blocked grep recursive flags (may follow symlinks)"
+        for t in tokens[1:]:
+            if not (t.startswith("-") and not t.startswith("--")):  # nosec B105
+                continue
+            # Short option bundling: `-Rni` etc.
+            if "r" in t[1:] or "R" in t[1:]:
+                return True, "Blocked grep recursive flags (may follow symlinks)"
+
+    if base_cmd == "tree":
+        for t in tokens[1:]:
+            if not (t.startswith("-") and not t.startswith("--")):  # nosec B105
+                continue
+            if "l" in t[1:]:
+                return True, "Blocked tree symlink-follow flag (-l)"
+
+    return False, ""
+
+
+def _check_path_escapes_base_dir(
+    tokens: list[str], base_cmd: str, base_dir: str
+) -> tuple[bool, str]:
+    """Block path arguments that resolve outside base_dir (typically via symlinks).
+
+    This is a defense-in-depth check for the bash tool, since many otherwise
+    "read-only" commands (cat/head/wc/etc.) will happily follow symlinks.
+    """
+    if base_cmd not in _COMMANDS_WITH_PATH_ARGS:
+        return False, ""
+
+    base_dir_path = Path(base_dir)
+
+    for token in tokens[1:]:
+        if token.startswith("-") and token != "-":  # nosec B105
+            continue
+        if token == "-":  # nosec B105 - stdin placeholder, not password
+            continue
+
+        # Validate /repo tokens explicitly.
+        if token == "/repo" or token.startswith("/repo/"):  # nosec B105
+            try:
+                resolve_repo_path(token, base_dir, allow_relative=False, allow_absolute=False)
+            except ValueError:
+                return True, f"Path escapes base_dir: {token}"
+            continue
+
+        expanded = _expand_home_token(token, base_dir)
+        candidate = Path(expanded) if os.path.isabs(expanded) else (base_dir_path / expanded)
+
+        try:
+            if not candidate.exists():
+                continue
+        except OSError:
+            # If we can't stat it, let the command fail normally.
+            continue
+
+        try:
+            if os.path.isabs(expanded):
+                resolve_repo_path(expanded, base_dir, require_within_base_dir=True)
+            else:
+                resolve_repo_path(expanded, base_dir, allow_absolute=False)
+        except ValueError:
+            return True, f"Path escapes base_dir: {token}"
+
+    return False, ""
 
 
 def _is_traversal_token(token: str) -> bool:
@@ -479,6 +615,14 @@ def _is_blocked_command(command: str, base_dir: str) -> tuple[bool, str]:
     # Validate base command
     base_cmd = os.path.basename(tokens[0])
     blocked, reason = _validate_command_base(base_cmd)
+    if blocked:
+        return blocked, reason
+
+    blocked, reason = _check_symlink_follow_flags(tokens, base_cmd)
+    if blocked:
+        return blocked, reason
+
+    blocked, reason = _check_path_escapes_base_dir(tokens, base_cmd, base_dir)
     if blocked:
         return blocked, reason
 

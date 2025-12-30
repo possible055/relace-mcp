@@ -396,12 +396,15 @@ class LSPClient:
             raise LSPError(f"Absolute path not allowed: {file_path}")
 
         target = Path(self._workspace) / file_path
-        # Check symlink before resolve to prevent path escape
+        # Policy: reject direct symlink paths (defense-in-depth; caller should already validate).
         if target.is_symlink():
             raise LSPError(f"Symlinks not allowed: {file_path}")
 
-        abs_path = target.resolve()
-        workspace_resolved = Path(self._workspace).resolve()
+        try:
+            abs_path = target.resolve()
+            workspace_resolved = Path(self._workspace).resolve()
+        except (OSError, RuntimeError) as e:
+            raise LSPError(f"Invalid path: {e}") from e
 
         # Validate resolved path is within workspace
         if not abs_path.is_relative_to(workspace_resolved):

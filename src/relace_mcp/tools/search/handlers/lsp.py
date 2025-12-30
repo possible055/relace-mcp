@@ -3,8 +3,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from relace_mcp.utils import map_path_no_resolve
+
 from .constants import LSP_TIMEOUT_SECONDS, MAX_LSP_RESULTS
-from .paths import map_repo_path
 
 if TYPE_CHECKING:
     from relace_mcp.lsp import Location
@@ -47,11 +48,10 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
 
     # Path validation and mapping
     try:
-        fs_path = map_repo_path(params.file, base_dir)
-        fs_path_obj = Path(fs_path)
-        if fs_path_obj.is_symlink():
+        fs_path = map_path_no_resolve(params.file, base_dir)
+        if fs_path.is_symlink():
             return f"Error: Symlinks not allowed: {params.file}"
-        abs_path = fs_path_obj.resolve()
+        abs_path = fs_path.resolve()
         resolved_base_dir = str(Path(base_dir).resolve())
 
         # Validate path is within base_dir FIRST to prevent information disclosure
@@ -64,7 +64,7 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
             return f"Error: File not found: {params.file}"
         if abs_path.suffix not in (".py", ".pyi"):
             return f"Error: find_symbol only supports Python files, got: {abs_path.suffix}"
-    except ValueError as e:
+    except (OSError, RuntimeError, ValueError) as e:
         return f"Error: Invalid path: {e}"
 
     # Lazy import to avoid loading lsp module if not used

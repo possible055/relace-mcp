@@ -166,6 +166,10 @@ def _iter_searchable_files(
                 continue
 
             filepath = Path(root) / filename
+            # Match ripgrep's default behavior: do not follow file symlinks. This prevents
+            # path escapes (e.g., a symlink inside base_dir pointing to /etc/passwd).
+            if filepath.is_symlink():
+                continue
             try:
                 rel_path = filepath.relative_to(base_path)
             except ValueError:
