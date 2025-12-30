@@ -354,3 +354,33 @@ class TestCommandNotInAllowlist:
         """Should block pip."""
         blocked, _ = _is_blocked_command("pip install requests", DEFAULT_BASE_DIR)
         assert blocked
+
+
+class TestSandboxEscapeBypassBlocking:
+    """Block common bypasses that still look 'read-only' at the shell level."""
+
+    def test_blocks_rg_preprocessor(self) -> None:
+        """ripgrep --pre spawns a subprocess per file; must be blocked."""
+        blocked, reason = _is_blocked_command("rg --pre=cat pattern .", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "pre" in reason.lower()
+
+    def test_blocks_awk_system(self) -> None:
+        """awk system() can execute arbitrary commands; must be blocked."""
+        blocked, reason = _is_blocked_command(
+            "awk 'BEGIN{system(\"ls\")}' file.txt", DEFAULT_BASE_DIR
+        )
+        assert blocked
+        assert "awk" in reason.lower() or "system" in reason.lower()
+
+    def test_blocks_sed_write_command(self) -> None:
+        """sed `w` can write files without shell redirection; must be blocked."""
+        blocked, reason = _is_blocked_command("sed 'w out.txt' file.txt", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "sed" in reason.lower() or "write" in reason.lower() or "e/w" in reason.lower()
+
+    def test_blocks_sed_script_file(self) -> None:
+        """sed -f loads uninspected commands; must be blocked."""
+        blocked, reason = _is_blocked_command("sed -f script.sed file.txt", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "sed" in reason.lower() or "script" in reason.lower()

@@ -207,10 +207,14 @@ export RELACE_SEARCH_PARALLEL_TOOL_CALLS=1
 
 ## Remote Deployment (Streamable HTTP)
 
-For remote deployment, run with streamable-http transport:
+Security note: this server can read and write files on the host via tools like `fast_apply`.
+Do **NOT** expose it directly to the public internet. Prefer `stdio` transport, or put HTTP
+behind authentication/VPN and run with least privilege (ideally in an isolated container).
+
+For remote deployment, run with streamable-http transport (bind all interfaces explicitly):
 
 ```bash
-relace-mcp -t streamable-http -p 8000
+relace-mcp -t streamable-http --host 0.0.0.0 -p 8000
 ```
 
 Connect via:
@@ -230,6 +234,6 @@ Connect via:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--host` | `0.0.0.0` | Bind address |
+| `--host` | `127.0.0.1` | Bind address |
 | `--port`, `-p` | `8000` | Port number |
 | `--path` | `/mcp` | URL path for MCP endpoint |

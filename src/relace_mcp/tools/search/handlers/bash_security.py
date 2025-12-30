@@ -140,8 +140,6 @@ BASH_SAFE_COMMANDS = frozenset(
         "cut",
         "diff",
         "git",
-        "python",
-        "python3",
         "basename",
         "dirname",
         "realpath",
@@ -512,6 +510,112 @@ def _check_sed_in_place(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
     return False, ""
 
 
+def _check_ripgrep_preprocessor(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
+    """Block ripgrep preprocessors, which can spawn arbitrary subprocesses.
+
+    `rg --pre=COMMAND` runs COMMAND for every searched file.
+    This violates the "read-only, no side effects" contract of the bash tool
+    and is a common sandbox escape vector.
+    """
+    if base_cmd != "rg":
+        return False, ""
+
+    for token in tokens[1:]:
+        if token == "--pre" or token.startswith("--pre="):  # nosec B105 - CLI flag
+            return True, "Blocked rg preprocessor flag (--pre)"
+        if token == "--pre-glob" or token.startswith("--pre-glob="):  # nosec B105 - CLI flag
+            return True, "Blocked rg preprocessor flag (--pre-glob)"
+
+    return False, ""
+
+
+def _check_awk_script(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
+    """Block awk constructs that can spawn subprocesses.
+
+    awk supports `system()` which can execute arbitrary shell commands.
+    We also block loading scripts from files (-f/--file) because we don't
+    inspect their contents here.
+    """
+    if base_cmd != "awk":
+        return False, ""
+
+    # Disallow script files: too hard to validate safely without reading them.
+    for token in tokens[1:]:
+        if token in {"-f", "--file"} or token.startswith("--file="):  # nosec B105 - CLI flag
+            return True, "Blocked awk script file flag (-f/--file)"
+
+    # Best-effort: scan all remaining arguments for system().
+    # (Avoids having to fully parse awk option grammar.)
+    args_blob = " ".join(tokens[1:])
+    if re.search(r"\bsystem\s*\(", args_blob, flags=re.IGNORECASE):
+        return True, "Blocked awk system() (subprocess execution)"
+
+    return False, ""
+
+
+_SED_DANGEROUS_SCRIPT_RE = re.compile(r"(^|[^A-Za-z0-9_])[ew]($| )", flags=re.IGNORECASE)
+
+
+def _check_sed_script(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
+    """Block sed features that can write files or execute commands.
+
+    - `w` writes to a file even without `-i`
+    - `e` executes a shell command (GNU sed) and can be used for sandbox escape
+    - `-f/--file` loads scripts from a file (not inspected here)
+    """
+    if base_cmd != "sed":
+        return False, ""
+
+    # Reject external script files (-f/--file) to prevent uninspected `e`/`w`.
+    i = 1
+    while i < len(tokens):
+        token = tokens[i]
+        if token == "--":  # nosec B105 - CLI argument, not password
+            break
+
+        if token == "-f" or token == "--file" or token.startswith("--file="):  # nosec B105
+            return True, "Blocked sed script file flag (-f/--file)"
+
+        # Consume arguments for flags that take parameters (best-effort).
+        if token in {"-e", "-f", "-i"}:  # nosec B105
+            i += 1
+            i += 1
+            continue
+        i += 1
+
+    # Best-effort: inspect inline scripts (from -e and/or first non-flag token).
+    scripts: list[str] = []
+    saw_e_flag = False
+    i = 1
+    while i < len(tokens):
+        token = tokens[i]
+        if token == "--":  # nosec B105
+            i += 1
+            break
+
+        if token == "-e":  # nosec B105
+            if i + 1 < len(tokens):
+                scripts.append(tokens[i + 1])
+            saw_e_flag = True
+            i += 2
+            continue
+
+        if token.startswith("-") and token != "-":  # nosec B105
+            i += 1
+            continue
+
+        # First positional argument is a script ONLY when no -e/-f scripts are provided.
+        if not saw_e_flag and not scripts:
+            scripts.append(token)
+        break
+
+    for script in scripts:
+        if _SED_DANGEROUS_SCRIPT_RE.search(script):
+            return True, "Blocked sed script containing e/w (command exec or file write)"
+
+    return False, ""
+
+
 def _check_command_in_arguments(tokens: list[str]) -> tuple[bool, str]:
     """Check if dangerous commands are hidden in arguments.
 
@@ -582,7 +686,19 @@ def _validate_specialized_commands(tokens: list[str], base_cmd: str) -> tuple[bo
     if blocked:
         return blocked, reason
 
+    blocked, reason = _check_ripgrep_preprocessor(tokens, base_cmd)
+    if blocked:
+        return blocked, reason
+
+    blocked, reason = _check_awk_script(tokens, base_cmd)
+    if blocked:
+        return blocked, reason
+
     blocked, reason = _check_sed_in_place(tokens, base_cmd)
+    if blocked:
+        return blocked, reason
+
+    blocked, reason = _check_sed_script(tokens, base_cmd)
     if blocked:
         return blocked, reason
 

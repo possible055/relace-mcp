@@ -16,7 +16,7 @@ from ..handlers import (
     view_file_handler,
 )
 from ..logging import log_tool_call
-from ..schemas import GrepSearchParams
+from ..schemas import GrepSearchParams, get_tool_schemas
 from .constants import MAX_PARALLEL_WORKERS, PARALLEL_SAFE_TOOLS
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,26 @@ class ToolCallsMixin:
             args: dict[str, Any],
             result: str | dict[str, Any],
         ) -> None: ...
+
+    def _enabled_tool_names(self) -> set[str]:
+        """Return the enabled tool names for this run (defense-in-depth).
+
+        The LLM is prompted with a tool schema allowlist, but some providers or
+        prompt-injection scenarios may still return tool calls for tools that were
+        not advertised. Enforce the allowlist at execution time to ensure tools
+        like `bash` remain opt-in.
+        """
+        enabled: set[str] = set()
+        for schema in get_tool_schemas():
+            func = schema.get("function")
+            if not isinstance(func, dict):
+                continue
+            name = func.get("name")
+            if isinstance(name, str) and name:
+                enabled.add(name)
+        # Always allow report_back so the harness can terminate deterministically.
+        enabled.add("report_back")
+        return enabled
 
     def _parse_and_classify_tool_calls(
         self, tool_calls: list[dict[str, Any]], trace_id: str
@@ -231,6 +251,21 @@ class ToolCallsMixin:
         if not isinstance(args, dict):
             return f"Error: Invalid arguments type, expected dict but got {type(args).__name__}"
 
+        # Defense-in-depth: enforce enabled tool allowlist at execution time.
+        enabled = self._enabled_tool_names()
+        if name not in enabled:
+            return (
+                f"Error: Tool '{name}' is disabled. "
+                "Set RELACE_SEARCH_ENABLED_TOOLS to explicitly allow it."
+            )
+
+        # report_back does not depend on base_dir.
+        if name == "report_back":
+            return report_back_handler(
+                explanation=args.get("explanation", ""),
+                files=args.get("files", {}),
+            )
+
         base_dir = self._config.base_dir
         if base_dir is None:
             return "Error: base_dir is not configured. Set RELACE_BASE_DIR or ensure MCP Roots are available."
@@ -265,12 +300,6 @@ class ToolCallsMixin:
                 include_hidden=args.get("include_hidden", False),
                 max_results=args.get("max_results", 200),
                 base_dir=base_dir,
-            )
-
-        elif name == "report_back":
-            return report_back_handler(
-                explanation=args.get("explanation", ""),
-                files=args.get("files", {}),
             )
         elif name == "bash":
             return bash_handler(
