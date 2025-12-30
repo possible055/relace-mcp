@@ -380,9 +380,9 @@ class TestParallelToolCallsFix:
 class TestToolSchemas:
     """Test tool schema definitions."""
 
-    def test_has_five_default_tools(self) -> None:
-        """Should have exactly 5 tools by default (bash is opt-in)."""
-        assert len(TOOL_SCHEMAS) == 5
+    def test_has_six_default_tools(self) -> None:
+        """Should have exactly 6 tools by default (bash is opt-in)."""
+        assert len(TOOL_SCHEMAS) == 6
 
     def test_tool_names(self) -> None:
         """Should have correct default tool names (no bash)."""
@@ -392,6 +392,7 @@ class TestToolSchemas:
             "view_directory",
             "grep_search",
             "glob",
+            "lsp_query",
             "report_back",
         }
 

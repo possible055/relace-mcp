@@ -238,6 +238,51 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "lsp_query",
+            "strict": True,
+            "description": (
+                "Semantic code query using Language Server Protocol for Python files.\n\n"
+                "Actions:\n"
+                "- 'definition': Jump to the definition of a symbol at the given position\n"
+                "- 'references': Find all references to the symbol at the given position\n\n"
+                "When to use:\n"
+                "- Use for precise symbol lookups when you need 100% accuracy\n"
+                "- Better than grep for finding where a function/class is defined\n"
+                "- Better than grep for finding all usages of a specific symbol\n\n"
+                "Limitations:\n"
+                "- Only works with Python (.py) files\n"
+                "- Requires exact line/column position of the symbol\n"
+                "- Has startup latency (~2-5 seconds) on first call"
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["action", "file", "line", "column"],
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["definition", "references"],
+                        "description": "The LSP action to perform.",
+                    },
+                    "file": {
+                        "type": "string",
+                        "description": "Path to the Python file, e.g. `/repo/src/main.py`.",
+                    },
+                    "line": {
+                        "type": "integer",
+                        "description": "Line number (0-indexed) where the symbol is located.",
+                    },
+                    "column": {
+                        "type": "integer",
+                        "description": "Column number (0-indexed) where the symbol starts.",
+                    },
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 
@@ -288,7 +333,8 @@ def get_tool_schemas() -> list[dict[str, Any]]:
     else:
         # Default tools exclude `bash` for security (opt-in only via env var)
         # bash requires Unix shell and poses higher security risk
-        enabled = {"view_file", "view_directory", "grep_search", "glob", "report_back"}
+        # lsp_query is enabled by default for semantic Python code queries
+        enabled = {"view_file", "view_directory", "grep_search", "glob", "lsp_query", "report_back"}
 
     # Always keep report_back so the harness can terminate deterministically.
     enabled.add("report_back")

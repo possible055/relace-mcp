@@ -19,6 +19,7 @@ from .constants import (
     MAX_GREP_DEPTH,
     MAX_GREP_MATCHES,
     MAX_GREP_SEARCH_CHARS,
+    MAX_LSP_RESULTS,
     MAX_TOOL_RESULT_CHARS,
     MAX_VIEW_DIRECTORY_CHARS,
     MAX_VIEW_FILE_CHARS,
@@ -26,6 +27,7 @@ from .constants import (
 from .context import estimate_context_size, truncate_for_context
 from .glob import glob_handler
 from .grep_search import grep_search_handler
+from .lsp import LSPQueryParams, lsp_query_handler
 from .paths import map_repo_path
 from .report_back import report_back_handler
 from .view_directory import view_directory_handler
@@ -39,6 +41,7 @@ __all__ = [
     "BASH_TIMEOUT_SECONDS",
     "GIT_ALLOWED_SUBCOMMANDS",
     "GREP_TIMEOUT_SECONDS",
+    "LSPQueryParams",
     "MAX_BASH_CHARS",
     "MAX_DIR_ITEMS",
     "MAX_GLOB_CHARS",
@@ -47,6 +50,7 @@ __all__ = [
     "MAX_GREP_DEPTH",
     "MAX_GREP_MATCHES",
     "MAX_GREP_SEARCH_CHARS",
+    "MAX_LSP_RESULTS",
     "MAX_TOOL_RESULT_CHARS",
     "MAX_VIEW_DIRECTORY_CHARS",
     "MAX_VIEW_FILE_CHARS",
@@ -56,6 +60,7 @@ __all__ = [
     "estimate_context_size",
     "glob_handler",
     "grep_search_handler",
+    "lsp_query_handler",
     "map_repo_path",
     "report_back_handler",
     "truncate_for_context",

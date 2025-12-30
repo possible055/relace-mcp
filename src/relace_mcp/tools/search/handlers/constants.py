@@ -24,3 +24,8 @@ MAX_GLOB_CHARS = 8000
 
 BASH_TIMEOUT_SECONDS = 30
 BASH_MAX_OUTPUT_CHARS = 50000
+
+
+# === LSP Tool ===
+# Maximum number of results returned from LSP queries (definition/references)
+MAX_LSP_RESULTS = 50
