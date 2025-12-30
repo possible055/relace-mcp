@@ -304,6 +304,12 @@ def _check_path_escapes_base_dir(
                 return True, f"Path escapes base_dir: {token}"
             continue
 
+        # Block ~user tilde expansion (e.g., ~root → /root) that Bash would expand
+        # to another user's home directory, allowing sandbox escape.
+        # Only allow: ~ (alone), ~/ (current user home prefix)
+        if token.startswith("~") and token != "~" and not token.startswith("~/"):  # nosec B105 - tilde shell symbol, not password
+            return True, f"Blocked ~user tilde pattern (sandbox escape): {token}"
+
         expanded = _expand_home_token(token, base_dir)
         candidate = Path(expanded) if os.path.isabs(expanded) else (base_dir_path / expanded)
 
