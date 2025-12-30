@@ -7,17 +7,32 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from relace_mcp.config.base_dir import (
+    PROJECT_MARKERS,
     find_git_root,
+    invalidate_roots_cache,
     resolve_base_dir,
     select_best_root,
     uri_to_path,
     validate_base_dir,
+    validate_project_directory,
 )
+
+
+@pytest.fixture(autouse=True)
+def clear_roots_cache():
+    """Clear the roots cache before and after each test."""
+    invalidate_roots_cache()
+    yield
+    invalidate_roots_cache()
 
 
 class TestValidateBaseDir:
     def test_valid_directory(self, tmp_path: Path) -> None:
         assert validate_base_dir(str(tmp_path)) is True
+
+    def test_rejects_filesystem_root(self) -> None:
+        root = Path(Path.cwd().anchor)
+        assert validate_base_dir(str(root)) is False
 
     def test_non_existent_path(self) -> None:
         assert validate_base_dir("/non/existent/path/at/all") is False
@@ -26,6 +41,48 @@ class TestValidateBaseDir:
         f = tmp_path / "file.txt"
         f.touch()
         assert validate_base_dir(str(f)) is False
+
+
+class TestValidateProjectDirectory:
+    """Tests for validate_project_directory safety checks."""
+
+    def test_rejects_root_directory(self) -> None:
+        """Root directory should be rejected as unsafe."""
+        root = Path(Path.cwd().anchor)
+        is_safe, reason = validate_project_directory(str(root))
+        assert is_safe is False
+        assert "system directory" in reason
+
+    def test_rejects_no_project_marker(self, tmp_path: Path) -> None:
+        """Directory without project markers should be rejected."""
+        is_safe, reason = validate_project_directory(str(tmp_path))
+        assert is_safe is False
+        assert "no project markers" in reason
+
+    def test_accepts_valid_project_with_git(self, tmp_path: Path) -> None:
+        """Valid project with .git should be accepted."""
+        (tmp_path / ".git").mkdir()
+        is_safe, reason = validate_project_directory(str(tmp_path))
+        assert is_safe is True
+        assert reason == ""
+
+    def test_accepts_valid_project_with_pyproject(self, tmp_path: Path) -> None:
+        """Valid project with pyproject.toml should be accepted."""
+        (tmp_path / "pyproject.toml").touch()
+        is_safe, reason = validate_project_directory(str(tmp_path))
+        assert is_safe is True
+        assert reason == ""
+
+    def test_accepts_valid_project_with_package_json(self, tmp_path: Path) -> None:
+        """Valid project with package.json should be accepted."""
+        (tmp_path / "package.json").touch()
+        is_safe, reason = validate_project_directory(str(tmp_path))
+        assert is_safe is True
+        assert reason == ""
+
+    def test_project_markers_constant_is_tuple(self) -> None:
+        """PROJECT_MARKERS should be a tuple for immutability."""
+        assert isinstance(PROJECT_MARKERS, tuple)
 
 
 class TestUriToPath:
@@ -250,6 +307,19 @@ class TestResolveBaseDir:
         base_dir, source = await resolve_base_dir(None, ctx)
         assert base_dir == str(tmp_path)
         assert "Git root" in source
+
+    @pytest.mark.asyncio
+    async def test_raises_when_cwd_is_filesystem_root(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Filesystem root should never be used as a fallback base_dir."""
+        import relace_mcp.config.base_dir as base_dir_module
+
+        monkeypatch.setattr(base_dir_module, "find_git_root", lambda _: None)
+        monkeypatch.chdir(Path.cwd().anchor)
+
+        with pytest.raises(RuntimeError):
+            await resolve_base_dir(None, ctx=None)
 
     @pytest.mark.asyncio
     async def test_single_invalid_mcp_root_falls_back_to_git_root(
