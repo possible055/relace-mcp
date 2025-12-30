@@ -30,6 +30,10 @@ class TestValidateBaseDir:
     def test_valid_directory(self, tmp_path: Path) -> None:
         assert validate_base_dir(str(tmp_path)) is True
 
+    def test_rejects_filesystem_root(self) -> None:
+        root = Path(Path.cwd().anchor)
+        assert validate_base_dir(str(root)) is False
+
     def test_non_existent_path(self) -> None:
         assert validate_base_dir("/non/existent/path/at/all") is False
 
@@ -302,6 +306,19 @@ class TestResolveBaseDir:
         base_dir, source = await resolve_base_dir(None, ctx)
         assert base_dir == str(tmp_path)
         assert "Git root" in source
+
+    @pytest.mark.asyncio
+    async def test_raises_when_cwd_is_filesystem_root(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Filesystem root should never be used as a fallback base_dir."""
+        import relace_mcp.config.base_dir as base_dir_module
+
+        monkeypatch.setattr(base_dir_module, "find_git_root", lambda _: None)
+        monkeypatch.chdir(Path.cwd().anchor)
+
+        with pytest.raises(RuntimeError):
+            await resolve_base_dir(None, ctx=None)
 
     @pytest.mark.asyncio
     async def test_single_invalid_mcp_root_falls_back_to_git_root(

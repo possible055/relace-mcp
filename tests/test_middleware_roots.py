@@ -9,6 +9,13 @@ from relace_mcp.middleware import roots as roots_module
 from relace_mcp.middleware.roots import ROOTS_LIST_CHANGED_METHOD, RootsMiddleware
 
 
+@pytest.fixture(autouse=True)
+def clear_roots_cache():
+    base_dir_module.invalidate_roots_cache()
+    yield
+    base_dir_module.invalidate_roots_cache()
+
+
 class TestRootsMiddleware:
     """Tests for RootsMiddleware notification handling."""
 
@@ -27,11 +34,12 @@ class TestRootsMiddleware:
         """Middleware should invalidate cache on roots/list_changed notification."""
         context = MagicMock()
         context.method = ROOTS_LIST_CHANGED_METHOD
+        context.fastmcp_context = None
 
         with patch.object(roots_module, "invalidate_roots_cache") as mock_invalidate:
             result = await middleware.on_notification(context, mock_call_next)
 
-            mock_invalidate.assert_called_once()
+            mock_invalidate.assert_called_once_with(None)
             mock_call_next.assert_awaited_once_with(context)
             assert result is None  # call_next returns None
 
@@ -42,6 +50,7 @@ class TestRootsMiddleware:
         """Middleware should pass through non-roots notifications without invalidating."""
         context = MagicMock()
         context.method = "notifications/tools/list_changed"
+        context.fastmcp_context = None
 
         with patch.object(roots_module, "invalidate_roots_cache") as mock_invalidate:
             await middleware.on_notification(context, mock_call_next)
@@ -56,6 +65,7 @@ class TestRootsMiddleware:
         """Middleware should gracefully handle notifications without method attribute."""
         context = MagicMock()
         context.method = None  # No method set
+        context.fastmcp_context = None
 
         with patch.object(roots_module, "invalidate_roots_cache") as mock_invalidate:
             await middleware.on_notification(context, mock_call_next)
@@ -70,19 +80,31 @@ class TestRootsCacheInvalidation:
     def test_invalidate_clears_cache(self) -> None:
         """invalidate_roots_cache should clear the cached value."""
         # Set up: populate the cache directly
-        base_dir_module._roots_cache = ("/test/path", "MCP Root (test)")
-        assert base_dir_module._roots_cache == ("/test/path", "MCP Root (test)")
+        base_dir_module._roots_cache = {"session-1": ("/test/path", "MCP Root (test)")}
+        assert base_dir_module._roots_cache == {"session-1": ("/test/path", "MCP Root (test)")}
 
         # Act: invalidate
         base_dir_module.invalidate_roots_cache()
 
         # Assert: cache is empty
-        assert base_dir_module._roots_cache is None
+        assert base_dir_module._roots_cache == {}
 
     def test_cache_is_none_after_invalidation(self) -> None:
-        """Cache should be None after invalidation."""
+        """Cache should be empty after invalidation."""
         base_dir_module.invalidate_roots_cache()
-        assert base_dir_module._roots_cache is None
+        assert base_dir_module._roots_cache == {}
+
+    def test_invalidate_clears_only_session_when_context_provided(self) -> None:
+        """invalidate_roots_cache(ctx) should only clear the matching session."""
+        base_dir_module._roots_cache = {
+            "session-1": ("/test/path/1", "MCP Root (1)"),
+            "session-2": ("/test/path/2", "MCP Root (2)"),
+        }
+
+        ctx = MagicMock(session_id="session-1")
+        base_dir_module.invalidate_roots_cache(ctx)
+
+        assert base_dir_module._roots_cache == {"session-2": ("/test/path/2", "MCP Root (2)")}
 
 
 class TestResolveBaseDirWithCache:
@@ -92,10 +114,12 @@ class TestResolveBaseDirWithCache:
     async def test_uses_cache_when_valid(self, tmp_path) -> None:
         """resolve_base_dir should use cached value when available."""
         # Pre-populate cache directly
-        cached_path = str(tmp_path / "cached")
-        base_dir_module._roots_cache = (cached_path, "MCP Root (cached)")
+        cached_dir = tmp_path / "cached"
+        cached_dir.mkdir()
+        cached_path = str(cached_dir)
+        base_dir_module._roots_cache = {"session-1": (cached_path, "MCP Root (cached)")}
 
-        ctx = MagicMock()
+        ctx = MagicMock(session_id="session-1")
         ctx.list_roots = AsyncMock()
 
         from relace_mcp.config.base_dir import resolve_base_dir
@@ -113,10 +137,10 @@ class TestResolveBaseDirWithCache:
     async def test_fetches_fresh_roots_after_invalidation(self, tmp_path) -> None:
         """After invalidation, resolve_base_dir should fetch fresh roots."""
         # Pre-populate and then invalidate
-        base_dir_module._roots_cache = ("/old/path", "MCP Root (old)")
+        base_dir_module._roots_cache = {"session-1": ("/old/path", "MCP Root (old)")}
         base_dir_module.invalidate_roots_cache()
 
-        ctx = MagicMock()
+        ctx = MagicMock(session_id="session-1")
         ctx.list_roots = AsyncMock(
             return_value=[MagicMock(uri=f"file://{tmp_path}", name="Fresh Root")]
         )
@@ -136,7 +160,7 @@ class TestResolveBaseDirWithCache:
     async def test_explicit_config_bypasses_cache(self, tmp_path) -> None:
         """RELACE_BASE_DIR should bypass both cache and MCP Roots."""
         # Pre-populate cache directly
-        base_dir_module._roots_cache = ("/cached/path", "MCP Root (cached)")
+        base_dir_module._roots_cache = {"session-1": ("/cached/path", "MCP Root (cached)")}
 
         explicit_path = str(tmp_path / "explicit")
 
@@ -151,3 +175,33 @@ class TestResolveBaseDirWithCache:
 
         # Cleanup
         base_dir_module.invalidate_roots_cache()
+
+    @pytest.mark.asyncio
+    async def test_cache_is_session_scoped(self, tmp_path) -> None:
+        """Different sessions should not share cached roots."""
+        s1 = tmp_path / "session1"
+        s2 = tmp_path / "session2"
+        s1.mkdir()
+        s2.mkdir()
+
+        base_dir_module._roots_cache = {
+            "session-1": (str(s1), "MCP Root (cached 1)"),
+            "session-2": (str(s2), "MCP Root (cached 2)"),
+        }
+
+        ctx1 = MagicMock(session_id="session-1")
+        ctx1.list_roots = AsyncMock()
+        ctx2 = MagicMock(session_id="session-2")
+        ctx2.list_roots = AsyncMock()
+
+        from relace_mcp.config.base_dir import resolve_base_dir
+
+        base_dir_1, source_1 = await resolve_base_dir(None, ctx1)
+        base_dir_2, source_2 = await resolve_base_dir(None, ctx2)
+
+        assert base_dir_1 == str(s1)
+        assert source_1 == "MCP Root (cached 1)"
+        assert base_dir_2 == str(s2)
+        assert source_2 == "MCP Root (cached 2)"
+        ctx1.list_roots.assert_not_awaited()
+        ctx2.list_roots.assert_not_awaited()
