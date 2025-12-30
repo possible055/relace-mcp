@@ -149,6 +149,7 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 |------|------|------|
 | `RELACE_API_KEY` | ✅ | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥 |
 | `RELACE_BASE_DIR` | ❌ | 项目根目录的绝对路径（未设置时自动通过 MCP Roots 检测） |
+| `RELACE_LOGGING` | ❌ | 设为 `1` 启用文件日志（默认：禁用） |
 | `RELACE_DEFAULT_ENCODING` | ❌ | 强制文件编码（如 `gbk`、`big5`），用于遗留编码仓库 |
 | `RELACE_ENCODING_SAMPLE_LIMIT` | ❌ | 自动检测编码的采样文件上限（默认：`30`） |
 
@@ -199,7 +200,7 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 - `RATE_LIMIT`：请求过多；稍后重试。
 - `TIMEOUT_ERROR` / `NETWORK_ERROR`：检查网络连接；通过 `RELACE_TIMEOUT_SECONDS` 增加超时时间。
 
-> **Windows 用户：** `fast_search` 中的 `bash` 工具在 Windows 上不可用。请使用 WSL 或依赖其他探索工具。
+> **Windows 用户：** `fast_search` 中的 `bash` 工具在 Windows 上不可用。请使用 WSL 或依赖其他探索工具（`view_file`、`grep_search`、`glob`）。
 
 ## 开发
 

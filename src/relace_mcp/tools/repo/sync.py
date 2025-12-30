@@ -186,7 +186,11 @@ def _read_file_content(base_dir: str, rel_path: str) -> bytes | None:
     """
     try:
         base_path = Path(base_dir).resolve()
-        file_path = (base_path / rel_path).resolve()
+        try:
+            file_path = (base_path / rel_path).resolve()
+        except (OSError, RuntimeError) as exc:
+            logger.debug("Failed to resolve %s: %s", rel_path, exc)
+            return None
         # Security: reject symlinks pointing outside base_dir
         if not file_path.is_relative_to(base_path):
             logger.warning("Blocked path traversal attempt: %s", rel_path)
@@ -196,7 +200,7 @@ def _read_file_content(base_dir: str, rel_path: str) -> bytes | None:
         if file_path.stat().st_size > MAX_FILE_SIZE_BYTES:
             return None
         return file_path.read_bytes()
-    except OSError as exc:
+    except (OSError, RuntimeError) as exc:
         logger.debug("Failed to read %s: %s", rel_path, exc)
         return None
 
@@ -236,7 +240,11 @@ def _compute_file_hashes(
     base_path = Path(base_dir).resolve()
 
     def hash_file(rel_path: str) -> tuple[str, str | None]:
-        file_path = (base_path / rel_path).resolve()
+        try:
+            file_path = (base_path / rel_path).resolve()
+        except (OSError, RuntimeError) as exc:
+            logger.debug("Failed to resolve for hash %s: %s", rel_path, exc)
+            return (rel_path, None)
         # Security: reject symlinks pointing outside base_dir
         if not file_path.is_relative_to(base_path):
             logger.warning("Blocked path traversal in hash: %s", rel_path)

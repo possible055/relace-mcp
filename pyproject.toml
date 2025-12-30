@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "relace-mcp"
-version = "0.2.1a2"
+version = "0.2.1a3"
 description = "Unofficial Relace MCP Server - Fast code merging via Relace API"
 readme = "README.md"
 license = { text = "MIT" }
@@ -24,6 +24,7 @@ classifiers = [
     "Environment :: Plugins",
 ]
 dependencies = [
+    "basedpyright>=1.20.0",
     "charset-normalizer>=3.0.0",
     "fastmcp>=2.0.0",
     "httpx>=0.28.0",
@@ -49,6 +50,7 @@ dev = [
     "dead>=1.5.2",
     "ruff>=0.1.0",
     "build>=1.0.0",
+    "types-PyYAML>=6.0.0",
 ]
 
 [project.scripts]
@@ -70,6 +72,11 @@ exclude_dirs = ["tests"]
 
 [tool.mypy]
 python_version = "3.11"
+
+[[tool.mypy.overrides]]
+module = ["psutil"]
+ignore_missing_imports = true
+follow_untyped_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

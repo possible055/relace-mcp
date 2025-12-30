@@ -1,7 +1,12 @@
+import fnmatch
+import os
 import re
+import signal
 import subprocess  # nosec B404
+import threading
+import time
 from collections.abc import Iterator
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 
 from ....tools.apply.file_io import decode_text_best_effort, get_project_encoding
@@ -25,10 +30,6 @@ def _timeout_context(seconds: int) -> "AbstractContextManager[None]":
     Raises:
         TimeoutError: When operation times out (main thread + Unix only).
     """
-    import signal
-    import threading
-    from contextlib import contextmanager
-
     is_main_thread = threading.current_thread() is threading.main_thread()
 
     @contextmanager
@@ -84,8 +85,6 @@ def _matches_file_patterns(
     Returns:
         True if file matches conditions.
     """
-    import fnmatch
-
     if include_pattern and not fnmatch.fnmatch(filename, include_pattern):
         return False
     if exclude_pattern and fnmatch.fnmatch(filename, exclude_pattern):
@@ -133,7 +132,7 @@ def _is_searchable_file(
         exclude_pattern: exclude pattern.
 
     Returns:
-        True if file should be searched.
+        True if file matches conditions.
     """
     if filename.startswith("."):
         return False
@@ -155,8 +154,6 @@ def _iter_searchable_files(
     Yields:
         (filepath, rel_path) tuple.
     """
-    import os
-
     for root, dirs, files in os.walk(base_path):
         if _exceeds_max_depth(Path(root), base_path, MAX_GREP_DEPTH):
             dirs.clear()
@@ -169,6 +166,10 @@ def _iter_searchable_files(
                 continue
 
             filepath = Path(root) / filename
+            # Match ripgrep's default behavior: do not follow file symlinks. This prevents
+            # path escapes (e.g., a symlink inside base_dir pointing to /etc/passwd).
+            if filepath.is_symlink():
+                continue
             try:
                 rel_path = filepath.relative_to(base_path)
             except ValueError:
@@ -339,8 +340,6 @@ def grep_search_handler(params: GrepSearchParams) -> str:
 
 def _grep_search_python_fallback(params: GrepSearchParams) -> str:
     """Pure Python grep implementation (when ripgrep not available)."""
-    import time
-
     # Compile pattern
     pattern = _compile_search_pattern(params.query, params.case_sensitive)
     if isinstance(pattern, str):
