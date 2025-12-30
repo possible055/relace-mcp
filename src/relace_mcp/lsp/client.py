@@ -280,14 +280,20 @@ class LSPClient:
             future: concurrent.futures.Future[Any] = concurrent.futures.Future()
             self._pending_requests[req_id] = future
 
-        self._send_message(
-            {
-                "jsonrpc": "2.0",
-                "id": req_id,
-                "method": method,
-                "params": params,
-            }
-        )
+        try:
+            self._send_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "method": method,
+                    "params": params,
+                }
+            )
+        except Exception:
+            # Clean up pending request on send failure to prevent resource leak
+            with self._lock:
+                self._pending_requests.pop(req_id, None)
+            raise
 
         try:
             return future.result(timeout=effective_timeout)

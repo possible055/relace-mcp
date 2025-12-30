@@ -44,7 +44,8 @@ def _parse_positive_float_env(name: str, default: float) -> float:
         value = float(raw)
     except ValueError:
         return default
-    if value <= 0:
+    # Use `not (value > 0)` to correctly reject NaN (comparisons with NaN always return False)
+    if not (value > 0):
         return default
     return value
 

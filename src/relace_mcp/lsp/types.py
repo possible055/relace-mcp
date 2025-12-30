@@ -68,3 +68,7 @@ class LSPError(Exception):
         if self.code is not None:
             return f"LSP Error {self.code}: {self.message}"
         return f"LSP Error: {self.message}"
+
+    def __reduce__(self) -> tuple[type, tuple[str, int | None]]:
+        """Enable proper pickling for dataclass Exception subclass."""
+        return (type(self), (self.message, self.code))
