@@ -188,9 +188,9 @@ Relace MCP 旨在支持遗留编码仓库（如 GBK/Big5），不会导致 `fast
 | 变量 | 默认值 | 描述 |
 |------|--------|------|
 | `RELACE_LSP_TIMEOUT_SECONDS` | `15.0` | LSP 启动/关闭/请求的超时时间 |
-| `RELACE_LSP_LOOP_STOP_TIMEOUT_SECONDS` | `3.0` | 停止 LSP 循环线程的看门狗超时 |
+| `RELACE_LSP_LOOP_STOP_TIMEOUT_SECONDS` | `3.0` | 旧版（multilspy 实现）遗留；当前实现无效 |
 
-> **注意：** LSP 需要 `multilspy`（随包安装）和 `jedi-language-server`。首次调用会有 2-5 秒启动延迟。
+> **注意：** LSP 使用 `basedpyright`（随包安装）。首次调用会有 2-5 秒启动延迟。
 
 ### OpenAI Structured Outputs 兼容性
 

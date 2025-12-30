@@ -149,6 +149,7 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 |----------|----------|-------------|
 | `RELACE_API_KEY` | ✅ | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
 | `RELACE_BASE_DIR` | ❌ | Absolute path to project root (auto-detected via MCP Roots if not set) |
+| `RELACE_LOGGING` | ❌ | Set to `1` to enable file logging (default: disabled) |
 | `RELACE_DEFAULT_ENCODING` | ❌ | Force file encoding (e.g., `gbk`, `big5`) for legacy repos |
 | `RELACE_ENCODING_SAMPLE_LIMIT` | ❌ | Max files for auto-detecting encoding (default: `30`) |
 
