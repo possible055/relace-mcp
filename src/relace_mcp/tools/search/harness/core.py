@@ -5,6 +5,7 @@ import time
 import uuid
 from typing import Any
 
+from ....backend import RELACE_PROVIDER
 from ....clients import SearchLLMClient
 from ....config import RelaceConfig
 from ..handlers import estimate_context_size
@@ -16,10 +17,15 @@ from ..logging import (
 )
 from ..schemas import (
     BUDGET_HINT_TEMPLATE,
+    BUDGET_HINT_TEMPLATE_OPENAI,
     CONVERGENCE_HINT,
+    CONVERGENCE_HINT_OPENAI,
     STRATEGIES,
+    STRATEGIES_OPENAI,
     SYSTEM_PROMPT,
+    SYSTEM_PROMPT_OPENAI,
     USER_PROMPT_TEMPLATE,
+    USER_PROMPT_TEMPLATE_OPENAI,
     get_tool_schemas,
 )
 from .constants import (
@@ -51,6 +57,20 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         self._observed_files: dict[str, list[list[int]]] = {}
         self._view_line_re = re.compile(r"^(\d+)\s")
 
+        # Select prompts based on API compatibility mode
+        if client.api_compat == RELACE_PROVIDER:
+            self._system_prompt = SYSTEM_PROMPT
+            self._user_prompt_template = USER_PROMPT_TEMPLATE
+            self._budget_hint_template = BUDGET_HINT_TEMPLATE
+            self._convergence_hint = CONVERGENCE_HINT
+            self._strategies = STRATEGIES
+        else:
+            self._system_prompt = SYSTEM_PROMPT_OPENAI
+            self._user_prompt_template = USER_PROMPT_TEMPLATE_OPENAI
+            self._budget_hint_template = BUDGET_HINT_TEMPLATE_OPENAI
+            self._convergence_hint = CONVERGENCE_HINT_OPENAI
+            self._strategies = STRATEGIES_OPENAI
+
     def _get_budget_hint(self, turn: int, max_turns: int, chars_used: int) -> str:
         """Generate Budget Tracker hint message.
 
@@ -66,16 +86,16 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         remaining_pct = 100 - (turn / max_turns) * 100
 
         if remaining >= BUDGET_HIGH_THRESHOLD:
-            strategy = STRATEGIES["high"]
+            strategy = self._strategies["high"]
         elif remaining >= BUDGET_MID_THRESHOLD:
-            strategy = STRATEGIES["mid"]
+            strategy = self._strategies["mid"]
         else:
-            strategy = STRATEGIES["low"]
+            strategy = self._strategies["low"]
 
         # Chars budget tracking (reference: MorphLLM Warp Grep)
         chars_pct = int((chars_used / MAX_CONTEXT_BUDGET_CHARS) * 100)
 
-        return BUDGET_HINT_TEMPLATE.format(
+        return self._budget_hint_template.format(
             turn=turn + 1,
             max_turns=max_turns,
             remaining=remaining,
@@ -144,8 +164,8 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
     def _run_search_loop(self, query: str, trace_id: str) -> dict[str, Any]:
         """Internal method to execute the search loop."""
         messages: list[dict[str, Any]] = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": USER_PROMPT_TEMPLATE.format(query=query)},
+            {"role": "system", "content": self._system_prompt},
+            {"role": "user", "content": self._user_prompt_template.format(query=query)},
         ]
 
         for turn in range(_harness_mod.SEARCH_MAX_TURNS):
@@ -176,7 +196,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             remaining = _harness_mod.SEARCH_MAX_TURNS - turn
             if remaining < BUDGET_MID_THRESHOLD:
                 # Last 2 turns: force convergence
-                messages.append({"role": "user", "content": CONVERGENCE_HINT})
+                messages.append({"role": "user", "content": self._convergence_hint})
                 logger.info("[%s] Injected convergence hint at turn %d", trace_id, turn + 1)
 
             # Check context size AFTER all user messages are added

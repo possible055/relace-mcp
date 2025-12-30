@@ -149,6 +149,7 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 |------|------|------|
 | `RELACE_API_KEY` | ✅ | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥 |
 | `RELACE_BASE_DIR` | ❌ | 项目根目录的绝对路径（未设置时自动通过 MCP Roots 检测） |
+| `RELACE_CLOUD_TOOLS` | ❌ | 设为 `1` 启用云端工具（cloud_sync、cloud_search 等） |
 | `RELACE_LOGGING` | ❌ | 设为 `1` 启用文件日志（默认：禁用） |
 | `RELACE_DEFAULT_ENCODING` | ❌ | 强制文件编码（如 `gbk`、`big5`），用于遗留编码仓库 |
 | `RELACE_ENCODING_SAMPLE_LIMIT` | ❌ | 自动检测编码的采样文件上限（默认：`30`） |
@@ -164,17 +165,24 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 
 ## 工具
 
+### 核心工具（始终可用）
+
 | 工具 | 描述 |
 |------|------|
 | `fast_apply` | 以 10,000+ tokens/秒的速度应用代码编辑 |
 | `fast_search` | 使用自然语言进行智能代码库搜索 |
+
+### 云端工具（需设置 `RELACE_CLOUD_TOOLS=1`）
+
+| 工具 | 描述 |
+|------|------|
 | `cloud_sync` | 将本地代码库上传到 Relace Cloud |
 | `cloud_search` | 对云端同步的仓库进行语义搜索 |
 | `cloud_list` | 列出云端仓库 |
 | `cloud_info` | 获取同步状态 |
 | `cloud_clear` | 删除云端仓库和本地状态 |
 
-> 详细参数和示例请参见 [docs/tools.zh-CN.md](docs/tools.zh-CN.md)。
+> 详细参数和示例请参见 [docs/tools.zh-CN.md](docs/tools.zh-CN.md).
 
 ## 日志
 

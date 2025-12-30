@@ -1,4 +1,5 @@
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 from fastmcp import FastMCP
@@ -7,8 +8,10 @@ from fastmcp.server.context import Context
 from ..clients import RelaceRepoClient, SearchLLMClient
 from ..clients.apply import ApplyLLMClient
 from ..config import RelaceConfig, resolve_base_dir
+from ..config.settings import RELACE_CLOUD_TOOLS
 from .apply import apply_file_logic
 from .repo import cloud_info_logic, cloud_list_logic, cloud_search_logic, cloud_sync_logic
+from .repo.state import load_sync_state
 from .search import FastAgenticSearchHarness
 
 __all__ = ["register_tools"]
@@ -82,121 +85,122 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         # Avoid shared mutable state across concurrent calls.
         return FastAgenticSearchHarness(effective_config, search_client).run(query=query)
 
-    # Cloud Repos (Semantic Search & Sync)
-    repo_client = RelaceRepoClient(config)
+    # Cloud Repos (Semantic Search & Sync) - only register if enabled
+    if RELACE_CLOUD_TOOLS:
+        repo_client = RelaceRepoClient(config)
 
-    @mcp.tool
-    async def cloud_sync(
-        force: bool = False, mirror: bool = False, ctx: Context | None = None
-    ) -> dict[str, Any]:
-        """Upload codebase to Relace Repos for cloud_search semantic indexing.
+        @mcp.tool
+        async def cloud_sync(
+            force: bool = False, mirror: bool = False, ctx: Context | None = None
+        ) -> dict[str, Any]:
+            """Upload codebase to Relace Repos for cloud_search semantic indexing.
 
-        Call this ONCE per session before using cloud_search, or after
-        significant code changes. Incremental sync is fast (only changed files).
+            Call this ONCE per session before using cloud_search, or after
+            significant code changes. Incremental sync is fast (only changed files).
 
-        Sync Modes:
-        - Incremental (default): only uploads new/modified files, deletes removed files
-        - Safe Full: triggered by force=True OR first sync (no cached state) OR
-          git HEAD changed (e.g., branch switch, rebase, commit amend).
-          Uploads all files; suppresses delete operations UNLESS HEAD changed,
-          in which case zombie files from the old ref are deleted to prevent stale results.
-        - Mirror Full (force=True, mirror=True): completely overwrites cloud to match local
+            Sync Modes:
+            - Incremental (default): only uploads new/modified files, deletes removed files
+            - Safe Full: triggered by force=True OR first sync (no cached state) OR
+              git HEAD changed (e.g., branch switch, rebase, commit amend).
+              Uploads all files; suppresses delete operations UNLESS HEAD changed,
+              in which case zombie files from the old ref are deleted to prevent stale results.
+            - Mirror Full (force=True, mirror=True): completely overwrites cloud to match local
 
-        Args:
-            force: If True, force full sync (ignore cached state).
-            mirror: If True (with force=True), use Mirror Full mode to completely
-                    overwrite cloud repo (removes files not in local).
-        """
-        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-        return cloud_sync_logic(repo_client, base_dir, force=force, mirror=mirror)
+            Args:
+                force: If True, force full sync (ignore cached state).
+                mirror: If True (with force=True), use Mirror Full mode to completely
+                        overwrite cloud repo (removes files not in local).
+            """
+            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+            return cloud_sync_logic(repo_client, base_dir, force=force, mirror=mirror)
 
-    @mcp.tool
-    async def cloud_search(
-        query: str,
-        branch: str = "",
-        score_threshold: float = 0.3,
-        token_limit: int = 30000,
-        ctx: Context | None = None,
-    ) -> dict[str, Any]:
-        """Semantic code search using Relace Cloud two-stage retrieval.
+        @mcp.tool
+        async def cloud_search(
+            query: str,
+            branch: str = "",
+            score_threshold: float = 0.3,
+            token_limit: int = 30000,
+            ctx: Context | None = None,
+        ) -> dict[str, Any]:
+            """Semantic code search using Relace Cloud two-stage retrieval.
 
-        Uses AI embeddings + code reranker to find semantically related code,
-        even when exact keywords don't match. Run cloud_sync once first.
+            Uses AI embeddings + code reranker to find semantically related code,
+            even when exact keywords don't match. Run cloud_sync once first.
 
-        Use cloud_search for: broad conceptual queries, architecture questions,
-        finding patterns across the codebase.
+            Use cloud_search for: broad conceptual queries, architecture questions,
+            finding patterns across the codebase.
 
-        Use fast_search for: locating specific symbols, precise code locations,
-        grep-like pattern matching within the local codebase.
+            Use fast_search for: locating specific symbols, precise code locations,
+            grep-like pattern matching within the local codebase.
 
-        Args:
-            query: Natural language search query.
-            branch: Branch to search (empty string uses API default branch).
-            score_threshold: Minimum relevance score (0.0-1.0, default 0.3).
-            token_limit: Maximum tokens to return (default 30000).
-        """
-        # Resolve base_dir dynamically from MCP Roots if not configured
-        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-        return cloud_search_logic(
-            repo_client,
-            base_dir,
-            query,
-            branch=branch,
-            score_threshold=score_threshold,
-            token_limit=token_limit,
-        )
+            Args:
+                query: Natural language search query.
+                branch: Branch to search (empty string uses API default branch).
+                score_threshold: Minimum relevance score (0.0-1.0, default 0.3).
+                token_limit: Maximum tokens to return (default 30000).
+            """
+            # Resolve base_dir dynamically from MCP Roots if not configured
+            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+            return cloud_search_logic(
+                repo_client,
+                base_dir,
+                query,
+                branch=branch,
+                score_threshold=score_threshold,
+                token_limit=token_limit,
+            )
 
-    @mcp.tool
-    async def cloud_clear(confirm: bool = False, ctx: Context | None = None) -> dict[str, Any]:
-        """Delete the cloud repository and local sync state.
+        @mcp.tool
+        async def cloud_clear(confirm: bool = False, ctx: Context | None = None) -> dict[str, Any]:
+            """Delete the cloud repository and local sync state.
 
-        Use when: switching to a different project, resetting after major
-        codebase restructuring, or cleaning up unused cloud repositories.
+            Use when: switching to a different project, resetting after major
+            codebase restructuring, or cleaning up unused cloud repositories.
 
-        WARNING: This action is IRREVERSIBLE. It permanently deletes the
-        remote repository and removes the local sync state file.
+            WARNING: This action is IRREVERSIBLE. It permanently deletes the
+            remote repository and removes the local sync state file.
 
-        Args:
-            confirm: Must be True to proceed. Acts as a safety guard.
-        """
-        from .repo.clear import cloud_clear_logic
+            Args:
+                confirm: Must be True to proceed. Acts as a safety guard.
+            """
+            from .repo.clear import cloud_clear_logic
 
-        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-        return cloud_clear_logic(repo_client, base_dir, confirm=confirm)
+            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+            return cloud_clear_logic(repo_client, base_dir, confirm=confirm)
 
-    @mcp.tool
-    def cloud_list() -> dict[str, Any]:
-        """List all repositories in your Relace Cloud account.
+        @mcp.tool
+        def cloud_list() -> dict[str, Any]:
+            """List all repositories in your Relace Cloud account.
 
-        Use to: discover synced repositories, verify cloud_sync results,
-        or identify repository IDs for debugging.
+            Use to: discover synced repositories, verify cloud_sync results,
+            or identify repository IDs for debugging.
 
-        Returns a list of repos with: repo_id, name, auto_index status.
-        Auto-paginates up to 10,000 repos (safety limit); `has_more=True` indicates the limit was reached.
-        """
-        return cloud_list_logic(repo_client)
+            Returns a list of repos with: repo_id, name, auto_index status.
+            Auto-paginates up to 10,000 repos (safety limit); `has_more=True` indicates the limit was reached.
+            """
+            return cloud_list_logic(repo_client)
 
-    @mcp.tool
-    async def cloud_info(ctx: Context | None = None) -> dict[str, Any]:
-        """Get detailed sync status for the current repository.
+        @mcp.tool
+        async def cloud_info(ctx: Context | None = None) -> dict[str, Any]:
+            """Get detailed sync status for the current repository.
 
-        Use before cloud_sync to understand what action is needed.
+            Use before cloud_sync to understand what action is needed.
 
-        Returns:
-        - local: Current git branch and HEAD commit
-        - synced: Last sync state (git ref, tracked files count)
-        - cloud: Cloud repo info (if exists)
-        - status: Whether sync is needed and recommended action
-        """
-        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-        return cloud_info_logic(repo_client, base_dir)
+            Returns:
+            - local: Current git branch and HEAD commit
+            - synced: Last sync state (git ref, tracked files count)
+            - cloud: Cloud repo info (if exists)
+            - status: Whether sync is needed and recommended action
+            """
+            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+            return cloud_info_logic(repo_client, base_dir)
 
     # === MCP Resources ===
 
     @mcp.resource("relace://tool_list", mime_type="application/json")
     def tool_list() -> list[dict[str, Any]]:
         """List all available tools with their status."""
-        return [
+        tools = [
             {
                 "id": "fast_apply",
                 "name": "Fast Apply",
@@ -209,34 +213,81 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 "description": "Agentic search over local codebase",
                 "enabled": True,
             },
-            {
-                "id": "cloud_sync",
-                "name": "Cloud Sync",
-                "description": "Upload codebase for semantic indexing",
-                "enabled": True,
-            },
-            {
-                "id": "cloud_search",
-                "name": "Cloud Search",
-                "description": "Semantic code search using AI embeddings",
-                "enabled": True,
-            },
-            {
-                "id": "cloud_clear",
-                "name": "Cloud Clear",
-                "description": "Delete cloud repository and sync state",
-                "enabled": True,
-            },
-            {
-                "id": "cloud_list",
-                "name": "Cloud List",
-                "description": "List all repositories in Relace Cloud",
-                "enabled": True,
-            },
-            {
-                "id": "cloud_info",
-                "name": "Cloud Info",
-                "description": "Get sync status for current repository",
-                "enabled": True,
-            },
         ]
+        if RELACE_CLOUD_TOOLS:
+            tools.extend(
+                [
+                    {
+                        "id": "cloud_sync",
+                        "name": "Cloud Sync",
+                        "description": "Upload codebase for semantic indexing",
+                        "enabled": True,
+                    },
+                    {
+                        "id": "cloud_search",
+                        "name": "Cloud Search",
+                        "description": "Semantic code search using AI embeddings",
+                        "enabled": True,
+                    },
+                    {
+                        "id": "cloud_clear",
+                        "name": "Cloud Clear",
+                        "description": "Delete cloud repository and sync state",
+                        "enabled": True,
+                    },
+                    {
+                        "id": "cloud_list",
+                        "name": "Cloud List",
+                        "description": "List all repositories in Relace Cloud",
+                        "enabled": True,
+                    },
+                    {
+                        "id": "cloud_info",
+                        "name": "Cloud Info",
+                        "description": "Get sync status for current repository",
+                        "enabled": True,
+                    },
+                ]
+            )
+        return tools
+
+    if RELACE_CLOUD_TOOLS:
+
+        @mcp.resource("relace://cloud/status", mime_type="application/json")
+        def cloud_status() -> dict[str, Any]:
+            """Current cloud sync status - lightweight read from local state file.
+
+            Returns sync state without making API calls. Use this to quickly check
+            if cloud_sync has been run and what the current sync status is.
+            """
+            if not config.base_dir:
+                return {
+                    "synced": False,
+                    "error": "base_dir not configured",
+                    "message": "Set RELACE_BASE_DIR or use MCP Roots to enable cloud status",
+                }
+
+            repo_name = Path(config.base_dir).name
+            state = load_sync_state(repo_name)
+
+            if state is None:
+                return {
+                    "synced": False,
+                    "repo_name": repo_name,
+                    "message": "No sync state found. Run cloud_sync to upload codebase.",
+                }
+
+            return {
+                "synced": True,
+                "repo_id": state.repo_id,
+                "repo_name": state.repo_name or repo_name,
+                "git_ref": (
+                    f"{state.git_branch}@{state.git_head_sha[:8]}"
+                    if state.git_branch and state.git_head_sha
+                    else state.git_head_sha[:8]
+                    if state.git_head_sha
+                    else ""
+                ),
+                "files_count": len(state.files),
+                "last_sync": state.last_sync,
+            }
