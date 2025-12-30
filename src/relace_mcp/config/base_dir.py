@@ -62,9 +62,6 @@ def invalidate_roots_cache(ctx: "Context | None" = None) -> None:
         _roots_cache.pop(key, None)
 
 
-# Root directory should never be used as project root (explicit check for clear error message)
-DANGEROUS_PATHS = frozenset(["/"])
-
 # Markers that indicate a directory is a project root
 PROJECT_MARKERS = (".git", "pyproject.toml", "package.json", "Cargo.toml", "go.mod", ".project")
 
@@ -82,11 +79,10 @@ def validate_project_directory(path: str) -> tuple[bool, str]:
         Tuple of (is_safe, reason_if_unsafe). If is_safe is True, reason is empty.
     """
     resolved = Path(path).resolve()
-    resolved_str = str(resolved)
 
-    # Check 1: Root directory is never valid
-    if resolved_str in DANGEROUS_PATHS:
-        return False, f"system directory: {resolved_str}"
+    # Check 1: Filesystem root is never valid (POSIX '/', Windows drive/UNC root)
+    if resolved == Path(resolved.anchor):
+        return False, f"system directory: {resolved}"
 
     # Check 2: Project markers - at least one should exist
     has_marker = any((resolved / marker).exists() for marker in PROJECT_MARKERS)

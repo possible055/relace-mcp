@@ -48,7 +48,8 @@ class TestValidateProjectDirectory:
 
     def test_rejects_root_directory(self) -> None:
         """Root directory should be rejected as unsafe."""
-        is_safe, reason = validate_project_directory("/")
+        root = Path(Path.cwd().anchor)
+        is_safe, reason = validate_project_directory(str(root))
         assert is_safe is False
         assert "system directory" in reason
 
