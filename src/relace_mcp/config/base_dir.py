@@ -14,20 +14,43 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Roots cache: stores resolved (base_dir, source) from MCP Roots.
-# None = invalid/empty. Set to tuple when resolved, cleared on roots/list_changed.
-_roots_cache: tuple[str, str] | None = None
+# Keyed by session/client ID to avoid cross-workspace leakage when serving multiple clients.
+_roots_cache: dict[str, tuple[str, str]] = {}
 
 
-def invalidate_roots_cache() -> None:
+def _roots_cache_key(ctx: "Context | None") -> str | None:
+    """Derive a stable cache key for the current client/session (best-effort)."""
+    if ctx is None:
+        return None
+    session_id = getattr(ctx, "session_id", None)
+    if isinstance(session_id, str) and session_id:
+        return session_id
+    client_id = getattr(ctx, "client_id", None)
+    if isinstance(client_id, str) and client_id:
+        return f"client:{client_id}"
+    return None
+
+
+def invalidate_roots_cache(ctx: "Context | None" = None) -> None:
     """Invalidate the cached MCP Roots resolution.
 
     Called by RootsMiddleware when receiving notifications/roots/list_changed.
-    The next call to resolve_base_dir() will fetch fresh roots from the client.
+    If a session/client key is available, only that entry is cleared; otherwise clears all.
     """
     global _roots_cache
-    if _roots_cache is not None:
-        logger.info("[base_dir] Roots cache invalidated due to roots/list_changed notification")
-        _roots_cache = None
+    key = _roots_cache_key(ctx)
+    if key is None:
+        if _roots_cache:
+            logger.info("[base_dir] Roots cache cleared due to roots/list_changed notification")
+            _roots_cache.clear()
+        return
+
+    if key in _roots_cache:
+        logger.info(
+            "[base_dir] Roots cache invalidated due to roots/list_changed notification (session=%s)",
+            key,
+        )
+        _roots_cache.pop(key, None)
 
 
 # Root directory should never be used as project root (explicit check for clear error message)
@@ -75,6 +98,14 @@ def validate_base_dir(path: str, *, require_write: bool = False) -> bool:
         True if valid, False otherwise
     """
     p = Path(path)
+    try:
+        resolved = p.resolve()
+        if resolved == resolved.parent:
+            logger.debug("Path is filesystem root (unsafe): %s", resolved)
+            return False
+    except OSError as exc:
+        logger.debug("Path is not accessible: %s (%s)", path, exc)
+        return False
     try:
         if not p.exists():
             logger.debug("Path does not exist: %s", path)
@@ -276,14 +307,29 @@ async def resolve_base_dir(
     # 1. Explicit config takes priority - trusted, no safety check
     if config_base_dir:
         resolved_path = str(Path(config_base_dir).resolve())
-        logger.info("[base_dir] Using RELACE_BASE_DIR: %s", resolved_path)
+        logger.debug("[base_dir] Using RELACE_BASE_DIR: %s", resolved_path)
         return resolved_path, "RELACE_BASE_DIR"
 
     # 2. Try cached MCP Roots first (invalidated by RootsMiddleware on change)
     global _roots_cache
-    if _roots_cache is not None:
-        logger.debug("[base_dir] Using cached roots: %s", _roots_cache[0])
-        return _roots_cache
+    cache_key = _roots_cache_key(ctx)
+    if cache_key is not None:
+        cached = _roots_cache.get(cache_key)
+        if cached is not None:
+            cached_path, cached_source = cached
+            if validate_base_dir(cached_path):
+                logger.debug(
+                    "[base_dir] Using cached roots (session=%s): %s",
+                    cache_key,
+                    cached_path,
+                )
+                return cached
+            logger.info(
+                "[base_dir] Cached roots invalid, clearing (session=%s): %s",
+                cache_key,
+                cached_path,
+            )
+            _roots_cache.pop(cache_key, None)
 
     # 3. Try MCP Roots from client
     if ctx is not None:
@@ -295,7 +341,8 @@ async def resolve_base_dir(
                 if validate_base_dir(resolved):
                     logger.info("[base_dir] Resolved from %s: %s", source, resolved)
                     _check_project_safety(resolved, source)
-                    _roots_cache = (resolved, source)
+                    if cache_key is not None:
+                        _roots_cache[cache_key] = (resolved, source)
                     return resolved, source
                 logger.warning(
                     "MCP Roots resolved to invalid base_dir: %s (source=%s). Falling back...",
@@ -315,20 +362,23 @@ async def resolve_base_dir(
     if git_root := find_git_root(str(cwd)):
         resolved = str(git_root.resolve())
         source = "Git root (fallback)"
-        logger.info("[base_dir] Resolved from %s: %s (cwd: %s)", source, resolved, cwd)
-        logger.warning(
-            "RELACE_BASE_DIR not set and MCP Roots unavailable. Using Git root: %s",
-            resolved,
-        )
-        _check_project_safety(resolved, source)
-        return resolved, source
+        if not validate_base_dir(resolved):
+            logger.warning("[base_dir] Git root is invalid or inaccessible: %s", resolved)
+        else:
+            logger.info("[base_dir] Resolved from %s: %s (cwd: %s)", source, resolved, cwd)
+            logger.warning(
+                "RELACE_BASE_DIR not set and MCP Roots unavailable. Using Git root: %s",
+                resolved,
+            )
+            _check_project_safety(resolved, source)
+            return resolved, source
 
     # 5. Fallback to cwd with warning
     resolved = str(cwd)
     source = "cwd (fallback)"
     logger.info("[base_dir] Resolved from %s: %s", source, resolved)
     if not validate_base_dir(resolved):
-        logger.error("Final fallback CWD is invalid or inaccessible: %s", cwd)
+        raise RuntimeError(f"Cannot resolve a valid base_dir (cwd is invalid): {cwd}")
 
     logger.warning(
         "RELACE_BASE_DIR not set, MCP Roots unavailable, no Git repo found. "
