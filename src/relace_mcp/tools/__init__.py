@@ -271,7 +271,13 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             "synced": True,
             "repo_id": state.repo_id,
             "repo_name": state.repo_name or repo_name,
-            "git_ref": f"{state.git_branch}@{state.git_head_sha[:8]}" if state.git_head_sha else "",
+            "git_ref": (
+                f"{state.git_branch}@{state.git_head_sha[:8]}"
+                if state.git_branch and state.git_head_sha
+                else state.git_head_sha[:8]
+                if state.git_head_sha
+                else ""
+            ),
             "files_count": len(state.files),
             "last_sync": state.last_sync,
         }
