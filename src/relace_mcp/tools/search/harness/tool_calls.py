@@ -85,21 +85,24 @@ class ToolCallsMixin:
         return parallel_calls, sequential_calls
 
     def _execute_tools_parallel(
-        self, tool_calls: list[dict[str, Any]], trace_id: str
+        self, tool_calls: list[dict[str, Any]], trace_id: str, turn: int | None = None
     ) -> tuple[list[tuple[str, str, str | dict[str, Any]]], dict[str, Any] | None]:
         """Execute read-only tools in parallel, other tools sequentially.
 
         Args:
             tool_calls: Tool calls list returned by API.
             trace_id: Trace ID.
+            turn: Current turn number (1-indexed) for logging.
 
         Returns:
             (tool_results, report_back_result) tuple.
         """
         parallel_calls, sequential_calls = self._parse_and_classify_tool_calls(tool_calls, trace_id)
 
-        tool_results = self._execute_parallel_batch(parallel_calls, trace_id)
-        seq_results, report_back_result = self._execute_sequential_batch(sequential_calls, trace_id)
+        tool_results = self._execute_parallel_batch(parallel_calls, trace_id, turn)
+        seq_results, report_back_result = self._execute_sequential_batch(
+            sequential_calls, trace_id, turn
+        )
         tool_results.extend(seq_results)
 
         # Sort by original order (maintain API protocol consistency)
@@ -112,12 +115,14 @@ class ToolCallsMixin:
         self,
         parallel_calls: list[tuple[str, str, str, dict[str, Any] | None]],
         trace_id: str,
+        turn: int | None = None,
     ) -> list[tuple[str, str, str | dict[str, Any]]]:
         """Execute read-only tools in parallel.
 
         Args:
             parallel_calls: Tool calls safe for parallel execution.
             trace_id: Trace ID.
+            turn: Current turn number (1-indexed) for logging.
 
         Returns:
             Tool results list.
@@ -135,7 +140,7 @@ class ToolCallsMixin:
                         continue
                     logger.debug("[%s] Tool call (parallel): %s", trace_id, func_name)
                     future = executor.submit(
-                        self._dispatch_tool_with_logging, func_name, func_args, trace_id
+                        self._dispatch_tool_with_logging, func_name, func_args, trace_id, turn
                     )
                     futures[future] = (tc_id, func_name, func_args)
 
@@ -155,12 +160,14 @@ class ToolCallsMixin:
         self,
         sequential_calls: list[tuple[str, str, str, dict[str, Any] | None]],
         trace_id: str,
+        turn: int | None = None,
     ) -> tuple[list[tuple[str, str, str | dict[str, Any]]], dict[str, Any] | None]:
         """Execute tool calls sequentially and detect report_back.
 
         Args:
             sequential_calls: Tool calls requiring sequential execution.
             trace_id: Trace ID.
+            turn: Current turn number (1-indexed) for logging.
 
         Returns:
             (tool_results, report_back_result) tuple.
@@ -179,7 +186,7 @@ class ToolCallsMixin:
 
             logger.debug("[%s] Tool call (sequential): %s", trace_id, func_name)
             try:
-                result = self._dispatch_tool_with_logging(func_name, func_args, trace_id)
+                result = self._dispatch_tool_with_logging(func_name, func_args, trace_id, turn)
             except Exception as exc:
                 logger.error("[%s] Tool %s raised exception: %s", trace_id, func_name, exc)
                 result = f"Error: {exc}"
@@ -194,7 +201,7 @@ class ToolCallsMixin:
         return tool_results, report_back_result
 
     def _dispatch_tool_with_logging(
-        self, name: str, args: dict[str, Any], trace_id: str
+        self, name: str, args: dict[str, Any], trace_id: str, turn: int | None = None
     ) -> str | dict[str, Any]:
         """Dispatch tool call with timing and logging."""
         if not settings.RELACE_LOGGING:
@@ -212,7 +219,7 @@ class ToolCallsMixin:
             else:
                 result_preview = json.dumps(result, ensure_ascii=False, default=str)[:300]
 
-            log_tool_call(trace_id, name, args, result_preview, latency_ms, success)
+            log_tool_call(trace_id, name, args, result_preview, latency_ms, success, turn=turn)
         except Exception:
             # Logging failure should never break tool execution
             logger.debug("Failed to log tool call for %s", name, exc_info=True)
