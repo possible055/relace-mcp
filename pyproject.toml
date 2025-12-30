@@ -27,6 +27,7 @@ dependencies = [
     "charset-normalizer>=3.0.0",
     "fastmcp>=2.0.0",
     "httpx>=0.28.0",
+    "multilspy>=0.0.15",
     "openai>=1.0.0",
     "platformdirs>=4.0.0",
     "python-dotenv>=1.0.0",
@@ -70,6 +71,11 @@ exclude_dirs = ["tests"]
 
 [tool.mypy]
 python_version = "3.11"
+
+[[tool.mypy.overrides]]
+module = ["multilspy", "multilspy.*"]
+ignore_missing_imports = true
+follow_untyped_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

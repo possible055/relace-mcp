@@ -6,9 +6,11 @@ from typing import TYPE_CHECKING, Any
 
 from ....config import settings
 from ..handlers import (
+    LSPQueryParams,
     bash_handler,
     glob_handler,
     grep_search_handler,
+    lsp_query_handler,
     report_back_handler,
     view_directory_handler,
     view_file_handler,
@@ -268,5 +270,13 @@ class ToolCallsMixin:
                 command=args.get("command", ""),
                 base_dir=base_dir,
             )
+        elif name == "lsp_query":
+            lsp_params = LSPQueryParams(
+                action=args.get("action", ""),
+                file=args.get("file", ""),
+                line=args.get("line", 0),
+                column=args.get("column", 0),
+            )
+            return lsp_query_handler(lsp_params, base_dir)
         else:
             return f"Error: Unknown tool '{name}'"
