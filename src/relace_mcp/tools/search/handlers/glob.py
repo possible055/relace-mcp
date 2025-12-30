@@ -1,3 +1,4 @@
+import fnmatch
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -59,8 +60,6 @@ def _match_glob_segments(pattern_segments: tuple[str, ...], path_segments: tuple
 
         if si >= len(path_segments):
             return False
-
-        import fnmatch
 
         if not fnmatch.fnmatchcase(path_segments[si], pat):
             return False
@@ -129,8 +128,6 @@ def glob_handler(
                     if pattern_has_sep:
                         ok = _match_glob_segments(pattern_segments, tuple(rel_posix.split("/")))
                     else:
-                        import fnmatch
-
                         ok = fnmatch.fnmatchcase(dname, normalized)
                     if ok:
                         matches.append(rel_posix + "/")
@@ -151,8 +148,6 @@ def glob_handler(
                 if pattern_has_sep:
                     ok = _match_glob_segments(pattern_segments, tuple(rel_posix.split("/")))
                 else:
-                    import fnmatch
-
                     ok = fnmatch.fnmatchcase(fname, normalized)
 
                 if ok:

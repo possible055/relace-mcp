@@ -163,7 +163,7 @@ Relace MCP 旨在支持遗留编码仓库（如 GBK/Big5），不会导致 `fast
 
 | 变量 | 默认值 | 描述 |
 |------|--------|------|
-| `RELACE_SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,lsp_query` | 逗号分隔的允许列表。`report_back` 始终启用。添加 `bash` 可启用 shell 命令（仅 Unix）。 |
+| `RELACE_SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,find_symbol` | 逗号分隔的允许列表。`report_back` 始终启用。添加 `bash` 可启用 shell 命令（仅 Unix）。 |
 | `RELACE_SEARCH_PARALLEL_TOOL_CALLS` | `1` | 启用并行工具调用以降低延迟 |
 
 > **注意：** `bash` 工具默认禁用以确保安全。在 Unix 系统上启用，请在 MCP 配置中添加：
@@ -172,7 +172,7 @@ Relace MCP 旨在支持遗留编码仓库（如 GBK/Big5），不会导致 `fast
 >   "mcpServers": {
 >     "relace": {
 >       "env": {
->         "RELACE_SEARCH_ENABLED_TOOLS": "view_file,view_directory,grep_search,glob,lsp_query,bash"
+>         "RELACE_SEARCH_ENABLED_TOOLS": "view_file,view_directory,grep_search,glob,find_symbol,bash"
 >       }
 >     }
 >   }
@@ -181,7 +181,7 @@ Relace MCP 旨在支持遗留编码仓库（如 GBK/Big5），不会导致 `fast
 
 ### LSP 工具
 
-`lsp_query` 工具通过 Language Server Protocol 提供 Python 文件的语义代码查询。支持：
+`find_symbol` 工具通过 Language Server Protocol 提供 Python 文件的语义代码查询。支持：
 - `definition`：跳转到符号定义
 - `references`：查找符号的所有引用
 

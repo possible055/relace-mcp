@@ -1,4 +1,5 @@
 import os
+import shlex
 import shutil
 import subprocess  # nosec B404
 
@@ -50,8 +51,6 @@ def _translate_repo_paths_in_command(command: str, base_dir: str) -> str:
     Returns:
         Command with /repo paths translated.
     """
-    import shlex
-
     try:
         tokens = shlex.split(command)
     except ValueError:

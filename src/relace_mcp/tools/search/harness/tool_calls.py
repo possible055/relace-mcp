@@ -277,7 +277,7 @@ class ToolCallsMixin:
                 command=args.get("command", ""),
                 base_dir=base_dir,
             )
-        elif name == "lsp_query":
+        elif name == "find_symbol":
             lsp_params = LSPQueryParams(
                 action=args.get("action", ""),
                 file=args.get("file", ""),
