@@ -44,6 +44,21 @@ class TestRootsMiddleware:
             assert result is None  # call_next returns None
 
     @pytest.mark.asyncio
+    async def test_handles_roots_list_changed_with_session_context(
+        self, middleware: RootsMiddleware, mock_call_next: AsyncMock
+    ) -> None:
+        """Middleware should pass session context to invalidate_roots_cache."""
+        mock_fastmcp_ctx = MagicMock(session_id="test-session-123")
+        context = MagicMock()
+        context.method = ROOTS_LIST_CHANGED_METHOD
+        context.fastmcp_context = mock_fastmcp_ctx
+
+        with patch.object(roots_module, "invalidate_roots_cache") as mock_invalidate:
+            await middleware.on_notification(context, mock_call_next)
+
+            mock_invalidate.assert_called_once_with(mock_fastmcp_ctx)
+
+    @pytest.mark.asyncio
     async def test_passes_through_other_notifications(
         self, middleware: RootsMiddleware, mock_call_next: AsyncMock
     ) -> None:
@@ -129,6 +144,76 @@ class TestResolveBaseDirWithCache:
         assert base_dir == cached_path
         assert source == "MCP Root (cached)"
         ctx.list_roots.assert_not_awaited()
+
+        # Cleanup
+        base_dir_module.invalidate_roots_cache()
+
+    @pytest.mark.asyncio
+    async def test_clears_invalid_cache_and_refetches_roots(self, tmp_path) -> None:
+        """When cached path becomes invalid, clear cache and fetch fresh roots."""
+        # Pre-populate cache with a path that will be deleted
+        stale_dir = tmp_path / "stale"
+        stale_dir.mkdir()
+        stale_path = str(stale_dir)
+        base_dir_module._roots_cache = {"session-1": (stale_path, "MCP Root (stale)")}
+
+        # Delete the cached directory to make it invalid
+        stale_dir.rmdir()
+
+        # Set up fresh roots
+        fresh_dir = tmp_path / "fresh"
+        fresh_dir.mkdir()
+
+        ctx = MagicMock(session_id="session-1")
+        ctx.list_roots = AsyncMock(
+            return_value=[MagicMock(uri=f"file://{fresh_dir}", name="Fresh Root")]
+        )
+
+        from relace_mcp.config.base_dir import resolve_base_dir
+
+        base_dir, source = await resolve_base_dir(None, ctx)
+
+        # Should have cleared invalid cache and fetched fresh roots
+        assert base_dir == str(fresh_dir)
+        assert "MCP Root" in source
+        ctx.list_roots.assert_awaited_once()
+
+        # Cache should now contain the fresh path
+        assert base_dir_module._roots_cache.get("session-1") == (str(fresh_dir), source)
+
+        # Cleanup
+        base_dir_module.invalidate_roots_cache()
+
+    @pytest.mark.asyncio
+    async def test_clears_invalid_cache_and_falls_back_to_git_root(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """When cached path is invalid and roots also fail, fall back to Git root."""
+        # Pre-populate cache with invalid path
+        stale_path = str(tmp_path / "does-not-exist")
+        base_dir_module._roots_cache = {"session-1": (stale_path, "MCP Root (stale)")}
+
+        # Set up git root
+        git_dir = tmp_path / ".git"
+        git_dir.mkdir()
+        cwd = tmp_path / "src"
+        cwd.mkdir()
+        monkeypatch.chdir(cwd)
+
+        ctx = MagicMock(session_id="session-1")
+        ctx.list_roots = AsyncMock(return_value=[])  # No roots available
+
+        from relace_mcp.config.base_dir import resolve_base_dir
+
+        base_dir, source = await resolve_base_dir(None, ctx)
+
+        # Should have cleared invalid cache and fallen back to Git root
+        assert base_dir == str(tmp_path)
+        assert "Git root" in source
+        ctx.list_roots.assert_awaited_once()
+
+        # Invalid cache entry should have been removed
+        assert "session-1" not in base_dir_module._roots_cache
 
         # Cleanup
         base_dir_module.invalidate_roots_cache()
