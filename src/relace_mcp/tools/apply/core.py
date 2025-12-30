@@ -78,7 +78,7 @@ def _resolve_path(
             )
         try:
             resolved_path = Path(file_path).resolve()
-        except (OSError, ValueError) as e:
+        except (OSError, ValueError, RuntimeError) as e:
             return errors.recoverable_error(
                 "INVALID_PATH", str(e), file_path, ctx.instruction, ctx.trace_id, ctx.elapsed_ms()
             )

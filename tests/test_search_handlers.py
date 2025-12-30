@@ -318,6 +318,32 @@ class TestGrepSearchHandler:
         finally:
             set_project_encoding(None)
 
+    def test_does_not_follow_symlink_files_python_fallback(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Python fallback should not follow file symlinks (prevents base_dir escape)."""
+        outside = tmp_path.parent / f"outside_file_{tmp_path.name}.txt"
+        outside.write_text("SECRET_PATTERN\n")
+        (tmp_path / "link.txt").symlink_to(outside)
+
+        # Force ripgrep path to fail so handler uses Python fallback deterministically.
+        import relace_mcp.tools.search.handlers.grep_search as grep_mod
+
+        def _raise(*_args: object, **_kwargs: object) -> object:
+            raise FileNotFoundError("rg unavailable")
+
+        monkeypatch.setattr(grep_mod.subprocess, "run", _raise)
+
+        params = GrepSearchParams(
+            query="SECRET_PATTERN",
+            case_sensitive=True,
+            include_pattern=None,
+            exclude_pattern=None,
+            base_dir=str(tmp_path),
+        )
+        result = grep_search_handler(params)
+        assert "No matches" in result
+
 
 class TestGlobHandler:
     """Test glob tool handler."""
@@ -396,6 +422,16 @@ class TestBashHandler:
         result = bash_handler("head -n 2 test.txt", str(tmp_path))
         assert "line1" in result
         assert "line2" in result
+
+    def test_blocks_symlink_escape(self, tmp_path: Path) -> None:
+        """Should block reading paths that escape base_dir via symlink."""
+        outside = tmp_path.parent / f"outside_file_{tmp_path.name}.txt"
+        outside.write_text("secret\n")
+        (tmp_path / "link.txt").symlink_to(outside)
+
+        result = bash_handler("cat link.txt", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
 
     def test_executes_wc_command(self, tmp_path: Path) -> None:
         """Should allow wc for counting lines."""
