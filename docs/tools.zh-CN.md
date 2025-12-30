@@ -73,7 +73,7 @@
 - 跳过大于 1MB 的文件和常见非源代码目录（`node_modules`、`__pycache__` 等）
 - 同步状态存储在 `~/.local/state/relace/sync/`
 
-> 高级同步模式（增量、安全完整、镜像）请参见 [advanced.md](advanced.md#sync-modes)。
+> 高级同步模式（增量、安全完整、镜像）请参见 [advanced.zh-CN.md](advanced.zh-CN.md#同步模式)。
 
 ---
 
