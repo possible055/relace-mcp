@@ -85,6 +85,36 @@ def resolve_repo_path(
     return str(resolved)
 
 
+def map_path_no_resolve(path: str, base_dir: str) -> Path:
+    """Map /repo/... virtual path to Path WITHOUT resolving symlinks.
+
+    Use this when you need to check is_symlink() BEFORE resolution.
+    Only handles /repo/... and relative paths. Absolute paths returned as-is.
+
+    Args:
+        path: Input path (/repo/..., relative, or absolute).
+        base_dir: Repository root directory.
+
+    Returns:
+        Path object (not resolved, symlinks intact).
+    """
+    base_path = Path(base_dir)
+
+    if path == "/repo" or path == "/repo/":
+        return base_path
+
+    if path.startswith("/repo/"):
+        rel = path[6:].lstrip("/")
+        if not rel:
+            return base_path
+        return base_path / rel
+
+    if not os.path.isabs(path):
+        return base_path / path
+
+    return Path(path)
+
+
 def validate_file_path(file_path: str, base_dir: str, *, allow_empty: bool = False) -> Path:
     """Validates and resolves file path, preventing path traversal attacks.
 
@@ -110,7 +140,7 @@ def validate_file_path(file_path: str, base_dir: str, *, allow_empty: bool = Fal
 
     try:
         resolved = Path(file_path).resolve()
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, RuntimeError) as exc:
         raise RuntimeError(f"Invalid file path: {file_path}") from exc
 
     base_resolved = Path(base_dir).resolve()

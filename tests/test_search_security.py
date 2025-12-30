@@ -62,6 +62,10 @@ class TestIsBlockedCommand:
         blocked, _ = _is_blocked_command("ls && rm file.txt", DEFAULT_BASE_DIR)
         assert blocked
 
+    def test_blocks_multiline_commands(self) -> None:
+        blocked, _ = _is_blocked_command("ls\nls", DEFAULT_BASE_DIR)
+        assert blocked
+
 
 class TestAbsolutePathBlocking:
     """Test absolute path sandbox enforcement."""

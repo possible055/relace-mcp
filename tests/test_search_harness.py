@@ -380,9 +380,9 @@ class TestParallelToolCallsFix:
 class TestToolSchemas:
     """Test tool schema definitions."""
 
-    def test_has_five_default_tools(self) -> None:
-        """Should have exactly 5 tools by default (bash is opt-in)."""
-        assert len(TOOL_SCHEMAS) == 5
+    def test_has_six_default_tools(self) -> None:
+        """Should have exactly 6 tools by default (bash is opt-in)."""
+        assert len(TOOL_SCHEMAS) == 6
 
     def test_tool_names(self) -> None:
         """Should have correct default tool names (no bash)."""
@@ -392,6 +392,7 @@ class TestToolSchemas:
             "view_directory",
             "grep_search",
             "glob",
+            "find_symbol",
             "report_back",
         }
 
@@ -424,6 +425,17 @@ class TestToolSchemas:
         schemas = get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
         assert names == {"view_file", "grep_search", "glob", "report_back"}
+
+    def test_lsp_query_backward_compat(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """lsp_query in allowlist should map to find_symbol for backward compatibility."""
+        from relace_mcp.tools.search.schemas import get_tool_schemas
+
+        monkeypatch.setenv("RELACE_SEARCH_ENABLED_TOOLS", "view_file,lsp_query")
+
+        schemas = get_tool_schemas()
+        names = {t["function"]["name"] for t in schemas}
+        assert "find_symbol" in names
+        assert "lsp_query" not in names
 
     def test_schema_has_default_per_official_docs(self) -> None:
         """Per Relace official docs, certain params should have default values."""
