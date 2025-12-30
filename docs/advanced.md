@@ -11,6 +11,7 @@ This document covers advanced configuration options for power users and develope
 - [Fast Apply Provider Swap](#fast-apply-provider-swap)
 - [Fast Search Provider Swap](#fast-search-provider-swap)
 - [Fast Search Tool Control](#fast-search-tool-control)
+  - [LSP Tool](#lsp-tool)
 - [Remote Deployment](#remote-deployment-streamable-http)
 
 ---
@@ -50,6 +51,8 @@ These settings allow temporary overrides when the official API updates before th
 | `RELACE_REPO_ID` | — (pre-configured repo UUID to skip list/create) |
 | `RELACE_REPO_SYNC_TIMEOUT` | `300` |
 | `RELACE_REPO_SYNC_MAX_FILES` | `5000` |
+| `RELACE_REPO_LIST_MAX` | `10000` (max repos to fetch with pagination) |
+| `RELACE_UPLOAD_MAX_WORKERS` | `8` (concurrent file hash/upload workers) |
 
 ---
 
@@ -160,7 +163,7 @@ Switch to OpenAI-compatible providers for `fast_search`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RELACE_SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob` | Comma-separated allowlist. `report_back` is always enabled. Add `bash` to enable shell commands (Unix only). |
+| `RELACE_SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,lsp_query` | Comma-separated allowlist. `report_back` is always enabled. Add `bash` to enable shell commands (Unix only). |
 | `RELACE_SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls for lower latency |
 
 > **Note:** The `bash` tool is disabled by default for security. To enable it on Unix systems, add to your MCP configuration:
@@ -169,12 +172,25 @@ Switch to OpenAI-compatible providers for `fast_search`:
 >   "mcpServers": {
 >     "relace": {
 >       "env": {
->         "RELACE_SEARCH_ENABLED_TOOLS": "view_file,view_directory,grep_search,glob,bash"
+>         "RELACE_SEARCH_ENABLED_TOOLS": "view_file,view_directory,grep_search,glob,lsp_query,bash"
 >       }
 >     }
 >   }
 > }
 > ```
+
+### LSP Tool
+
+The `lsp_query` tool provides semantic code queries using Language Server Protocol for Python files. It supports:
+- `definition`: Jump to the definition of a symbol
+- `references`: Find all references to a symbol
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RELACE_LSP_TIMEOUT_SECONDS` | `15.0` | Timeout for LSP startup/shutdown/requests |
+| `RELACE_LSP_LOOP_STOP_TIMEOUT_SECONDS` | `3.0` | Watchdog timeout for stopping the LSP loop thread |
+
+> **Note:** LSP requires `multilspy` (installed with the package) and `jedi-language-server`. First call incurs 2-5s startup latency.
 
 ### OpenAI Structured Outputs Compatibility
 
