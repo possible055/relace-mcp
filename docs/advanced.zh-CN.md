@@ -11,6 +11,7 @@
 - [Fast Apply 提供商切换](#fast-apply-提供商切换)
 - [Fast Search 提供商切换](#fast-search-提供商切换)
 - [Fast Search 工具控制](#fast-search-工具控制)
+  - [LSP 工具](#lsp-工具)
 - [远程部署 (Streamable HTTP)](#远程部署-streamable-http)
 
 ---
@@ -50,6 +51,8 @@
 | `RELACE_REPO_ID` | — (预配置的 repo UUID，可跳过 list/create) |
 | `RELACE_REPO_SYNC_TIMEOUT` | `300` |
 | `RELACE_REPO_SYNC_MAX_FILES` | `5000` |
+| `RELACE_REPO_LIST_MAX` | `10000`（分页获取的最大仓库数） |
+| `RELACE_UPLOAD_MAX_WORKERS` | `8`（并发文件哈希/上传工作线程数） |
 
 ---
 
@@ -160,7 +163,7 @@ Relace MCP 旨在支持遗留编码仓库（如 GBK/Big5），不会导致 `fast
 
 | 变量 | 默认值 | 描述 |
 |------|--------|------|
-| `RELACE_SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob` | 逗号分隔的允许列表。`report_back` 始终启用。添加 `bash` 可启用 shell 命令（仅 Unix）。 |
+| `RELACE_SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,lsp_query` | 逗号分隔的允许列表。`report_back` 始终启用。添加 `bash` 可启用 shell 命令（仅 Unix）。 |
 | `RELACE_SEARCH_PARALLEL_TOOL_CALLS` | `1` | 启用并行工具调用以降低延迟 |
 
 > **注意：** `bash` 工具默认禁用以确保安全。在 Unix 系统上启用，请在 MCP 配置中添加：
@@ -169,12 +172,25 @@ Relace MCP 旨在支持遗留编码仓库（如 GBK/Big5），不会导致 `fast
 >   "mcpServers": {
 >     "relace": {
 >       "env": {
->         "RELACE_SEARCH_ENABLED_TOOLS": "view_file,view_directory,grep_search,glob,bash"
+>         "RELACE_SEARCH_ENABLED_TOOLS": "view_file,view_directory,grep_search,glob,lsp_query,bash"
 >       }
 >     }
 >   }
 > }
 > ```
+
+### LSP 工具
+
+`lsp_query` 工具通过 Language Server Protocol 提供 Python 文件的语义代码查询。支持：
+- `definition`：跳转到符号定义
+- `references`：查找符号的所有引用
+
+| 变量 | 默认值 | 描述 |
+|------|--------|------|
+| `RELACE_LSP_TIMEOUT_SECONDS` | `15.0` | LSP 启动/关闭/请求的超时时间 |
+| `RELACE_LSP_LOOP_STOP_TIMEOUT_SECONDS` | `3.0` | 停止 LSP 循环线程的看门狗超时 |
+
+> **注意：** LSP 需要 `multilspy`（随包安装）和 `jedi-language-server`。首次调用会有 2-5 秒启动延迟。
 
 ### OpenAI Structured Outputs 兼容性
 
