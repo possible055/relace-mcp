@@ -26,6 +26,6 @@ class RootsMiddleware(Middleware):
         # MiddlewareContext has a 'method' attribute that contains the notification method name
         if context.method == ROOTS_LIST_CHANGED_METHOD:
             logger.info("[RootsMiddleware] Received roots/list_changed notification")
-            invalidate_roots_cache()
+            invalidate_roots_cache(context.fastmcp_context)
 
         return await call_next(context)
