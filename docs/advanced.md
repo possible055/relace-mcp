@@ -188,9 +188,9 @@ The `find_symbol` tool provides semantic code queries using Language Server Prot
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `RELACE_LSP_TIMEOUT_SECONDS` | `15.0` | Timeout for LSP startup/shutdown/requests |
-| `RELACE_LSP_LOOP_STOP_TIMEOUT_SECONDS` | `3.0` | Watchdog timeout for stopping the LSP loop thread |
+| `RELACE_LSP_LOOP_STOP_TIMEOUT_SECONDS` | `3.0` | Legacy (multilspy implementation); no effect in current client |
 
-> **Note:** LSP requires `multilspy` (installed with the package) and `jedi-language-server`. First call incurs 2-5s startup latency.
+> **Note:** LSP uses `basedpyright` (installed with the package). First call incurs 2-5s startup latency.
 
 ### OpenAI Structured Outputs Compatibility
 

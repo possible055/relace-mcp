@@ -1,14 +1,9 @@
 import threading
-from concurrent.futures import TimeoutError as FuturesTimeoutError
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from relace_mcp.tools.search.handlers.lsp import (
     LSPQueryParams,
-    LSPServerManager,
     _format_lsp_results,
     lsp_query_handler,
 )
@@ -38,35 +33,19 @@ class TestFormatLSPResults:
         assert result == "No results found."
 
     def test_location_format(self) -> None:
-        results: list[dict[str, Any]] = [
-            {
-                "uri": "file:///base/src/main.py",
-                "range": {"start": {"line": 10, "character": 4}},
-            }
-        ]
+        # Import Location from the lsp module
+        from relace_mcp.lsp import Location
+
+        results = [Location(uri="file:///base/src/main.py", line=10, character=4)]
         result = _format_lsp_results(results, "/base")
         assert "/repo/src/main.py:11:4" in result
 
-    def test_location_link_format(self) -> None:
-        results: list[dict[str, Any]] = [
-            {
-                "targetUri": "file:///base/lib/util.py",
-                "targetRange": {"start": {"line": 0, "character": 0}},
-            }
-        ]
-        result = _format_lsp_results(results, "/base")
-        assert "/repo/lib/util.py:1:0" in result
-
     def test_multiple_results(self) -> None:
-        results: list[dict[str, Any]] = [
-            {
-                "uri": "file:///base/a.py",
-                "range": {"start": {"line": 1, "character": 0}},
-            },
-            {
-                "uri": "file:///base/b.py",
-                "range": {"start": {"line": 2, "character": 5}},
-            },
+        from relace_mcp.lsp import Location
+
+        results = [
+            Location(uri="file:///base/a.py", line=1, character=0),
+            Location(uri="file:///base/b.py", line=2, character=5),
         ]
         result = _format_lsp_results(results, "/base")
         lines = result.split("\n")
@@ -75,12 +54,10 @@ class TestFormatLSPResults:
         assert "/repo/b.py:3:5" in lines[1]
 
     def test_result_capping(self) -> None:
-        results: list[dict[str, Any]] = [
-            {
-                "uri": f"file:///base/file{i}.py",
-                "range": {"start": {"line": i, "character": 0}},
-            }
-            for i in range(100)
+        from relace_mcp.lsp import Location
+
+        results = [
+            Location(uri=f"file:///base/file{i}.py", line=i, character=0) for i in range(100)
         ]
         result = _format_lsp_results(results, "/base")
         assert "capped at 50 results" in result
@@ -91,24 +68,18 @@ class TestFormatLSPResults:
 
         e.g., /home/user/project should NOT match /home/user/project123
         """
-        results: list[dict[str, Any]] = [
-            {
-                "uri": "file:///home/user/project123/file.py",
-                "range": {"start": {"line": 0, "character": 0}},
-            }
-        ]
+        from relace_mcp.lsp import Location
+
+        results = [Location(uri="file:///home/user/project123/file.py", line=0, character=0)]
         result = _format_lsp_results(results, "/home/user/project")
         # Should NOT be transformed to /repo/... since project123 != project
         assert result == "/home/user/project123/file.py:1:0"
 
     def test_base_dir_with_trailing_slash(self) -> None:
         """base_dir with trailing slash should work correctly."""
-        results: list[dict[str, Any]] = [
-            {
-                "uri": "file:///base/src/main.py",
-                "range": {"start": {"line": 5, "character": 10}},
-            }
-        ]
+        from relace_mcp.lsp import Location
+
+        results = [Location(uri="file:///base/src/main.py", line=5, character=10)]
         result = _format_lsp_results(results, "/base/")
         assert "/repo/src/main.py:6:10" in result
 
@@ -172,13 +143,15 @@ class TestLSPQueryHandler:
         assert "Error" in result
         assert "column" in result
 
-    @patch("relace_mcp.tools.search.handlers.lsp.LSPServerManager.get_instance")
-    def test_symlinked_base_dir_works(self, mock_get_instance: MagicMock, tmp_path: Path) -> None:
+    @patch("relace_mcp.lsp.LSPClientManager")
+    def test_symlinked_base_dir_works(self, mock_manager_cls: MagicMock, tmp_path: Path) -> None:
         """Regression test: symlinked base_dir should not cause ValueError.
 
         When base_dir is a symlink, Path.resolve() on the file returns the
         real path, but relative_to with the unresolved base_dir fails.
         """
+        from relace_mcp.lsp import Location
+
         # Create actual directory with a Python file
         actual_dir = tmp_path / "actual"
         actual_dir.mkdir()
@@ -189,14 +162,13 @@ class TestLSPQueryHandler:
         symlink_dir = tmp_path / "symlink"
         symlink_dir.symlink_to(actual_dir)
 
-        mock_manager = MagicMock()
-        mock_manager.request_definition.return_value = [
-            {
-                "uri": f"file://{actual_dir}/test.py",
-                "range": {"start": {"line": 0, "character": 0}},
-            }
+        mock_client = MagicMock()
+        mock_client.definition.return_value = [
+            Location(uri=f"file://{actual_dir}/test.py", line=0, character=0)
         ]
-        mock_get_instance.return_value = mock_manager
+        mock_manager = MagicMock()
+        mock_manager.get_client.return_value = mock_client
+        mock_manager_cls.get_instance.return_value = mock_manager
 
         params = LSPQueryParams(
             action="definition",
@@ -209,22 +181,23 @@ class TestLSPQueryHandler:
 
         # Should succeed, not return "Invalid path" error
         assert "Error" not in result
-        mock_manager.request_definition.assert_called_once()
+        mock_client.definition.assert_called_once()
 
-    @patch("relace_mcp.tools.search.handlers.lsp.LSPServerManager.get_instance")
-    def test_definition_calls_manager(self, mock_get_instance: MagicMock, tmp_path: Path) -> None:
+    @patch("relace_mcp.lsp.LSPClientManager")
+    def test_definition_calls_manager(self, mock_manager_cls: MagicMock, tmp_path: Path) -> None:
+        from relace_mcp.lsp import Location
+
         # Create a Python file
         py_file = tmp_path / "test.py"
         py_file.write_text("def hello():\n    pass\n")
 
-        mock_manager = MagicMock()
-        mock_manager.request_definition.return_value = [
-            {
-                "uri": f"file://{tmp_path}/test.py",
-                "range": {"start": {"line": 0, "character": 4}},
-            }
+        mock_client = MagicMock()
+        mock_client.definition.return_value = [
+            Location(uri=f"file://{tmp_path}/test.py", line=0, character=4)
         ]
-        mock_get_instance.return_value = mock_manager
+        mock_manager = MagicMock()
+        mock_manager.get_client.return_value = mock_client
+        mock_manager_cls.get_instance.return_value = mock_manager
 
         params = LSPQueryParams(
             action="definition",
@@ -234,17 +207,21 @@ class TestLSPQueryHandler:
         )
         result = lsp_query_handler(params, str(tmp_path))
 
-        mock_manager.request_definition.assert_called_once()
+        mock_client.definition.assert_called_once()
         assert "test.py:1:4" in result
 
-    @patch("relace_mcp.tools.search.handlers.lsp.LSPServerManager.get_instance")
-    def test_timeout_returns_error(self, mock_get_instance: MagicMock, tmp_path: Path) -> None:
+    @patch("relace_mcp.lsp.LSPClientManager")
+    def test_timeout_returns_error(self, mock_manager_cls: MagicMock, tmp_path: Path) -> None:
+        from relace_mcp.lsp import LSPError
+
         py_file = tmp_path / "test.py"
         py_file.write_text("x = 1\n")
 
+        mock_client = MagicMock()
+        mock_client.definition.side_effect = LSPError("Request textDocument/definition timed out")
         mock_manager = MagicMock()
-        mock_manager.request_definition.side_effect = FuturesTimeoutError()
-        mock_get_instance.return_value = mock_manager
+        mock_manager.get_client.return_value = mock_client
+        mock_manager_cls.get_instance.return_value = mock_manager
 
         params = LSPQueryParams(
             action="definition",
@@ -257,23 +234,21 @@ class TestLSPQueryHandler:
         assert "Error" in result
         assert "timed out" in result
 
-    @patch("relace_mcp.tools.search.handlers.lsp.LSPServerManager.get_instance")
-    def test_references_calls_manager(self, mock_get_instance: MagicMock, tmp_path: Path) -> None:
+    @patch("relace_mcp.lsp.LSPClientManager")
+    def test_references_calls_manager(self, mock_manager_cls: MagicMock, tmp_path: Path) -> None:
+        from relace_mcp.lsp import Location
+
         py_file = tmp_path / "test.py"
         py_file.write_text("x = 1\nprint(x)\n")
 
-        mock_manager = MagicMock()
-        mock_manager.request_references.return_value = [
-            {
-                "uri": f"file://{tmp_path}/test.py",
-                "range": {"start": {"line": 0, "character": 0}},
-            },
-            {
-                "uri": f"file://{tmp_path}/test.py",
-                "range": {"start": {"line": 1, "character": 6}},
-            },
+        mock_client = MagicMock()
+        mock_client.references.return_value = [
+            Location(uri=f"file://{tmp_path}/test.py", line=0, character=0),
+            Location(uri=f"file://{tmp_path}/test.py", line=1, character=6),
         ]
-        mock_get_instance.return_value = mock_manager
+        mock_manager = MagicMock()
+        mock_manager.get_client.return_value = mock_client
+        mock_manager_cls.get_instance.return_value = mock_manager
 
         params = LSPQueryParams(
             action="references",
@@ -283,34 +258,38 @@ class TestLSPQueryHandler:
         )
         result = lsp_query_handler(params, str(tmp_path))
 
-        mock_manager.request_references.assert_called_once()
+        mock_client.references.assert_called_once()
         lines = result.split("\n")
         assert len(lines) == 2
 
 
-class TestLSPServerManager:
-    """Tests for LSPServerManager singleton."""
+class TestLSPClientManager:
+    """Tests for LSPClientManager singleton."""
 
     def test_singleton_instance(self) -> None:
-        # Reset singleton for test isolation
-        LSPServerManager._instance = None
+        from relace_mcp.lsp import LSPClientManager
 
-        m1 = LSPServerManager.get_instance()
-        m2 = LSPServerManager.get_instance()
+        # Reset singleton for test isolation
+        LSPClientManager._instance = None
+
+        m1 = LSPClientManager.get_instance()
+        m2 = LSPClientManager.get_instance()
         assert m1 is m2
 
         # Cleanup
-        LSPServerManager._instance = None
+        LSPClientManager._instance = None
 
     def test_singleton_thread_safety(self) -> None:
-        LSPServerManager._instance = None
+        from relace_mcp.lsp import LSPClientManager
 
-        instances: list[LSPServerManager] = []
+        LSPClientManager._instance = None
+
+        instances: list = []
         errors: list[Exception] = []
 
         def get_manager() -> None:
             try:
-                instances.append(LSPServerManager.get_instance())
+                instances.append(LSPClientManager.get_instance())
             except Exception as e:
                 errors.append(e)
 
@@ -326,56 +305,15 @@ class TestLSPServerManager:
         assert all(inst is instances[0] for inst in instances)
 
         # Cleanup
-        LSPServerManager._instance = None
+        LSPClientManager._instance = None
 
     def test_manager_initial_state(self) -> None:
-        LSPServerManager._instance = None
+        from relace_mcp.lsp import LSPClientManager
 
-        manager = LSPServerManager.get_instance()
-        assert manager._initialized is False
-        assert manager._server is None
-        assert manager._context is None
-        assert manager._loop is None
-        assert manager._loop_thread is None
-        assert manager._workspace is None
+        LSPClientManager._instance = None
+
+        manager = LSPClientManager.get_instance()
+        assert len(manager._clients) == 0
 
         # Cleanup
-        LSPServerManager._instance = None
-
-    @patch("relace_mcp.tools.search.handlers.lsp.asyncio.run_coroutine_threadsafe")
-    def test_request_exception_triggers_cleanup(self, mock_rcts: MagicMock) -> None:
-        LSPServerManager._instance = None
-        manager = LSPServerManager.get_instance()
-
-        fut = MagicMock()
-        fut.result.return_value = None
-        mock_rcts.return_value = fut
-
-        context = MagicMock()
-        # Avoid unawaited AsyncMock coroutine warnings from __aexit__.
-        context.__aexit__ = MagicMock(return_value=None)  # type: ignore[method-assign]
-        server = MagicMock()
-        server.request_definition.side_effect = RuntimeError("boom")
-
-        manager._initialized = True
-        manager._context = context
-        manager._server = server
-        manager._loop = MagicMock()
-        manager._loop_thread = MagicMock()
-        manager._loop_thread.is_alive.return_value = False
-        manager._workspace = "/tmp"
-        manager._ensure_server = MagicMock()
-
-        with pytest.raises(RuntimeError, match="boom"):
-            manager.request_definition("/tmp", "a.py", 0, 0)
-
-        context.__aexit__.assert_called_once_with(None, None, None)
-        assert manager._initialized is False
-        assert manager._server is None
-        assert manager._context is None
-        assert manager._loop is None
-        assert manager._loop_thread is None
-        assert manager._workspace is None
-
-        # Cleanup
-        LSPServerManager._instance = None
+        LSPClientManager._instance = None
