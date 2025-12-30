@@ -149,6 +149,7 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 |----------|----------|-------------|
 | `RELACE_API_KEY` | ✅ | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
 | `RELACE_BASE_DIR` | ❌ | Absolute path to project root (auto-detected via MCP Roots if not set) |
+| `RELACE_CLOUD_TOOLS` | ❌ | Set to `1` to enable cloud tools (cloud_sync, cloud_search, etc.) |
 | `RELACE_LOGGING` | ❌ | Set to `1` to enable file logging (default: disabled) |
 | `RELACE_DEFAULT_ENCODING` | ❌ | Force file encoding (e.g., `gbk`, `big5`) for legacy repos |
 | `RELACE_ENCODING_SAMPLE_LIMIT` | ❌ | Max files for auto-detecting encoding (default: `30`) |
@@ -164,10 +165,17 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 
 ## Tools
 
+### Core Tools (always available)
+
 | Tool | Description |
 |------|-------------|
 | `fast_apply` | Apply code edits at 10,000+ tokens/sec |
 | `fast_search` | Agentic codebase search with natural language |
+
+### Cloud Tools (requires `RELACE_CLOUD_TOOLS=1`)
+
+| Tool | Description |
+|------|-------------|
 | `cloud_sync` | Upload local codebase to Relace Cloud |
 | `cloud_search` | Semantic search over cloud-synced repos |
 | `cloud_list` | List cloud repositories |

@@ -7,6 +7,11 @@ from platformdirs import user_state_dir
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "RELACE_CLOUD_TOOLS",
+    "RelaceConfig",
+]
+
 # Fast Apply (OpenAI-compatible base URL; SDK appends /chat/completions automatically)
 RELACE_APPLY_BASE_URL = os.getenv(
     "RELACE_APPLY_ENDPOINT",
@@ -57,6 +62,10 @@ _logging_env = os.getenv("RELACE_LOGGING", "").lower()
 if not _logging_env:
     _logging_env = os.getenv("RELACE_EXPERIMENTAL_LOGGING", "").lower()
 RELACE_LOGGING = _logging_env in ("1", "true", "yes")
+
+# Cloud tools (disabled by default)
+# Use RELACE_CLOUD_TOOLS=1 to enable cloud_sync, cloud_search, cloud_list, cloud_info, cloud_clear
+RELACE_CLOUD_TOOLS = os.getenv("RELACE_CLOUD_TOOLS", "").lower() in ("1", "true", "yes")
 
 # Logging - Cross-platform state directory:
 # - Linux: ~/.local/state/relace

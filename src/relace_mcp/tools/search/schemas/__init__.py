@@ -1,28 +1,47 @@
 from ....config import (
     SEARCH_BUDGET_HINT_TEMPLATE,
+    SEARCH_BUDGET_HINT_TEMPLATE_OPENAI,
     SEARCH_CONVERGENCE_HINT,
+    SEARCH_CONVERGENCE_HINT_OPENAI,
     SEARCH_STRATEGIES,
+    SEARCH_STRATEGIES_OPENAI,
     SEARCH_SYSTEM_PROMPT,
+    SEARCH_SYSTEM_PROMPT_OPENAI,
     SEARCH_USER_PROMPT_TEMPLATE,
+    SEARCH_USER_PROMPT_TEMPLATE_OPENAI,
 )
 from .tool_schemas import TOOL_SCHEMAS, get_tool_schemas, normalize_tool_schemas
 from .types import GrepSearchParams
 
-# Shorter aliases for internal use within the search module
+# Shorter aliases for internal use within the search module (Relace native)
 SYSTEM_PROMPT = SEARCH_SYSTEM_PROMPT
 USER_PROMPT_TEMPLATE = SEARCH_USER_PROMPT_TEMPLATE
 BUDGET_HINT_TEMPLATE = SEARCH_BUDGET_HINT_TEMPLATE
 CONVERGENCE_HINT = SEARCH_CONVERGENCE_HINT
 STRATEGIES = SEARCH_STRATEGIES
 
+# OpenAI-compatible prompts
+SYSTEM_PROMPT_OPENAI = SEARCH_SYSTEM_PROMPT_OPENAI
+USER_PROMPT_TEMPLATE_OPENAI = SEARCH_USER_PROMPT_TEMPLATE_OPENAI
+BUDGET_HINT_TEMPLATE_OPENAI = SEARCH_BUDGET_HINT_TEMPLATE_OPENAI
+CONVERGENCE_HINT_OPENAI = SEARCH_CONVERGENCE_HINT_OPENAI
+STRATEGIES_OPENAI = SEARCH_STRATEGIES_OPENAI
+
 __all__ = [
     "GrepSearchParams",
-    # Export aliases for backward compatibility within search module
+    # Export aliases for backward compatibility within search module (Relace native)
     "SYSTEM_PROMPT",
     "USER_PROMPT_TEMPLATE",
     "BUDGET_HINT_TEMPLATE",
     "CONVERGENCE_HINT",
     "STRATEGIES",
+    # OpenAI-compatible prompts
+    "SYSTEM_PROMPT_OPENAI",
+    "USER_PROMPT_TEMPLATE_OPENAI",
+    "BUDGET_HINT_TEMPLATE_OPENAI",
+    "CONVERGENCE_HINT_OPENAI",
+    "STRATEGIES_OPENAI",
+    # Tool schemas
     "get_tool_schemas",
     "normalize_tool_schemas",
     "TOOL_SCHEMAS",
