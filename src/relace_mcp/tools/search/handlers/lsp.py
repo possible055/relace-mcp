@@ -1,14 +1,21 @@
+import asyncio
 import atexit
 import logging
 import threading
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from .constants import MAX_LSP_RESULTS
+from .constants import LSP_LOOP_STOP_TIMEOUT_SECONDS, LSP_TIMEOUT_SECONDS, MAX_LSP_RESULTS
 from .paths import map_repo_path
 
 logger = logging.getLogger(__name__)
+
+
+def _run_event_loop(loop: asyncio.AbstractEventLoop) -> None:
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
 
 
 class LSPServerManager:
@@ -24,7 +31,9 @@ class LSPServerManager:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._server: Any = None  # SyncLanguageServer
-        self._context: Any = None  # Context manager state
+        self._context: Any = None  # Async context manager state (LanguageServer.start_server)
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._loop_thread: threading.Thread | None = None
         self._workspace: str | None = None
         self._initialized = False
 
@@ -43,21 +52,101 @@ class LSPServerManager:
     def _cleanup(self) -> None:
         """Cleanup resources on process exit."""
         with self._lock:
+            server = self._server
             context = self._context
+            loop = self._loop
+            loop_thread = self._loop_thread
 
-            # Always clear state, even if context is missing (defense-in-depth)
+            # Always clear state (defense-in-depth)
             self._server = None
             self._context = None
+            self._loop = None
+            self._loop_thread = None
+            self._workspace = None
             self._initialized = False
 
-            if context is None:
+            if server is None or context is None or loop is None or loop_thread is None:
                 return
 
             try:
                 logger.debug("Shutting down LSP server...")
-                context.__exit__(None, None, None)
-            except Exception as exc:
-                logger.warning("Error during LSP cleanup: %s", exc)
+                fut = asyncio.run_coroutine_threadsafe(context.__aexit__(None, None, None), loop)
+                fut.result(timeout=LSP_TIMEOUT_SECONDS)
+            except FuturesTimeoutError:
+                try:
+                    fut.cancel()
+                except Exception:  # nosec B110 - cleanup best-effort
+                    pass
+                logger.warning(
+                    "LSP cleanup timed out after %.1fs; forcing stop", LSP_TIMEOUT_SECONDS
+                )
+                self._force_stop(server, loop)
+            except Exception:
+                logger.warning("Error during LSP cleanup", exc_info=True)
+            finally:
+                self._stop_loop(loop, loop_thread)
+
+    def _stop_loop(self, loop: asyncio.AbstractEventLoop, loop_thread: threading.Thread) -> None:
+        try:
+            loop.call_soon_threadsafe(loop.stop)
+        except Exception:  # nosec B110 - cleanup best-effort
+            pass
+
+        loop_thread.join(timeout=LSP_LOOP_STOP_TIMEOUT_SECONDS)
+        if loop_thread.is_alive():
+            return
+
+        try:
+            loop.close()
+        except Exception:  # nosec B110 - cleanup best-effort
+            pass
+
+    def _kill_process_tree(self, pid: int) -> None:
+        try:
+            import psutil
+        except Exception:
+            return
+
+        try:
+            parent = psutil.Process(pid)
+        except Exception:
+            return
+
+        for child in parent.children(recursive=True):
+            try:
+                child.kill()
+            except Exception:  # nosec B110 - cleanup best-effort
+                pass
+        try:
+            parent.kill()
+        except Exception:  # nosec B110 - cleanup best-effort
+            pass
+
+    def _force_stop(self, server: Any, loop: asyncio.AbstractEventLoop) -> None:
+        """Forcefully stop the language server process (best-effort)."""
+        try:
+            fut = asyncio.run_coroutine_threadsafe(server.language_server.server.stop(), loop)
+            fut.result(timeout=LSP_TIMEOUT_SECONDS)
+            return
+        except Exception:  # nosec B110 - cleanup best-effort, fallback below
+            pass
+
+        try:
+            process = server.language_server.server.process
+            pid = getattr(process, "pid", None)
+        except Exception:
+            process = None
+            pid = None
+
+        if isinstance(pid, int) and pid > 0:
+            self._kill_process_tree(pid)
+            return
+
+        try:
+            if process is not None:
+                process.kill()
+        except Exception:  # nosec B110 - cleanup best-effort
+            pass
 
     def _ensure_server(self, workspace: str) -> None:
         """Ensure server is running for the given workspace.
@@ -81,27 +170,71 @@ class LSPServerManager:
             lsp_logger = MultilspyLogger()
             lsp_logger.logger.setLevel(logging.WARNING)
 
-            server = None
-            context = None
+            server: Any | None = None
+            loop: asyncio.AbstractEventLoop | None = None
+            loop_thread: threading.Thread | None = None
+            context: Any | None = None
+            fut: Any | None = None
+
             try:
-                server = SyncLanguageServer.create(config, lsp_logger, workspace)
-                context = server.start_server()
-                context.__enter__()
+                server = SyncLanguageServer.create(
+                    config, lsp_logger, workspace, timeout=max(1, int(LSP_TIMEOUT_SECONDS))
+                )
+
+                loop = asyncio.new_event_loop()
+                loop_thread = threading.Thread(
+                    target=_run_event_loop,
+                    args=(loop,),
+                    daemon=True,
+                )
+                loop_thread.start()
+                cast(Any, server).loop = loop
+
+                context = server.language_server.start_server()
+                fut = asyncio.run_coroutine_threadsafe(context.__aenter__(), loop)
+                fut.result(timeout=LSP_TIMEOUT_SECONDS)
+
                 self._server = server
                 self._context = context
+                self._loop = loop
+                self._loop_thread = loop_thread
                 self._workspace = workspace
                 self._initialized = True
                 logger.info("LSP server started successfully")
-            except Exception:
+            except FuturesTimeoutError as exc:
+                if fut is not None:
+                    try:
+                        fut.cancel()
+                    except Exception:  # nosec B110 - cleanup best-effort
+                        pass
+                logger.warning(
+                    "LSP startup timed out after %.1fs", LSP_TIMEOUT_SECONDS, exc_info=True
+                )
                 try:
-                    if context is not None:
-                        context.__exit__(None, None, None)
-                except Exception as exc:
-                    logger.warning("Error during LSP startup cleanup: %s", exc)
+                    if server is not None and loop is not None:
+                        self._force_stop(server, loop)
                 finally:
-                    self._initialized = False
-                    self._server = None
-                    self._context = None
+                    if loop is not None and loop_thread is not None:
+                        self._stop_loop(loop, loop_thread)
+                raise TimeoutError(
+                    f"LSP startup timed out after {LSP_TIMEOUT_SECONDS:.1f} seconds"
+                ) from exc
+            except Exception:
+                if context is not None and loop is not None:
+                    try:
+                        exit_fut = asyncio.run_coroutine_threadsafe(
+                            context.__aexit__(None, None, None), loop
+                        )
+                        exit_fut.result(timeout=LSP_TIMEOUT_SECONDS)
+                    except Exception as exc:
+                        logger.warning("Error during LSP startup cleanup: %s", exc)
+                        if server is not None:
+                            self._force_stop(server, loop)
+                elif server is not None and loop is not None:
+                    self._force_stop(server, loop)
+
+                if loop is not None and loop_thread is not None:
+                    self._stop_loop(loop, loop_thread)
                 raise
 
     def request_definition(
@@ -172,13 +305,14 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
     try:
         fs_path = map_repo_path(params.file, base_dir)
         abs_path = Path(fs_path).resolve()
+        resolved_base_dir = str(Path(base_dir).resolve())
 
         if not abs_path.exists():
             return f"Error: File not found: {params.file}"
         if abs_path.suffix != ".py":
             return f"Error: LSP query only supports Python files, got: {abs_path.suffix}"
 
-        rel_path = str(abs_path.relative_to(base_dir))
+        rel_path = str(abs_path.relative_to(resolved_base_dir))
     except ValueError as e:
         return f"Error: Invalid path: {e}"
 
@@ -187,14 +321,20 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
         manager = LSPServerManager.get_instance()
 
         if params.action == "definition":
-            results = manager.request_definition(base_dir, rel_path, params.line, params.column)
+            results = manager.request_definition(
+                resolved_base_dir, rel_path, params.line, params.column
+            )
         else:
-            results = manager.request_references(base_dir, rel_path, params.line, params.column)
+            results = manager.request_references(
+                resolved_base_dir, rel_path, params.line, params.column
+            )
 
-        return _format_lsp_results(results, base_dir)
+        return _format_lsp_results(results, resolved_base_dir)
 
     except FileNotFoundError:
         return "Error: jedi-language-server not found. Run: pip install jedi-language-server"
+    except (FuturesTimeoutError, TimeoutError):
+        return f"Error: LSP query timed out after {LSP_TIMEOUT_SECONDS:.1f} seconds."
     except Exception as exc:
         logger.warning("LSP query failed: %s", exc)
         return f"Error: LSP query failed: {exc}"
@@ -206,14 +346,17 @@ def _format_lsp_results(results: list[dict[str, Any]], base_dir: str) -> str:
         return "No results found."
 
     lines = []
+    # Ensure base_dir ends with / to match directory boundary correctly
+    # e.g., avoid matching /home/user/project123 when base_dir is /home/user/project
+    base_dir_prefix = base_dir if base_dir.endswith("/") else base_dir + "/"
     for r in results[:MAX_LSP_RESULTS]:
         uri = r.get("uri") or r.get("targetUri", "")
         rng = r.get("range") or r.get("targetRange", {})
         start = rng.get("start", {})
 
         path = uri.replace("file://", "")
-        if path.startswith(base_dir):
-            path = "/repo" + path[len(base_dir) :]
+        if path.startswith(base_dir_prefix):
+            path = "/repo/" + path[len(base_dir_prefix) :]
 
         line_num = start.get("line", 0) + 1
         col_num = start.get("character", 0)
