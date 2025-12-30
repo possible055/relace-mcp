@@ -10,6 +10,7 @@ from fastmcp import FastMCP
 
 from .config import RelaceConfig
 from .config.settings import ENCODING_DETECTION_SAMPLE_LIMIT, LOG_PATH, RELACE_LOGGING
+from .middleware import RootsMiddleware
 from .tools import register_tools
 from .tools.apply.encoding import detect_project_encoding
 from .tools.apply.file_io import set_project_encoding
@@ -121,6 +122,10 @@ def build_server(config: RelaceConfig | None = None, run_health_check: bool = Tr
     config = detect_and_set_encoding(config)
 
     mcp = FastMCP("Relace Fast Apply MCP")
+
+    # Register middleware to handle MCP notifications (e.g., roots/list_changed)
+    mcp.add_middleware(RootsMiddleware())
+
     register_tools(mcp, config)
     return mcp
 
