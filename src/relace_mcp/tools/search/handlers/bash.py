@@ -1,4 +1,5 @@
 import os
+import shlex
 import shutil
 import subprocess  # nosec B404
 
@@ -50,8 +51,6 @@ def _translate_repo_paths_in_command(command: str, base_dir: str) -> str:
     Returns:
         Command with /repo paths translated.
     """
-    import shlex
-
     try:
         tokens = shlex.split(command)
     except ValueError:
@@ -99,6 +98,9 @@ def bash_handler(command: str, base_dir: str) -> str:
 
     # Step 2: Translate /repo paths AFTER security check
     translated_command = _translate_repo_paths_in_command(command, base_dir)
+    # Defense-in-depth: disable glob expansion to avoid path checks being bypassed
+    # via wildcard expansion (e.g., `cat link*` -> `cat link_to_/etc/passwd`).
+    translated_command = f"set -f; {translated_command}"
 
     try:
         bash_path = shutil.which("bash")

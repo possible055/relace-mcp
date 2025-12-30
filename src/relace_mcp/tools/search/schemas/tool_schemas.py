@@ -238,6 +238,44 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_symbol",
+            "strict": True,
+            "description": (
+                "Find where a Python symbol is defined or find all its usages.\n\n"
+                "Use AFTER viewing a file when you know the symbol's exact position.\n"
+                "Actions: 'definition' (go to source), 'references' (find all usages).\n\n"
+                "IMPORTANT: line/column are 0-indexed (view_file shows 1-indexed lines, subtract 1).\n"
+                "First call has 2-5s startup delay."
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["action", "file", "line", "column"],
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["definition", "references"],
+                        "description": "The LSP action to perform.",
+                    },
+                    "file": {
+                        "type": "string",
+                        "description": "Path to the Python file, e.g. `/repo/src/main.py`.",
+                    },
+                    "line": {
+                        "type": "integer",
+                        "description": "Line number (0-indexed) where the symbol is located.",
+                    },
+                    "column": {
+                        "type": "integer",
+                        "description": "Column number (0-indexed) where the symbol starts.",
+                    },
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 
@@ -285,10 +323,22 @@ def get_tool_schemas() -> list[dict[str, Any]]:
 
     if raw_allowlist:
         enabled = {t.strip().lower() for t in _split_tool_list(raw_allowlist)}
+        # Backward compatibility: lsp_query is now find_symbol
+        if "lsp_query" in enabled:
+            enabled.discard("lsp_query")
+            enabled.add("find_symbol")
     else:
         # Default tools exclude `bash` for security (opt-in only via env var)
         # bash requires Unix shell and poses higher security risk
-        enabled = {"view_file", "view_directory", "grep_search", "glob", "report_back"}
+        # find_symbol is enabled by default for semantic Python code queries
+        enabled = {
+            "view_file",
+            "view_directory",
+            "grep_search",
+            "glob",
+            "find_symbol",
+            "report_back",
+        }
 
     # Always keep report_back so the harness can terminate deterministically.
     enabled.add("report_back")
