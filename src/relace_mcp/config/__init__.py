@@ -7,8 +7,11 @@ from .base_dir import resolve_base_dir
 # Public API: RelaceConfig is the main configuration class
 from .settings import RelaceConfig
 
-# Load search_prompts.yaml (Fast Agentic Search)
-_PROMPTS_PATH = Path(__file__).parent / "search_prompts.yaml"
+# LLM prompts directory
+_LLM_PROMPTS_DIR = Path(__file__).parent / "llm_prompts"
+
+# Load search_relace.yaml (Fast Agentic Search - Relace native)
+_PROMPTS_PATH = _LLM_PROMPTS_DIR / "search_relace.yaml"
 with _PROMPTS_PATH.open(encoding="utf-8") as f:
     _PROMPTS = yaml.safe_load(f)
 
@@ -19,8 +22,20 @@ SEARCH_BUDGET_HINT_TEMPLATE: str = _PROMPTS["budget_hint_template"].strip()
 SEARCH_CONVERGENCE_HINT: str = _PROMPTS["convergence_hint"].strip()
 SEARCH_STRATEGIES: dict[str, str] = _PROMPTS["strategies"]
 
-# Load apply_prompts.yaml (Fast Apply for OpenAI-compatible endpoints)
-_APPLY_PROMPTS_PATH = Path(__file__).parent / "apply_prompts.yaml"
+# Load search_openai.yaml (Fast Agentic Search - OpenAI-compatible)
+_PROMPTS_OPENAI_PATH = _LLM_PROMPTS_DIR / "search_openai.yaml"
+with _PROMPTS_OPENAI_PATH.open(encoding="utf-8") as f:
+    _PROMPTS_OPENAI = yaml.safe_load(f)
+
+# OpenAI-compatible search prompt constants
+SEARCH_SYSTEM_PROMPT_OPENAI: str = _PROMPTS_OPENAI["system_prompt"].strip()
+SEARCH_USER_PROMPT_TEMPLATE_OPENAI: str = _PROMPTS_OPENAI["user_prompt_template"].strip()
+SEARCH_BUDGET_HINT_TEMPLATE_OPENAI: str = _PROMPTS_OPENAI["budget_hint_template"].strip()
+SEARCH_CONVERGENCE_HINT_OPENAI: str = _PROMPTS_OPENAI["convergence_hint"].strip()
+SEARCH_STRATEGIES_OPENAI: dict[str, str] = _PROMPTS_OPENAI["strategies"]
+
+# Load apply_openai.yaml (Fast Apply for OpenAI-compatible endpoints)
+_APPLY_PROMPTS_PATH = _LLM_PROMPTS_DIR / "apply_openai.yaml"
 with _APPLY_PROMPTS_PATH.open(encoding="utf-8") as f:
     _APPLY_PROMPTS = yaml.safe_load(f)
 
@@ -33,11 +48,18 @@ __all__ = [
     # Public API
     "RelaceConfig",
     "resolve_base_dir",
-    # Prompts (for internal submodule use)
+    # Prompts - Relace native (for internal submodule use)
     "SEARCH_SYSTEM_PROMPT",
     "SEARCH_USER_PROMPT_TEMPLATE",
     "SEARCH_BUDGET_HINT_TEMPLATE",
     "SEARCH_CONVERGENCE_HINT",
     "SEARCH_STRATEGIES",
+    # Prompts - OpenAI-compatible
+    "SEARCH_SYSTEM_PROMPT_OPENAI",
+    "SEARCH_USER_PROMPT_TEMPLATE_OPENAI",
+    "SEARCH_BUDGET_HINT_TEMPLATE_OPENAI",
+    "SEARCH_CONVERGENCE_HINT_OPENAI",
+    "SEARCH_STRATEGIES_OPENAI",
+    # Apply prompt
     "APPLY_SYSTEM_PROMPT",
 ]
