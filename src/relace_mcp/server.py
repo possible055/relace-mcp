@@ -18,6 +18,26 @@ from .tools.apply.file_io import set_project_encoding
 logger = logging.getLogger(__name__)
 
 
+def _load_dotenv_from_path() -> None:
+    """Load .env file from RELACE_DOTENV_PATH or default locations.
+
+    Priority:
+    1. RELACE_DOTENV_PATH environment variable (explicit path)
+    2. Default dotenv search (current directory and parents)
+    """
+    dotenv_path = os.getenv("RELACE_DOTENV_PATH", "").strip()
+    if dotenv_path:
+        path = Path(dotenv_path).expanduser()
+        if path.exists():
+            load_dotenv(path)
+            logger.info("Loaded .env from RELACE_DOTENV_PATH: %s", path)
+        else:
+            logger.warning("RELACE_DOTENV_PATH does not exist: %s", dotenv_path)
+            load_dotenv()  # Fallback to default
+    else:
+        load_dotenv()
+
+
 def check_health(config: RelaceConfig) -> dict[str, str]:
     results: dict[str, str] = {}
     errors: list[str] = []
@@ -161,7 +181,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    load_dotenv()
+    _load_dotenv_from_path()
 
     logging.basicConfig(
         level=logging.INFO,

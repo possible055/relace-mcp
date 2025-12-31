@@ -168,7 +168,6 @@ def test_openrouter_provider_requires_provider_key(tmp_path, monkeypatch) -> Non
     monkeypatch.setenv("RELACE_SEARCH_PROVIDER", "openrouter")
     monkeypatch.setenv("RELACE_SEARCH_MODEL", "openai/gpt-4o")
     monkeypatch.delenv("RELACE_SEARCH_API_KEY", raising=False)
-    monkeypatch.delenv("RELACE_SEARCH_API_KEY_ENV", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
     config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
