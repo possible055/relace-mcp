@@ -213,7 +213,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             message = choices[0].get("message", {})
             # Defense: some providers/mocks may lack role, avoid breaking block/repair logic
             message.setdefault("role", "assistant")
-            tool_calls = message.get("tool_calls", [])
+            tool_calls = message.get("tool_calls") or []
 
             # Extract usage for token tracking
             usage = response.get("usage")
@@ -231,7 +231,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
 
             # If no tool_calls, check for content (model may respond directly)
             if not tool_calls:
-                content = message.get("content", "")
+                content = message.get("content") or ""
                 content_preview = content[:200] if len(content) <= 200 else content[:197] + "..."
                 logger.warning(
                     "[%s] No tool calls in turn %d, content: %s",
