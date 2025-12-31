@@ -24,33 +24,37 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `RELACE_BASE_DIR` | cwd | Restrict file access to this directory |
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
 | `RELACE_LOGGING` | `0` | Set to `1` to enable file logging |
+| `RELACE_TIMEOUT_SECONDS` | `60` | Default request timeout |
 
 ### Fast Apply
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RELACE_APPLY_PROVIDER` | `relace` | Provider: `relace`, `openai`, `openrouter`, `cerebras`, etc. |
-| `RELACE_APPLY_ENDPOINT` | (Relace official) | Override base URL |
-| `RELACE_APPLY_MODEL` | `auto` | Override model name |
-| `RELACE_APPLY_API_KEY` | — | API key for non-Relace providers |
-| `RELACE_APPLY_PROMPT_FILE` | — | Override apply prompt YAML path |
-| `RELACE_TIMEOUT_SECONDS` | `60` | Request timeout |
+| `APPLY_PROVIDER` | `relace` | Provider: `relace`, `openai`, `openrouter`, `cerebras`, etc. |
+| `APPLY_ENDPOINT` | (Relace official) | Override base URL |
+| `APPLY_MODEL` | `auto` | Override model name |
+| `APPLY_API_KEY` | — | API key for non-Relace providers |
+| `APPLY_PROMPT_FILE` | — | Override apply prompt YAML path |
+
+> **Note:** `RELACE_APPLY_*` variants are deprecated but still supported with warnings.
 
 ### Fast Search
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RELACE_SEARCH_PROVIDER` | `relace` | Provider: `relace`, `openai`, `openrouter`, `cerebras`, etc. |
-| `RELACE_SEARCH_ENDPOINT` | (Relace official) | Override base URL |
-| `RELACE_SEARCH_MODEL` | `relace-search` | Override model name |
-| `RELACE_SEARCH_API_KEY` | — | API key for non-Relace providers |
-| `RELACE_SEARCH_PROMPT_FILE` | — | Override search prompt YAML path |
-| `RELACE_SEARCH_TIMEOUT_SECONDS` | `120` | Request timeout |
-| `RELACE_SEARCH_MAX_TURNS` | `6` | Maximum agent loop turns |
-| `RELACE_SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,find_symbol` | Tool allowlist (comma-separated) |
-| `RELACE_SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls |
-| `RELACE_SEARCH_TOOL_STRICT` | `1` | Include `strict` field in tool schemas |
+| `SEARCH_PROVIDER` | `relace` | Provider: `relace`, `openai`, `openrouter`, `cerebras`, etc. |
+| `SEARCH_ENDPOINT` | (Relace official) | Override base URL |
+| `SEARCH_MODEL` | `relace-search` | Override model name |
+| `SEARCH_API_KEY` | — | API key for non-Relace providers |
+| `SEARCH_PROMPT_FILE` | — | Override search prompt YAML path |
+| `SEARCH_TIMEOUT_SECONDS` | `120` | Request timeout |
+| `SEARCH_MAX_TURNS` | `6` | Maximum agent loop turns |
+| `SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,find_symbol` | Tool allowlist (comma-separated) |
+| `SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls |
+| `SEARCH_TOOL_STRICT` | `1` | Include `strict` field in tool schemas |
 | `RELACE_LSP_TIMEOUT_SECONDS` | `15.0` | LSP startup/request timeout |
+
+> **Note:** `RELACE_SEARCH_*` variants are deprecated but still supported with warnings.
 
 ### Cloud Sync
 
@@ -145,19 +149,19 @@ Both `fast_apply` and `fast_search` can use OpenAI-compatible providers instead 
 
 ```bash
 # For fast_apply
-export RELACE_APPLY_PROVIDER=openrouter
-export RELACE_APPLY_API_KEY=sk-or-v1-xxx
-export RELACE_APPLY_MODEL=anthropic/claude-3.5sonnet
+export APPLY_PROVIDER=openrouter
+export APPLY_API_KEY=sk-or-v1-xxx
+export APPLY_MODEL=anthropic/claude-3.5-sonnet
 
 # For fast_search
-export RELACE_SEARCH_PROVIDER=openai
-export RELACE_SEARCH_API_KEY=sk-xxx
-export RELACE_SEARCH_MODEL=gpt-4o
+export SEARCH_PROVIDER=openai
+export SEARCH_API_KEY=sk-xxx
+export SEARCH_MODEL=gpt-4o
 ```
 
 ### API Key Resolution
 
-1. `RELACE_APPLY_API_KEY` / `RELACE_SEARCH_API_KEY` (explicit)
+1. `APPLY_API_KEY` / `SEARCH_API_KEY` (explicit)
 2. Provider-specific key (e.g., `OPENROUTER_API_KEY`)
 3. `RELACE_API_KEY` (only for `relace` provider)
 
@@ -171,11 +175,11 @@ The `find_symbol` tool uses Language Server Protocol for Python semantic queries
 
 ### OpenAI Structured Outputs
 
-When using OpenAI providers with `RELACE_SEARCH_TOOL_STRICT=1` (default), parallel tool calls are automatically disabled. To enable parallel calls:
+When using OpenAI providers with `SEARCH_TOOL_STRICT=1` (default), parallel tool calls are automatically disabled. To enable parallel calls:
 
 ```bash
-export RELACE_SEARCH_TOOL_STRICT=0
-export RELACE_SEARCH_PARALLEL_TOOL_CALLS=1
+export SEARCH_TOOL_STRICT=0
+export SEARCH_PARALLEL_TOOL_CALLS=1
 ```
 
 ### Bash Tool
@@ -187,7 +191,7 @@ The `bash` tool is disabled by default. To enable on Unix:
   "mcpServers": {
     "relace": {
       "env": {
-        "RELACE_SEARCH_ENABLED_TOOLS": "view_file,view_directory,grep_search,glob,find_symbol,bash"
+        "SEARCH_ENABLED_TOOLS": "view_file,view_directory,grep_search,glob,find_symbol,bash"
       }
     }
   }
@@ -226,3 +230,4 @@ relace-mcp -t streamable-http --host 0.0.0.0 -p 8000
 | `--host` | `127.0.0.1` | Bind address |
 | `--port`, `-p` | `8000` | Port number |
 | `--path` | `/mcp` | URL path for MCP endpoint |
+```

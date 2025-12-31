@@ -24,33 +24,37 @@
 | `RELACE_BASE_DIR` | 当前目录 | 限制文件访问范围 |
 | `RELACE_DEFAULT_ENCODING` | — | 强制项目文件编码（如 `gbk`、`big5`） |
 | `RELACE_LOGGING` | `0` | 设为 `1` 启用文件日志 |
+| `RELACE_TIMEOUT_SECONDS` | `60` | 默认请求超时 |
 
 ### Fast Apply
 
 | 变量 | 默认值 | 描述 |
 |------|--------|------|
-| `RELACE_APPLY_PROVIDER` | `relace` | 提供商：`relace`、`openai`、`openrouter`、`cerebras` 等 |
-| `RELACE_APPLY_ENDPOINT` | (Relace 官方) | 覆盖 base URL |
-| `RELACE_APPLY_MODEL` | `auto` | 覆盖模型名称 |
-| `RELACE_APPLY_API_KEY` | — | 非 Relace 提供商的 API key |
-| `RELACE_APPLY_PROMPT_FILE` | — | 覆盖 apply prompt YAML 路径 |
-| `RELACE_TIMEOUT_SECONDS` | `60` | 请求超时 |
+| `APPLY_PROVIDER` | `relace` | 提供商：`relace`、`openai`、`openrouter`、`cerebras` 等 |
+| `APPLY_ENDPOINT` | (Relace 官方) | 覆盖 base URL |
+| `APPLY_MODEL` | `auto` | 覆盖模型名称 |
+| `APPLY_API_KEY` | — | 非 Relace 提供商的 API key |
+| `APPLY_PROMPT_FILE` | — | 覆盖 apply prompt YAML 路径 |
+
+> **注意：** `RELACE_APPLY_*` 变体已弃用，但仍支持（会显示警告）。
 
 ### Fast Search
 
 | 变量 | 默认值 | 描述 |
 |------|--------|------|
-| `RELACE_SEARCH_PROVIDER` | `relace` | 提供商：`relace`、`openai`、`openrouter`、`cerebras` 等 |
-| `RELACE_SEARCH_ENDPOINT` | (Relace 官方) | 覆盖 base URL |
-| `RELACE_SEARCH_MODEL` | `relace-search` | 覆盖模型名称 |
-| `RELACE_SEARCH_API_KEY` | — | 非 Relace 提供商的 API key |
-| `RELACE_SEARCH_PROMPT_FILE` | — | 覆盖 search prompt YAML 路径 |
-| `RELACE_SEARCH_TIMEOUT_SECONDS` | `120` | 请求超时 |
-| `RELACE_SEARCH_MAX_TURNS` | `6` | 最大 agent 循环轮数 |
-| `RELACE_SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,find_symbol` | 工具允许列表（逗号分隔） |
-| `RELACE_SEARCH_PARALLEL_TOOL_CALLS` | `1` | 启用并行工具调用 |
-| `RELACE_SEARCH_TOOL_STRICT` | `1` | 在 tool schema 中包含 `strict` 字段 |
+| `SEARCH_PROVIDER` | `relace` | 提供商：`relace`、`openai`、`openrouter`、`cerebras` 等 |
+| `SEARCH_ENDPOINT` | (Relace 官方) | 覆盖 base URL |
+| `SEARCH_MODEL` | `relace-search` | 覆盖模型名称 |
+| `SEARCH_API_KEY` | — | 非 Relace 提供商的 API key |
+| `SEARCH_PROMPT_FILE` | — | 覆盖 search prompt YAML 路径 |
+| `SEARCH_TIMEOUT_SECONDS` | `120` | 请求超时 |
+| `SEARCH_MAX_TURNS` | `6` | 最大 agent 循环轮数 |
+| `SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,find_symbol` | 工具允许列表（逗号分隔） |
+| `SEARCH_PARALLEL_TOOL_CALLS` | `1` | 启用并行工具调用 |
+| `SEARCH_TOOL_STRICT` | `1` | 在 tool schema 中包含 `strict` 字段 |
 | `RELACE_LSP_TIMEOUT_SECONDS` | `15.0` | LSP 启动/请求超时 |
+
+> **注意：** `RELACE_SEARCH_*` 变体已弃用，但仍支持（会显示警告）。
 
 ### Cloud Sync
 
@@ -145,19 +149,19 @@
 
 ```bash
 # For fast_apply
-export RELACE_APPLY_PROVIDER=openrouter
-export RELACE_APPLY_API_KEY=sk-or-v1-xxx
-export RELACE_APPLY_MODEL=anthropic/claude-3.5-sonnet
+export APPLY_PROVIDER=openrouter
+export APPLY_API_KEY=sk-or-v1-xxx
+export APPLY_MODEL=anthropic/claude-3.5-sonnet
 
 # For fast_search
-export RELACE_SEARCH_PROVIDER=openai
-export RELACE_SEARCH_API_KEY=sk-xxx
-export RELACE_SEARCH_MODEL=gpt-4o
+export SEARCH_PROVIDER=openai
+export SEARCH_API_KEY=sk-xxx
+export SEARCH_MODEL=gpt-4o
 ```
 
 ### API Key 解析顺序
 
-1. `RELACE_APPLY_API_KEY` / `RELACE_SEARCH_API_KEY`（显式）
+1. `APPLY_API_KEY` / `SEARCH_API_KEY`（显式）
 2. 提供商专用 key（如 `OPENROUTER_API_KEY`）
 3. `RELACE_API_KEY`（仅限 `relace` 提供商）
 
@@ -171,11 +175,11 @@ export RELACE_SEARCH_MODEL=gpt-4o
 
 ### OpenAI Structured Outputs
 
-使用 OpenAI 提供商且 `RELACE_SEARCH_TOOL_STRICT=1`（默认）时，并行工具调用会自动禁用。要启用并行调用：
+使用 OpenAI 提供商且 `SEARCH_TOOL_STRICT=1`（默认）时，并行工具调用会自动禁用。要启用并行调用：
 
 ```bash
-export RELACE_SEARCH_TOOL_STRICT=0
-export RELACE_SEARCH_PARALLEL_TOOL_CALLS=1
+export SEARCH_TOOL_STRICT=0
+export SEARCH_PARALLEL_TOOL_CALLS=1
 ```
 
 ### Bash 工具
@@ -187,7 +191,7 @@ export RELACE_SEARCH_PARALLEL_TOOL_CALLS=1
   "mcpServers": {
     "relace": {
       "env": {
-        "RELACE_SEARCH_ENABLED_TOOLS": "view_file,view_directory,grep_search,glob,find_symbol,bash"
+        "SEARCH_ENABLED_TOOLS": "view_file,view_directory,grep_search,glob,find_symbol,bash"
       }
     }
   }

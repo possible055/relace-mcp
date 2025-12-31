@@ -165,14 +165,14 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 RELACE_API_KEY=rlc-your-api-key
 
 # 自定义搜索模型（可选）
-RELACE_SEARCH_PROVIDER=openai
-RELACE_SEARCH_ENDPOINT=https://api.openai.com/v1
-RELACE_SEARCH_MODEL=gpt-4o
-RELACE_SEARCH_API_KEY=sk-xxx
+SEARCH_PROVIDER=openai
+SEARCH_ENDPOINT=https://api.openai.com/v1
+SEARCH_MODEL=gpt-4o
+SEARCH_API_KEY=sk-xxx
 
 # 其他设置
 RELACE_LOGGING=1
-RELACE_SEARCH_MAX_TURNS=6
+SEARCH_MAX_TURNS=6
 ```
 
 **2. 在 MCP 配置中指向该文件：**

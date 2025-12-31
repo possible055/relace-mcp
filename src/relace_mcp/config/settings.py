@@ -5,6 +5,8 @@ from pathlib import Path
 
 from platformdirs import user_state_dir
 
+from .compat import getenv_with_fallback
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -13,23 +15,25 @@ __all__ = [
 ]
 
 # Fast Apply (OpenAI-compatible base URL; SDK appends /chat/completions automatically)
-RELACE_APPLY_BASE_URL = os.getenv(
-    "RELACE_APPLY_ENDPOINT",
-    "https://instantapply.endpoint.relace.run/v1/apply",
+APPLY_BASE_URL = (
+    getenv_with_fallback("APPLY_ENDPOINT", "RELACE_APPLY_ENDPOINT")
+    or "https://instantapply.endpoint.relace.run/v1/apply"
 )
-RELACE_APPLY_MODEL = os.getenv("RELACE_APPLY_MODEL", "auto")
+APPLY_MODEL = getenv_with_fallback("APPLY_MODEL", "RELACE_APPLY_MODEL") or "auto"
 TIMEOUT_SECONDS = float(os.getenv("RELACE_TIMEOUT_SECONDS", "60.0"))
 MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0
 
 # Fast Agentic Search (OpenAI-compatible base URL; SDK appends /chat/completions automatically)
-RELACE_SEARCH_BASE_URL = os.getenv(
-    "RELACE_SEARCH_ENDPOINT",
-    "https://search.endpoint.relace.run/v1/search",
+SEARCH_BASE_URL = (
+    getenv_with_fallback("SEARCH_ENDPOINT", "RELACE_SEARCH_ENDPOINT")
+    or "https://search.endpoint.relace.run/v1/search"
 )
-RELACE_SEARCH_MODEL = os.getenv("RELACE_SEARCH_MODEL", "relace-search")
-SEARCH_TIMEOUT_SECONDS = float(os.getenv("RELACE_SEARCH_TIMEOUT_SECONDS", "120.0"))
-SEARCH_MAX_TURNS = int(os.getenv("RELACE_SEARCH_MAX_TURNS", "6"))
+SEARCH_MODEL = getenv_with_fallback("SEARCH_MODEL", "RELACE_SEARCH_MODEL") or "relace-search"
+SEARCH_TIMEOUT_SECONDS = float(
+    getenv_with_fallback("SEARCH_TIMEOUT_SECONDS", "RELACE_SEARCH_TIMEOUT_SECONDS") or "120.0"
+)
+SEARCH_MAX_TURNS = int(getenv_with_fallback("SEARCH_MAX_TURNS", "RELACE_SEARCH_MAX_TURNS") or "6")
 
 # Relace Repos API (Infrastructure Endpoint for cloud sync/search)
 RELACE_API_ENDPOINT = os.getenv(

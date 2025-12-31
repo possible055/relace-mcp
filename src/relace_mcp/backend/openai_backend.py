@@ -9,6 +9,7 @@ from openai.types.chat import ChatCompletionMessageParam
 from tenacity import RetryCallState, retry, stop_after_attempt, wait_exponential
 
 from ..config import RelaceConfig
+from ..config.compat import getenv_with_fallback
 from ..config.settings import MAX_RETRIES, RETRY_BASE_DELAY
 
 logger = logging.getLogger(__name__)
@@ -37,8 +38,8 @@ def _normalize_base_url(base_url: str) -> str:
     return base_url
 
 
-def _env_bool(name: str, *, default: bool) -> bool:
-    raw = os.getenv(name)
+def _env_bool(name: str, *, default: bool, deprecated_name: str = "") -> bool:
+    raw = getenv_with_fallback(name, deprecated_name) if deprecated_name else os.getenv(name)
     if raw is None:
         return default
     value = raw.strip().lower()
@@ -78,8 +79,15 @@ class OpenAIChatClient:
         default_base_url: str,
         default_model: str,
         timeout_seconds: float = 60.0,
+        deprecated_provider_env: str = "",
+        deprecated_base_url_env: str = "",
+        deprecated_model_env: str = "",
     ) -> None:
-        self._provider = os.getenv(provider_env, RELACE_PROVIDER).strip().lower()
+        self._provider = (
+            (getenv_with_fallback(provider_env, deprecated_provider_env) or RELACE_PROVIDER)
+            .strip()
+            .lower()
+        )
         prefix = (
             provider_env.removesuffix("_PROVIDER") if provider_env.endswith("_PROVIDER") else ""
         )
@@ -87,12 +95,12 @@ class OpenAIChatClient:
         # API compatibility is derived from provider
         self._api_compat = RELACE_PROVIDER if self._provider == RELACE_PROVIDER else OPENAI_PROVIDER
 
-        base_url = os.getenv(base_url_env, "").strip()
+        base_url = getenv_with_fallback(base_url_env, deprecated_base_url_env).strip()
         if not base_url:
             base_url = _DEFAULT_BASE_URLS.get(self._provider, default_base_url)
         base_url = _normalize_base_url(base_url)
 
-        self._model = os.getenv(model_env, "").strip() or (
+        self._model = getenv_with_fallback(model_env, deprecated_model_env).strip() or (
             "gpt-4o" if self._provider == OPENAI_PROVIDER else default_model
         )
 
@@ -106,9 +114,10 @@ class OpenAIChatClient:
 
         api_key = ""
         api_key_env = f"{prefix}_API_KEY" if prefix else ""
+        deprecated_api_key_env = f"RELACE_{prefix}_API_KEY" if prefix else ""
 
         if api_key_env:
-            api_key = os.getenv(api_key_env, "").strip()
+            api_key = getenv_with_fallback(api_key_env, deprecated_api_key_env).strip()
 
         if not api_key:
             if self._api_compat == RELACE_PROVIDER:
