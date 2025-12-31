@@ -19,8 +19,8 @@ RELACE_APPLY_BASE_URL = os.getenv(
 )
 RELACE_APPLY_MODEL = os.getenv("RELACE_APPLY_MODEL", "auto")
 TIMEOUT_SECONDS = float(os.getenv("RELACE_TIMEOUT_SECONDS", "60.0"))
-MAX_RETRIES = int(os.getenv("RELACE_MAX_RETRIES", "3"))
-RETRY_BASE_DELAY = float(os.getenv("RELACE_RETRY_BASE_DELAY", "1.0"))
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 1.0
 
 # Fast Agentic Search (OpenAI-compatible base URL; SDK appends /chat/completions automatically)
 RELACE_SEARCH_BASE_URL = os.getenv(
@@ -47,7 +47,7 @@ REPO_SYNC_MAX_FILES = int(os.getenv("RELACE_REPO_SYNC_MAX_FILES", "5000"))
 # If not set, auto-detection will be attempted at startup
 RELACE_DEFAULT_ENCODING = os.getenv("RELACE_DEFAULT_ENCODING", None)
 # Maximum files to sample for encoding detection (higher = more accurate but slower startup)
-ENCODING_DETECTION_SAMPLE_LIMIT = int(os.getenv("RELACE_ENCODING_SAMPLE_LIMIT", "30"))
+ENCODING_DETECTION_SAMPLE_LIMIT = 30
 
 # EXPERIMENTAL: Post-check validation (validates merged_code semantic correctness, disabled by default)
 EXPERIMENTAL_POST_CHECK = os.getenv("RELACE_EXPERIMENTAL_POST_CHECK", "").lower() in (
