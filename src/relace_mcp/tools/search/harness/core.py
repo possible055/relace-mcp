@@ -27,8 +27,6 @@ from ..schemas import (
     get_tool_schemas,
 )
 from .constants import (
-    BUDGET_HIGH_THRESHOLD,
-    BUDGET_MID_THRESHOLD,
     MAX_CONTEXT_BUDGET_CHARS,
     MAX_TOTAL_CONTEXT_CHARS,
 )
@@ -68,31 +66,23 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             self._turn_instructions = TURN_INSTRUCTIONS_OPENAI
 
     def _get_turn_hint(self, turn: int, max_turns: int, chars_used: int) -> str:
-        """Generate unified turn hint message.
+        """Generate turn status hint.
 
-        Provides urgency-based instructions to guide model behavior.
+        Only shows urgency instruction on final turn.
 
         Args:
-            turn: Current turn number (0-indexed).
+            turn: Current turn number (0-indexed internally, displayed as 1-indexed).
             max_turns: Maximum allowed turns.
             chars_used: Total characters used in context so far.
         """
         remaining = max_turns - turn
-
-        if remaining >= BUDGET_HIGH_THRESHOLD:
-            urgency = "low"
-        elif remaining >= BUDGET_MID_THRESHOLD:
-            urgency = "medium"
-        else:
-            urgency = "high"
-
-        instruction = self._turn_instructions[urgency]
+        mode = "final" if remaining == 1 else "normal"
+        instruction = self._turn_instructions[mode]
         chars_pct = int((chars_used / MAX_CONTEXT_BUDGET_CHARS) * 100)
 
         return self._turn_hint_template.format(
             turn=turn + 1,
             max_turns=max_turns,
-            urgency=urgency,
             chars_pct=chars_pct,
             instruction=instruction,
         )
@@ -212,7 +202,10 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             message.setdefault("role", "assistant")
             tool_calls = message.get("tool_calls", [])
 
-            # Log turn state after getting response (includes LLM latency)
+            # Extract usage for token tracking
+            usage = response.get("usage")
+
+            # Log turn state after getting response (includes LLM latency and token usage)
             log_search_turn(
                 trace_id,
                 turn + 1,
@@ -220,6 +213,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 ctx_size,
                 len(tool_calls),
                 llm_latency_ms=llm_latency_ms,
+                usage=usage,
             )
 
             # If no tool_calls, check for content (model may respond directly)
