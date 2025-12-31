@@ -181,12 +181,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    _load_dotenv_from_path()
-
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
     )
+
+    _load_dotenv_from_path()
 
     config = RelaceConfig.from_env()
     server = build_server(config)

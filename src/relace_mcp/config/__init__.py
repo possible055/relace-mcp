@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import yaml
 
@@ -36,7 +36,11 @@ def _load_prompt_file(
                 raise ValueError(
                     f"Prompt file is empty or contains only comments: {custom_path_obj}"
                 )
-            return cast(dict[str, Any], result)
+            if not isinstance(result, dict):
+                raise TypeError(
+                    f"Prompt file must be a YAML mapping (dict), got {type(result).__name__}: {custom_path_obj}"
+                )
+            return result
         else:
             logger.warning("%s=%s does not exist, falling back to default", env_var, custom_path)
 
@@ -44,7 +48,11 @@ def _load_prompt_file(
         result = yaml.safe_load(f)
     if result is None:
         raise ValueError(f"Prompt file is empty or contains only comments: {default_path}")
-    return cast(dict[str, Any], result)
+    if not isinstance(result, dict):
+        raise TypeError(
+            f"Prompt file must be a YAML mapping (dict), got {type(result).__name__}: {default_path}"
+        )
+    return result
 
 
 # Load search_relace.yaml (Fast Agentic Search - Relace native)
