@@ -24,8 +24,9 @@ def log_search_turn(
     chars_used: int,
     tool_calls_count: int,
     llm_latency_ms: float | None = None,
+    usage: dict[str, Any] | None = None,
 ) -> None:
-    """Record agent loop turn state with LLM API timing."""
+    """Record agent loop turn state with LLM API timing and token usage."""
     event: dict[str, Any] = {
         "kind": "search_turn",
         "trace_id": trace_id,
@@ -36,6 +37,19 @@ def log_search_turn(
     }
     if llm_latency_ms is not None:
         event["llm_latency_ms"] = round(llm_latency_ms, 1)
+
+    # Check for valid usage with actual token counts
+    if usage and "prompt_tokens" in usage:
+        event["prompt_tokens"] = usage["prompt_tokens"]
+        if "completion_tokens" in usage:
+            event["completion_tokens"] = usage["completion_tokens"]
+        if "total_tokens" in usage:
+            event["total_tokens"] = usage["total_tokens"]
+    else:
+        # Fallback: estimate tokens from chars (1 token ≈ 4 chars)
+        event["tokens_estimated"] = True
+        event["prompt_tokens_est"] = chars_used // 4
+
     log_event(event)
 
 

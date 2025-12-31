@@ -207,10 +207,13 @@ export RELACE_SEARCH_PARALLEL_TOOL_CALLS=1
 
 ## 远程部署 (Streamable HTTP)
 
-用于远程部署，以 streamable-http transport 运行：
+安全提示：本服务可通过 `fast_apply` 等工具在主机上读写文件。
+请勿直接暴露到公网。优先使用 `stdio`，或在 HTTP 前增加鉴权/VPN，并以最小权限运行（建议放在隔离容器内）。
+
+用于远程部署，以 streamable-http transport 运行（需要显式绑定到所有网卡）：
 
 ```bash
-relace-mcp -t streamable-http -p 8000
+relace-mcp -t streamable-http --host 0.0.0.0 -p 8000
 ```
 
 连接配置：
@@ -230,6 +233,6 @@ relace-mcp -t streamable-http -p 8000
 
 | 选项 | 默认值 | 描述 |
 |------|--------|------|
-| `--host` | `0.0.0.0` | 绑定地址 |
+| `--host` | `127.0.0.1` | 绑定地址 |
 | `--port`, `-p` | `8000` | 端口号 |
 | `--path` | `/mcp` | MCP 端点的 URL 路径 |

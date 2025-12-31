@@ -88,7 +88,7 @@ class TestLSPQueryHandler:
     """Tests for lsp_query_handler function."""
 
     def test_invalid_action_returns_error(self, tmp_path: Path) -> None:
-        params = LSPQueryParams(action="invalid", file="/repo/x.py", line=0, column=0)
+        params = LSPQueryParams(action="invalid", file="/repo/x.py", line=1, column=1)
         result = lsp_query_handler(params, str(tmp_path))
         assert "Error" in result
         assert "Unknown action" in result
@@ -97,8 +97,8 @@ class TestLSPQueryHandler:
         params = LSPQueryParams(
             action="definition",
             file="/repo/nonexistent.py",
-            line=0,
-            column=0,
+            line=1,
+            column=1,
         )
         result = lsp_query_handler(params, str(tmp_path))
         assert "Error" in result
@@ -110,8 +110,8 @@ class TestLSPQueryHandler:
         params = LSPQueryParams(
             action="definition",
             file="/repo/test.js",
-            line=0,
-            column=0,
+            line=1,
+            column=1,
         )
         result = lsp_query_handler(params, str(tmp_path))
         assert "Error" in result
@@ -124,7 +124,7 @@ class TestLSPQueryHandler:
             action="definition",
             file="/repo/test.py",
             line=-1,
-            column=0,
+            column=1,
         )
         result = lsp_query_handler(params, str(tmp_path))
         assert "Error" in result
@@ -136,7 +136,7 @@ class TestLSPQueryHandler:
         params = LSPQueryParams(
             action="definition",
             file="/repo/test.py",
-            line=0,
+            line=1,
             column=-1,
         )
         result = lsp_query_handler(params, str(tmp_path))
@@ -173,8 +173,8 @@ class TestLSPQueryHandler:
         params = LSPQueryParams(
             action="definition",
             file="/repo/test.py",
-            line=0,
-            column=0,
+            line=1,
+            column=1,
         )
         # Pass symlink path as base_dir - this should NOT raise ValueError
         result = lsp_query_handler(params, str(symlink_dir))
@@ -202,8 +202,8 @@ class TestLSPQueryHandler:
         params = LSPQueryParams(
             action="definition",
             file="/repo/test.py",
-            line=0,
-            column=4,
+            line=1,
+            column=5,
         )
         result = lsp_query_handler(params, str(tmp_path))
 
@@ -226,8 +226,8 @@ class TestLSPQueryHandler:
         params = LSPQueryParams(
             action="definition",
             file="/repo/test.py",
-            line=0,
-            column=0,
+            line=1,
+            column=1,
         )
         result = lsp_query_handler(params, str(tmp_path))
 
@@ -253,8 +253,8 @@ class TestLSPQueryHandler:
         params = LSPQueryParams(
             action="references",
             file="/repo/test.py",
-            line=0,
-            column=0,
+            line=1,
+            column=1,
         )
         result = lsp_query_handler(params, str(tmp_path))
 

@@ -576,14 +576,17 @@ class TestApplyFileLogicApiErrors:
         mock_backend.apply.side_effect = RuntimeError("API Error")
 
         # edit_snippet contains anchor lines that exist in original file
-        with pytest.raises(RuntimeError):
-            await apply_file_logic(
-                backend=mock_backend,
-                file_path=str(temp_source_file),
-                edit_snippet="def hello():\n    print('Hello')\n",
-                instruction=None,
-                base_dir=str(tmp_path),
-            )
+        result = await apply_file_logic(
+            backend=mock_backend,
+            file_path=str(temp_source_file),
+            edit_snippet="def hello():\n    print('Hello')\n",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
+
+        assert result["status"] == "error"
+        assert result["code"] == "INTERNAL_ERROR"
+        assert "API Error" in result["message"]
 
         logged = json.loads(mock_log_path.read_text().strip())
         assert logged["kind"] == "apply_error"

@@ -18,9 +18,8 @@ with _PROMPTS_PATH.open(encoding="utf-8") as f:
 # Search prompt constants (prefixed for consistency with APPLY_SYSTEM_PROMPT)
 SEARCH_SYSTEM_PROMPT: str = _PROMPTS["system_prompt"].strip()
 SEARCH_USER_PROMPT_TEMPLATE: str = _PROMPTS["user_prompt_template"].strip()
-SEARCH_BUDGET_HINT_TEMPLATE: str = _PROMPTS["budget_hint_template"].strip()
-SEARCH_CONVERGENCE_HINT: str = _PROMPTS["convergence_hint"].strip()
-SEARCH_STRATEGIES: dict[str, str] = _PROMPTS["strategies"]
+SEARCH_TURN_HINT_TEMPLATE: str = _PROMPTS["turn_hint_template"].strip()
+SEARCH_TURN_INSTRUCTIONS: dict[str, str] = _PROMPTS["turn_instructions"]
 
 # Load search_openai.yaml (Fast Agentic Search - OpenAI-compatible)
 _PROMPTS_OPENAI_PATH = _LLM_PROMPTS_DIR / "search_openai.yaml"
@@ -30,9 +29,8 @@ with _PROMPTS_OPENAI_PATH.open(encoding="utf-8") as f:
 # OpenAI-compatible search prompt constants
 SEARCH_SYSTEM_PROMPT_OPENAI: str = _PROMPTS_OPENAI["system_prompt"].strip()
 SEARCH_USER_PROMPT_TEMPLATE_OPENAI: str = _PROMPTS_OPENAI["user_prompt_template"].strip()
-SEARCH_BUDGET_HINT_TEMPLATE_OPENAI: str = _PROMPTS_OPENAI["budget_hint_template"].strip()
-SEARCH_CONVERGENCE_HINT_OPENAI: str = _PROMPTS_OPENAI["convergence_hint"].strip()
-SEARCH_STRATEGIES_OPENAI: dict[str, str] = _PROMPTS_OPENAI["strategies"]
+SEARCH_TURN_HINT_TEMPLATE_OPENAI: str = _PROMPTS_OPENAI["turn_hint_template"].strip()
+SEARCH_TURN_INSTRUCTIONS_OPENAI: dict[str, str] = _PROMPTS_OPENAI["turn_instructions"]
 
 # Load apply_openai.yaml (Fast Apply for OpenAI-compatible endpoints)
 _APPLY_PROMPTS_PATH = _LLM_PROMPTS_DIR / "apply_openai.yaml"
@@ -51,15 +49,13 @@ __all__ = [
     # Prompts - Relace native (for internal submodule use)
     "SEARCH_SYSTEM_PROMPT",
     "SEARCH_USER_PROMPT_TEMPLATE",
-    "SEARCH_BUDGET_HINT_TEMPLATE",
-    "SEARCH_CONVERGENCE_HINT",
-    "SEARCH_STRATEGIES",
+    "SEARCH_TURN_HINT_TEMPLATE",
+    "SEARCH_TURN_INSTRUCTIONS",
     # Prompts - OpenAI-compatible
     "SEARCH_SYSTEM_PROMPT_OPENAI",
     "SEARCH_USER_PROMPT_TEMPLATE_OPENAI",
-    "SEARCH_BUDGET_HINT_TEMPLATE_OPENAI",
-    "SEARCH_CONVERGENCE_HINT_OPENAI",
-    "SEARCH_STRATEGIES_OPENAI",
+    "SEARCH_TURN_HINT_TEMPLATE_OPENAI",
+    "SEARCH_TURN_INSTRUCTIONS_OPENAI",
     # Apply prompt
     "APPLY_SYSTEM_PROMPT",
 ]
