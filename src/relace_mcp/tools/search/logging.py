@@ -38,10 +38,9 @@ def log_search_turn(
     if llm_latency_ms is not None:
         event["llm_latency_ms"] = round(llm_latency_ms, 1)
 
-    if usage:
-        # Extract token counts from OpenAI-style usage dict
-        if "prompt_tokens" in usage:
-            event["prompt_tokens"] = usage["prompt_tokens"]
+    # Check for valid usage with actual token counts
+    if usage and "prompt_tokens" in usage:
+        event["prompt_tokens"] = usage["prompt_tokens"]
         if "completion_tokens" in usage:
             event["completion_tokens"] = usage["completion_tokens"]
         if "total_tokens" in usage:

@@ -13,7 +13,7 @@ system_prompt: |
   - `view_file`: Read file contents with line range
   - `view_directory`: List directory structure
   - `find_symbol`: Trace Python symbol definitions and references
-    - Requires file path, line (0-indexed), and column (0-indexed)
+    - Requires file path, line, and column (1-indexed, matching view_file output)
     - Column must point to the SYMBOL START, not keywords like 'class' or 'def'
   - `report_back`: Submit findings when exploration complete
   </tools>
@@ -57,7 +57,7 @@ user_prompt_template: |
 
   IMPORTANT:
   - Turn budget LIMITED. Call 4-12 tools in PARALLEL each turn.
-  - find_symbol: column = CHARACTER POSITION of symbol start (0-indexed).
+  - find_symbol: Use line/column directly from view_file output (1-indexed).
 
   Report findings via `report_back` when ready.
   </task>

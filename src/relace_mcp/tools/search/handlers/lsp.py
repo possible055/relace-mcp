@@ -61,14 +61,14 @@ _PYTHON_KEYWORDS = frozenset(
 class LSPQueryParams:
     """Parameters for find_symbol tool.
 
-    Note: line and column are 0-indexed. view_file shows 1-indexed line numbers,
-    so subtract 1 when using positions from view_file output.
+    Note: line and column are 1-indexed to match view_file output.
+    Internally converted to 0-indexed for LSP protocol.
     """
 
     action: str  # "definition" | "references"
     file: str
-    line: int  # 0-indexed
-    column: int  # 0-indexed
+    line: int  # 1-indexed
+    column: int  # 1-indexed
 
 
 def _find_symbol_columns(line_content: str) -> list[int]:
@@ -87,7 +87,11 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
     Thread-safe through LSPClientManager's internal locking.
     First call incurs startup delay, subsequent calls are fast.
 
-    Column fallback: If column=0 yields no results, automatically tries
+    Args:
+        params: Query parameters with 1-indexed line/column (matching view_file output).
+        base_dir: Base directory for resolving paths.
+
+    Column fallback: If initial column yields no results, automatically tries
     other symbol positions on the same line.
     """
     # Validate action first (no need for imports)
@@ -95,13 +99,17 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
         return f"Error: Unknown action '{params.action}'. Use 'definition' or 'references'."
 
     if not isinstance(params.line, int) or not isinstance(params.column, int):
-        return "Error: line and column must be integers (0-indexed)."
+        return "Error: line and column must be integers (1-indexed)."
 
-    if params.line < 0:
-        return "Error: line must be >= 0 (0-indexed)."
+    if params.line < 1:
+        return "Error: line must be >= 1 (1-indexed)."
 
-    if params.column < 0:
-        return "Error: column must be >= 0 (0-indexed)."
+    if params.column < 1:
+        return "Error: column must be >= 1 (1-indexed)."
+
+    # Convert to 0-indexed for LSP protocol
+    line_0 = params.line - 1
+    column_0 = params.column - 1
 
     # Path validation and mapping
     try:
@@ -143,7 +151,7 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
             return client.references(rel_path, line, column)
 
         # Try the requested position first
-        results = do_query(params.line, params.column)
+        results = do_query(line_0, column_0)
 
         # Fallback: if no results, try finding symbols on the line
         # This handles cases where column points to keywords (def, class) instead of symbol names
@@ -151,19 +159,19 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
             try:
                 with open(abs_path, encoding="utf-8", errors="replace") as f:
                     lines = f.readlines()
-                    if 0 <= params.line < len(lines):
-                        line_content = lines[params.line]
+                    if 0 <= line_0 < len(lines):
+                        line_content = lines[line_0]
                         symbol_columns = _find_symbol_columns(line_content)
                         # Skip the originally requested column
                         for col in symbol_columns:
-                            if col == params.column:
+                            if col == column_0:
                                 continue
-                            results = do_query(params.line, col)
+                            results = do_query(line_0, col)
                             if results:
                                 logger.debug(
                                     "Column fallback succeeded: line=%d, col=%d -> %d",
-                                    params.line,
-                                    params.column,
+                                    line_0,
+                                    column_0,
                                     col,
                                 )
                                 break

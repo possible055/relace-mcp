@@ -247,7 +247,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "Find where a Python symbol is defined or find all its usages.\n\n"
                 "Use AFTER viewing a file when you know the symbol's exact position.\n"
                 "Actions: 'definition' (go to source), 'references' (find all usages).\n\n"
-                "IMPORTANT: line/column are 0-indexed (view_file shows 1-indexed lines, subtract 1).\n"
+                "line/column are 1-indexed, matching view_file output directly.\n"
                 "First call has 2-5s startup delay."
             ),
             "parameters": {
@@ -265,11 +265,11 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     },
                     "line": {
                         "type": "integer",
-                        "description": "Line number (0-indexed) where the symbol is located.",
+                        "description": "Line number (1-indexed, same as view_file output).",
                     },
                     "column": {
                         "type": "integer",
-                        "description": "Column number (0-indexed) where the symbol starts.",
+                        "description": "Column number (1-indexed) where the symbol starts.",
                     },
                 },
                 "additionalProperties": False,
