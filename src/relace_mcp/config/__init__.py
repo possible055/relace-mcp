@@ -31,12 +31,20 @@ def _load_prompt_file(
         if custom_path_obj.exists():
             logger.info("Loading custom prompt from %s (via %s)", custom_path_obj, env_var)
             with custom_path_obj.open(encoding="utf-8") as f:
-                return cast(dict[str, Any], yaml.safe_load(f))
+                result = yaml.safe_load(f)
+            if result is None:
+                raise ValueError(
+                    f"Prompt file is empty or contains only comments: {custom_path_obj}"
+                )
+            return cast(dict[str, Any], result)
         else:
             logger.warning("%s=%s does not exist, falling back to default", env_var, custom_path)
 
     with default_path.open(encoding="utf-8") as f:
-        return cast(dict[str, Any], yaml.safe_load(f))
+        result = yaml.safe_load(f)
+    if result is None:
+        raise ValueError(f"Prompt file is empty or contains only comments: {default_path}")
+    return cast(dict[str, Any], result)
 
 
 # Load search_relace.yaml (Fast Agentic Search - Relace native)

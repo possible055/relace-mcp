@@ -230,4 +230,3 @@ relace-mcp -t streamable-http --host 0.0.0.0 -p 8000
 | `--host` | `127.0.0.1` | Bind address |
 | `--port`, `-p` | `8000` | Port number |
 | `--path` | `/mcp` | URL path for MCP endpoint |
-```

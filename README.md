@@ -165,14 +165,14 @@ Instead of setting many environment variables in your MCP config, you can use a 
 RELACE_API_KEY=rlc-your-api-key
 
 # Custom search model (optional)
-RELACE_SEARCH_PROVIDER=openai
-RELACE_SEARCH_ENDPOINT=https://api.openai.com/v1
-RELACE_SEARCH_MODEL=gpt-4o
-RELACE_SEARCH_API_KEY=sk-xxx
+SEARCH_PROVIDER=openai
+SEARCH_ENDPOINT=https://api.openai.com/v1
+SEARCH_MODEL=gpt-4o
+SEARCH_API_KEY=sk-xxx
 
 # Other settings
 RELACE_LOGGING=1
-RELACE_SEARCH_MAX_TURNS=6
+SEARCH_MAX_TURNS=6
 ```
 
 **2. Point to it in your MCP config:**
