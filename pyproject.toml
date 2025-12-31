@@ -52,9 +52,13 @@ dev = [
     "build>=1.0.0",
     "types-PyYAML>=6.0.0",
 ]
+tools = [
+    "textual>=0.50.0",
+]
 
 [project.scripts]
 relace-mcp = "relace_mcp.server:main"
+relace-dashboard = "relace_mcp.dashboard:main"
 
 [tool.setuptools]
 include-package-data = true

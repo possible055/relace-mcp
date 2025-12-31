@@ -1,0 +1,98 @@
+/* Relace MCP Dashboard - HTOP Style */
+
+Screen {
+    layout: vertical;
+    background: black; /* Deep black for terminal feel */
+    color: #e0e0e0;
+}
+
+CompactHeader {
+    dock: top;
+    height: 1;
+    background: #000000;
+    color: white;
+}
+
+/* Tab Buttons */
+FilterButton {
+    min-width: 10;
+    height: 1;
+    border: none;
+    background: #222222;
+    color: #888888;
+    text-align: center;
+    text-style: bold;
+}
+
+FilterButton:hover {
+    background: #444444;
+    color: white;
+}
+
+FilterButton.active {
+    background: $primary;
+    color: black;
+    text-style: bold;
+}
+
+TimeCycleButton {
+    min-width: 10;
+    height: 1;
+    border: none;
+    background: #222222;
+    color: $accent;
+    text-align: center;
+}
+TimeCycleButton:hover {
+    background: #444444;
+}
+
+/* Stats Label */
+#stats-label {
+    content-align: right middle;
+    color: $success;
+    text-style: bold;
+}
+
+/* Main Log Output */
+#log-output {
+    height: 1fr;
+    border: none; /* No border to maximize space */
+    margin: 0;
+    padding: 0; /* Remove padding to fix scrollbar inset */
+    background: #111111;
+    scrollbar-gutter: stable;
+}
+
+/* Footer - HTOP Style Keys */
+Footer {
+    dock: bottom;
+    height: 1;
+    background: #000000;
+    color: black;
+}
+
+Footer > .footer-key {
+    background: #b0b0b0;
+    color: black;
+    padding: 0 1;
+    text-style: bold;
+}
+Footer > .footer-key--key {
+    color: #cc0000; /* Red Key letter like F1 */
+    text-style: bold;
+}
+Footer > .footer-key--description {
+    color: black;
+}
+
+/* Toast Notification Override */
+Toast {
+    min-width: 15;
+    max-width: 30;
+    padding: 0 1; /* Minimal padding */
+    height: auto;
+    background: $surface;
+    opacity: 90%;
+    margin: 0;
+}
