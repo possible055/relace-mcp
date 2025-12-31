@@ -20,9 +20,8 @@ def getenv_with_fallback(new_name: str, old_name: str, default: str = "") -> str
             stacklevel=3,
         )
         logger.warning(
-            "Environment variable '%s' is deprecated, use '%s' instead.",
-            old_name,
-            new_name,
+            "A deprecated environment variable was used; "
+            "please update your configuration. See DeprecationWarning for details."
         )
         return value
     return default
