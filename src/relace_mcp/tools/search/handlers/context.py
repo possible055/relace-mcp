@@ -59,7 +59,7 @@ def estimate_context_size(messages: list[dict[str, Any]]) -> int:
                             total += len(value)
                             break
         # tool_calls also take space
-        tool_calls = msg.get("tool_calls", [])
+        tool_calls = msg.get("tool_calls") or []
         for tc in tool_calls:
             func = tc.get("function", {})
             total += len(func.get("arguments", ""))

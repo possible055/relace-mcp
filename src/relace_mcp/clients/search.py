@@ -7,8 +7,8 @@ from ..backend import RELACE_PROVIDER, OpenAIChatClient
 from ..backend.openai_backend import _env_bool
 from ..config import RelaceConfig
 from ..config.settings import (
-    RELACE_SEARCH_BASE_URL,
-    RELACE_SEARCH_MODEL,
+    SEARCH_BASE_URL,
+    SEARCH_MODEL,
     SEARCH_TIMEOUT_SECONDS,
 )
 
@@ -34,27 +34,29 @@ class SearchLLMClient:
     Supports Relace and OpenAI-compatible providers (OpenAI, OpenRouter, Cerebras, etc.).
 
     Environment variables:
-        RELACE_SEARCH_PROVIDER: Provider name (default: relace)
-        RELACE_SEARCH_ENDPOINT: API base URL
-        RELACE_SEARCH_MODEL: Model name
-        RELACE_SEARCH_API_KEY: API key (or use provider-specific key)
-        RELACE_SEARCH_PARALLEL_TOOL_CALLS: Enable parallel tool calls (default: true)
-        RELACE_SEARCH_TOOL_STRICT: Include strict field in tool schemas (default: true)
+        SEARCH_PROVIDER: Provider name (default: relace)
+        SEARCH_ENDPOINT: API base URL
+        SEARCH_MODEL: Model name
+        SEARCH_API_KEY: API key (or use provider-specific key)
+        SEARCH_PARALLEL_TOOL_CALLS: Enable parallel tool calls (default: true)
+        SEARCH_TOOL_STRICT: Include strict field in tool schemas (default: true)
 
-    Note:
-        When using OpenAI-compatible providers with strict=true, parallel_tool_calls
-        is automatically disabled to comply with OpenAI Structured Outputs limitations.
+    Deprecated (still supported with warning):
+        RELACE_SEARCH_* variants are deprecated, use SEARCH_* instead.
     """
 
     def __init__(self, config: RelaceConfig) -> None:
         self._chat_client = OpenAIChatClient(
             config,
-            provider_env="RELACE_SEARCH_PROVIDER",
-            base_url_env="RELACE_SEARCH_ENDPOINT",
-            model_env="RELACE_SEARCH_MODEL",
-            default_base_url=RELACE_SEARCH_BASE_URL,
-            default_model=RELACE_SEARCH_MODEL,
+            provider_env="SEARCH_PROVIDER",
+            base_url_env="SEARCH_ENDPOINT",
+            model_env="SEARCH_MODEL",
+            default_base_url=SEARCH_BASE_URL,
+            default_model=SEARCH_MODEL,
             timeout_seconds=SEARCH_TIMEOUT_SECONDS,
+            deprecated_provider_env="RELACE_SEARCH_PROVIDER",
+            deprecated_base_url_env="RELACE_SEARCH_ENDPOINT",
+            deprecated_model_env="RELACE_SEARCH_MODEL",
         )
         self._disable_relace_sampling = False
         self._disable_parallel_tool_calls = False
@@ -78,7 +80,11 @@ class SearchLLMClient:
             self._chat_client.api_compat == RELACE_PROVIDER and not self._disable_relace_sampling
         )
         include_parallel_tool_calls = (
-            _env_bool("RELACE_SEARCH_PARALLEL_TOOL_CALLS", default=True)
+            _env_bool(
+                "SEARCH_PARALLEL_TOOL_CALLS",
+                default=True,
+                deprecated_name="RELACE_SEARCH_PARALLEL_TOOL_CALLS",
+            )
             and not self._disable_parallel_tool_calls
         )
 
@@ -95,7 +101,7 @@ class SearchLLMClient:
                 logger.warning(
                     "[%s] OpenAI Structured Outputs does not support parallel_tool_calls "
                     "with strict=true. Disabling parallel_tool_calls for compatibility. "
-                    "Set RELACE_SEARCH_PARALLEL_TOOL_CALLS=0 to suppress this warning.",
+                    "Set SEARCH_PARALLEL_TOOL_CALLS=0 to suppress this warning.",
                     trace_id,
                 )
                 include_parallel_tool_calls = False
