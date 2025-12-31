@@ -590,9 +590,8 @@ def _sed_script_has_dangerous_flag(script: str) -> bool:
     - Standalone e/w commands at script boundaries
     - Address-prefixed e/w commands (5e, 1,10e, $w)
     """
-    # Check substitution command flags
-    match = _SED_SUBST_FLAGS_RE.search(script)
-    if match:
+    # Check substitution command flags (all occurrences)
+    for match in _SED_SUBST_FLAGS_RE.finditer(script):
         flags = match.group(2).lower()
         if "e" in flags or "w" in flags:
             return True

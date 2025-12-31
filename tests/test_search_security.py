@@ -413,6 +413,15 @@ class TestSandboxEscapeBypassBlocking:
         blocked, _ = _is_blocked_command("sed 's/test/new/g' file.txt", DEFAULT_BASE_DIR)
         assert not blocked
 
+    def test_blocks_sed_multiple_subst_with_e_in_second(self) -> None:
+        """sed with dangerous flag in second substitution must be blocked."""
+        # Use -e syntax to avoid ; being caught by command chaining pattern
+        blocked, reason = _is_blocked_command(
+            "sed -e 's/a/b/g' -e 's/x/y/e' file.txt", DEFAULT_BASE_DIR
+        )
+        assert blocked
+        assert "sed" in reason.lower() or "e/w" in reason.lower()
+
     def test_blocks_sed_address_prefixed_e(self) -> None:
         """sed address+e executes pattern space as shell command; must be blocked."""
         blocked, reason = _is_blocked_command("sed 5e file.txt", DEFAULT_BASE_DIR)
