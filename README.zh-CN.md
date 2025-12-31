@@ -149,10 +149,49 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 |------|------|------|
 | `RELACE_API_KEY` | ✅ | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥 |
 | `RELACE_BASE_DIR` | ❌ | 项目根目录的绝对路径（未设置时自动通过 MCP Roots 检测） |
+| `RELACE_DOTENV_PATH` | ❌ | `.env` 文件路径，用于集中配置 |
 | `RELACE_CLOUD_TOOLS` | ❌ | 设为 `1` 启用云端工具（cloud_sync、cloud_search 等） |
 | `RELACE_LOGGING` | ❌ | 设为 `1` 启用文件日志（默认：禁用） |
 | `RELACE_DEFAULT_ENCODING` | ❌ | 强制文件编码（如 `gbk`、`big5`），用于遗留编码仓库 |
-| `RELACE_ENCODING_SAMPLE_LIMIT` | ❌ | 自动检测编码的采样文件上限（默认：`30`） |
+
+### 使用 .env 文件
+
+可以使用集中的 `.env` 文件代替在 MCP 配置中设置多个环境变量：
+
+**1. 创建 `.env` 文件**（例如 `~/.config/relace/.env`）：
+
+```bash
+# ~/.config/relace/.env
+RELACE_API_KEY=rlc-your-api-key
+
+# 自定义搜索模型（可选）
+SEARCH_PROVIDER=openai
+SEARCH_ENDPOINT=https://api.openai.com/v1
+SEARCH_MODEL=gpt-4o
+SEARCH_API_KEY=sk-xxx
+
+# 其他设置
+RELACE_LOGGING=1
+SEARCH_MAX_TURNS=6
+```
+
+**2. 在 MCP 配置中指向该文件：**
+
+```json
+{
+  "mcpServers": {
+    "relace": {
+      "command": "uv",
+      "args": ["tool", "run", "relace-mcp"],
+      "env": {
+        "RELACE_DOTENV_PATH": "~/.config/relace/.env"
+      }
+    }
+  }
+}
+```
+
+> **注意：** 直接在 `env` 中设置的变量优先于 `.env` 文件中的变量。
 
 > **注意：** 当 `RELACE_BASE_DIR` 未设置时，服务器会自动检测项目根目录：
 > 1. MCP Roots（编辑器提供的工作区信息）

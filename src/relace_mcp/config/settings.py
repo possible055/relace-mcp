@@ -5,6 +5,8 @@ from pathlib import Path
 
 from platformdirs import user_state_dir
 
+from .compat import getenv_with_fallback
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -13,23 +15,25 @@ __all__ = [
 ]
 
 # Fast Apply (OpenAI-compatible base URL; SDK appends /chat/completions automatically)
-RELACE_APPLY_BASE_URL = os.getenv(
-    "RELACE_APPLY_ENDPOINT",
-    "https://instantapply.endpoint.relace.run/v1/apply",
+APPLY_BASE_URL = (
+    getenv_with_fallback("APPLY_ENDPOINT", "RELACE_APPLY_ENDPOINT")
+    or "https://instantapply.endpoint.relace.run/v1/apply"
 )
-RELACE_APPLY_MODEL = os.getenv("RELACE_APPLY_MODEL", "auto")
+APPLY_MODEL = getenv_with_fallback("APPLY_MODEL", "RELACE_APPLY_MODEL") or "auto"
 TIMEOUT_SECONDS = float(os.getenv("RELACE_TIMEOUT_SECONDS", "60.0"))
-MAX_RETRIES = int(os.getenv("RELACE_MAX_RETRIES", "3"))
-RETRY_BASE_DELAY = float(os.getenv("RELACE_RETRY_BASE_DELAY", "1.0"))
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 1.0
 
 # Fast Agentic Search (OpenAI-compatible base URL; SDK appends /chat/completions automatically)
-RELACE_SEARCH_BASE_URL = os.getenv(
-    "RELACE_SEARCH_ENDPOINT",
-    "https://search.endpoint.relace.run/v1/search",
+SEARCH_BASE_URL = (
+    getenv_with_fallback("SEARCH_ENDPOINT", "RELACE_SEARCH_ENDPOINT")
+    or "https://search.endpoint.relace.run/v1/search"
 )
-RELACE_SEARCH_MODEL = os.getenv("RELACE_SEARCH_MODEL", "relace-search")
-SEARCH_TIMEOUT_SECONDS = float(os.getenv("RELACE_SEARCH_TIMEOUT_SECONDS", "120.0"))
-SEARCH_MAX_TURNS = int(os.getenv("RELACE_SEARCH_MAX_TURNS", "6"))
+SEARCH_MODEL = getenv_with_fallback("SEARCH_MODEL", "RELACE_SEARCH_MODEL") or "relace-search"
+SEARCH_TIMEOUT_SECONDS = float(
+    getenv_with_fallback("SEARCH_TIMEOUT_SECONDS", "RELACE_SEARCH_TIMEOUT_SECONDS") or "120.0"
+)
+SEARCH_MAX_TURNS = int(getenv_with_fallback("SEARCH_MAX_TURNS", "RELACE_SEARCH_MAX_TURNS") or "6")
 
 # Relace Repos API (Infrastructure Endpoint for cloud sync/search)
 RELACE_API_ENDPOINT = os.getenv(
@@ -47,7 +51,7 @@ REPO_SYNC_MAX_FILES = int(os.getenv("RELACE_REPO_SYNC_MAX_FILES", "5000"))
 # If not set, auto-detection will be attempted at startup
 RELACE_DEFAULT_ENCODING = os.getenv("RELACE_DEFAULT_ENCODING", None)
 # Maximum files to sample for encoding detection (higher = more accurate but slower startup)
-ENCODING_DETECTION_SAMPLE_LIMIT = int(os.getenv("RELACE_ENCODING_SAMPLE_LIMIT", "30"))
+ENCODING_DETECTION_SAMPLE_LIMIT = 30
 
 # EXPERIMENTAL: Post-check validation (validates merged_code semantic correctness, disabled by default)
 EXPERIMENTAL_POST_CHECK = os.getenv("RELACE_EXPERIMENTAL_POST_CHECK", "").lower() in (

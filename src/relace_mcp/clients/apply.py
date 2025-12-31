@@ -5,8 +5,8 @@ from typing import Any
 from ..backend import RELACE_PROVIDER, OpenAIChatClient
 from ..config import APPLY_SYSTEM_PROMPT, RelaceConfig
 from ..config.settings import (
-    RELACE_APPLY_BASE_URL,
-    RELACE_APPLY_MODEL,
+    APPLY_BASE_URL,
+    APPLY_MODEL,
     TIMEOUT_SECONDS,
 )
 
@@ -34,21 +34,27 @@ class ApplyLLMClient:
     Supports Relace and OpenAI-compatible providers (OpenAI, OpenRouter, Cerebras, etc.).
 
     Environment variables:
-        RELACE_APPLY_PROVIDER: Provider name (default: relace)
-        RELACE_APPLY_ENDPOINT: API base URL
-        RELACE_APPLY_MODEL: Model name
-        RELACE_APPLY_API_KEY: API key (or use provider-specific key)
+        APPLY_PROVIDER: Provider name (default: relace)
+        APPLY_ENDPOINT: API base URL
+        APPLY_MODEL: Model name
+        APPLY_API_KEY: API key (or use provider-specific key)
+
+    Deprecated (still supported with warning):
+        RELACE_APPLY_* variants are deprecated, use APPLY_* instead.
     """
 
     def __init__(self, config: RelaceConfig) -> None:
         self._chat_client = OpenAIChatClient(
             config,
-            provider_env="RELACE_APPLY_PROVIDER",
-            base_url_env="RELACE_APPLY_ENDPOINT",
-            model_env="RELACE_APPLY_MODEL",
-            default_base_url=RELACE_APPLY_BASE_URL,
-            default_model=RELACE_APPLY_MODEL,
+            provider_env="APPLY_PROVIDER",
+            base_url_env="APPLY_ENDPOINT",
+            model_env="APPLY_MODEL",
+            default_base_url=APPLY_BASE_URL,
+            default_model=APPLY_MODEL,
             timeout_seconds=TIMEOUT_SECONDS,
+            deprecated_provider_env="RELACE_APPLY_PROVIDER",
+            deprecated_base_url_env="RELACE_APPLY_ENDPOINT",
+            deprecated_model_env="RELACE_APPLY_MODEL",
         )
         # Cache api_compat for conditional system prompt injection
         self._api_compat = self._chat_client.api_compat

@@ -25,7 +25,7 @@ class MessageHistoryMixin:
         expected_ids: set[str] = set()
         for msg in messages:
             if msg.get("role") == "assistant":
-                tool_calls = msg.get("tool_calls", [])
+                tool_calls = msg.get("tool_calls") or []
                 for tc in tool_calls:
                     tc_id = tc.get("id", "")
                     if tc_id:

@@ -149,10 +149,49 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 |----------|----------|-------------|
 | `RELACE_API_KEY` | ✅ | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
 | `RELACE_BASE_DIR` | ❌ | Absolute path to project root (auto-detected via MCP Roots if not set) |
+| `RELACE_DOTENV_PATH` | ❌ | Path to `.env` file for centralized configuration |
 | `RELACE_CLOUD_TOOLS` | ❌ | Set to `1` to enable cloud tools (cloud_sync, cloud_search, etc.) |
 | `RELACE_LOGGING` | ❌ | Set to `1` to enable file logging (default: disabled) |
 | `RELACE_DEFAULT_ENCODING` | ❌ | Force file encoding (e.g., `gbk`, `big5`) for legacy repos |
-| `RELACE_ENCODING_SAMPLE_LIMIT` | ❌ | Max files for auto-detecting encoding (default: `30`) |
+
+### Using a .env File
+
+Instead of setting many environment variables in your MCP config, you can use a centralized `.env` file:
+
+**1. Create a `.env` file** (e.g., `~/.config/relace/.env`):
+
+```bash
+# ~/.config/relace/.env
+RELACE_API_KEY=rlc-your-api-key
+
+# Custom search model (optional)
+SEARCH_PROVIDER=openai
+SEARCH_ENDPOINT=https://api.openai.com/v1
+SEARCH_MODEL=gpt-4o
+SEARCH_API_KEY=sk-xxx
+
+# Other settings
+RELACE_LOGGING=1
+SEARCH_MAX_TURNS=6
+```
+
+**2. Point to it in your MCP config:**
+
+```json
+{
+  "mcpServers": {
+    "relace": {
+      "command": "uv",
+      "args": ["tool", "run", "relace-mcp"],
+      "env": {
+        "RELACE_DOTENV_PATH": "~/.config/relace/.env"
+      }
+    }
+  }
+}
+```
+
+> **Note:** Variables set directly in `env` take precedence over those in the `.env` file.
 
 > **Note:** When `RELACE_BASE_DIR` is not set, the server automatically detects your project root using:
 > 1. MCP Roots (workspace info from your editor)

@@ -53,9 +53,3 @@ def _parse_positive_float_env(name: str, default: float) -> float:
 # Hard upper bound for LSP startup/shutdown/requests (seconds).
 # Use RELACE_LSP_TIMEOUT_SECONDS to override.
 LSP_TIMEOUT_SECONDS = _parse_positive_float_env("RELACE_LSP_TIMEOUT_SECONDS", 15.0)
-
-# Legacy (multilspy implementation): watchdog for stopping the LSP loop thread (seconds).
-# Kept for backward compatibility; has no effect in the current basedpyright client.
-LSP_LOOP_STOP_TIMEOUT_SECONDS = _parse_positive_float_env(
-    "RELACE_LSP_LOOP_STOP_TIMEOUT_SECONDS", 3.0
-)

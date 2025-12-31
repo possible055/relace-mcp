@@ -1,6 +1,7 @@
-import os
 import shutil
 from typing import Any
+
+from ....config.compat import getenv_with_fallback
 
 _TRUTHY = {"1", "true", "yes", "y", "on"}
 _FALSY = {"0", "false", "no", "n", "off"}
@@ -285,7 +286,8 @@ def _split_tool_list(raw: str) -> list[str]:
 
 
 def _include_tool_strict() -> bool:
-    raw = os.getenv("RELACE_SEARCH_TOOL_STRICT", "1").strip().lower()
+    raw = getenv_with_fallback("SEARCH_TOOL_STRICT", "RELACE_SEARCH_TOOL_STRICT") or "1"
+    raw = raw.strip().lower()
     if raw in _TRUTHY:
         return True
     if raw in _FALSY:
@@ -318,13 +320,18 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
             If empty frozenset, find_symbol is hidden.
 
     Environment variables:
-        - RELACE_SEARCH_ENABLED_TOOLS: Comma/space-separated allowlist, e.g.
+        - SEARCH_ENABLED_TOOLS: Comma/space-separated allowlist, e.g.
           "view_file,view_directory,grep_search,glob,bash". `report_back` is always enabled.
           If not set, all tools except `bash` are enabled by default (bash requires explicit
           opt-in for security reasons).
-        - RELACE_SEARCH_TOOL_STRICT: Set to 0/false to omit the non-standard `strict` field from tool schemas.
+        - SEARCH_TOOL_STRICT: Set to 0/false to omit the non-standard `strict` field from tool schemas.
+
+    Deprecated (still supported with warning):
+        RELACE_SEARCH_ENABLED_TOOLS, RELACE_SEARCH_TOOL_STRICT
     """
-    raw_allowlist = os.getenv("RELACE_SEARCH_ENABLED_TOOLS", "").strip()
+    raw_allowlist = getenv_with_fallback(
+        "SEARCH_ENABLED_TOOLS", "RELACE_SEARCH_ENABLED_TOOLS"
+    ).strip()
 
     if raw_allowlist:
         enabled = {t.strip().lower() for t in _split_tool_list(raw_allowlist)}

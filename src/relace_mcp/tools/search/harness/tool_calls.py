@@ -259,7 +259,7 @@ class ToolCallsMixin:
         if name not in enabled:
             return (
                 f"Error: Tool '{name}' is disabled. "
-                "Set RELACE_SEARCH_ENABLED_TOOLS to explicitly allow it."
+                "Set SEARCH_ENABLED_TOOLS to explicitly allow it."
             )
 
         # report_back does not depend on base_dir.
