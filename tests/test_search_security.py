@@ -384,3 +384,65 @@ class TestSandboxEscapeBypassBlocking:
         blocked, reason = _is_blocked_command("sed -f script.sed file.txt", DEFAULT_BASE_DIR)
         assert blocked
         assert "sed" in reason.lower() or "script" in reason.lower()
+
+    def test_blocks_sed_combined_flags_ew(self) -> None:
+        """sed combined flags like /ew must be blocked (e executes shell commands)."""
+        blocked, reason = _is_blocked_command("sed 's/foo/bar/ew' file.txt", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "sed" in reason.lower() or "e/w" in reason.lower()
+
+    def test_blocks_sed_combined_flags_gew(self) -> None:
+        """sed flags /gew must be blocked even when e is not at flag boundary."""
+        blocked, reason = _is_blocked_command("sed 's/foo/bar/gew' file.txt", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "sed" in reason.lower() or "e/w" in reason.lower()
+
+    def test_blocks_sed_e_flag_alone(self) -> None:
+        """sed e flag executes replacement as shell command; must be blocked."""
+        blocked, reason = _is_blocked_command("sed 's/foo/bar/e' file.txt", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "sed" in reason.lower() or "e/w" in reason.lower()
+
+    def test_allows_sed_normal_substitution(self) -> None:
+        """sed normal substitution without dangerous flags should be allowed."""
+        blocked, _ = _is_blocked_command("sed 's/foo/bar/gi' file.txt", DEFAULT_BASE_DIR)
+        assert not blocked
+
+    def test_allows_sed_replacement_containing_e(self) -> None:
+        """sed with 'e' in replacement text (not flags) should be allowed."""
+        blocked, _ = _is_blocked_command("sed 's/test/new/g' file.txt", DEFAULT_BASE_DIR)
+        assert not blocked
+
+    def test_blocks_sed_address_prefixed_e(self) -> None:
+        """sed address+e executes pattern space as shell command; must be blocked."""
+        blocked, reason = _is_blocked_command("sed 5e file.txt", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "sed" in reason.lower() or "e/w" in reason.lower()
+
+    def test_blocks_sed_range_address_e(self) -> None:
+        """sed range+e like 1,10e must be blocked."""
+        blocked, reason = _is_blocked_command("sed 1,10e file.txt", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "sed" in reason.lower() or "e/w" in reason.lower()
+
+    def test_blocks_sed_last_line_e(self) -> None:
+        """sed $e (last line execute) must be blocked."""
+        blocked, reason = _is_blocked_command("sed '$e' file.txt", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "sed" in reason.lower() or "e/w" in reason.lower()
+
+    def test_blocks_sed_address_prefixed_w(self) -> None:
+        """sed address+w writes to file; must be blocked."""
+        blocked, reason = _is_blocked_command("sed '5w out.txt' file.txt", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "sed" in reason.lower() or "e/w" in reason.lower()
+
+    def test_allows_sed_print_command(self) -> None:
+        """sed print command (p) should be allowed."""
+        blocked, _ = _is_blocked_command("sed 5p file.txt", DEFAULT_BASE_DIR)
+        assert not blocked
+
+    def test_allows_sed_delete_command(self) -> None:
+        """sed delete command (d) should be allowed."""
+        blocked, _ = _is_blocked_command("sed 1,10d file.txt", DEFAULT_BASE_DIR)
+        assert not blocked

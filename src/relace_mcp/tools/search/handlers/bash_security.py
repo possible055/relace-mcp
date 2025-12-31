@@ -530,9 +530,12 @@ def _check_ripgrep_preprocessor(tokens: list[str], base_cmd: str) -> tuple[bool,
 
 
 def _check_awk_script(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
-    """Block awk constructs that can spawn subprocesses.
+    """Block awk constructs that can spawn subprocesses or perform I/O.
 
-    awk supports `system()` which can execute arbitrary shell commands.
+    awk supports multiple ways to execute shell commands:
+    - system() - execute a shell command
+    - "cmd" | getline - execute cmd and read its output
+    - print | "cmd" - pipe print output to cmd
     We also block loading scripts from files (-f/--file) because we don't
     inspect their contents here.
     """
@@ -544,16 +547,65 @@ def _check_awk_script(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
         if token in {"-f", "--file"} or token.startswith("--file="):  # nosec B105 - CLI flag
             return True, "Blocked awk script file flag (-f/--file)"
 
-    # Best-effort: scan all remaining arguments for system().
+    # Best-effort: scan all remaining arguments for dangerous patterns.
     # (Avoids having to fully parse awk option grammar.)
     args_blob = " ".join(tokens[1:])
+
+    # Block system() - direct command execution
     if re.search(r"\bsystem\s*\(", args_blob, flags=re.IGNORECASE):
         return True, "Blocked awk system() (subprocess execution)"
+
+    # Block getline with pipe: "cmd" | getline (executes cmd and reads output)
+    # Pattern: string/variable followed by | and getline
+    if re.search(r"\|\s*getline\b", args_blob, flags=re.IGNORECASE):
+        return True, "Blocked awk pipe to getline (subprocess execution)"
+
+    # Block print/printf piped to command: print | "cmd"
+    if re.search(r'\bprint[f]?\s*[^|]*\|\s*["\']', args_blob, flags=re.IGNORECASE):
+        return True, "Blocked awk print pipe to command (subprocess execution)"
 
     return False, ""
 
 
-_SED_DANGEROUS_SCRIPT_RE = re.compile(r"(^|[^A-Za-z0-9_])[ew]($| )", flags=re.IGNORECASE)
+# Regex to extract substitution command flags: s<delim>...<delim>...<delim>[flags]
+# Captures the flags portion after the third delimiter
+_SED_SUBST_FLAGS_RE = re.compile(
+    r"s([/\#@|:,!])(?:[^\\]|\\.)*?\1(?:[^\\]|\\.)*?\1([giIpPmM0-9ew]*)",
+    flags=re.IGNORECASE,
+)
+
+# Standalone e/w commands at script start or after semicolon/newline
+_SED_STANDALONE_CMD_RE = re.compile(r"(^|[;\n])\s*[ew](\s|$)", flags=re.IGNORECASE)
+
+# Address-prefixed e/w commands: 5e, 1,10e, $e (GNU sed: e executes pattern space)
+# Matches: <number>[,<number>]<e|w> or $[ew]
+_SED_ADDRESSED_CMD_RE = re.compile(r"(\d+|\$)(,(\d+|\$))?\s*[ew]", flags=re.IGNORECASE)
+
+
+def _sed_script_has_dangerous_flag(script: str) -> bool:
+    """Check if sed script contains dangerous e/w commands.
+
+    Detects:
+    - e/w flags in substitution commands (s/.../.../<flags>)
+    - Standalone e/w commands at script boundaries
+    - Address-prefixed e/w commands (5e, 1,10e, $w)
+    """
+    # Check substitution command flags
+    match = _SED_SUBST_FLAGS_RE.search(script)
+    if match:
+        flags = match.group(2).lower()
+        if "e" in flags or "w" in flags:
+            return True
+
+    # Check standalone e/w commands
+    if _SED_STANDALONE_CMD_RE.search(script):
+        return True
+
+    # Check address-prefixed e/w commands (e.g., 5e, 1,10e, $w)
+    if _SED_ADDRESSED_CMD_RE.search(script):
+        return True
+
+    return False
 
 
 def _check_sed_script(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
@@ -610,7 +662,7 @@ def _check_sed_script(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
         break
 
     for script in scripts:
-        if _SED_DANGEROUS_SCRIPT_RE.search(script):
+        if _sed_script_has_dangerous_flag(script):
             return True, "Blocked sed script containing e/w (command exec or file write)"
 
     return False, ""
