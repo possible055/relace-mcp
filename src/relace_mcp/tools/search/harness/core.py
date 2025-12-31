@@ -24,6 +24,7 @@ from ..schemas import (
     TURN_INSTRUCTIONS_OPENAI,
     USER_PROMPT_TEMPLATE,
     USER_PROMPT_TEMPLATE_OPENAI,
+    build_system_prompt,
     get_tool_schemas,
 )
 from .constants import (
@@ -47,23 +48,33 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
     processing tool calls and terminating upon receiving report_back.
     """
 
-    def __init__(self, config: RelaceConfig, client: SearchLLMClient) -> None:
+    def __init__(
+        self,
+        config: RelaceConfig,
+        client: SearchLLMClient,
+        *,
+        lsp_languages: frozenset[str] | None = None,
+    ) -> None:
         self._config = config
         self._client = client
         self._observed_files: dict[str, list[list[int]]] = {}
         self._view_line_re = re.compile(r"^(\d+)\s")
+        self._lsp_languages = lsp_languages if lsp_languages is not None else frozenset()
 
-        # Select prompts based on API compatibility mode
+        # Select base prompts based on API compatibility mode
         if client.api_compat == RELACE_PROVIDER:
-            self._system_prompt = SYSTEM_PROMPT
+            base_prompt = SYSTEM_PROMPT
             self._user_prompt_template = USER_PROMPT_TEMPLATE
             self._turn_hint_template = TURN_HINT_TEMPLATE
             self._turn_instructions = TURN_INSTRUCTIONS
         else:
-            self._system_prompt = SYSTEM_PROMPT_OPENAI
+            base_prompt = SYSTEM_PROMPT_OPENAI
             self._user_prompt_template = USER_PROMPT_TEMPLATE_OPENAI
             self._turn_hint_template = TURN_HINT_TEMPLATE_OPENAI
             self._turn_instructions = TURN_INSTRUCTIONS_OPENAI
+
+        # Build dynamic system prompt with LSP language info
+        self._system_prompt = build_system_prompt(base_prompt, self._lsp_languages)
 
     def _get_turn_hint(self, turn: int, max_turns: int, chars_used: int) -> str:
         """Generate turn status hint.
@@ -188,7 +199,9 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
 
             # Track LLM API latency
             llm_start = time.perf_counter()
-            response = self._client.chat(messages, tools=get_tool_schemas(), trace_id=trace_id)
+            response = self._client.chat(
+                messages, tools=get_tool_schemas(self._lsp_languages), trace_id=trace_id
+            )
             llm_latency_ms = (time.perf_counter() - llm_start) * 1000
 
             # Parse response

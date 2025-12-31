@@ -11,9 +11,7 @@ system_prompt: |
   - `glob`: Find files by pattern matching
   - `view_file`: Read file contents with line range
   - `view_directory`: List directory structure
-  - `find_symbol`: Trace Python symbol definitions and references
-    - Requires file path, line, and column (1-indexed, matching view_file output)
-    - Column must point to the SYMBOL START, not keywords like 'class' or 'def'
+  {find_symbol_section}
   - `bash`: Shell commands (use sparingly, if available)
   - `report_back`: Submit findings when exploration complete
   </tools>
@@ -21,7 +19,7 @@ system_prompt: |
   <strategy>
   Text search: `grep_search`, `glob` for locating files and patterns.
   Code reading: `view_file`, `view_directory` for understanding implementations.
-  Semantic navigation: `find_symbol` for tracing function/class definitions and all call sites (Python).
+  Semantic navigation: `find_symbol` for tracing function/class definitions and call sites (if available).
   </strategy>
 
   <execution>

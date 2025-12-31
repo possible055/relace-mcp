@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
 class ToolCallsMixin:
     _config: "RelaceConfig"
+    _lsp_languages: frozenset[str]
 
     if TYPE_CHECKING:
 
@@ -43,10 +44,12 @@ class ToolCallsMixin:
         The LLM is prompted with a tool schema allowlist, but some providers or
         prompt-injection scenarios may still return tool calls for tools that were
         not advertised. Enforce the allowlist at execution time to ensure tools
-        like `bash` remain opt-in.
+        like `bash` remain opt-in and `find_symbol` is hidden when no LSP languages
+        are available.
         """
         enabled: set[str] = set()
-        for schema in get_tool_schemas():
+        # Use same lsp_languages as the harness to ensure consistency
+        for schema in get_tool_schemas(self._lsp_languages):
             func = schema.get("function")
             if not isinstance(func, dict):
                 continue
