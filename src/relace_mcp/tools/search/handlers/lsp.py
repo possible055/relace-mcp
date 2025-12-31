@@ -145,7 +145,7 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
             PYTHON_CONFIG, resolved_base_dir, timeout_seconds=LSP_TIMEOUT_SECONDS
         )
 
-        def do_query(line: int, column: int) -> list[Location]:
+        def do_query(line: int, column: int) -> "list[Location]":
             if params.action == "definition":
                 return client.definition(rel_path, line, column)
             return client.references(rel_path, line, column)
