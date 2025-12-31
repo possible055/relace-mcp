@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import time
@@ -10,6 +9,7 @@ from openai.types.chat import ChatCompletionMessageParam
 from tenacity import RetryCallState, retry, stop_after_attempt, wait_exponential
 
 from ..config import RelaceConfig
+from ..config.compat import getenv_with_fallback
 from ..config.settings import MAX_RETRIES, RETRY_BASE_DELAY
 
 logger = logging.getLogger(__name__)
@@ -38,8 +38,8 @@ def _normalize_base_url(base_url: str) -> str:
     return base_url
 
 
-def _env_bool(name: str, *, default: bool) -> bool:
-    raw = os.getenv(name)
+def _env_bool(name: str, *, default: bool, deprecated_name: str = "") -> bool:
+    raw = getenv_with_fallback(name, deprecated_name) if deprecated_name else os.getenv(name)
     if raw is None:
         return default
     value = raw.strip().lower()
@@ -49,29 +49,6 @@ def _env_bool(name: str, *, default: bool) -> bool:
         return False
     logger.warning("Invalid %s=%r; expected boolean, defaulting to %s", name, raw, default)
     return default
-
-
-def _load_json_dict_env(name: str) -> dict[str, str] | None:
-    raw = os.getenv(name)
-    if not raw:
-        return None
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"{name} must be valid JSON object, got invalid JSON: {exc}") from exc
-
-    if not isinstance(parsed, dict) or any(not isinstance(k, str) for k in parsed):
-        raise RuntimeError(f"{name} must be a JSON object with string keys")
-
-    headers: dict[str, str] = {}
-    for key, value in parsed.items():
-        if value is None:
-            continue
-        if not isinstance(value, str):
-            headers[key] = str(value)
-        else:
-            headers[key] = value
-    return headers
 
 
 def _should_retry(retry_state: RetryCallState) -> bool:
@@ -102,29 +79,28 @@ class OpenAIChatClient:
         default_base_url: str,
         default_model: str,
         timeout_seconds: float = 60.0,
+        deprecated_provider_env: str = "",
+        deprecated_base_url_env: str = "",
+        deprecated_model_env: str = "",
     ) -> None:
-        self._provider = os.getenv(provider_env, RELACE_PROVIDER).strip().lower()
+        self._provider = (
+            (getenv_with_fallback(provider_env, deprecated_provider_env) or RELACE_PROVIDER)
+            .strip()
+            .lower()
+        )
         prefix = (
             provider_env.removesuffix("_PROVIDER") if provider_env.endswith("_PROVIDER") else ""
         )
 
-        compat_env = f"{prefix}_API_COMPAT" if prefix else ""
-        compat_raw = os.getenv(compat_env, "").strip().lower() if compat_env else ""
-        if compat_raw in (OPENAI_PROVIDER, RELACE_PROVIDER):
-            self._api_compat = compat_raw
-        elif compat_raw:
-            raise RuntimeError(f"{compat_env} must be '{OPENAI_PROVIDER}' or '{RELACE_PROVIDER}'")
-        else:
-            self._api_compat = (
-                RELACE_PROVIDER if self._provider == RELACE_PROVIDER else OPENAI_PROVIDER
-            )
+        # API compatibility is derived from provider
+        self._api_compat = RELACE_PROVIDER if self._provider == RELACE_PROVIDER else OPENAI_PROVIDER
 
-        base_url = os.getenv(base_url_env, "").strip()
+        base_url = getenv_with_fallback(base_url_env, deprecated_base_url_env).strip()
         if not base_url:
             base_url = _DEFAULT_BASE_URLS.get(self._provider, default_base_url)
         base_url = _normalize_base_url(base_url)
 
-        self._model = os.getenv(model_env, "").strip() or (
+        self._model = getenv_with_fallback(model_env, deprecated_model_env).strip() or (
             "gpt-4o" if self._provider == OPENAI_PROVIDER else default_model
         )
 
@@ -138,17 +114,10 @@ class OpenAIChatClient:
 
         api_key = ""
         api_key_env = f"{prefix}_API_KEY" if prefix else ""
-        api_key_env_env = f"{prefix}_API_KEY_ENV" if prefix else ""
+        deprecated_api_key_env = f"RELACE_{prefix}_API_KEY" if prefix else ""
 
         if api_key_env:
-            api_key = os.getenv(api_key_env, "").strip()
-
-        if not api_key and api_key_env_env:
-            indirect_env = os.getenv(api_key_env_env, "").strip()
-            if indirect_env:
-                api_key = os.getenv(indirect_env, "").strip()
-                if not api_key:
-                    raise RuntimeError(f"{api_key_env_env} points to unset env var: {indirect_env}")
+            api_key = getenv_with_fallback(api_key_env, deprecated_api_key_env).strip()
 
         if not api_key:
             if self._api_compat == RELACE_PROVIDER:
@@ -168,28 +137,20 @@ class OpenAIChatClient:
                 if not api_key:
                     raise RuntimeError(
                         f"No API key found for {provider_env}={self._provider}. "
-                        f"Set {api_key_env} (recommended) or {api_key_env_env}, "
-                        f"or export {derived_env}."
+                        f"Set {api_key_env} or export {derived_env}."
                     )
-
-        default_headers = None
-        if prefix:
-            headers_env = f"{prefix}_HEADERS"
-            default_headers = _load_json_dict_env(headers_env)
 
         self._sync_client = OpenAI(
             api_key=api_key,
             base_url=base_url,
             timeout=timeout_seconds,
             max_retries=0,  # We handle retries with tenacity
-            default_headers=default_headers,
         )
         self._async_client = AsyncOpenAI(
             api_key=api_key,
             base_url=base_url,
             timeout=timeout_seconds,
             max_retries=0,
-            default_headers=default_headers,
         )
 
     @property

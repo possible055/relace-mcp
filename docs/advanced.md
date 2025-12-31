@@ -4,15 +4,85 @@ This document covers advanced configuration options for power users and develope
 
 ## Table of Contents
 
+- [Environment Variables Reference](#environment-variables-reference)
 - [Sync Modes](#sync-modes)
-- [Developer Overrides](#developer-overrides)
-- [Encoding](#encoding)
 - [Logging](#logging)
-- [Fast Apply Provider Swap](#fast-apply-provider-swap)
-- [Fast Search Provider Swap](#fast-search-provider-swap)
-- [Fast Search Tool Control](#fast-search-tool-control)
-  - [LSP Tool](#lsp-tool)
+- [Alternative Providers](#alternative-providers)
 - [Remote Deployment](#remote-deployment-streamable-http)
+
+---
+
+## Environment Variables Reference
+
+All environment variables can be set in your shell or in the `env` section of your MCP configuration.
+
+### Core
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RELACE_API_KEY` | — | **Required.** Your Relace API key |
+| `RELACE_BASE_DIR` | cwd | Restrict file access to this directory |
+| `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
+| `RELACE_LOGGING` | `0` | Set to `1` to enable file logging |
+| `RELACE_TIMEOUT_SECONDS` | `60` | Default request timeout |
+
+### Fast Apply
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `APPLY_PROVIDER` | `relace` | Provider: `relace`, `openai`, `openrouter`, `cerebras`, etc. |
+| `APPLY_ENDPOINT` | (Relace official) | Override base URL |
+| `APPLY_MODEL` | `auto` | Override model name |
+| `APPLY_API_KEY` | — | API key for non-Relace providers |
+| `APPLY_PROMPT_FILE` | — | Override apply prompt YAML path |
+
+> **Note:** `RELACE_APPLY_*` variants are deprecated but still supported with warnings.
+
+### Fast Search
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SEARCH_PROVIDER` | `relace` | Provider: `relace`, `openai`, `openrouter`, `cerebras`, etc. |
+| `SEARCH_ENDPOINT` | (Relace official) | Override base URL |
+| `SEARCH_MODEL` | `relace-search` | Override model name |
+| `SEARCH_API_KEY` | — | API key for non-Relace providers |
+| `SEARCH_PROMPT_FILE` | — | Override search prompt YAML path |
+| `SEARCH_TIMEOUT_SECONDS` | `120` | Request timeout |
+| `SEARCH_MAX_TURNS` | `6` | Maximum agent loop turns |
+| `SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,find_symbol` | Tool allowlist (comma-separated) |
+| `SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls |
+| `SEARCH_TOOL_STRICT` | `1` | Include `strict` field in tool schemas |
+| `RELACE_LSP_TIMEOUT_SECONDS` | `15.0` | LSP startup/request timeout |
+
+> **Note:** `RELACE_SEARCH_*` variants are deprecated but still supported with warnings.
+
+### Cloud Sync
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RELACE_API_ENDPOINT` | `https://api.relace.run/v1` | API endpoint for cloud operations |
+| `RELACE_REPO_ID` | — | Pre-configured repo UUID (skip list/create) |
+| `RELACE_REPO_SYNC_TIMEOUT` | `300` | Sync operation timeout |
+| `RELACE_REPO_SYNC_MAX_FILES` | `5000` | Maximum files per sync |
+| `RELACE_REPO_LIST_MAX` | `10000` | Maximum repos to fetch |
+| `RELACE_UPLOAD_MAX_WORKERS` | `8` | Concurrent upload workers |
+
+### Third-Party API Keys
+
+When using alternative providers, set the corresponding API key:
+
+| Variable | Used When |
+|----------|-----------|
+| `OPENAI_API_KEY` | `*_PROVIDER=openai` and no `*_API_KEY` set |
+| `OPENROUTER_API_KEY` | `*_PROVIDER=openrouter` and no `*_API_KEY` set |
+| `CEREBRAS_API_KEY` | `*_PROVIDER=cerebras` and no `*_API_KEY` set |
+
+### Experimental
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RELACE_EXPERIMENTAL_POST_CHECK` | `0` | Extra validation after `fast_apply` (may increase failures) |
+| `RELACE_EXPERIMENTAL_LOGGING` | — | Deprecated alias for `RELACE_LOGGING` |
 
 ---
 
@@ -26,49 +96,7 @@ The `cloud_sync` tool supports three sync modes:
 | Safe Full | `force=True`, first sync, or HEAD changed | Uploads all files; suppresses deletes unless HEAD changed |
 | Mirror Full | `force=True, mirror=True` | Completely overwrites cloud to match local |
 
-### HEAD Change Detection
-
-When git HEAD changes since last sync (e.g., branch switch, rebase, commit amend), Safe Full mode automatically cleans up zombie files from the old ref to prevent stale search results.
-
----
-
-## Developer Overrides
-
-These settings allow temporary overrides when the official API updates before the package catches up:
-
-| Variable | Default |
-|----------|---------|
-| `RELACE_APPLY_ENDPOINT` | `https://instantapply.endpoint.relace.run/v1/apply` |
-| `RELACE_APPLY_MODEL` | `auto` |
-| `RELACE_TIMEOUT_SECONDS` | `60` |
-| `RELACE_MAX_RETRIES` | `3` |
-| `RELACE_RETRY_BASE_DELAY` | `1.0` |
-| `RELACE_SEARCH_ENDPOINT` | `https://search.endpoint.relace.run/v1/search` |
-| `RELACE_SEARCH_MODEL` | `relace-search` |
-| `RELACE_SEARCH_TIMEOUT_SECONDS` | `120` |
-| `RELACE_SEARCH_MAX_TURNS` | `6` |
-| `RELACE_API_ENDPOINT` | `https://api.relace.run/v1` |
-| `RELACE_REPO_ID` | — (pre-configured repo UUID to skip list/create) |
-| `RELACE_REPO_SYNC_TIMEOUT` | `300` |
-| `RELACE_REPO_SYNC_MAX_FILES` | `5000` |
-| `RELACE_REPO_LIST_MAX` | `10000` (max repos to fetch with pagination) |
-| `RELACE_UPLOAD_MAX_WORKERS` | `8` (concurrent file hash/upload workers) |
-
----
-
-## Encoding
-
-Relace MCP aims to work with legacy-encoded repos (e.g., GBK/Big5) without crashing tools like `fast_apply`, `view_file`, `grep_search`, and `cloud_sync`.
-
-**Recommended best practice:** convert the repo to UTF-8 (and keep it consistent). If you must keep legacy encodings:
-
-- For Python source, add a PEP 263 coding cookie on the first or second line (e.g., `# -*- coding: gbk -*-`).
-- If your repo is predominantly a single legacy encoding, set `RELACE_DEFAULT_ENCODING` explicitly.
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RELACE_DEFAULT_ENCODING` | — | Force the default encoding used when reading/writing project files (e.g., `gbk`, `big5`) |
-| `RELACE_ENCODING_SAMPLE_LIMIT` | `30` | Max files sampled at startup for auto-detecting a dominant project encoding |
+When git HEAD changes since last sync (e.g., branch switch, rebase), Safe Full mode automatically cleans up zombie files from the old ref.
 
 ---
 
@@ -78,8 +106,6 @@ File logging is opt-in. Enable with `RELACE_LOGGING=1`.
 
 ### Log Location
 
-Logs are written to a cross-platform state directory:
-
 | Platform | Path |
 |----------|------|
 | Linux | `~/.local/state/relace/relace.log` |
@@ -88,10 +114,10 @@ Logs are written to a cross-platform state directory:
 
 ### Log Format
 
-Logs are written in JSON Lines (JSONL) format, one JSON object per line:
+Logs are written in JSON Lines (JSONL) format:
 
 ```json
-{"kind":"apply_success","level":"info","trace_id":"a1b2c3d4","started_at":"2025-01-01T00:00:00+00:00","latency_ms":150,"file_path":"/path/to/file.py","file_size_bytes":1234,"instruction":"fix bug","edit_snippet_preview":"def foo():...","usage":{"prompt_tokens":100,"completion_tokens":50},"timestamp":"2025-01-01T00:00:00.150000+00:00"}
+{"kind":"apply_success","level":"info","trace_id":"a1b2c3d4","latency_ms":150,"file_path":"/path/to/file.py",...}
 ```
 
 ### Event Types
@@ -109,115 +135,82 @@ Logs are written in JSON Lines (JSONL) format, one JSON object per line:
 
 ### Log Rotation
 
-- Logs rotate automatically when exceeding **10 MB**
-- Up to **5** rotated log files are kept
-- Old files are named `relace.YYYYMMDD_HHMMSS.log`
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RELACE_LOGGING` | `0` | Set to `1` to enable file logging |
-| `RELACE_EXPERIMENTAL_LOGGING` | — | Deprecated alias for `RELACE_LOGGING` (backward compatibility) |
+- Rotates automatically at **10 MB**
+- Keeps up to **5** rotated files
+- Naming: `relace.YYYYMMDD_HHMMSS.log`
 
 ---
 
-## Fast Apply Provider Swap
+## Alternative Providers
 
-Switch to OpenAI-compatible providers for `fast_apply`:
+Both `fast_apply` and `fast_search` can use OpenAI-compatible providers instead of Relace.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RELACE_APPLY_PROVIDER` | `relace` | Provider label. `relace` uses `RELACE_API_KEY`; other values use the provider's API key. |
-| `RELACE_APPLY_ENDPOINT` | — | Optional override base URL (SDK posts to `/chat/completions`; trailing `/chat/completions` is auto-stripped). |
-| `RELACE_APPLY_MODEL` | — | Optional override model |
-| `RELACE_APPLY_API_KEY` | — | Optional direct API key override (recommended for non-Relace providers) |
-| `RELACE_APPLY_API_KEY_ENV` | — | Optional: env var name holding the API key |
-| `RELACE_APPLY_HEADERS` | — | Optional JSON object for default headers (e.g. `{\"HTTP-Referer\":\"...\",\"X-Title\":\"...\"}`) |
-| `OPENAI_API_KEY` | — | Used when `RELACE_APPLY_PROVIDER=openai` and no `RELACE_APPLY_API_KEY*` is set |
-| `OPENROUTER_API_KEY` | — | Used when `RELACE_APPLY_PROVIDER=openrouter` and no `RELACE_APPLY_API_KEY*` is set |
-| `CEREBRAS_API_KEY` | — | Used when `RELACE_APPLY_PROVIDER=cerebras` and no `RELACE_APPLY_API_KEY*` is set |
+### Configuration Pattern
 
----
+```bash
+# For fast_apply
+export APPLY_PROVIDER=openrouter
+export APPLY_API_KEY=sk-or-v1-xxx
+export APPLY_MODEL=anthropic/claude-3.5-sonnet
 
-## Fast Search Provider Swap
+# For fast_search
+export SEARCH_PROVIDER=openai
+export SEARCH_API_KEY=sk-xxx
+export SEARCH_MODEL=gpt-4o
+```
 
-Switch to OpenAI-compatible providers for `fast_search`:
+### API Key Resolution
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RELACE_SEARCH_PROVIDER` | `relace` | Provider label. `relace` uses `RELACE_API_KEY`; other values use the provider's API key. |
-| `RELACE_SEARCH_ENDPOINT` | — | Optional override base URL (SDK posts to `/chat/completions`; trailing `/chat/completions` is auto-stripped). |
-| `RELACE_SEARCH_MODEL` | — | Optional override model |
-| `RELACE_SEARCH_API_KEY` | — | Optional direct API key override (recommended for non-Relace providers) |
-| `RELACE_SEARCH_API_KEY_ENV` | — | Optional: env var name holding the API key |
-| `RELACE_SEARCH_HEADERS` | — | Optional JSON object for default headers (e.g. `{\"HTTP-Referer\":\"...\",\"X-Title\":\"...\"}`) |
-| `RELACE_SEARCH_TOOL_STRICT` | `1` | Set to `0` to omit the non-standard `strict` field from tool schemas |
-| `OPENAI_API_KEY` | — | Used when `RELACE_SEARCH_PROVIDER=openai` and no `RELACE_SEARCH_API_KEY*` is set |
-| `OPENROUTER_API_KEY` | — | Used when `RELACE_SEARCH_PROVIDER=openrouter` and no `RELACE_SEARCH_API_KEY*` is set |
-| `CEREBRAS_API_KEY` | — | Used when `RELACE_SEARCH_PROVIDER=cerebras` and no `RELACE_SEARCH_API_KEY*` is set |
-
----
-
-## Fast Search Tool Control
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RELACE_SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,find_symbol` | Comma-separated allowlist. `report_back` is always enabled. Add `bash` to enable shell commands (Unix only). |
-| `RELACE_SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls for lower latency |
-
-> **Note:** The `bash` tool is disabled by default for security. To enable it on Unix systems, add to your MCP configuration:
-> ```json
-> {
->   "mcpServers": {
->     "relace": {
->       "env": {
->         "RELACE_SEARCH_ENABLED_TOOLS": "view_file,view_directory,grep_search,glob,find_symbol,bash"
->       }
->     }
->   }
-> }
-> ```
+1. `APPLY_API_KEY` / `SEARCH_API_KEY` (explicit)
+2. Provider-specific key (e.g., `OPENROUTER_API_KEY`)
+3. `RELACE_API_KEY` (only for `relace` provider)
 
 ### LSP Tool
 
-The `find_symbol` tool provides semantic code queries using Language Server Protocol for Python files. It supports:
-- `definition`: Jump to the definition of a symbol
-- `references`: Find all references to a symbol
+The `find_symbol` tool uses Language Server Protocol for Python semantic queries:
+- `definition`: Jump to symbol definition
+- `references`: Find all symbol references
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RELACE_LSP_TIMEOUT_SECONDS` | `15.0` | Timeout for LSP startup/shutdown/requests |
-| `RELACE_LSP_LOOP_STOP_TIMEOUT_SECONDS` | `3.0` | Legacy (multilspy implementation); no effect in current client |
+> **Note:** Uses `basedpyright` (bundled). First call incurs 2-5s startup latency.
 
-> **Note:** LSP uses `basedpyright` (installed with the package). First call incurs 2-5s startup latency.
+### OpenAI Structured Outputs
 
-### OpenAI Structured Outputs Compatibility
-
-When using OpenAI or OpenAI-compatible providers (not `relace`) with `RELACE_SEARCH_TOOL_STRICT=1` (default), `parallel_tool_calls` is automatically disabled to comply with [OpenAI's Structured Outputs limitations](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/structured-outputs).
-
-To use parallel tool calls with OpenAI providers, disable strict mode:
+When using OpenAI providers with `SEARCH_TOOL_STRICT=1` (default), parallel tool calls are automatically disabled. To enable parallel calls:
 
 ```bash
-export RELACE_SEARCH_TOOL_STRICT=0
-export RELACE_SEARCH_PARALLEL_TOOL_CALLS=1
+export SEARCH_TOOL_STRICT=0
+export SEARCH_PARALLEL_TOOL_CALLS=1
+```
+
+### Bash Tool
+
+The `bash` tool is disabled by default. To enable on Unix:
+
+```json
+{
+  "mcpServers": {
+    "relace": {
+      "env": {
+        "SEARCH_ENABLED_TOOLS": "view_file,view_directory,grep_search,glob,find_symbol,bash"
+      }
+    }
+  }
+}
 ```
 
 ---
 
 ## Remote Deployment (Streamable HTTP)
 
-Security note: this server can read and write files on the host via tools like `fast_apply`.
-Do **NOT** expose it directly to the public internet. Prefer `stdio` transport, or put HTTP
-behind authentication/VPN and run with least privilege (ideally in an isolated container).
+> **Security:** This server can read/write files. Do **NOT** expose directly to the internet. Use `stdio`, or put HTTP behind authentication/VPN.
 
-For remote deployment, run with streamable-http transport (bind all interfaces explicitly):
+### Running the Server
 
 ```bash
 relace-mcp -t streamable-http --host 0.0.0.0 -p 8000
 ```
 
-Connect via:
+### Client Configuration
 
 ```json
 {
@@ -230,7 +223,7 @@ Connect via:
 }
 ```
 
-### Additional CLI Options
+### CLI Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
