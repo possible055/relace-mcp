@@ -81,9 +81,17 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         """
         # Resolve base_dir dynamically from MCP Roots if not configured
         base_dir, source = await resolve_base_dir(config.base_dir, ctx)
+
+        # Get cached LSP languages (auto-detects on first call per base_dir)
+        from ..lsp.languages import get_lsp_languages
+
+        lsp_languages = get_lsp_languages(Path(base_dir))
+
         effective_config = replace(config, base_dir=base_dir)
         # Avoid shared mutable state across concurrent calls.
-        return FastAgenticSearchHarness(effective_config, search_client).run(query=query)
+        return FastAgenticSearchHarness(
+            effective_config, search_client, lsp_languages=lsp_languages
+        ).run(query=query)
 
     # Cloud Repos (Semantic Search & Sync) - only register if enabled
     if RELACE_CLOUD_TOOLS:
