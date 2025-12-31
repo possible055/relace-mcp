@@ -15,6 +15,7 @@ dist/
 # Linter / formatter cache
 .pylint.d/
 ruff_cache/
+.mypy_cache/
 
 # IDE editor settings
 .vscode/

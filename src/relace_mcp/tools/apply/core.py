@@ -400,4 +400,11 @@ async def apply_file_logic(
             )
 
         logger.error("[%s] Apply failed for %s: %s", ctx.trace_id, file_path, exc)
-        raise
+        return errors.recoverable_error(
+            "INTERNAL_ERROR",
+            f"Unexpected error ({type(exc).__name__}): {exc}",
+            file_path,
+            instruction,
+            ctx.trace_id,
+            ctx.elapsed_ms(),
+        )

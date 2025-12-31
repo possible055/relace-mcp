@@ -247,7 +247,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "Find where a Python symbol is defined or find all its usages.\n\n"
                 "Use AFTER viewing a file when you know the symbol's exact position.\n"
                 "Actions: 'definition' (go to source), 'references' (find all usages).\n\n"
-                "IMPORTANT: line/column are 0-indexed (view_file shows 1-indexed lines, subtract 1).\n"
+                "line/column are 1-indexed, matching view_file output directly.\n"
                 "First call has 2-5s startup delay."
             ),
             "parameters": {
@@ -265,11 +265,11 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     },
                     "line": {
                         "type": "integer",
-                        "description": "Line number (0-indexed) where the symbol is located.",
+                        "description": "Line number (1-indexed, same as view_file output).",
                     },
                     "column": {
                         "type": "integer",
-                        "description": "Column number (0-indexed) where the symbol starts.",
+                        "description": "Column number (1-indexed) where the symbol starts.",
                     },
                 },
                 "additionalProperties": False,
@@ -309,8 +309,13 @@ def normalize_tool_schemas(
     return normalized
 
 
-def get_tool_schemas() -> list[dict[str, Any]]:
+def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[str, Any]]:
     """Get enabled tool schemas for Fast Agentic Search.
+
+    Args:
+        lsp_languages: Set of available LSP language IDs for the current project.
+            If None, find_symbol is included by default (legacy behavior).
+            If empty frozenset, find_symbol is hidden.
 
     Environment variables:
         - RELACE_SEARCH_ENABLED_TOOLS: Comma/space-separated allowlist, e.g.
@@ -346,6 +351,10 @@ def get_tool_schemas() -> list[dict[str, Any]]:
     # Platform/tool availability: only expose bash when it's actually runnable.
     if "bash" in enabled and shutil.which("bash") is None:
         enabled.discard("bash")
+
+    # Hide find_symbol if no LSP languages are available for this project
+    if lsp_languages is not None and not lsp_languages:
+        enabled.discard("find_symbol")
 
     selected = [
         schema for schema in _ALL_TOOL_SCHEMAS if schema.get("function", {}).get("name") in enabled

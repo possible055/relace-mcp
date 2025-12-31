@@ -144,8 +144,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--host",
-        default="0.0.0.0",  # nosec B104
-        help="Host to bind for HTTP mode (default: 0.0.0.0)",
+        default="127.0.0.1",
+        help="Host to bind for HTTP mode (default: 127.0.0.1)",
     )
     parser.add_argument(
         "-p",

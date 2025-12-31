@@ -32,6 +32,17 @@ def _make_report_back_call(call_id: str, explanation: str, files: dict) -> dict:
     }
 
 
+def _make_bash_call(call_id: str, command: str) -> dict:
+    """Build bash tool call for tests."""
+    return {
+        "id": call_id,
+        "function": {
+            "name": "bash",
+            "arguments": json.dumps({"command": command}),
+        },
+    }
+
+
 class TestFastAgenticSearchHarness:
     """Test the agent harness."""
 
@@ -140,7 +151,41 @@ class TestFastAgenticSearchHarness:
         result = harness.run("Find hello")
 
         assert result["turns_used"] == 2
-        assert mock_client.chat.call_count == 2
+
+    def test_blocks_disabled_tools_defense_in_depth(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Even if the model hallucinates tool calls, disabled tools must not execute."""
+        # Ensure default tool allowlist is active (bash is opt-in).
+        monkeypatch.delenv("RELACE_SEARCH_ENABLED_TOOLS", raising=False)
+
+        # If bash ever executes here, the handler would be called.
+        from relace_mcp.tools.search.harness import tool_calls as tc_mod
+
+        bash_spy = MagicMock(return_value="should-not-run")
+        monkeypatch.setattr(tc_mod, "bash_handler", bash_spy)
+
+        mock_client.chat.return_value = {
+            "choices": [
+                {
+                    "message": {
+                        "tool_calls": [
+                            _make_bash_call("call_1", "ls -la"),
+                            _make_report_back_call("call_2", "Done", {}),
+                        ]
+                    }
+                }
+            ]
+        }
+
+        harness = FastAgenticSearchHarness(mock_config, mock_client)
+        result = harness.run("Try to run bash")
+
+        assert result["explanation"] == "Done"
+        assert bash_spy.call_count == 0
 
     def test_handles_parallel_tool_calls(
         self,

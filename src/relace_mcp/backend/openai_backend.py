@@ -80,7 +80,9 @@ def _should_retry(retry_state: RetryCallState) -> bool:
         return False
     if isinstance(exc, openai.RateLimitError):
         return True
-    if isinstance(exc, openai.APIConnectionError | openai.APITimeoutError):
+    # Use a tuple for Python 3.11/3.12 compatibility (PEP 604 unions in isinstance
+    # are only supported in newer Python versions).
+    if isinstance(exc, (openai.APIConnectionError, openai.APITimeoutError)):
         return True
     if isinstance(exc, openai.APIStatusError):
         return exc.status_code >= 500
