@@ -143,7 +143,7 @@ def compute_stats(events: list[dict[str, Any]]) -> dict[str, Any]:
 
     for event in events:
         kind = event.get("kind", "")
-        if kind == "apply_success":
+        if kind in ("apply_success", "create_success"):
             apply_success += 1
         elif kind == "apply_error":
             apply_error += 1
