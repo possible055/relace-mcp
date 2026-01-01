@@ -26,6 +26,3 @@ ruff_cache/
 # Logs / Env
 *.log
 .env
-
-# --- project-specific rules ---
-relace_apply.log
