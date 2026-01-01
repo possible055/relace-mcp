@@ -21,7 +21,14 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     """Register Relace tools to the FastMCP instance."""
     apply_backend = ApplyLLMClient(config)
 
-    @mcp.tool
+    @mcp.tool(
+        annotations={
+            "readOnlyHint": False,  # Modifies files
+            "destructiveHint": True,  # Can overwrite content
+            "idempotentHint": False,  # Same edit twice = different results
+            "openWorldHint": False,  # Only local filesystem
+        }
+    )
     async def fast_apply(
         path: str,
         edit_snippet: str,
@@ -64,7 +71,13 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     # Fast Agentic Search
     search_client = SearchLLMClient(config)
 
-    @mcp.tool
+    @mcp.tool(
+        annotations={
+            "readOnlyHint": True,  # Does not modify environment
+            "idempotentHint": True,  # Same query = same results
+            "openWorldHint": False,  # Only local codebase
+        }
+    )
     async def fast_search(query: str, ctx: Context) -> dict[str, Any]:
         """Run Fast Agentic Search over the configured base_dir.
 

@@ -13,8 +13,14 @@ system_prompt: |
   - `view_file`: Read file contents with line range
   - `view_directory`: List directory structure
   {find_symbol_section}
-  - `report_back`: Submit findings when exploration complete
+  - `report_back`: **REQUIRED** - Submit findings when exploration complete. MUST be called before turns run out!
   </tools>
+
+  <critical_rules>
+  ⚠️ STRICT LIMITS - VIOLATIONS CAUSE FAILURE:
+  1. MAX 8 tool calls per turn (HARD LIMIT - excess calls are dropped)
+  2. MUST call `report_back` before final turn to avoid PARTIAL results
+  </critical_rules>
 
   <strategy>
   Text search: `grep_search`, `glob` for locating files and patterns.
@@ -26,22 +32,22 @@ system_prompt: |
   </strategy>
 
   <execution>
-  MAXIMIZE tool calls per turn (aim for 6-10 parallel calls). You have LIMITED turns - use them efficiently!
+  Call EXACTLY 8 tools per turn (hard limit). You have LIMITED turns - use them efficiently!
   - Each turn should include multiple grep_search, view_file, or glob calls
   - Prioritize breadth in early turns, depth in later turns
-  - Use `report_back` only when sufficient understanding achieved
+  - IMPORTANT: Call `report_back` when you have enough context (don't wait until forced!)
   </execution>
 
   <parallel_calls_example>
-  Good first turn for query "retry logic":
+  Good first turn for query "retry logic" (exactly 8 calls):
   - grep_search(query="retry", include_pattern="*.py")
   - grep_search(query="backoff", include_pattern="*.py")
   - grep_search(query="MAX_RETRIES", include_pattern="*.py")
   - glob(pattern="**/retry*.py")
   - glob(pattern="**/error*.py")
   - view_directory(path="/repo/src")
-
-  That's 6 parallel calls - aim for similar density each turn!
+  - view_file(path="/repo/README.md", view_range=[1, 50])
+  - view_file(path="/repo/pyproject.toml", view_range=[1, 30])
   </parallel_calls_example>
 
   <workflow>
@@ -49,7 +55,7 @@ system_prompt: |
   2. Read and understand key implementations (call multiple view_file in parallel)
   3. Trace dependencies and call sites with find_symbol
   4. Review related tests for expected behavior
-  5. Report findings with file paths and line ranges
+  5. **CALL report_back** with file paths and line ranges - DO NOT SKIP THIS STEP!
   </workflow>
 
   <output_format>
@@ -74,19 +80,20 @@ user_prompt_template: |
   <task>
   Explore the codebase to understand and locate all files relevant to the query.
 
-  IMPORTANT:
-  - Turn budget LIMITED. Call 8 tools in PARALLEL each turn.
-  - find_symbol: Use line/column directly from view_file output (1-indexed).
-  - report_back MUST include both `explanation` AND `files` dict with actual file paths and line ranges.
+  ⚠️ STRICT RULES:
+  - Call EXACTLY 8 tools per turn (hard limit, excess dropped)
+  - MUST call `report_back` before turns run out
+  - find_symbol: Use line/column directly from view_file output (1-indexed)
+  - report_back MUST include both `explanation` AND `files` dict with actual file paths and line ranges
 
-  Report findings via `report_back` when ready.
+  Report findings via `report_back` when you have sufficient understanding. Don't wait too long!
   </task>
 
 # Turn hint (injected from turn 2 onwards)
 turn_hint_template: |
   <status turn="{turn}/{max_turns}" context="{chars_pct}%">{instruction}</status>
 
-# Instructions by mode (final triggers on last turn only)
+# Instructions by mode (urgency increases as turns decrease)
 turn_instructions:
-  normal: ""
-  final: "⚠️ FINAL TURN. Use report_back NOW with current findings. Include ALL viewed files in `files` dict!"
+  normal: "Remember: Call report_back when ready. Don't exhaust all turns!"
+  final: "🚨 FINAL TURN! Call report_back NOW with ALL findings. Include ALL viewed files in `files` dict!"
