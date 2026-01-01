@@ -142,6 +142,7 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 - **快速搜索** — 使用自然语言查询进行智能代码库探索
 - **云端同步** — 将本地代码库上传到 Relace Cloud 进行语义搜索
 - **云端搜索** — 对云端同步的仓库进行语义代码搜索
+- **仪表盘** — 实时终端 UI 用于监控操作（需要 `textual`）
 
 ## 环境变量
 
@@ -233,6 +234,27 @@ SEARCH_MAX_TURNS=6
 - **Windows**: `%LOCALAPPDATA%\relace\relace.log`
 
 > 日志格式和进阶选项请参见 [docs/advanced.zh-CN.md](docs/advanced.zh-CN.md#日志)。
+
+## 仪表盘
+
+实时终端 UI，用于监控 `fast_apply` 和 `fast_search` 操作。
+
+```bash
+# 安装包含仪表盘支持
+pip install relace-mcp[tools]
+
+# 启动仪表盘
+relace-dashboard
+```
+
+功能特性：
+- 多视图标签页（All、Apply、Search、Insights、Errors）
+- 时间范围筛选（1h、6h、24h、All）
+- 实时日志追踪
+- 树形结构搜索会话视图
+- 工具使用统计
+
+> 详细用法请参见 [docs/dashboard.zh-CN.md](docs/dashboard.zh-CN.md)。
 
 ## 故障排除
 

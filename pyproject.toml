@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "relace-mcp"
-version = "0.2.2.dev1"
+version = "0.2.2.dev2"
 description = "Unofficial Relace MCP Server - Fast code merging via Relace API"
 readme = "README.md"
 license = { text = "MIT" }
@@ -64,7 +64,7 @@ relace-dashboard = "relace_mcp.dashboard:main"
 include-package-data = true
 
 [tool.setuptools.package-data]
-relace_mcp = ["**/*.yaml"]
+relace_mcp = ["**/*.yaml", "**/*.tcss"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
