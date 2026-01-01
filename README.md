@@ -142,6 +142,7 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 - **Fast Search** — Agentic codebase exploration with natural language queries
 - **Cloud Sync** — Upload local codebase to Relace Cloud for semantic search
 - **Cloud Search** — Semantic code search over cloud-synced repositories
+- **Dashboard** — Real-time terminal UI for monitoring operations (requires `textual`)
 
 ## Environment Variables
 
@@ -233,6 +234,27 @@ Operation logs are written to a cross-platform state directory:
 - **Windows**: `%LOCALAPPDATA%\relace\relace.log`
 
 > For log format and advanced options, see [docs/advanced.md](docs/advanced.md#logging).
+
+## Dashboard
+
+A real-time terminal UI for monitoring `fast_apply` and `fast_search` operations.
+
+```bash
+# Install with dashboard support
+pip install relace-mcp[tools]
+
+# Launch dashboard
+relace-dashboard
+```
+
+Features:
+- Multi-view tabs (All, Apply, Search, Insights, Errors)
+- Time range filtering (1h, 6h, 24h, All)
+- Real-time log tailing
+- Tree-structured search session view
+- Tool usage statistics
+
+> For detailed usage, see [docs/dashboard.md](docs/dashboard.md).
 
 ## Troubleshooting
 
