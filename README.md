@@ -154,6 +154,7 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 | `RELACE_CLOUD_TOOLS` | ❌ | Set to `1` to enable cloud tools (cloud_sync, cloud_search, etc.) |
 | `RELACE_LOGGING` | ❌ | Set to `1` to enable file logging (default: disabled) |
 | `RELACE_DEFAULT_ENCODING` | ❌ | Force file encoding (e.g., `gbk`, `big5`) for legacy repos |
+| `RELACE_TEMPERATURE` | ❌ | LLM sampling temperature (default: `1.0`, range: 0.0-2.0) |
 
 ### Using a .env File
 

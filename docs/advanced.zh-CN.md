@@ -25,6 +25,7 @@
 | `RELACE_DEFAULT_ENCODING` | — | 强制项目文件编码（如 `gbk`、`big5`） |
 | `RELACE_LOGGING` | `0` | 设为 `1` 启用文件日志 |
 | `RELACE_TIMEOUT_SECONDS` | `60` | 默认请求超时 |
+| `RELACE_TEMPERATURE` | `1.0` | LLM 采样温度（0.0-2.0），用于 fast_apply 和 fast_search |
 
 ### Fast Apply
 

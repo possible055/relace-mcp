@@ -171,8 +171,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "report_back",
             "strict": True,
             "description": (
-                "This is a tool to use when you feel like you have finished exploring the codebase "
-                "and understanding the problem, and now would like to report back to the user."
+                "Report your findings back to the user after exploring the codebase. "
+                "IMPORTANT: Include PRECISE line ranges for relevant code, not entire files."
             ),
             "parameters": {
                 "type": "object",
@@ -194,8 +194,9 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                             },
                         },
                         "description": (
-                            "A dictionary where the keys are file paths and the values are lists of tuples "
-                            "representing the line ranges in each file that are relevant to solving the issue."
+                            "A dictionary mapping file paths to lists of [start_line, end_line] tuples. "
+                            "Use PRECISE ranges for relevant code sections only (e.g., [[54, 67], [100, 115]]), "
+                            "NOT entire file ranges like [[1, 500]]. Multiple ranges per file are encouraged."
                         ),
                     },
                 },

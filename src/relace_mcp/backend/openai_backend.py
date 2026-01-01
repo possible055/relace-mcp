@@ -20,6 +20,20 @@ RELACE_PROVIDER = "relace"
 _TRUTHY = {"1", "true", "yes", "y", "on"}
 _FALSY = {"0", "false", "no", "n", "off"}
 
+DEFAULT_TEMPERATURE = 1.0
+
+
+def _env_float(name: str, *, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw.strip())
+    except ValueError:
+        logger.warning("Invalid %s=%r; expected float, defaulting to %s", name, raw, default)
+        return default
+
+
 _DEFAULT_BASE_URLS: dict[str, str] = {
     OPENAI_PROVIDER: "https://api.openai.com/v1",
     "openrouter": "https://openrouter.ai/api/v1",
@@ -153,6 +167,8 @@ class OpenAIChatClient:
             max_retries=0,
         )
 
+        self._default_temperature = _env_float("RELACE_TEMPERATURE", default=DEFAULT_TEMPERATURE)
+
     @property
     def provider(self) -> str:
         return self._provider
@@ -178,7 +194,7 @@ class OpenAIChatClient:
         self,
         messages: list[dict[str, Any]],
         *,
-        temperature: float = 1.0,
+        temperature: float | None = None,
         extra_body: dict[str, Any] | None = None,
         trace_id: str = "unknown",
     ) -> tuple[dict[str, Any], float]:
@@ -186,7 +202,7 @@ class OpenAIChatClient:
 
         Args:
             messages: List of chat messages.
-            temperature: Sampling temperature (0.0-2.0).
+            temperature: Sampling temperature (0.0-2.0). If None, uses RELACE_TEMPERATURE env or 1.0.
             extra_body: Additional request parameters.
             trace_id: Request identifier for logging.
 
@@ -196,6 +212,8 @@ class OpenAIChatClient:
         Raises:
             openai.APIError: API call failed after retries.
         """
+        if temperature is None:
+            temperature = self._default_temperature
         start = time.perf_counter()
         try:
             response = self._sync_client.chat.completions.create(
@@ -227,7 +245,7 @@ class OpenAIChatClient:
         self,
         messages: list[dict[str, Any]],
         *,
-        temperature: float = 1.0,
+        temperature: float | None = None,
         extra_body: dict[str, Any] | None = None,
         trace_id: str = "unknown",
     ) -> tuple[dict[str, Any], float]:
@@ -235,7 +253,7 @@ class OpenAIChatClient:
 
         Args:
             messages: List of chat messages.
-            temperature: Sampling temperature (0.0-2.0).
+            temperature: Sampling temperature (0.0-2.0). If None, uses RELACE_TEMPERATURE env or 1.0.
             extra_body: Additional request parameters.
             trace_id: Request identifier for logging.
 
@@ -245,6 +263,8 @@ class OpenAIChatClient:
         Raises:
             openai.APIError: API call failed after retries.
         """
+        if temperature is None:
+            temperature = self._default_temperature
         start = time.perf_counter()
         try:
             response = await self._async_client.chat.completions.create(

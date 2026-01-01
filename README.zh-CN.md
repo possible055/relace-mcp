@@ -154,6 +154,7 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 | `RELACE_CLOUD_TOOLS` | ❌ | 设为 `1` 启用云端工具（cloud_sync、cloud_search 等） |
 | `RELACE_LOGGING` | ❌ | 设为 `1` 启用文件日志（默认：禁用） |
 | `RELACE_DEFAULT_ENCODING` | ❌ | 强制文件编码（如 `gbk`、`big5`），用于遗留编码仓库 |
+| `RELACE_TEMPERATURE` | ❌ | LLM 采样温度（默认：`1.0`，范围：0.0-2.0） |
 
 ### 使用 .env 文件
 
