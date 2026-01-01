@@ -13,8 +13,20 @@ from ..handlers import (
 
 logger = logging.getLogger(__name__)
 
+_ALLOWED_ASSISTANT_FIELDS = frozenset({"role", "content", "tool_calls", "name"})
+
 
 class MessageHistoryMixin:
+    def _sanitize_assistant_message(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Filter out OpenAI-specific fields from assistant message.
+
+        Some providers (e.g. Mistral) reject extra fields like refusal, annotations,
+        audio, function_call that OpenAI SDK includes in serialized responses.
+        """
+        return {
+            k: v for k, v in message.items() if k in _ALLOWED_ASSISTANT_FIELDS and v is not None
+        }
+
     def _repair_tool_call_integrity(self, messages: list[dict[str, Any]], trace_id: str) -> None:
         """Check and repair tool_calls and tool results pairing integrity.
 
