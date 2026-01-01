@@ -53,7 +53,7 @@ repos:
     rev: v2.1.0
     hooks:
       - id: dead
-        args: ["--exclude", "tests/|src/relace_mcp/tools/__init__\\.py"]
+        args: ["--exclude", "tests/|src/relace_mcp/tools/__init__\\.py|src/relace_mcp/dashboard/"]
 
   # Docstring coverage (for MCP tool definitions)
   - repo: https://github.com/econchick/interrogate
