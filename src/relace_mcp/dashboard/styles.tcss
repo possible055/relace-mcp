@@ -1,0 +1,136 @@
+/* Relace MCP Dashboard - HTOP Style */
+
+Screen {
+    layout: vertical;
+    background: black; /* Deep black for terminal feel */
+    color: #e0e0e0;
+}
+
+CompactHeader {
+    dock: top;
+    height: 1;
+    background: #000000;
+    color: white;
+}
+
+/* Tab Buttons */
+FilterButton {
+    width: auto;
+    height: 1;
+    border: none;
+    background: #222222;
+    color: #888888;
+    padding: 0 3;
+    margin: 0 1;
+    content-align: center middle;
+    text-align: center;
+    text-style: bold;
+}
+
+FilterButton:hover {
+    background: #444444;
+    color: white;
+}
+
+FilterButton.active {
+    background: $primary;
+    color: black;
+    text-style: bold;
+}
+
+TimeCycleButton {
+    min-width: 10;
+    height: 1;
+    border: none;
+    background: #222222;
+    color: $accent;
+    content-align: center middle;
+}
+TimeCycleButton:hover {
+    background: #444444;
+}
+
+/* Stats Label */
+#stats-label {
+    content-align: right middle;
+    color: $success;
+    text-style: bold;
+}
+
+/* Main Log Output */
+#log-all, #log-apply, #log-errors {
+    height: 1fr;
+    border: none;
+    margin: 0;
+    padding: 0;
+    background: #111111;
+    scrollbar-gutter: stable;
+}
+
+SearchTree, InsightsTree {
+    background: #000000;
+    color: #cccccc;
+    scrollbar-gutter: stable;
+}
+
+SearchTree > Tree, InsightsTree > Tree {
+    background: #000000;
+}
+
+/* Footer - HTOP Style Keys */
+Footer {
+    dock: bottom;
+    height: 1;
+    background: #000000;
+    color: black;
+}
+
+Footer > .footer-key {
+    background: #b0b0b0;
+    color: black;
+    padding: 0 1;
+    text-style: bold;
+}
+Footer > .footer-key--key {
+    color: #cc0000; /* Red Key letter like F1 */
+    text-style: bold;
+}
+Footer > .footer-key--description {
+    color: black;
+}
+
+/* Toast Notification Override */
+Toast {
+    min-width: 15;
+    max-width: 30;
+    padding: 0 1;
+    height: auto;
+}
+
+/* Insights Toolbar */
+.insights-toolbar {
+    height: 1;
+    background: #111111;
+    padding: 0 1;
+    margin-top: 1;
+}
+
+#toggle-failed {
+    width: auto;
+    min-width: 18;
+    height: 1;
+    border: none;
+    background: #222222;
+    color: #888888;
+    text-style: bold;
+}
+
+#toggle-failed:hover {
+    background: #333333;
+    color: white;
+}
+
+#toggle-failed.active {
+    background: #222222; /* Keep same bg, use label colored elements for state */
+    color: #e0e0e0;
+}

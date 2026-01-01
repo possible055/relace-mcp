@@ -73,8 +73,9 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             self._turn_hint_template = TURN_HINT_TEMPLATE_OPENAI
             self._turn_instructions = TURN_INSTRUCTIONS_OPENAI
 
-        # Build dynamic system prompt with LSP language info
-        self._system_prompt = build_system_prompt(base_prompt, self._lsp_languages)
+        # Build dynamic system prompt with LSP language info and enabled tools
+        enabled_tools = self._enabled_tool_names()
+        self._system_prompt = build_system_prompt(base_prompt, self._lsp_languages, enabled_tools)
 
     def _get_turn_hint(self, turn: int, max_turns: int, chars_used: int) -> str:
         """Generate turn status hint.

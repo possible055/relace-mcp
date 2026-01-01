@@ -19,7 +19,21 @@ def build_find_symbol_section(languages: frozenset[str]) -> str:
     )
 
 
-def build_system_prompt(template: str, languages: frozenset[str]) -> str:
-    """Build system prompt with dynamic find_symbol section."""
-    section = build_find_symbol_section(languages)
-    return template.replace("{find_symbol_section}", section)
+def build_system_prompt(
+    template: str, languages: frozenset[str], enabled_tools: set[str] | None = None
+) -> str:
+    """Build system prompt with dynamic tool sections (find_symbol, bash)."""
+    # 1. find_symbol
+    fs_section = build_find_symbol_section(languages)
+    prompt = template.replace("{find_symbol_section}", fs_section)
+
+    # 2. bash
+    bash_section = ""
+    if enabled_tools is not None and "bash" in enabled_tools:
+        bash_section = "- `bash`: Shell commands (use sparingly, if available)"
+
+    # Also handle cleaning up empty line if bash is disabled
+    prompt = prompt.replace("{bash_section}", bash_section)
+
+    # Cleanup any resulting triple-newlines
+    return prompt.replace("\n\n\n", "\n\n").strip()
