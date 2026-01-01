@@ -13,6 +13,7 @@ APPLY_KINDS = frozenset({"create_success", "apply_success", "apply_error"})
 SEARCH_KINDS = frozenset(
     {"search_start", "search_turn", "tool_call", "search_complete", "search_error"}
 )
+INSIGHTS_KINDS = frozenset({"search_start", "search_turn", "tool_call"})
 ALL_KINDS = APPLY_KINDS | SEARCH_KINDS
 
 
@@ -175,3 +176,37 @@ def get_time_presets() -> dict[str, tuple[datetime, datetime]]:
         "24h": (now - timedelta(hours=24), now),
         "All": (datetime.min.replace(tzinfo=UTC), now),
     }
+
+
+def get_aggregated_tool_stats(
+    events: list[dict[str, Any]], max_tool_calls: int = 100, include_failed: bool = True
+) -> list[dict[str, Any]]:
+    """Aggregate tool calls by turn globally, limited to last N tool calls."""
+    # First, filter to just tool_call events
+    if include_failed:
+        tool_calls = [e for e in events if e.get("kind") == "tool_call"]
+    else:
+        tool_calls = [e for e in events if e.get("kind") == "tool_call" and e.get("success", True)]
+
+    # Limit to last N tool calls
+    if len(tool_calls) > max_tool_calls:
+        tool_calls = tool_calls[-max_tool_calls:]
+
+    # Map: turn -> {tool_name: count}
+    aggregated: dict[int, dict[str, int]] = {}
+
+    for event in tool_calls:
+        turn = event.get("turn", 0)
+        tool_name = event.get("tool_name", "unknown")
+
+        if turn not in aggregated:
+            aggregated[turn] = {}
+
+        aggregated[turn][tool_name] = aggregated[turn].get(tool_name, 0) + 1
+
+    # Convert to a sorted list of turns
+    result = []
+    for turn_num in sorted(aggregated.keys()):
+        result.append({"turn": turn_num, "tools": aggregated[turn_num]})
+
+    return result

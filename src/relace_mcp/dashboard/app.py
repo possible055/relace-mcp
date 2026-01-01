@@ -7,7 +7,7 @@ from typing import Any
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import ContentSwitcher, Footer, RichLog
+from textual.widgets import Button, ContentSwitcher, Footer, RichLog, Static
 
 from .log_reader import (
     ALL_KINDS,
@@ -15,7 +15,14 @@ from .log_reader import (
     get_log_path,
     parse_log_event,
 )
-from .widgets import CompactHeader, FilterChanged, SearchTree, TimeRangeChanged
+from .widgets import (
+    CompactHeader,
+    FilterChanged,
+    InsightsTree,
+    SearchTree,
+    TimeRangeChanged,
+    ToggleInsightsFailed,
+)
 
 
 class LogViewerApp(App[None]):  # type: ignore[misc]
@@ -39,11 +46,12 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
         Binding("t", "toggle_time", "Time"),
     ]
 
-    _TAB_ORDER = ["all", "apply", "search", "errors"]
+    _TAB_ORDER = ["all", "apply", "search", "insights", "errors"]
     _TAB_ID_MAP = {
         "log-all": "all",
         "log-apply": "apply",
         "tree-search": "search",
+        "tree-insights": "insights",
         "log-errors": "errors",
     }
 
@@ -61,6 +69,7 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
             "log-all": deque(),
             "log-apply": deque(),
             "tree-search": deque(),
+            "tree-insights": deque(),
             "log-errors": deque(),
         }
 
@@ -69,6 +78,8 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
         self._stats_apply_success = 0
         self._stats_search_complete = 0
         self._stats_dirty = True
+
+        self._insights_include_failed = True
 
         # When reloading, pause tailing to avoid interleaving/duplicates.
         self._reload_in_progress = False
@@ -97,7 +108,17 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
             # 3. SEARCH TREE (Persistent)
             yield SearchTree(id="tree-search")
 
-            # 4. ERRORS LOGS (Persistent)
+            # 4. INSIGHTS TREE (Persistent)
+            from textual.containers import Horizontal, Vertical
+            from textual.widgets import Button
+
+            with Vertical(id="tree-insights"):
+                with Horizontal(classes="insights-toolbar"):
+                    yield Button("[green]✓[/] Show Failed", id="toggle-failed", classes="active")
+                    yield Static(" ", classes="spacer")
+                yield InsightsTree(id="insights-widget")
+
+            # 5. ERRORS LOGS (Persistent)
             yield RichLog(
                 highlight=True,
                 markup=True,
@@ -125,6 +146,7 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
         self.query_one("#log-all", RichLog).clear()
         self.query_one("#log-apply", RichLog).clear()
         self.query_one("#tree-search", SearchTree).clear()
+        self.query_one("#insights-widget", InsightsTree).clear()
         self.query_one("#log-errors", RichLog).clear()
 
     def _route_event(self, event: dict[str, Any]) -> None:
@@ -153,7 +175,13 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
         if kind in SEARCH_KINDS:
             self._pending["tree-search"].append(event)
 
-        # 4. To 'Errors'
+        # 4. To 'Insights'
+        from .log_reader import INSIGHTS_KINDS
+
+        if kind in INSIGHTS_KINDS:
+            self._pending["tree-insights"].append(event)
+
+        # 5. To 'Errors'
         if "error" in kind:
             self._pending["log-errors"].append(event)
 
@@ -294,6 +322,38 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
                 for _ in range(to_flush):
                     tree.add_event(pending.popleft())
 
+        elif current == "tree-insights":
+            tree = self.query_one("#insights-widget", InsightsTree)
+            pending = self._pending["tree-insights"]
+            if not pending:
+                return
+
+            # Insights is a bit different: it re-renders the whole tree based on session state
+            # but for consistency with others we'll drain the queue.
+            # However, get_tool_turn_stats needs ALL relevant events to compute accurately.
+            # So here we'll just clear the queue and trigger a full refresh of the insight tree
+            # using the data we already have if needed, but actually the app's _route_event
+            # just feeds events.
+            # Let's simplify: drain the queue into a local cache if needed, but InsightsTree.update_stats
+            # actually takes a list of events.
+            # For now, let's just trigger update_stats if we have NEW events.
+            has_new = False
+            while pending:
+                pending.popleft()
+                has_new = True
+
+            if has_new:
+                # We need all events matching INSIGHTS_KINDS.
+                # Easiest way? Fetch from log_reader (re-reading) or keep a local buffer?
+                # The app doesn't keep a global list of all events, only deques for widgets.
+                # This is a bit tricky with the current architecture.
+                # Let's fix this by having action_reload and tail accumulate events for insights.
+                # Actually, the most efficient way for Insights is to just re-read the last 100 tool calls.
+                from .log_reader import INSIGHTS_KINDS, read_log_events
+
+                events = read_log_events(enabled_kinds=set(INSIGHTS_KINDS), max_events=1000)
+                tree.update_stats(events, include_failed=self._insights_include_failed)
+
     async def _tail_log(self) -> None:
         log_path = get_log_path()
         if not log_path.exists():
@@ -339,6 +399,8 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
             switcher.current = "tree-search"
         elif self._enabled_kinds == APPLY_KINDS:
             switcher.current = "log-apply"
+        elif self._enabled_kinds == {"search_start", "search_turn", "tool_call"}:  # INSIGHTS_KINDS
+            switcher.current = "tree-insights"
         elif self._enabled_kinds == {"apply_error", "search_error"}:
             switcher.current = "log-errors"
         else:
@@ -366,6 +428,27 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
 
         self.notify(f"Time Filter set to: {label}", title="Time Range", severity="information")
         await self.action_reload()
+
+    def on_toggle_insights_failed(self, message: ToggleInsightsFailed) -> None:
+        self._insights_include_failed = message.include_failed
+        # Trigger refresh of insights tree
+        tree = self.query_one("#insights-widget", InsightsTree)
+        from .log_reader import INSIGHTS_KINDS, read_log_events
+
+        events = read_log_events(enabled_kinds=set(INSIGHTS_KINDS), max_events=1000)
+        tree.update_stats(events, include_failed=self._insights_include_failed)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "toggle-failed":
+            btn = event.button
+            if "active" in btn.classes:
+                btn.remove_class("active")
+                btn.label = "[ ] Show Failed"
+                self.post_message(ToggleInsightsFailed(False))
+            else:
+                btn.add_class("active")
+                btn.label = "[green]✓[/] Show Failed"
+                self.post_message(ToggleInsightsFailed(True))
 
     async def action_reload(self) -> None:
         self._reload_in_progress = True

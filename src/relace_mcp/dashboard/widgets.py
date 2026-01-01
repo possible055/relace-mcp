@@ -8,7 +8,36 @@ from textual.reactive import reactive
 from textual.widgets import Button, Static, Tree
 from textual.widgets.tree import TreeNode
 
-from .log_reader import ALL_KINDS, APPLY_KINDS, SEARCH_KINDS, get_time_presets
+from .log_reader import (
+    ALL_KINDS,
+    APPLY_KINDS,
+    SEARCH_KINDS,
+    get_aggregated_tool_stats,
+    get_time_presets,
+)
+
+TOOL_ABBREVIATIONS = {
+    "grep_search": "grep",
+    "view_file": "read",
+    "fast_apply": "apply",
+    "report_back": "rep",
+    "find_symbol": "sym",
+    "view_directory": "ls",
+    "glob": "glob",
+    "bash": "bash",
+    "read_resource": "res",
+    "cloud_search": "search",
+    "cloud_list": "list",
+    "cloud_info": "info",
+    "cloud_sync": "sync",
+    "cloud_clear": "clear",
+}
+
+
+class ToggleInsightsFailed(Message):  # type: ignore[misc]
+    def __init__(self, include_failed: bool) -> None:
+        super().__init__()
+        self.include_failed = include_failed
 
 
 class SearchTree(Tree[dict[str, Any]]):  # type: ignore[misc]
@@ -235,33 +264,126 @@ class SearchTree(Tree[dict[str, Any]]):  # type: ignore[misc]
                 self._current_turn = None
 
     def _get_tool_style(self, tool: str) -> str:
-        t = tool.lower()
+        palette = [
+            "#ff7675",
+            "#fab1a0",
+            "#ffeaa7",
+            "#55efc4",
+            "#81ecec",
+            "#74b9ff",
+            "#a29bfe",
+            "#fd79a8",
+            "#fdcb6e",
+            "#e17055",
+            "#00b894",
+            "#00cec9",
+            "#0984e3",
+            "#6c5ce7",
+            "#e84393",
+        ]
+        import hashlib
 
-        # Search / Discovery
-        if "cloud_search" in t:
-            return "bold blue"
-        if t in ("grep_search", "glob", "find_symbol"):
-            return "bold cyan"
+        idx = int(hashlib.md5(tool.encode(), usedforsecurity=False).hexdigest(), 16) % len(palette)
+        return palette[idx]
 
-        # Read / View
-        if t in ("view_file", "view_directory", "read_resource", "cloud_list", "cloud_info"):
-            return "bold green"
 
-        # Command / Shell
-        if t in ("bash", "run_command"):
-            return "bold yellow"
+class InsightsTree(Tree[dict[str, Any]]):  # type: ignore[misc]
+    """A tree view for tool call frequency insights."""
 
-        # Modification / Result / Actions
-        if t in ("fast_apply", "report_back", "cloud_sync", "cloud_clear"):
-            return "bold magenta"
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__("Insights", **kwargs)
+        self.show_root = False
+        self.root.expand()
 
-        # Fallback heuristics
-        if "search" in t:
-            return "bold blue"
-        if "view" in t or "read" in t:
-            return "bold green"
+    def clear(self) -> "InsightsTree":
+        self.root.remove_children()
+        return self
 
-        return "white"
+    def update_stats(self, events: list[dict[str, Any]], include_failed: bool = True) -> None:
+        """Process last 100 tool calls and update the aggregated tree."""
+        self.clear()
+        stats = get_aggregated_tool_stats(events, max_tool_calls=100, include_failed=include_failed)
+
+        # 1. Add Legend (Use all tools in events for a stable list)
+        legend_node = self.root.add("[bold underline]Tool Legend[/]", expand=True)
+        all_tools = set()
+        for e in events:
+            if e.get("kind") == "tool_call":
+                all_tools.add(e.get("tool_name", "unknown"))
+
+        for tool in sorted(all_tools):
+            style = self._get_tool_style(tool)
+            abbr = TOOL_ABBREVIATIONS.get(tool, tool)
+            legend_node.add(f"[{style}]█[/] {abbr} [dim]({tool})[/]", allow_expand=False)
+
+        # 2. Add Aggregated Turns
+        BAR_TOTAL_WIDTH = 30
+        for turn_data in stats:
+            turn_num = turn_data["turn"]
+            tool_counts = turn_data["tools"]
+            total_in_turn = sum(tool_counts.values())
+
+            # Build the bar cells (30 units total)
+            cells = []
+            sorted_tools = sorted(tool_counts.items(), key=lambda x: x[1], reverse=True)
+            remaining_width = BAR_TOTAL_WIDTH
+            for i, (tool, count) in enumerate(sorted_tools):
+                style = self._get_tool_style(tool)
+                pct = count / total_in_turn
+                part_width = round(pct * BAR_TOTAL_WIDTH) if total_in_turn > 0 else 0
+
+                if i == len(sorted_tools) - 1:
+                    part_width = max(0, remaining_width)
+                else:
+                    part_width = min(part_width, remaining_width)
+
+                remaining_width -= part_width
+                for _ in range(part_width):
+                    cells.append(f"[{style}]█[/]")
+
+            # Ensure we have exactly BAR_TOTAL_WIDTH characters
+            while len(cells) < BAR_TOTAL_WIDTH:
+                cells.append("[dim]░[/]")
+
+            bar_str = "".join(cells)
+
+            # Add small color block indicators to the text labels on the right
+            abbr_list = []
+            for tool, count in sorted_tools:
+                style = self._get_tool_style(tool)
+                pct = (count / total_in_turn) * 100
+                abbr = TOOL_ABBREVIATIONS.get(tool, tool)
+                abbr_list.append(f"[{style}]■[/] {pct:.0f}% {abbr}")
+
+            details_str = ", ".join(abbr_list)
+
+            turn_label = f"Turn {turn_num} [[white]{bar_str}[/]] [dim]({details_str})[/]"
+            turn_node = self.root.add(turn_label, expand=False)
+            turn_node.allow_expand = False
+
+    def _get_tool_style(self, tool: str) -> str:
+        palette = [
+            "#ff7675",
+            "#fab1a0",
+            "#ffeaa7",
+            "#55efc4",
+            "#81ecec",
+            "#74b9ff",
+            "#a29bfe",
+            "#fd79a8",
+            "#fdcb6e",
+            "#e17055",
+            "#00b894",
+            "#00cec9",
+            "#0984e3",
+            "#6c5ce7",
+            "#e84393",
+        ]
+        import hashlib
+
+        # Deterministic color based on name
+        idx = int(hashlib.md5(tool.encode(), usedforsecurity=False).hexdigest(), 16) % len(palette)
+        return palette[idx]
 
 
 class TimeCycleButton(Button):  # type: ignore[misc]
@@ -352,6 +474,7 @@ class CompactHeader(Static):  # type: ignore[misc]
             yield FilterButton("All", id="filter-all", classes="active")
             yield FilterButton("Apply", id="filter-apply")
             yield FilterButton("Search", id="filter-search")
+            yield FilterButton("Insights", id="filter-insights")
             yield FilterButton("Errors", id="filter-errors")
             yield Static(" ", classes="spacer")
             yield Static("", id="stats-label")
@@ -369,6 +492,7 @@ class CompactHeader(Static):  # type: ignore[misc]
             return  # Handled by the button itself
 
         button_id = event.button.id or ""
+
         if not button_id.startswith("filter-"):
             return
 
@@ -389,6 +513,10 @@ class CompactHeader(Static):  # type: ignore[misc]
             self._enabled_kinds = set(APPLY_KINDS)
         elif filter_type == "search":
             self._enabled_kinds = set(SEARCH_KINDS)
+        elif filter_type == "insights":
+            from .log_reader import INSIGHTS_KINDS
+
+            self._enabled_kinds = set(INSIGHTS_KINDS)
         elif filter_type == "errors":
             self._enabled_kinds = {"apply_error", "search_error"}
 

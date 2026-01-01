@@ -58,13 +58,23 @@ TimeCycleButton:hover {
 }
 
 /* Main Log Output */
-#log-output {
+#log-all, #log-apply, #log-errors {
     height: 1fr;
-    border: none; /* No border to maximize space */
+    border: none;
     margin: 0;
-    padding: 0; /* Remove padding to fix scrollbar inset */
+    padding: 0;
     background: #111111;
     scrollbar-gutter: stable;
+}
+
+SearchTree, InsightsTree {
+    background: #000000;
+    color: #cccccc;
+    scrollbar-gutter: stable;
+}
+
+SearchTree > Tree, InsightsTree > Tree {
+    background: #000000;
 }
 
 /* Footer - HTOP Style Keys */
@@ -93,9 +103,34 @@ Footer > .footer-key--description {
 Toast {
     min-width: 15;
     max-width: 30;
-    padding: 0 1; /* Minimal padding */
+    padding: 0 1;
     height: auto;
-    background: $surface;
-    opacity: 90%;
-    margin: 0;
+}
+
+/* Insights Toolbar */
+.insights-toolbar {
+    height: 1;
+    background: #111111;
+    padding: 0 1;
+    margin-top: 1;
+}
+
+#toggle-failed {
+    width: auto;
+    min-width: 18;
+    height: 1;
+    border: none;
+    background: #222222;
+    color: #888888;
+    text-style: bold;
+}
+
+#toggle-failed:hover {
+    background: #333333;
+    color: white;
+}
+
+#toggle-failed.active {
+    background: #222222; /* Keep same bg, use label colored elements for state */
+    color: #e0e0e0;
 }
