@@ -245,7 +245,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 continue
 
             # Add assistant message (with tool_calls) to messages
-            messages.append(message)
+            messages.append(self._sanitize_assistant_message(message))
 
             # Execute tool calls in parallel and collect results
             tool_results, report_back_result = self._execute_tools_parallel(
