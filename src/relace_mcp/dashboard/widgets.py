@@ -214,8 +214,13 @@ class SearchTree(Tree[dict[str, Any]]):  # type: ignore[misc]
                 files = event.get("files_found", 0)
                 turns = event.get("turns_used", "?")
 
-                # Final label: [12:34:56] (Turns: Y, Tools: Z, Tok: 12k, Files: X)
-                self._current_session.label = f"[{s_ts}] [green](Turns: {turns}, Tools: {self._session_total_tools}, Tok: {tok_str}, Files: {files})[/]"
+                # Format total latency
+                total_ms = event.get("total_latency_ms", 0)
+                time_str = f"{total_ms / 1000.0:.1f}s" if total_ms else ""
+
+                # Final label: [12:34:56] (Turns: Y, Tools: Z, Tok: 12k, Files: X, Time: 3.5s)
+                time_part = f", Time: {time_str}" if time_str else ""
+                self._current_session.label = f"[{s_ts}] [green](Turns: {turns}, Tools: {self._session_total_tools}, Tok: {tok_str}, Files: {files}{time_part})[/]"
 
         elif kind == "search_error":
             # If a session ends in error, we might want to hide it completely from the Search view
@@ -291,12 +296,15 @@ class FilterButton(Button):  # type: ignore[misc]
 
     DEFAULT_CSS = """
     FilterButton {
-        min-width: 8;
+        width: auto;
         height: 1;
-        padding: 0 1;
+        padding: 0 3;
+        margin: 0 1;
         border: none;
         background: $surface;
         color: $text-muted;
+        content-align: center middle;
+        text-align: center;
     }
     FilterButton:hover {
         background: $surface-lighten-1;
@@ -304,7 +312,7 @@ class FilterButton(Button):  # type: ignore[misc]
     }
     FilterButton.active {
         background: $primary;
-        color: $text;
+        color: black;
         text-style: bold;
     }
     """
@@ -341,10 +349,10 @@ class CompactHeader(Static):  # type: ignore[misc]
 
     def compose(self) -> ComposeResult:
         with Horizontal():
-            yield FilterButton("All [F1]", id="filter-all", classes="active")
-            yield FilterButton("Apply [F2]", id="filter-apply")
-            yield FilterButton("Search [F3]", id="filter-search")
-            yield FilterButton("Errors [F4]", id="filter-errors")
+            yield FilterButton("All", id="filter-all", classes="active")
+            yield FilterButton("Apply", id="filter-apply")
+            yield FilterButton("Search", id="filter-search")
+            yield FilterButton("Errors", id="filter-errors")
             yield Static(" ", classes="spacer")
             yield Static("", id="stats-label")
             yield Static("[dim]│ [/]")

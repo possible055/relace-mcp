@@ -1,4 +1,5 @@
 import asyncio
+from collections import deque
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -10,11 +11,9 @@ from textual.widgets import ContentSwitcher, Footer, RichLog
 
 from .log_reader import (
     ALL_KINDS,
-    compute_stats,
     filter_event,
     get_log_path,
     parse_log_event,
-    read_log_events,
 )
 from .widgets import CompactHeader, FilterChanged, SearchTree, TimeRangeChanged
 
@@ -24,18 +23,29 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
     CSS_PATH = "styles.tcss"
     ENABLE_COMMAND_PALETTE = False
 
+    FLUSH_INTERVAL_S = 0.05
+    MAX_FLUSH_LOG_EVENTS = 250
+    MAX_FLUSH_TREE_EVENTS = 100
+    TAIL_YIELD_EVERY = 200
+
     BINDINGS = [
         # Main actions
         Binding("q", "quit", "Quit"),
         Binding("r", "reload", "Reload"),
-        # Filter shortcuts
-        Binding("f1", "filter('all')", "All", show=False),
-        Binding("f2", "filter('apply')", "Apply", show=False),
-        Binding("f3", "filter('search')", "Search", show=False),
-        Binding("f4", "filter('errors')", "Errors", show=False),
+        # Nav shortcuts (vim style + arrow keys)
+        Binding("left,h", "prev_tab", "Prev Tab"),
+        Binding("right,l", "next_tab", "Next Tab"),
         # Time shortcuts
         Binding("t", "toggle_time", "Time"),
     ]
+
+    _TAB_ORDER = ["all", "apply", "search", "errors"]
+    _TAB_ID_MAP = {
+        "log-all": "all",
+        "log-apply": "apply",
+        "tree-search": "search",
+        "log-errors": "errors",
+    }
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -43,6 +53,25 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
         self._time_start: datetime = datetime.now(UTC) - timedelta(hours=24)
         self._time_end: datetime = datetime.now(UTC)
         self._tail_task: asyncio.Task[None] | None = None
+        self._flush_timer = None
+
+        # Pending (unrendered) events per view. This decouples file tailing from UI rendering
+        # so tab switches remain responsive under heavy log volume.
+        self._pending: dict[str, deque[dict[str, Any]]] = {
+            "log-all": deque(),
+            "log-apply": deque(),
+            "tree-search": deque(),
+            "log-errors": deque(),
+        }
+
+        # Lightweight stats updated incrementally as events are routed.
+        self._stats_total = 0
+        self._stats_apply_success = 0
+        self._stats_search_complete = 0
+        self._stats_dirty = True
+
+        # When reloading, pause tailing to avoid interleaving/duplicates.
+        self._reload_in_progress = False
 
     def compose(self) -> ComposeResult:
         yield CompactHeader(id="header")
@@ -79,61 +108,63 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
         yield Footer()
 
     async def on_mount(self) -> None:
-        self.action_reload()  # Load initial data to all 4 widgets
+        self._flush_timer = self.set_interval(self.FLUSH_INTERVAL_S, self._flush_pending)
+        await self.action_reload()  # Load initial data to all 4 widgets
         self._tail_task = asyncio.create_task(self._tail_log())
 
-    def _dispatch_event(self, event: dict[str, Any]) -> None:
-        """Dispatch a single event to all relevant widgets."""
-        kind = event.get("kind", "")
+    def _reset_view_state(self) -> None:
+        for pending in self._pending.values():
+            pending.clear()
 
-        # 1. To 'All' (Always)
-        self._write_event(self.query_one("#log-all", RichLog), event)
+        self._stats_total = 0
+        self._stats_apply_success = 0
+        self._stats_search_complete = 0
+        self._stats_dirty = True
 
-        # 2. To 'Apply'
-        from .log_reader import APPLY_KINDS, SEARCH_KINDS
-
-        if kind in APPLY_KINDS:
-            self._write_event(self.query_one("#log-apply", RichLog), event)
-
-        # 3. To 'Search' (Tree)
-        # Note: SEARCH_KINDS includes search_start/turn/tool/complete/error
-        if kind in SEARCH_KINDS:
-            self.query_one("#tree-search", SearchTree).add_event(event)
-
-        # 4. To 'Errors'
-        if "error" in kind:
-            self._write_event(self.query_one("#log-errors", RichLog), event)
-
-    def _load_initial_events(self) -> None:
-        # Load almost unlimited events
-        events = read_log_events(
-            enabled_kinds=None,  # None = Read everything (don't pre-filter by kind)
-            time_start=self._time_start,
-            time_end=self._time_end,
-            max_events=1000000,
-        )
-
-        # Clear all widgets first
+        # Clear all widgets (views are persistent but should reset on reload)
         self.query_one("#log-all", RichLog).clear()
         self.query_one("#log-apply", RichLog).clear()
         self.query_one("#tree-search", SearchTree).clear()
         self.query_one("#log-errors", RichLog).clear()
 
-        # Dispatch all
-        for event in events:
-            self._dispatch_event(event)
+    def _route_event(self, event: dict[str, Any]) -> None:
+        """Route a single event into pending buffers (rendered later in batches)."""
+        kind = event.get("kind", "")
 
-        stats = compute_stats(events)
-        self._update_stats(stats)
+        # Stats
+        self._stats_total += 1
+        if kind == "apply_success":
+            self._stats_apply_success += 1
+        elif kind == "search_complete":
+            self._stats_search_complete += 1
+        self._stats_dirty = True
 
-    def _update_stats(self, stats: dict[str, Any]) -> None:
-        total = stats.get("total", 0)
-        apply_ok = stats.get("apply_success", 0)
-        search_ok = stats.get("search_complete", 0)
+        # 1. To 'All' (Always)
+        self._pending["log-all"].append(event)
+
+        # 2. To 'Apply'
+        from .log_reader import APPLY_KINDS, SEARCH_KINDS
+
+        if kind in APPLY_KINDS:
+            self._pending["log-apply"].append(event)
+
+        # 3. To 'Search' (Tree)
+        # Note: SEARCH_KINDS includes search_start/turn/tool/complete/error
+        if kind in SEARCH_KINDS:
+            self._pending["tree-search"].append(event)
+
+        # 4. To 'Errors'
+        if "error" in kind:
+            self._pending["log-errors"].append(event)
+
+    def _update_stats(self) -> None:
+        total = self._stats_total
+        apply_ok = self._stats_apply_success
+        search_ok = self._stats_search_complete
         header = self.query_one("#header", CompactHeader)
         header.stats_text = f"Total: {total} | Apply: {apply_ok}✓ | Search: {search_ok}✓"
 
-    def _write_event(self, log_widget: RichLog, event: dict[str, Any]) -> None:
+    def _format_event(self, event: dict[str, Any]) -> Text:
         kind = event.get("kind", "unknown")
         ts = event.get("timestamp", "")[11:19]  # Time only (HH:MM:SS) for htop vibe
 
@@ -202,7 +233,7 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
             error = event.get("error", "")
             line.append(f" {error}", style="bold red")
 
-        log_widget.write(line)
+        return line
 
     def _get_kind_style(self, kind: str) -> str:
         if "error" in kind:
@@ -215,6 +246,54 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
             return "magenta"
         return "white"
 
+    async def _flush_pending(self) -> None:
+        # Update header stats at most once per tick.
+        if self._stats_dirty:
+            self._update_stats()
+            self._stats_dirty = False
+
+        switcher = self.query_one(ContentSwitcher)
+        current = switcher.current
+
+        # Render only the active view each tick to keep tab switches smooth.
+        if current in ("log-all", "log-apply", "log-errors"):
+            log_widget = self.query_one(f"#{current}", RichLog)
+            pending = self._pending[current]
+            if not pending:
+                return
+
+            width = log_widget.scrollable_content_region.width or log_widget.size.width
+            if width <= 0:
+                return
+
+            to_flush = min(self.MAX_FLUSH_LOG_EVENTS, len(pending))
+            if to_flush <= 0:
+                return
+
+            with self.batch_update():
+                for i in range(to_flush):
+                    event = pending.popleft()
+                    scroll_end = None if i == to_flush - 1 else False
+                    log_widget.write(
+                        self._format_event(event),
+                        width=width,
+                        scroll_end=scroll_end,
+                    )
+
+        elif current == "tree-search":
+            tree = self.query_one("#tree-search", SearchTree)
+            pending = self._pending["tree-search"]
+            if not pending:
+                return
+
+            to_flush = min(self.MAX_FLUSH_TREE_EVENTS, len(pending))
+            if to_flush <= 0:
+                return
+
+            with self.batch_update():
+                for _ in range(to_flush):
+                    tree.add_event(pending.popleft())
+
     async def _tail_log(self) -> None:
         log_path = get_log_path()
         if not log_path.exists():
@@ -222,7 +301,12 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
 
         with open(log_path, encoding="utf-8", errors="replace") as f:
             f.seek(0, 2)
+            processed = 0
             while True:
+                if self._reload_in_progress:
+                    await asyncio.sleep(0.1)
+                    continue
+
                 line = f.readline()
                 if line:
                     event = parse_log_event(line)
@@ -232,7 +316,11 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
                         time_start=self._time_start,
                         time_end=None,  # No upper bound for live tailing
                     ):
-                        self._dispatch_event(event)
+                        self._route_event(event)
+                        processed += 1
+                        if processed >= self.TAIL_YIELD_EVERY:
+                            processed = 0
+                            await asyncio.sleep(0)
 
                         # If current view is a RichLog, maybe scroll to end?
                         # RichLog usually auto-scrolls if at bottom.
@@ -260,7 +348,7 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
         # IMPORTANT: Do NOT call action_reload() here.
         # Just switching the view is instant because background updates keep them fresh.
 
-    def on_time_range_changed(self, message: TimeRangeChanged) -> None:
+    async def on_time_range_changed(self, message: TimeRangeChanged) -> None:
         self._time_start = message.start
         self._time_end = message.end
 
@@ -277,14 +365,68 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
                 break
 
         self.notify(f"Time Filter set to: {label}", title="Time Range", severity="information")
-        self.action_reload()
+        await self.action_reload()
 
-    def action_reload(self) -> None:
-        self._load_initial_events()
+    async def action_reload(self) -> None:
+        self._reload_in_progress = True
+        try:
+            self._reset_view_state()
+
+            log_path = get_log_path()
+            if not log_path.exists():
+                return
+
+            # Snapshot size to avoid duplicating lines written while reloading (tail will pick them up).
+            snapshot_size = log_path.stat().st_size
+            bytes_read = 0
+            matched = 0
+
+            # Stream + yield so the UI can keep responding while loading lots of events.
+            with open(log_path, "rb") as f:
+                while bytes_read < snapshot_size and matched < 1_000_000:
+                    line_bytes = f.readline()
+                    if not line_bytes:
+                        break
+                    bytes_read += len(line_bytes)
+
+                    line = line_bytes.decode("utf-8", errors="replace")
+                    event = parse_log_event(line)
+                    if event and filter_event(
+                        event,
+                        enabled_kinds=None,
+                        time_start=self._time_start,
+                        time_end=self._time_end,
+                    ):
+                        self._route_event(event)
+                        matched += 1
+                        if matched % 5000 == 0:
+                            await asyncio.sleep(0)
+        finally:
+            self._reload_in_progress = False
 
     def action_filter(self, filter_type: str) -> None:
         header = self.query_one("#header", CompactHeader)
         header.set_filter_by_key(filter_type)
+
+    def action_next_tab(self) -> None:
+        self._cycle_tab(1)
+
+    def action_prev_tab(self) -> None:
+        self._cycle_tab(-1)
+
+    def _cycle_tab(self, delta: int) -> None:
+        switcher = self.query_one(ContentSwitcher)
+        current_id = switcher.current or "log-all"
+        current_type = self._TAB_ID_MAP.get(current_id, "all")
+
+        try:
+            idx = self._TAB_ORDER.index(current_type)
+        except ValueError:
+            idx = 0
+
+        new_idx = (idx + delta) % len(self._TAB_ORDER)
+        new_type = self._TAB_ORDER[new_idx]
+        self.action_filter(new_type)
 
     def action_toggle_time(self) -> None:
         # Trigger the button click programmatically or find button and call cycle

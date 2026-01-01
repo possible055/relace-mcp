@@ -15,11 +15,14 @@ CompactHeader {
 
 /* Tab Buttons */
 FilterButton {
-    min-width: 10;
+    width: auto;
     height: 1;
     border: none;
     background: #222222;
     color: #888888;
+    padding: 0 3;
+    margin: 0 1;
+    content-align: center middle;
     text-align: center;
     text-style: bold;
 }
@@ -41,7 +44,7 @@ TimeCycleButton {
     border: none;
     background: #222222;
     color: $accent;
-    text-align: center;
+    content-align: center middle;
 }
 TimeCycleButton:hover {
     background: #444444;
