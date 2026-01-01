@@ -74,6 +74,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     @mcp.tool(
         annotations={
             "readOnlyHint": True,  # Does not modify environment
+            "destructiveHint": False,  # Read-only = non-destructive
             "idempotentHint": True,  # Same query = same results
             "openWorldHint": False,  # Only local codebase
         }
