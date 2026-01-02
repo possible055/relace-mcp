@@ -8,7 +8,12 @@ from relace_mcp.clients import SearchLLMClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.tools.search import FastAgenticSearchHarness
 
-from .metrics import compute_file_precision, compute_file_recall, compute_line_coverage
+from .metrics import (
+    compute_file_precision,
+    compute_file_recall,
+    compute_line_coverage,
+    compute_line_precision,
+)
 from .swe_bench import BenchmarkCase, get_repos_dir
 
 
@@ -20,6 +25,7 @@ class BenchmarkResult:
     file_recall: float
     file_precision: float
     line_coverage: float
+    line_precision: float
     turns_used: int
     latency_ms: float
     partial: bool = False
@@ -33,6 +39,7 @@ class BenchmarkSummary:
     avg_file_recall: float
     avg_file_precision: float
     avg_line_coverage: float
+    avg_line_precision: float
     avg_turns: float
     avg_latency_ms: float
     results: list[BenchmarkResult]
@@ -44,6 +51,7 @@ class BenchmarkSummary:
             "avg_file_recall": self.avg_file_recall,
             "avg_file_precision": self.avg_file_precision,
             "avg_line_coverage": self.avg_line_coverage,
+            "avg_line_precision": self.avg_line_precision,
             "avg_turns": self.avg_turns,
             "avg_latency_ms": self.avg_latency_ms,
             "results": [asdict(r) for r in self.results],
@@ -90,6 +98,7 @@ class BenchmarkRunner:
                 file_recall=0.0,
                 file_precision=0.0,
                 line_coverage=0.0,
+                line_precision=0.0,
                 turns_used=0,
                 latency_ms=0.0,
                 partial=True,
@@ -142,9 +151,29 @@ class BenchmarkRunner:
         latency_ms = (time.perf_counter() - start_time) * 1000
 
         returned_files = result.get("files", {})
-        file_recall = compute_file_recall(returned_files, case.ground_truth_files)
-        file_precision = compute_file_precision(returned_files, case.ground_truth_files)
-        line_coverage = compute_line_coverage(returned_files, case.ground_truth_files)
+        if not isinstance(returned_files, dict):
+            returned_files = {}
+
+        file_recall = compute_file_recall(
+            returned_files,
+            case.ground_truth_files,
+            repo_root=repo_path,
+        )
+        file_precision = compute_file_precision(
+            returned_files,
+            case.ground_truth_files,
+            repo_root=repo_path,
+        )
+        line_coverage = compute_line_coverage(
+            returned_files,
+            case.ground_truth_files,
+            repo_root=repo_path,
+        )
+        line_precision = compute_line_precision(
+            returned_files,
+            case.ground_truth_files,
+            repo_root=repo_path,
+        )
 
         return BenchmarkResult(
             case_id=case.id,
@@ -153,6 +182,7 @@ class BenchmarkRunner:
             file_recall=file_recall,
             file_precision=file_precision,
             line_coverage=line_coverage,
+            line_precision=line_precision,
             turns_used=result.get("turns_used", 0),
             latency_ms=latency_ms,
             partial=result.get("partial", False),
@@ -168,6 +198,7 @@ class BenchmarkRunner:
                 avg_file_recall=0.0,
                 avg_file_precision=0.0,
                 avg_line_coverage=0.0,
+                avg_line_precision=0.0,
                 avg_turns=0.0,
                 avg_latency_ms=0.0,
                 results=[],
@@ -179,6 +210,7 @@ class BenchmarkRunner:
             avg_file_recall=sum(r.file_recall for r in results) / n,
             avg_file_precision=sum(r.file_precision for r in results) / n,
             avg_line_coverage=sum(r.line_coverage for r in results) / n,
+            avg_line_precision=sum(r.line_precision for r in results) / n,
             avg_turns=sum(r.turns_used for r in results) / n,
             avg_latency_ms=sum(r.latency_ms for r in results) / n,
             results=results,

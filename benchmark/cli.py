@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import click
+from dotenv import load_dotenv
 
 from relace_mcp.config import RelaceConfig
 
@@ -17,6 +18,9 @@ from .swe_bench import load_swe_bench
 @click.option("--dry-run", is_flag=True, help="Only load data, don't run searches")
 def main(limit: int, output: str, verbose: bool, dry_run: bool) -> None:
     """Run SWE-bench benchmark on fast_search."""
+    # Load .env from current directory or parents
+    load_dotenv()
+
     click.echo(f"Loading SWE-bench (limit={limit})...")
 
     try:
@@ -62,6 +66,7 @@ def main(limit: int, output: str, verbose: bool, dry_run: bool) -> None:
     click.echo(f"Avg File Recall:   {summary.avg_file_recall:.1%}")
     click.echo(f"Avg File Precision:{summary.avg_file_precision:.1%}")
     click.echo(f"Avg Line Coverage: {summary.avg_line_coverage:.1%}")
+    click.echo(f"Avg Line Precision:{summary.avg_line_precision:.1%}")
     click.echo(f"Avg Turns:         {summary.avg_turns:.2f}")
     click.echo(f"Avg Latency:       {summary.avg_latency_ms:.0f}ms")
 
