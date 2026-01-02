@@ -28,7 +28,7 @@ class TestApplyClientSystemPrompt:
         ):
             client = ApplyLLMClient(mock_config)
             # Verify api_compat is 'openai'
-            assert client._api_compat == "openai"
+            assert client._provider_config.api_compat == "openai"
 
             request = ApplyRequest(
                 initial_code="def foo():\n    pass\n",
@@ -56,7 +56,7 @@ class TestApplyClientSystemPrompt:
         ):
             client = ApplyLLMClient(mock_config)
             # Verify api_compat is 'relace'
-            assert client._api_compat == "relace"
+            assert client._provider_config.api_compat == "relace"
 
             request = ApplyRequest(
                 initial_code="def foo():\n    pass\n",
@@ -82,7 +82,7 @@ class TestApplyClientSystemPrompt:
             try:
                 client = ApplyLLMClient(mock_config)
                 # Default api_compat should be 'relace'
-                assert client._api_compat == "relace"
+                assert client._provider_config.api_compat == "relace"
 
                 request = ApplyRequest(
                     initial_code="x = 1",

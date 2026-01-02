@@ -103,9 +103,9 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         effective_config = replace(config, base_dir=base_dir)
         # Avoid shared mutable state across concurrent calls.
-        return FastAgenticSearchHarness(
+        return await FastAgenticSearchHarness(
             effective_config, search_client, lsp_languages=lsp_languages
-        ).run(query=query)
+        ).run_async(query=query)
 
     # Cloud Repos (Semantic Search & Sync) - only register if enabled
     if RELACE_CLOUD_TOOLS:

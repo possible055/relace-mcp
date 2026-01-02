@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from fastmcp import FastMCP
 
 from .config import RelaceConfig
-from .config.settings import ENCODING_DETECTION_SAMPLE_LIMIT, LOG_PATH, RELACE_LOGGING
+from .config.settings import ENCODING_DETECTION_SAMPLE_LIMIT, LOG_PATH, MCP_LOGGING
 from .middleware import RootsMiddleware
 from .tools import register_tools
 from .tools.apply.encoding import detect_project_encoding
@@ -66,7 +66,7 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
     else:
         results["base_dir"] = "deferred (will resolve from MCP Roots)"
 
-    if RELACE_LOGGING:
+    if MCP_LOGGING:
         log_dir = LOG_PATH.parent
         try:
             log_dir.mkdir(parents=True, exist_ok=True)

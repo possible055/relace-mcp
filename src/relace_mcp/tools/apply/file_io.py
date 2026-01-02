@@ -240,6 +240,27 @@ def read_text_with_fallback(path: Path) -> tuple[str, str]:
     )
 
 
+def read_text_best_effort(path: Path, *, errors: str = "replace") -> str | None:
+    """Read file with project encoding, return None on failure or binary.
+
+    Unified helper for handlers that need lenient file reading without exceptions.
+
+    Args:
+        path: File path.
+        errors: Error handling mode for decode ("replace", "ignore", "strict").
+
+    Returns:
+        File content as string, or None if read fails or file is binary.
+    """
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    return decode_text_best_effort(
+        raw, path=path, preferred_encoding=_project_encoding, errors=errors
+    )
+
+
 def atomic_write(path: Path, content: str, encoding: str) -> None:
     """Atomically write to file (using temp file + os.replace).
 

@@ -7,10 +7,11 @@ import pytest
 
 from relace_mcp.clients.apply import ApplyResponse
 from relace_mcp.config import RelaceConfig
+from relace_mcp.config.settings import MAX_FILE_SIZE_BYTES
 from relace_mcp.tools.apply import apply_file_logic
 from relace_mcp.tools.apply.file_io import set_project_encoding
 from relace_mcp.tools.apply.logging import log_event
-from relace_mcp.utils import MAX_FILE_SIZE_BYTES, validate_file_path
+from relace_mcp.utils import validate_file_path
 
 
 class TestValidateFilePath:
@@ -81,7 +82,7 @@ class TestLogEvent:
         """Should create parent directories if needed."""
         log_path = tmp_path / "deep" / "nested" / "dir" / "log.json"
         with (
-            patch("relace_mcp.config.settings.RELACE_LOGGING", True),
+            patch("relace_mcp.config.settings.MCP_LOGGING", True),
             patch("relace_mcp.config.settings.LOG_PATH", log_path),
         ):
             log_event({"test": True})
@@ -97,7 +98,7 @@ class TestLogEvent:
         """Should not raise on log write failure (e.g., path is a directory)."""
         # Using directory as log path will fail, but should not raise exception
         with (
-            patch("relace_mcp.config.settings.RELACE_LOGGING", True),
+            patch("relace_mcp.config.settings.MCP_LOGGING", True),
             patch("relace_mcp.config.settings.LOG_PATH", tmp_path),
         ):
             log_event({"test": True})  # Should not raise exception

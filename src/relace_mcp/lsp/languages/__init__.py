@@ -20,28 +20,23 @@ def get_config_for_file(path: str) -> LanguageServerConfig | None:
     return None
 
 
-def _detect_lsp_languages(base_dir: Path) -> frozenset[str]:
-    """Scan directory for supported language files."""
+def get_lsp_languages(base_dir: Path) -> frozenset[str]:
+    """Get available LSP languages for base_dir (cached)."""
+    resolved = base_dir.resolve()
+    if resolved in _lsp_cache:
+        return _lsp_cache[resolved]
+
     available: set[str] = set()
     for lang_id, config in LANGUAGE_CONFIGS.items():
         for ext in config.file_extensions:
             try:
-                next(base_dir.rglob(f"*{ext}"))
+                next(resolved.rglob(f"*{ext}"))
                 available.add(lang_id)
                 break
             except StopIteration:
                 continue
-    return frozenset(available)
 
-
-def get_lsp_languages(base_dir: Path) -> frozenset[str]:
-    """Get available LSP languages for base_dir (cached)."""
-    resolved = base_dir.resolve()
-
-    if resolved in _lsp_cache:
-        return _lsp_cache[resolved]
-
-    languages = _detect_lsp_languages(resolved)
+    languages = frozenset(available)
     _lsp_cache[resolved] = languages
     return languages
 

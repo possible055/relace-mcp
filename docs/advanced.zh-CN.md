@@ -24,7 +24,6 @@
 | `RELACE_BASE_DIR` | 当前目录 | 限制文件访问范围 |
 | `RELACE_DEFAULT_ENCODING` | — | 强制项目文件编码（如 `gbk`、`big5`） |
 | `RELACE_LOGGING` | `0` | 设为 `1` 启用文件日志 |
-| `RELACE_TIMEOUT_SECONDS` | `60` | 默认请求超时 |
 | `RELACE_TEMPERATURE` | `1.0` | LLM 采样温度（0.0-2.0），用于 fast_apply 和 fast_search |
 
 ### Fast Apply
@@ -36,8 +35,10 @@
 | `APPLY_MODEL` | `auto` | 覆盖模型名称 |
 | `APPLY_API_KEY` | — | 非 Relace 提供商的 API key |
 | `APPLY_PROMPT_FILE` | — | 覆盖 apply prompt YAML 路径 |
+| `APPLY_TIMEOUT_SECONDS` | `60` | 请求超时 |
+| `APPLY_POST_CHECK` | `0` | 合并后验证（可能增加失败率） |
 
-> **注意：** `RELACE_APPLY_*` 变体已弃用，但仍支持（会显示警告）。
+> **注意：** `RELACE_APPLY_*`、`RELACE_TIMEOUT_SECONDS`、`RELACE_EXPERIMENTAL_POST_CHECK` 变体已弃用，但仍支持（会显示警告）。
 
 ### Fast Search
 
@@ -53,9 +54,9 @@
 | `SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,find_symbol` | 工具允许列表（逗号分隔） |
 | `SEARCH_PARALLEL_TOOL_CALLS` | `1` | 启用并行工具调用 |
 | `SEARCH_TOOL_STRICT` | `1` | 在 tool schema 中包含 `strict` 字段 |
-| `RELACE_LSP_TIMEOUT_SECONDS` | `15.0` | LSP 启动/请求超时 |
+| `SEARCH_LSP_TIMEOUT_SECONDS` | `15.0` | LSP 启动/请求超时 |
 
-> **注意：** `RELACE_SEARCH_*` 变体已弃用，但仍支持（会显示警告）。
+> **注意：** `RELACE_SEARCH_*`、`RELACE_LSP_TIMEOUT_SECONDS` 变体已弃用，但仍支持（会显示警告）。
 
 ### Cloud Sync
 
@@ -82,8 +83,9 @@
 
 | 变量 | 默认值 | 描述 |
 |------|--------|------|
-| `RELACE_EXPERIMENTAL_POST_CHECK` | `0` | `fast_apply` 后额外验证（可能增加失败率） |
 | `RELACE_EXPERIMENTAL_LOGGING` | — | `RELACE_LOGGING` 的弃用别名 |
+
+> **注意：** `RELACE_EXPERIMENTAL_POST_CHECK` 已重命名为 `APPLY_POST_CHECK` 并移至 Fast Apply 部分。
 
 ---
 
