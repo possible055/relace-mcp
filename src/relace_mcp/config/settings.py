@@ -103,6 +103,9 @@ LOG_DIR = Path(user_state_dir("relace", appauthor=False))
 LOG_PATH = LOG_DIR / "relace.log"
 MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024
 
+# File size limit (10MB) to prevent memory exhaustion on file read/write operations
+MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
+
 
 @dataclass(frozen=True)
 class RelaceConfig:

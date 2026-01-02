@@ -109,8 +109,8 @@ EXCLUDED_DIRS = {
     ".coverage",
 }
 
-# Maximum file size to upload (1MB)
-MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024
+# Maximum file size to upload (1MB) - separate from global MAX_FILE_SIZE_BYTES (10MB)
+SYNC_MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024
 
 # Maximum concurrent uploads (configurable via environment variable)
 MAX_UPLOAD_WORKERS = int(os.getenv("RELACE_UPLOAD_MAX_WORKERS", "8"))
@@ -166,7 +166,7 @@ def _scan_directory(base_dir: str) -> list[str]:
 
             # Check file size
             try:
-                if file_path.stat().st_size > MAX_FILE_SIZE_BYTES:
+                if file_path.stat().st_size > SYNC_MAX_FILE_SIZE_BYTES:
                     continue
             except OSError:
                 continue
@@ -197,7 +197,7 @@ def _read_file_content(base_dir: str, rel_path: str) -> bytes | None:
             return None
         if not file_path.is_file():
             return None
-        if file_path.stat().st_size > MAX_FILE_SIZE_BYTES:
+        if file_path.stat().st_size > SYNC_MAX_FILE_SIZE_BYTES:
             return None
         return file_path.read_bytes()
     except (OSError, RuntimeError) as exc:
