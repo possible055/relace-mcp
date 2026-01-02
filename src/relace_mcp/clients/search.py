@@ -122,53 +122,17 @@ class SearchLLMClient:
             )
             return data
         except (openai.BadRequestError, openai.UnprocessableEntityError) as exc:
-            try:
-                retried = self._retry_compat_on_schema_error(
-                    exc,
-                    messages=messages,
-                    tools=tools,
-                    trace_id=trace_id,
-                    include_relace_sampling=include_relace_sampling,
-                    include_parallel_tool_calls=include_parallel_tool_calls,
-                )
-            except openai.APIError as retry_exc:
-                raise RuntimeError(
-                    f"{self._provider_config.display_name} Search API request failed "
-                    f"after compatibility retry: {retry_exc}"
-                ) from retry_exc
+            retried = self._retry_compat_on_schema_error(
+                exc,
+                messages=messages,
+                tools=tools,
+                trace_id=trace_id,
+                include_relace_sampling=include_relace_sampling,
+                include_parallel_tool_calls=include_parallel_tool_calls,
+            )
             if retried is not None:
                 return retried
-            raise RuntimeError(
-                f"{self._provider_config.display_name} Search API request schema rejected: {exc}"
-            ) from exc
-        except openai.AuthenticationError as exc:
-            raise RuntimeError(
-                f"{self._provider_config.display_name} Search API authentication error: {exc}"
-            ) from exc
-        except openai.RateLimitError as exc:
-            raise RuntimeError(
-                f"{self._provider_config.display_name} Search API rate limit: {exc}"
-            ) from exc
-        except openai.APITimeoutError as exc:
-            raise RuntimeError(
-                f"{self._provider_config.display_name} Search API request timed out "
-                f"after {SEARCH_TIMEOUT_SECONDS}s."
-            ) from exc
-        except openai.APIConnectionError as exc:
-            raise RuntimeError(
-                f"Failed to connect to {self._provider_config.display_name} Search API: {exc}"
-            ) from exc
-        except openai.APIStatusError as exc:
-            if exc.status_code == 404:
-                raise RuntimeError(
-                    f"{self._provider_config.display_name} Search API returned 404. "
-                    "If using an OpenAI-compatible endpoint, set SEARCH_ENDPOINT to the "
-                    "provider base URL (do not include `/chat/completions`)."
-                ) from exc
-            raise RuntimeError(
-                f"{self._provider_config.display_name} Search API error "
-                f"(status={exc.status_code}): {exc}"
-            ) from exc
+            raise
 
     def _retry_compat_on_schema_error(
         self,
