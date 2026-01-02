@@ -2,7 +2,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..backend import RELACE_PROVIDER, OpenAIChatClient
+from ..backend import OpenAIChatClient
+from ..config.settings import RELACE_PROVIDER
 from ..config import APPLY_SYSTEM_PROMPT, RelaceConfig, create_provider_config
 from ..config.settings import (
     APPLY_BASE_URL,

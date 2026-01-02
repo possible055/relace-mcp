@@ -76,11 +76,11 @@ _post_check_env = getenv_with_fallback("APPLY_POST_CHECK", "RELACE_EXPERIMENTAL_
 EXPERIMENTAL_POST_CHECK = _post_check_env.lower() in ("1", "true", "yes")
 
 # Local file logging (disabled by default)
-# Use RELACE_LOGGING=1 to enable (RELACE_EXPERIMENTAL_LOGGING still works for backward compat)
-_logging_env = os.getenv("RELACE_LOGGING", "").lower()
+# Use MCP_LOGGING=1 to enable (RELACE_LOGGING still works for backward compat)
+_logging_env = getenv_with_fallback("MCP_LOGGING", "RELACE_LOGGING").lower()
 if not _logging_env:
     _logging_env = os.getenv("RELACE_EXPERIMENTAL_LOGGING", "").lower()
-RELACE_LOGGING = _logging_env in ("1", "true", "yes")
+MCP_LOGGING = _logging_env in ("1", "true", "yes")
 
 # Cloud tools (disabled by default)
 # Use RELACE_CLOUD_TOOLS=1 to enable cloud_sync, cloud_search, cloud_list, cloud_info, cloud_clear

@@ -5,7 +5,7 @@ import time
 import uuid
 from typing import Any
 
-from ....backend import RELACE_PROVIDER
+from ....config.settings import RELACE_PROVIDER
 from ....clients import SearchLLMClient
 from ....config import RelaceConfig
 from ..handlers import estimate_context_size

@@ -3,7 +3,8 @@ from typing import Any
 
 import openai
 
-from ..backend import RELACE_PROVIDER, OpenAIChatClient
+from ..backend import OpenAIChatClient
+from ..config.settings import RELACE_PROVIDER
 from ..config import RelaceConfig, create_provider_config
 from ..config.compat import env_bool
 from ..config.settings import (
