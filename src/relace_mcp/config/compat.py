@@ -4,6 +4,9 @@ import warnings
 
 logger = logging.getLogger(__name__)
 
+_TRUTHY = {"1", "true", "yes", "y", "on"}
+_FALSY = {"0", "false", "no", "n", "off"}
+
 
 def getenv_with_fallback(new_name: str, old_name: str, default: str = "") -> str:
     """Get environment variable with deprecation fallback.
@@ -24,4 +27,34 @@ def getenv_with_fallback(new_name: str, old_name: str, default: str = "") -> str
             "please update your configuration. See DeprecationWarning for details."
         )
         return value
+    return default
+
+
+def env_float(name: str, *, default: float) -> float:
+    """Parse environment variable as float with fallback to default."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw.strip())
+    except ValueError:
+        logger.warning("Invalid %s=%r; expected float, defaulting to %s", name, raw, default)
+        return default
+
+
+def env_bool(name: str, *, default: bool, deprecated_name: str = "") -> bool:
+    """Parse environment variable as boolean with fallback to default.
+
+    Recognizes truthy values: 1, true, yes, y, on
+    Recognizes falsy values: 0, false, no, n, off
+    """
+    raw = getenv_with_fallback(name, deprecated_name) if deprecated_name else os.getenv(name)
+    if raw is None:
+        return default
+    value = raw.strip().lower()
+    if value in _TRUTHY:
+        return True
+    if value in _FALSY:
+        return False
+    logger.warning("Invalid %s=%r; expected boolean, defaulting to %s", name, raw, default)
     return default

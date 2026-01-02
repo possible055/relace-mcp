@@ -208,7 +208,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             # Parse response
             choices = response.get("choices", [])
             if not choices:
-                name = self._client._chat_client.provider_display_name
+                name = self._client._provider_config.display_name
                 raise RuntimeError(f"{name} Search API returned empty choices")
 
             message = choices[0].get("message", {})

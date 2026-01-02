@@ -26,6 +26,21 @@ TIMEOUT_SECONDS = float(
 MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0
 
+# Temperature settings for each tool
+SEARCH_TEMPERATURE = float(os.getenv("SEARCH_TEMPERATURE", "1.0"))
+APPLY_TEMPERATURE = float(os.getenv("APPLY_TEMPERATURE", "0.0"))
+
+# Provider identifiers (used for API compatibility detection)
+OPENAI_PROVIDER = "openai"
+RELACE_PROVIDER = "relace"
+
+# Default base URLs for known providers (fallback when env var not set)
+DEFAULT_PROVIDER_BASE_URLS: dict[str, str] = {
+    "openai": "https://api.openai.com/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
+    "cerebras": "https://api.cerebras.ai/v1",
+}
+
 # Fast Agentic Search (OpenAI-compatible base URL; SDK appends /chat/completions automatically)
 SEARCH_BASE_URL = (
     getenv_with_fallback("SEARCH_ENDPOINT", "RELACE_SEARCH_ENDPOINT")
