@@ -194,6 +194,47 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 "error": str(exc),
             }
 
+    async def run_async(self, query: str) -> dict[str, Any]:
+        """Execute one Fast Agentic Search asynchronously.
+
+        Note:
+            This method always returns a dict, never raises exceptions.
+            When errors occur, returns a partial report with error field.
+        """
+        trace_id = str(uuid.uuid4())[:8]
+        # Safe query truncation (avoid cutting in middle of multi-byte characters)
+        query_preview = query[:100] if len(query) <= 100 else query[:97] + "..."
+        logger.info("[%s] Starting Fast Agentic Search (async): %s", trace_id, query_preview)
+        log_search_start(trace_id, query)
+        start_time = time.perf_counter()
+
+        # Reset observed_files (used to accumulate explored files)
+        self._observed_files = {}
+
+        try:
+            result = await self._run_search_loop_async(query, trace_id)
+            total_ms = (time.perf_counter() - start_time) * 1000
+            log_search_complete(
+                trace_id,
+                result.get("turns_used", 0),
+                len(result.get("files", {})),
+                result.get("partial", False),
+                total_ms,
+            )
+            return result
+        except Exception as exc:
+            logger.error("[%s] Search failed with error: %s", trace_id, exc)
+            log_search_error(trace_id, str(exc))
+            merged_files = self._merge_observed_ranges()
+            return {
+                "query": query,
+                "explanation": f"[ERROR] Search failed: {exc}",
+                "files": merged_files,
+                "turns_used": 0,
+                "partial": True,
+                "error": str(exc),
+            }
+
     def _run_search_loop(self, query: str, trace_id: str) -> dict[str, Any]:
         """Internal method to execute the search loop."""
         messages: list[dict[str, Any]] = [
