@@ -5,11 +5,11 @@ import openai
 
 from ..backend import OpenAIChatClient
 from ..config import RelaceConfig, create_provider_config
-from ..config.compat import env_bool
 from ..config.settings import (
     RELACE_PROVIDER,
     SEARCH_BASE_URL,
     SEARCH_MODEL,
+    SEARCH_PARALLEL_TOOL_CALLS,
     SEARCH_TEMPERATURE,
     SEARCH_TIMEOUT_SECONDS,
 )
@@ -59,6 +59,7 @@ class SearchLLMClient:
         self._disable_relace_sampling = False
         self._disable_parallel_tool_calls = False
         self._strip_tool_strict = False
+        self._parallel_tool_calls_enabled = SEARCH_PARALLEL_TOOL_CALLS
 
     @property
     def api_compat(self) -> str:
@@ -79,12 +80,7 @@ class SearchLLMClient:
             and not self._disable_relace_sampling
         )
         include_parallel_tool_calls = (
-            env_bool(
-                "SEARCH_PARALLEL_TOOL_CALLS",
-                default=True,
-                deprecated_name="RELACE_SEARCH_PARALLEL_TOOL_CALLS",
-            )
-            and not self._disable_parallel_tool_calls
+            self._parallel_tool_calls_enabled and not self._disable_parallel_tool_calls
         )
 
         # OpenAI Structured Outputs does not support parallel_tool_calls with strict=true

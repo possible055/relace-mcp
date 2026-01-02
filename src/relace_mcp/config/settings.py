@@ -5,7 +5,7 @@ from pathlib import Path
 
 from platformdirs import user_state_dir
 
-from .compat import getenv_with_fallback
+from .compat import env_bool, getenv_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,12 @@ SEARCH_TIMEOUT_SECONDS = float(
     getenv_with_fallback("SEARCH_TIMEOUT_SECONDS", "RELACE_SEARCH_TIMEOUT_SECONDS") or "120.0"
 )
 SEARCH_MAX_TURNS = int(getenv_with_fallback("SEARCH_MAX_TURNS", "RELACE_SEARCH_MAX_TURNS") or "6")
+# Search parallel tool calls (default: true)
+SEARCH_PARALLEL_TOOL_CALLS = env_bool(
+    "SEARCH_PARALLEL_TOOL_CALLS",
+    default=True,
+    deprecated_name="RELACE_SEARCH_PARALLEL_TOOL_CALLS",
+)
 
 # Relace Repos API (Infrastructure Endpoint for cloud sync/search)
 RELACE_API_ENDPOINT = os.getenv(
@@ -62,6 +68,8 @@ RELACE_REPO_ID = os.getenv("RELACE_REPO_ID", None)
 # Repo sync settings
 REPO_SYNC_TIMEOUT_SECONDS = float(os.getenv("RELACE_REPO_SYNC_TIMEOUT", "300.0"))
 REPO_SYNC_MAX_FILES = int(os.getenv("RELACE_REPO_SYNC_MAX_FILES", "5000"))
+# Maximum repos to fetch (100 pages * 100 per page)
+REPO_LIST_MAX = int(os.getenv("RELACE_REPO_LIST_MAX", "10000"))
 
 
 # Encoding detection: explicitly set project default encoding (e.g., "gbk", "big5", "shift_jis")

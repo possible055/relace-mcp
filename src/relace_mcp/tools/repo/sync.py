@@ -384,7 +384,7 @@ def cloud_sync_logic(
     current_branch, current_head = get_current_git_info(base_dir)
     ref_changed = False
     deletes_suppressed = 0
-    repo_name = client.get_repo_name_from_base_dir(base_dir)
+    repo_name = Path(base_dir).name
 
     try:
         # Ensure repo exists
