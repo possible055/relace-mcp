@@ -57,7 +57,7 @@ def openai_error_to_recoverable(
         Structured recoverable error response.
     """
     if isinstance(exc, openai.APITimeoutError):
-        return recoverable_error(
+        result = recoverable_error(
             "TIMEOUT_ERROR",
             "Request timed out. Please retry later.",
             path,
@@ -65,9 +65,14 @@ def openai_error_to_recoverable(
             trace_id,
             timing_ms,
         )
+        result["detail"] = {
+            "error_type": type(exc).__name__,
+            "error_message": str(exc),
+        }
+        return result
 
     if isinstance(exc, openai.APIConnectionError):
-        return recoverable_error(
+        result = recoverable_error(
             "NETWORK_ERROR",
             "Network error. Please check network connection and retry.",
             path,
@@ -75,6 +80,11 @@ def openai_error_to_recoverable(
             trace_id,
             timing_ms,
         )
+        result["detail"] = {
+            "error_type": type(exc).__name__,
+            "error_message": str(exc),
+        }
+        return result
 
     if isinstance(exc, openai.APIStatusError):
         status_code = exc.status_code

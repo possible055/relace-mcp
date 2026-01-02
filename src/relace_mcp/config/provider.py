@@ -75,11 +75,8 @@ def create_provider_config(
     deprecated_api_key_env = f"RELACE_{prefix}_API_KEY"
 
     # Parse provider
-    provider = (
-        (getenv_with_fallback(provider_env, deprecated_provider_env) or RELACE_PROVIDER)
-        .strip()
-        .lower()
-    )
+    raw_provider = getenv_with_fallback(provider_env, deprecated_provider_env).strip()
+    provider = (raw_provider if raw_provider else RELACE_PROVIDER).lower()
 
     # Derive API compatibility mode
     api_compat = RELACE_PROVIDER if provider == RELACE_PROVIDER else OPENAI_PROVIDER

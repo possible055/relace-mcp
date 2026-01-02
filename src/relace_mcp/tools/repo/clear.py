@@ -36,6 +36,12 @@ def cloud_clear_logic(
 
     try:
         repo_name = Path(base_dir).name
+        if not repo_name:
+            return {
+                "status": "error",
+                "message": "Invalid base_dir: cannot derive repository name from root, current directory, or empty path.",
+                "repo_id": None,
+            }
 
         # 1. Try to get repo_id from local sync state (safest)
         repo_id = None

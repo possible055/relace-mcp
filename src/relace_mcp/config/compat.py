@@ -44,5 +44,9 @@ def env_bool(name: str, *, default: bool, deprecated_name: str = "") -> bool:
         return True
     if value in _FALSY:
         return False
-    logger.warning("Invalid %s=%r; expected boolean, defaulting to %s", name, raw, default)
+    warnings.warn(
+        f"Invalid boolean env var {name}={raw!r}; defaulting to {default}",
+        stacklevel=2,
+    )
+    logger.warning("Invalid boolean environment variable detected; using default")
     return default

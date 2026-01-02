@@ -124,8 +124,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         """
         trace_id = str(uuid.uuid4())[:8]
         # Safe query truncation (avoid cutting in middle of multi-byte characters)
-        query_preview = query[:100] if len(query) <= 100 else query[:97] + "..."
-        logger.info("[%s] Starting Fast Agentic Search: %s", trace_id, query_preview)
+        logger.info("[%s] Starting Fast Agentic Search (query_len=%d)", trace_id, len(query))
         log_search_start(trace_id, query)
         start_time = time.perf_counter()
 
@@ -144,7 +143,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             )
             return result
         except Exception as exc:
-            logger.error("[%s] Search failed with error: %s", trace_id, exc)
+            logger.exception("[%s] Search failed with error", trace_id)
             log_search_error(trace_id, str(exc))
             merged_files = self._merge_observed_ranges()
             return {
@@ -164,9 +163,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             When errors occur, returns a partial report with error field.
         """
         trace_id = str(uuid.uuid4())[:8]
-        # Safe query truncation (avoid cutting in middle of multi-byte characters)
-        query_preview = query[:100] if len(query) <= 100 else query[:97] + "..."
-        logger.info("[%s] Starting Fast Agentic Search (async): %s", trace_id, query_preview)
+        logger.info("[%s] Starting Fast Agentic Search async (query_len=%d)", trace_id, len(query))
         log_search_start(trace_id, query)
         start_time = time.perf_counter()
 
@@ -185,7 +182,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             )
             return result
         except Exception as exc:
-            logger.error("[%s] Search failed with error: %s", trace_id, exc)
+            logger.exception("[%s] Search failed with error", trace_id)
             log_search_error(trace_id, str(exc))
             merged_files = self._merge_observed_ranges()
             return {
@@ -276,12 +273,11 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             # If no tool_calls, check for content (model may respond directly)
             if not tool_calls:
                 content = message.get("content") or ""
-                content_preview = content[:200] if len(content) <= 200 else content[:197] + "..."
                 logger.warning(
-                    "[%s] No tool calls in turn %d, content: %s",
+                    "[%s] No tool calls in turn %d (content_len=%d)",
                     trace_id,
                     turn + 1,
-                    content_preview,
+                    len(content),
                 )
                 # Add assistant message to context and continue
                 messages.append({"role": "assistant", "content": content})
@@ -415,14 +411,11 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 # If no tool_calls, check for content (model may respond directly)
                 if not tool_calls:
                     content = message.get("content") or ""
-                    content_preview = (
-                        content[:200] if len(content) <= 200 else content[:197] + "..."
-                    )
                     logger.warning(
-                        "[%s] No tool calls in turn %d, content: %s",
+                        "[%s] No tool calls in turn %d (content_len=%d)",
                         trace_id,
                         turn + 1,
-                        content_preview,
+                        len(content),
                     )
                     # Add assistant message to context and continue
                     messages.append({"role": "assistant", "content": content})
