@@ -1,8 +1,7 @@
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-
-from datasets import load_dataset
+from typing import Literal
 
 
 @dataclass
@@ -23,23 +22,61 @@ def extract_files_from_patch(patch: str) -> dict[str, list[tuple[int, int]]]:
     Returns:
         Dict mapping file paths to list of (start_line, end_line) tuples.
     """
+    return extract_files_from_patch_with_side(patch, side="old")
+
+
+def extract_files_from_patch_with_side(
+    patch: str, *, side: Literal["old", "new"] = "old"
+) -> dict[str, list[tuple[int, int]]]:
+    """Parse diff patch and extract file -> line ranges.
+
+    SWE-bench provides `base_commit` (pre-patch). If you run searches against `base_commit`,
+    prefer `side="old"` so line numbers align with the checked-out code.
+    """
     files: dict[str, list[tuple[int, int]]] = {}
     current_file: str | None = None
+    is_new_file = False
 
-    for line in patch.split("\n"):
-        # Match file path from diff header
-        if line.startswith("+++ b/"):
-            current_file = line[6:]
-            if current_file not in files:
-                files[current_file] = []
-        # Match hunk header: @@ -old_start,old_count +new_start,new_count @@
-        elif line.startswith("@@") and current_file:
-            match = re.search(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", line)
-            if match:
-                start = int(match.group(1))
-                count = int(match.group(2)) if match.group(2) else 1
-                end = start + count - 1
-                files[current_file].append((start, end))
+    for line in patch.splitlines():
+        if line.startswith("diff --git "):
+            current_file = None
+            is_new_file = False
+            continue
+
+        if line.startswith("--- "):
+            path_spec = line[4:].strip()
+            if path_spec == "/dev/null":
+                current_file = None
+                is_new_file = True
+                continue
+            if path_spec.startswith("a/"):
+                current_file = path_spec[2:]
+                is_new_file = False
+                files.setdefault(current_file, [])
+            continue
+
+        if not current_file or is_new_file:
+            continue
+
+        if not line.startswith("@@"):
+            continue
+
+        match = re.search(r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", line)
+        if not match:
+            continue
+
+        if side == "old":
+            start = int(match.group(1))
+            count = int(match.group(2)) if match.group(2) else 1
+        else:
+            start = int(match.group(3))
+            count = int(match.group(4)) if match.group(4) else 1
+
+        if start <= 0 or count <= 0:
+            continue
+
+        end = start + count - 1
+        files[current_file].append((start, end))
 
     return files
 
@@ -60,6 +97,14 @@ def load_swe_bench(
     Returns:
         List of BenchmarkCase objects with ground truth extracted from patches.
     """
+    try:
+        from datasets import load_dataset
+    except ImportError as exc:
+        raise RuntimeError(
+            "Missing optional dependency 'datasets'. Install with `uv run --extra benchmark ...` "
+            "or `pip install -e '.[benchmark]'`."
+        ) from exc
+
     dataset = load_dataset(dataset_name, split=split)  # nosec B615
     cases: list[BenchmarkCase] = []
 
