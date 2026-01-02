@@ -83,3 +83,9 @@ jobs:
 
       - name: Run Ruff formatter check
         run: uv run ruff format --check .
+
+      - name: Run mypy type checking
+        run: uv run mypy src/ benchmark/ --strict --allow-untyped-calls --ignore-missing-imports
+
+      - name: Run bandit security scan
+        run: uv run bandit -r src/ -c pyproject.toml

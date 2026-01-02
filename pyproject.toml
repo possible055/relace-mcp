@@ -51,6 +51,7 @@ dev = [
     "ruff>=0.1.0",
     "build>=1.0.0",
     "types-PyYAML>=6.0.0",
+    "bandit[toml]>=1.9.0",
 ]
 tools = [
     "textual>=0.50.0",
