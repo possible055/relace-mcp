@@ -1,12 +1,20 @@
+import platform
 import subprocess  # nosec B404
+import sys
 import time
 from dataclasses import asdict, dataclass, replace
+from datetime import UTC, datetime
+from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
+from relace_mcp.backend import RELACE_PROVIDER
 from relace_mcp.clients import SearchLLMClient
 from relace_mcp.config import RelaceConfig
+from relace_mcp.config import settings as relace_settings
 from relace_mcp.tools.search import FastAgenticSearchHarness
+from relace_mcp.tools.search.schemas.tool_schemas import get_tool_schemas
 
 from .metrics import (
     compute_file_precision,
@@ -16,6 +24,29 @@ from .metrics import (
     compute_line_precision_matched,
 )
 from .swe_bench import BenchmarkCase, get_repos_dir
+
+
+def _sanitize_endpoint_url(url: str) -> str:
+    """Sanitize endpoint URL for logs/metadata (strip credentials, query, fragments)."""
+    try:
+        parts = urlsplit(url)
+    except Exception:
+        return url
+
+    if not parts.scheme or not parts.netloc:
+        return url
+
+    host = parts.hostname or ""
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    if not host:
+        host = parts.netloc.split("@")[-1]
+
+    netloc = host
+    if parts.port is not None:
+        netloc = f"{host}:{parts.port}"
+
+    return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
 
 
 @dataclass
@@ -36,6 +67,7 @@ class BenchmarkResult:
 
 @dataclass
 class BenchmarkSummary:
+    metadata: dict[str, Any]
     total_cases: int
     success_rate: float
     avg_file_recall: float
@@ -49,6 +81,7 @@ class BenchmarkSummary:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "metadata": self.metadata,
             "total_cases": self.total_cases,
             "success_rate": self.success_rate,
             "avg_file_recall": self.avg_file_recall,
@@ -69,8 +102,15 @@ class BenchmarkRunner:
         self.repos_dir = get_repos_dir()
         self.repos_dir.mkdir(parents=True, exist_ok=True)
 
-    def run_benchmark(self, cases: list[BenchmarkCase]) -> BenchmarkSummary:
+    def run_benchmark(
+        self,
+        cases: list[BenchmarkCase],
+        *,
+        run_config: dict[str, Any] | None = None,
+    ) -> BenchmarkSummary:
         """Run benchmark on all cases and return summary."""
+        started_at = datetime.now(UTC)
+        wall_start = time.perf_counter()
         results: list[BenchmarkResult] = []
 
         for i, case in enumerate(cases):
@@ -87,7 +127,16 @@ class BenchmarkRunner:
                     f"Turns={result.turns_used} Latency={result.latency_ms:.0f}ms"
                 )
 
-        return self._compute_summary(results)
+        completed_at = datetime.now(UTC)
+        duration_ms = (time.perf_counter() - wall_start) * 1000
+        metadata = self._build_run_metadata(
+            cases,
+            run_config=run_config,
+            started_at=started_at,
+            completed_at=completed_at,
+            duration_ms=duration_ms,
+        )
+        return self._compute_summary(results, metadata=metadata)
 
     def _run_case(self, case: BenchmarkCase) -> BenchmarkResult:
         """Run a single benchmark case."""
@@ -200,11 +249,17 @@ class BenchmarkRunner:
             partial=result.get("partial", False),
         )
 
-    def _compute_summary(self, results: list[BenchmarkResult]) -> BenchmarkSummary:
+    def _compute_summary(
+        self,
+        results: list[BenchmarkResult],
+        *,
+        metadata: dict[str, Any],
+    ) -> BenchmarkSummary:
         """Compute aggregate statistics."""
         n = len(results)
         if n == 0:
             return BenchmarkSummary(
+                metadata=metadata,
                 total_cases=0,
                 success_rate=0.0,
                 avg_file_recall=0.0,
@@ -218,6 +273,7 @@ class BenchmarkRunner:
             )
 
         return BenchmarkSummary(
+            metadata=metadata,
             total_cases=n,
             success_rate=sum(1 for r in results if r.success) / n,
             avg_file_recall=sum(r.file_recall for r in results) / n,
@@ -229,3 +285,100 @@ class BenchmarkRunner:
             avg_latency_ms=sum(r.latency_ms for r in results) / n,
             results=results,
         )
+
+    def _build_run_metadata(
+        self,
+        cases: list[BenchmarkCase],
+        *,
+        run_config: dict[str, Any] | None,
+        started_at: datetime,
+        completed_at: datetime,
+        duration_ms: float,
+    ) -> dict[str, Any]:
+        """Build reproducibility metadata for this benchmark run (no secrets)."""
+        # NOTE: Intentionally avoid recording any API keys.
+        config_meta: dict[str, Any] = {
+            "base_dir": self.config.base_dir,
+            "default_encoding": self.config.default_encoding,
+        }
+
+        search_client = SearchLLMClient(self.config)
+        chat_client = search_client._chat_client  # Internal, but stable for metadata.
+
+        # Match BenchmarkRunner's harness default: lsp_languages=None -> empty frozenset.
+        tool_schemas = get_tool_schemas(frozenset())
+        tool_names: list[str] = []
+        tool_has_strict = False
+        for schema in tool_schemas:
+            func = schema.get("function")
+            if not isinstance(func, dict):
+                continue
+            name = func.get("name")
+            if isinstance(name, str) and name:
+                tool_names.append(name)
+            if "strict" in func:
+                tool_has_strict = True
+        tool_names = sorted(set(tool_names + ["report_back"]))
+
+        # SearchLLMClient currently hard-codes these request params.
+        request_params: dict[str, Any] = {
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "top_k": 100 if chat_client.api_compat == RELACE_PROVIDER else None,
+            "repetition_penalty": (1.0 if chat_client.api_compat == RELACE_PROVIDER else None),
+        }
+
+        case_list = [{"id": c.id, "repo": c.repo, "base_commit": c.base_commit} for c in cases]
+
+        relace_mcp_commit: str | None = None
+        try:
+            project_root = Path(__file__).resolve().parent.parent
+            completed = subprocess.run(  # nosec B603 B607
+                ["git", "-C", str(project_root), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            relace_mcp_commit = completed.stdout.strip() or None
+        except Exception:
+            relace_mcp_commit = None
+
+        relace_mcp_version: str | None = None
+        try:
+            relace_mcp_version = importlib_metadata.version("relace-mcp")
+        except importlib_metadata.PackageNotFoundError:
+            relace_mcp_version = None
+
+        run_meta = dict(run_config) if isinstance(run_config, dict) else {}
+        run_meta.setdefault("cases_loaded", len(cases))
+
+        return {
+            "run": {
+                **run_meta,
+                "started_at_utc": started_at.isoformat(),
+                "completed_at_utc": completed_at.isoformat(),
+                "duration_ms": round(duration_ms, 2),
+            },
+            "config": config_meta,
+            "dataset": {
+                "repos_dir": str(self.repos_dir),
+                "cases": case_list,
+            },
+            "search": {
+                "provider": chat_client.provider,
+                "api_compat": chat_client.api_compat,
+                "base_url": _sanitize_endpoint_url(chat_client.base_url),
+                "model": getattr(chat_client, "model", None),
+                "timeout_seconds": relace_settings.SEARCH_TIMEOUT_SECONDS,
+                "max_turns": relace_settings.SEARCH_MAX_TURNS,
+                "tools": tool_names,
+                "tool_strict": tool_has_strict,
+                **request_params,
+            },
+            "environment": {
+                "python": sys.version,
+                "platform": platform.platform(),
+                "relace_mcp_version": relace_mcp_version,
+                "relace_mcp_git_commit": relace_mcp_commit,
+            },
+        }

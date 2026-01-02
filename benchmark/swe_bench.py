@@ -3,6 +3,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
 
+DEFAULT_DATASET_NAME = "princeton-nlp/SWE-bench_Lite_oracle"
+DEFAULT_SPLIT = "test"
+
 
 @dataclass
 class BenchmarkCase:
@@ -84,8 +87,10 @@ def extract_files_from_patch_with_side(
 def load_swe_bench(
     limit: int = 50,
     *,
-    dataset_name: str = "princeton-nlp/SWE-bench_Lite_oracle",
-    split: str = "test",
+    dataset_name: str = DEFAULT_DATASET_NAME,
+    split: str = DEFAULT_SPLIT,
+    shuffle: bool = True,
+    seed: int = 0,
 ) -> list[BenchmarkCase]:
     """Load SWE-bench dataset and convert to BenchmarkCase objects.
 
@@ -93,6 +98,8 @@ def load_swe_bench(
         limit: Maximum number of cases to load.
         dataset_name: HuggingFace dataset identifier.
         split: Dataset split to use.
+        shuffle: Shuffle dataset before selecting limit (recommended to avoid bias).
+        seed: Random seed used for shuffling (ensures reproducible sampling).
 
     Returns:
         List of BenchmarkCase objects with ground truth extracted from patches.
@@ -106,6 +113,8 @@ def load_swe_bench(
         ) from exc
 
     dataset = load_dataset(dataset_name, split=split)  # nosec B615
+    if shuffle:
+        dataset = dataset.shuffle(seed=seed)
     cases: list[BenchmarkCase] = []
 
     for item in dataset.select(range(min(limit, len(dataset)))):  # pyright: ignore[reportAttributeAccessIssue]

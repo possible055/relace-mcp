@@ -8,11 +8,24 @@ from dotenv import load_dotenv
 from relace_mcp.config import RelaceConfig
 
 from .runner import BenchmarkRunner
-from .swe_bench import load_swe_bench
+from .swe_bench import DEFAULT_DATASET_NAME, DEFAULT_SPLIT, load_swe_bench
 
 
 @click.command()
 @click.option("--limit", default=5, help="Maximum number of cases to run")
+@click.option(
+    "--shuffle/--no-shuffle",
+    default=True,
+    show_default=True,
+    help="Shuffle SWE-bench cases before selecting --limit (recommended to reduce bias)",
+)
+@click.option(
+    "--seed",
+    default=0,
+    show_default=True,
+    type=int,
+    help="Random seed used when shuffling SWE-bench cases",
+)
 @click.option(
     "--output",
     default="results/benchmark_results.json",
@@ -20,7 +33,7 @@ from .swe_bench import load_swe_bench
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.option("--dry-run", is_flag=True, help="Only load data, don't run searches")
-def main(limit: int, output: str, verbose: bool, dry_run: bool) -> None:
+def main(limit: int, shuffle: bool, seed: int, output: str, verbose: bool, dry_run: bool) -> None:
     """Run SWE-bench benchmark on fast_search."""
     # Load .env from current directory or parents
     load_dotenv()
@@ -30,10 +43,10 @@ def main(limit: int, output: str, verbose: bool, dry_run: bool) -> None:
     output_path = benchmark_dir / output
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    click.echo(f"Loading SWE-bench (limit={limit})...")
+    click.echo(f"Loading SWE-bench (limit={limit}, shuffle={shuffle}, seed={seed})...")
 
     try:
-        cases = load_swe_bench(limit=limit)
+        cases = load_swe_bench(limit=limit, shuffle=shuffle, seed=seed)
     except Exception as e:
         click.echo(f"Error loading dataset: {e}", err=True)
         sys.exit(1)
@@ -58,7 +71,16 @@ def main(limit: int, output: str, verbose: bool, dry_run: bool) -> None:
     runner = BenchmarkRunner(config, verbose=verbose)
 
     click.echo("\nRunning benchmark...")
-    summary = runner.run_benchmark(cases)
+    summary = runner.run_benchmark(
+        cases,
+        run_config={
+            "dataset_name": DEFAULT_DATASET_NAME,
+            "split": DEFAULT_SPLIT,
+            "limit": limit,
+            "shuffle": shuffle,
+            "seed": seed,
+        },
+    )
 
     # Save results
     with open(output_path, "w") as f:
