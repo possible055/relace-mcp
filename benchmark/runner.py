@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
-from relace_mcp.backend import RELACE_PROVIDER
 from relace_mcp.clients import SearchLLMClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.config import settings as relace_settings
+from relace_mcp.config.settings import RELACE_PROVIDER
 from relace_mcp.tools.search import FastAgenticSearchHarness
 from relace_mcp.tools.search.schemas.tool_schemas import get_tool_schemas
 
@@ -303,7 +303,7 @@ class BenchmarkRunner:
         }
 
         search_client = SearchLLMClient(self.config)
-        chat_client = search_client._chat_client  # Internal, but stable for metadata.
+        provider_config = search_client._provider_config
 
         # Match BenchmarkRunner's harness default: lsp_languages=None -> empty frozenset.
         tool_schemas = get_tool_schemas(frozenset())
@@ -324,8 +324,8 @@ class BenchmarkRunner:
         request_params: dict[str, Any] = {
             "temperature": 1.0,
             "top_p": 0.95,
-            "top_k": 100 if chat_client.api_compat == RELACE_PROVIDER else None,
-            "repetition_penalty": (1.0 if chat_client.api_compat == RELACE_PROVIDER else None),
+            "top_k": 100 if provider_config.api_compat == RELACE_PROVIDER else None,
+            "repetition_penalty": (1.0 if provider_config.api_compat == RELACE_PROVIDER else None),
         }
 
         case_list = [{"id": c.id, "repo": c.repo, "base_commit": c.base_commit} for c in cases]
@@ -365,10 +365,10 @@ class BenchmarkRunner:
                 "cases": case_list,
             },
             "search": {
-                "provider": chat_client.provider,
-                "api_compat": chat_client.api_compat,
-                "base_url": _sanitize_endpoint_url(chat_client.base_url),
-                "model": getattr(chat_client, "model", None),
+                "provider": provider_config.provider,
+                "api_compat": provider_config.api_compat,
+                "base_url": _sanitize_endpoint_url(provider_config.base_url),
+                "model": provider_config.model,
                 "timeout_seconds": relace_settings.SEARCH_TIMEOUT_SECONDS,
                 "max_turns": relace_settings.SEARCH_MAX_TURNS,
                 "tools": tool_names,
