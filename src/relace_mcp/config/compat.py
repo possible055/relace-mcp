@@ -37,7 +37,7 @@ def env_bool(name: str, *, default: bool, deprecated_name: str = "") -> bool:
     Recognizes falsy values: 0, false, no, n, off
     """
     raw = getenv_with_fallback(name, deprecated_name) if deprecated_name else os.getenv(name)
-    if raw is None:
+    if raw is None or raw == "":
         return default
     value = raw.strip().lower()
     if value in _TRUTHY:
