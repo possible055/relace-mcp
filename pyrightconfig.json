@@ -33,4 +33,8 @@
     "reportUnusedFunction": "warning",
     "reportUnusedClass": "warning",
     "reportDuplicateImport": "error"
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 2d75011 (chore: update project configuration and ignore rules)
