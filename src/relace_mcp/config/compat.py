@@ -30,18 +30,6 @@ def getenv_with_fallback(new_name: str, old_name: str, default: str = "") -> str
     return default
 
 
-def env_float(name: str, *, default: float) -> float:
-    """Parse environment variable as float with fallback to default."""
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    try:
-        return float(raw.strip())
-    except ValueError:
-        logger.warning("Invalid %s=%r; expected float, defaulting to %s", name, raw, default)
-        return default
-
-
 def env_bool(name: str, *, default: bool, deprecated_name: str = "") -> bool:
     """Parse environment variable as boolean with fallback to default.
 

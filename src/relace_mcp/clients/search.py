@@ -4,10 +4,10 @@ from typing import Any
 import openai
 
 from ..backend import OpenAIChatClient
-from ..config.settings import RELACE_PROVIDER
 from ..config import RelaceConfig, create_provider_config
 from ..config.compat import env_bool
 from ..config.settings import (
+    RELACE_PROVIDER,
     SEARCH_BASE_URL,
     SEARCH_MODEL,
     SEARCH_TEMPERATURE,

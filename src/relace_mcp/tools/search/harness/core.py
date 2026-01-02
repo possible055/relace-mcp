@@ -5,9 +5,9 @@ import time
 import uuid
 from typing import Any
 
-from ....config.settings import RELACE_PROVIDER
 from ....clients import SearchLLMClient
 from ....config import RelaceConfig
+from ....config.settings import RELACE_PROVIDER
 from ..handlers import estimate_context_size
 from ..logging import (
     log_search_complete,
