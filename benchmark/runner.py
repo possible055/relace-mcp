@@ -13,6 +13,7 @@ from .metrics import (
     compute_file_recall,
     compute_line_coverage,
     compute_line_precision,
+    compute_line_precision_matched,
 )
 from .swe_bench import BenchmarkCase, get_repos_dir
 
@@ -26,6 +27,7 @@ class BenchmarkResult:
     file_precision: float
     line_coverage: float
     line_precision: float
+    line_precision_matched: float
     turns_used: int
     latency_ms: float
     partial: bool = False
@@ -40,6 +42,7 @@ class BenchmarkSummary:
     avg_file_precision: float
     avg_line_coverage: float
     avg_line_precision: float
+    avg_line_precision_matched: float
     avg_turns: float
     avg_latency_ms: float
     results: list[BenchmarkResult]
@@ -52,6 +55,7 @@ class BenchmarkSummary:
             "avg_file_precision": self.avg_file_precision,
             "avg_line_coverage": self.avg_line_coverage,
             "avg_line_precision": self.avg_line_precision,
+            "avg_line_precision_matched": self.avg_line_precision_matched,
             "avg_turns": self.avg_turns,
             "avg_latency_ms": self.avg_latency_ms,
             "results": [asdict(r) for r in self.results],
@@ -99,6 +103,7 @@ class BenchmarkRunner:
                 file_precision=0.0,
                 line_coverage=0.0,
                 line_precision=0.0,
+                line_precision_matched=0.0,
                 turns_used=0,
                 latency_ms=0.0,
                 partial=True,
@@ -175,6 +180,12 @@ class BenchmarkRunner:
             repo_root=repo_path,
         )
 
+        line_precision_matched = compute_line_precision_matched(
+            returned_files,
+            case.ground_truth_files,
+            repo_root=repo_path,
+        )
+
         return BenchmarkResult(
             case_id=case.id,
             repo=case.repo,
@@ -183,6 +194,7 @@ class BenchmarkRunner:
             file_precision=file_precision,
             line_coverage=line_coverage,
             line_precision=line_precision,
+            line_precision_matched=line_precision_matched,
             turns_used=result.get("turns_used", 0),
             latency_ms=latency_ms,
             partial=result.get("partial", False),
@@ -199,6 +211,7 @@ class BenchmarkRunner:
                 avg_file_precision=0.0,
                 avg_line_coverage=0.0,
                 avg_line_precision=0.0,
+                avg_line_precision_matched=0.0,
                 avg_turns=0.0,
                 avg_latency_ms=0.0,
                 results=[],
@@ -211,6 +224,7 @@ class BenchmarkRunner:
             avg_file_precision=sum(r.file_precision for r in results) / n,
             avg_line_coverage=sum(r.line_coverage for r in results) / n,
             avg_line_precision=sum(r.line_precision for r in results) / n,
+            avg_line_precision_matched=sum(r.line_precision_matched for r in results) / n,
             avg_turns=sum(r.turns_used for r in results) / n,
             avg_latency_ms=sum(r.latency_ms for r in results) / n,
             results=results,

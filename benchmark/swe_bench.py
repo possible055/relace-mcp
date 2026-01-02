@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, cast
 
 
 @dataclass
@@ -108,16 +108,17 @@ def load_swe_bench(
     dataset = load_dataset(dataset_name, split=split)  # nosec B615
     cases: list[BenchmarkCase] = []
 
-    for item in dataset.select(range(min(limit, len(dataset)))):
-        patch = item.get("patch", "")
+    for item in dataset.select(range(min(limit, len(dataset)))):  # pyright: ignore[reportAttributeAccessIssue]
+        row = cast(dict[str, Any], item)
+        patch = row.get("patch", "")
         ground_truth = extract_files_from_patch(patch) if patch else {}
 
         cases.append(
             BenchmarkCase(
-                id=item["instance_id"],
-                query=item["problem_statement"],
-                repo=item["repo"],
-                base_commit=item["base_commit"],
+                id=row["instance_id"],
+                query=row["problem_statement"],
+                repo=row["repo"],
+                base_commit=row["base_commit"],
                 ground_truth_files=ground_truth,
             )
         )

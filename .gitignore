@@ -31,3 +31,5 @@ AGENTS.md
 # Benchmark artifacts
 benchmark/repos/*
 !benchmark/repos/.gitkeep
+benchmark/results/*
+!benchmark/results/.gitkeep

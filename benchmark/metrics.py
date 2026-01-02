@@ -263,3 +263,51 @@ def compute_line_precision(
         correct_lines += _intersection_length(merged_ret, merged_gt)
 
     return correct_lines / total_returned_lines if total_returned_lines else 0.0
+
+
+def compute_line_precision_matched(
+    returned_files: dict[str, list[list[int]]],
+    ground_truth: dict[str, list[tuple[int, int]]],
+    *,
+    repo_root: Path | None = None,
+) -> float:
+    """Compute line precision only for matched files (no penalty for unrelated files).
+
+    Line Precision (Matched) = Σ(Correct lines) / Σ(Matched file lines)
+
+    Unlike compute_line_precision, this only counts lines from files that exist
+    in both returned and GT, providing a pure measure of range accuracy.
+
+    Args:
+        returned_files: Files returned by fast_search (path -> [[start, end], ...]).
+        ground_truth: Ground truth files from patch (path -> [(start, end), ...]).
+        repo_root: Repository root for normalizing absolute paths.
+
+    Returns:
+        Precision score between 0.0 and 1.0.
+    """
+    if not returned_files:
+        return 0.0
+
+    normalized_returned = _normalize_returned_files(returned_files, repo_root=repo_root)
+    normalized_gt = _normalize_ground_truth_files(ground_truth, repo_root=repo_root)
+    gt_to_ret, _, _ = _match_paths(set(normalized_gt), set(normalized_returned))
+
+    # Build reverse mapping: ret_path -> gt_path
+    ret_to_gt = {v: k for k, v in gt_to_ret.items()}
+
+    total_matched_lines = 0
+    correct_lines = 0
+
+    for ret_path, ret_ranges in normalized_returned.items():
+        gt_path = ret_to_gt.get(ret_path)
+        if not gt_path:
+            continue  # Skip unmatched files
+
+        merged_ret = _normalize_line_ranges(ret_ranges)
+        total_matched_lines += sum(end - start + 1 for start, end in merged_ret)
+
+        merged_gt = _merge_ranges(normalized_gt.get(gt_path, []))
+        correct_lines += _intersection_length(merged_ret, merged_gt)
+
+    return correct_lines / total_matched_lines if total_matched_lines else 0.0

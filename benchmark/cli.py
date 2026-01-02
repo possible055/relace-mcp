@@ -13,13 +13,22 @@ from .swe_bench import load_swe_bench
 
 @click.command()
 @click.option("--limit", default=5, help="Maximum number of cases to run")
-@click.option("--output", default="benchmark_results.json", help="Output file path")
+@click.option(
+    "--output",
+    default="results/benchmark_results.json",
+    help="Output file path (relative to benchmark/)",
+)
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.option("--dry-run", is_flag=True, help="Only load data, don't run searches")
 def main(limit: int, output: str, verbose: bool, dry_run: bool) -> None:
     """Run SWE-bench benchmark on fast_search."""
     # Load .env from current directory or parents
     load_dotenv()
+
+    # Resolve output path relative to benchmark directory
+    benchmark_dir = Path(__file__).parent
+    output_path = benchmark_dir / output
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     click.echo(f"Loading SWE-bench (limit={limit})...")
 
@@ -52,7 +61,6 @@ def main(limit: int, output: str, verbose: bool, dry_run: bool) -> None:
     summary = runner.run_benchmark(cases)
 
     # Save results
-    output_path = Path(output)
     with open(output_path, "w") as f:
         json.dump(summary.to_dict(), f, indent=2)
     click.echo(f"\nResults saved to {output_path}")
@@ -67,6 +75,7 @@ def main(limit: int, output: str, verbose: bool, dry_run: bool) -> None:
     click.echo(f"Avg File Precision:{summary.avg_file_precision:.1%}")
     click.echo(f"Avg Line Coverage: {summary.avg_line_coverage:.1%}")
     click.echo(f"Avg Line Precision:{summary.avg_line_precision:.1%}")
+    click.echo(f"Avg Line Prec(M):  {summary.avg_line_precision_matched:.1%}")
     click.echo(f"Avg Turns:         {summary.avg_turns:.2f}")
     click.echo(f"Avg Latency:       {summary.avg_latency_ms:.0f}ms")
 
