@@ -20,7 +20,9 @@ APPLY_BASE_URL = (
     or "https://instantapply.endpoint.relace.run/v1/apply"
 )
 APPLY_MODEL = getenv_with_fallback("APPLY_MODEL", "RELACE_APPLY_MODEL") or "auto"
-TIMEOUT_SECONDS = float(os.getenv("RELACE_TIMEOUT_SECONDS", "60.0"))
+TIMEOUT_SECONDS = float(
+    getenv_with_fallback("APPLY_TIMEOUT_SECONDS", "RELACE_TIMEOUT_SECONDS") or "60.0"
+)
 MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0
 
@@ -54,11 +56,9 @@ RELACE_DEFAULT_ENCODING = os.getenv("RELACE_DEFAULT_ENCODING", None)
 ENCODING_DETECTION_SAMPLE_LIMIT = 30
 
 # EXPERIMENTAL: Post-check validation (validates merged_code semantic correctness, disabled by default)
-EXPERIMENTAL_POST_CHECK = os.getenv("RELACE_EXPERIMENTAL_POST_CHECK", "").lower() in (
-    "1",
-    "true",
-    "yes",
-)
+# Use APPLY_POST_CHECK=1 to enable (RELACE_EXPERIMENTAL_POST_CHECK still works for backward compat)
+_post_check_env = getenv_with_fallback("APPLY_POST_CHECK", "RELACE_EXPERIMENTAL_POST_CHECK")
+EXPERIMENTAL_POST_CHECK = _post_check_env.lower() in ("1", "true", "yes")
 
 # Local file logging (disabled by default)
 # Use RELACE_LOGGING=1 to enable (RELACE_EXPERIMENTAL_LOGGING still works for backward compat)
