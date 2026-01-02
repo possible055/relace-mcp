@@ -41,7 +41,7 @@ def log_event(event: dict[str, Any]) -> None:
     Args:
         event: Event data to log.
     """
-    if not settings.RELACE_LOGGING:
+    if not settings.MCP_LOGGING:
         return
 
     try:

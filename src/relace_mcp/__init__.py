@@ -1,4 +1,6 @@
-__version__ = "0.2.3.dev3"
+from importlib.metadata import version
+
+__version__ = version("relace-mcp")
 
 from .server import build_server, main
 

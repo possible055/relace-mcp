@@ -10,8 +10,8 @@ from typing import Any
 import openai
 
 from ...clients.apply import ApplyLLMClient, ApplyRequest, ApplyResponse
-from ...config.settings import EXPERIMENTAL_POST_CHECK
-from ...utils import MAX_FILE_SIZE_BYTES, validate_file_path
+from ...config.settings import EXPERIMENTAL_POST_CHECK, MAX_FILE_SIZE_BYTES
+from ...utils import validate_file_path
 from . import errors, file_io, snippet
 from . import logging as apply_logging
 from .exceptions import (

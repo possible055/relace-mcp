@@ -269,7 +269,7 @@ relace-dashboard
 - `FILE_NOT_WRITABLE` / `PERMISSION_ERROR`：检查文件和目录的写入权限。
 - `AUTH_ERROR`：验证 `RELACE_API_KEY` 是否有效且未过期。
 - `RATE_LIMIT`：请求过多；稍后重试。
-- `TIMEOUT_ERROR` / `NETWORK_ERROR`：检查网络连接；通过 `RELACE_TIMEOUT_SECONDS` 增加超时时间。
+- `TIMEOUT_ERROR` / `NETWORK_ERROR`：检查网络连接；通过 `APPLY_TIMEOUT_SECONDS` 增加超时时间。
 
 > **Windows 用户：** `fast_search` 中的 `bash` 工具在 Windows 上不可用。请使用 WSL 或依赖其他探索工具（`view_file`、`grep_search`、`glob`）。
 

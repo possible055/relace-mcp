@@ -2,11 +2,13 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..backend import RELACE_PROVIDER, OpenAIChatClient
-from ..config import APPLY_SYSTEM_PROMPT, RelaceConfig
+from ..backend import OpenAIChatClient
+from ..config import APPLY_SYSTEM_PROMPT, RelaceConfig, create_provider_config
 from ..config.settings import (
     APPLY_BASE_URL,
     APPLY_MODEL,
+    APPLY_TEMPERATURE,
+    RELACE_PROVIDER,
     TIMEOUT_SECONDS,
 )
 
@@ -44,20 +46,14 @@ class ApplyLLMClient:
     """
 
     def __init__(self, config: RelaceConfig) -> None:
-        self._chat_client = OpenAIChatClient(
-            config,
-            provider_env="APPLY_PROVIDER",
-            base_url_env="APPLY_ENDPOINT",
-            model_env="APPLY_MODEL",
+        self._provider_config = create_provider_config(
+            "APPLY",
             default_base_url=APPLY_BASE_URL,
             default_model=APPLY_MODEL,
-            timeout_seconds=TIMEOUT_SECONDS,
-            deprecated_provider_env="RELACE_APPLY_PROVIDER",
-            deprecated_base_url_env="RELACE_APPLY_ENDPOINT",
-            deprecated_model_env="RELACE_APPLY_MODEL",
+            default_timeout=TIMEOUT_SECONDS,
+            relace_api_key=config.api_key,
         )
-        # Cache api_compat for conditional system prompt injection
-        self._api_compat = self._chat_client.api_compat
+        self._chat_client = OpenAIChatClient(self._provider_config)
 
     async def apply(self, request: ApplyRequest) -> ApplyResponse:
         """Call Relace Instant Apply API to merge edit_snippet into initial_code.
@@ -77,7 +73,7 @@ class ApplyLLMClient:
 
         data, latency_ms = await self._chat_client.chat_completions_async(
             messages=messages,
-            temperature=0.0,
+            temperature=APPLY_TEMPERATURE,
             trace_id=trace_id,
         )
 
@@ -102,7 +98,7 @@ class ApplyLLMClient:
         messages: list[dict[str, Any]] = []
         # Only inject system prompt for OpenAI-compatible endpoints
         # Relace native API has built-in system prompt, no need to inject
-        if self._api_compat != RELACE_PROVIDER:
+        if self._provider_config.api_compat != RELACE_PROVIDER:
             messages.append({"role": "system", "content": APPLY_SYSTEM_PROMPT})
         messages.append({"role": "user", "content": user_message})
         return messages

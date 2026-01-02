@@ -24,7 +24,7 @@ def recoverable_error(
     Returns:
         Structured error response.
     """
-    return {
+    result: dict[str, Any] = {
         "status": "error",
         "code": error_code,
         "path": path,
@@ -32,6 +32,9 @@ def recoverable_error(
         "timing_ms": timing_ms,
         "message": message,
     }
+    if instruction:
+        result["instruction"] = instruction
+    return result
 
 
 def openai_error_to_recoverable(
@@ -54,26 +57,34 @@ def openai_error_to_recoverable(
         Structured recoverable error response.
     """
     if isinstance(exc, openai.APITimeoutError):
-        return {
-            "status": "error",
-            "code": "TIMEOUT_ERROR",
-            "path": path,
-            "trace_id": trace_id,
-            "timing_ms": timing_ms,
-            "message": "Request timed out. Please retry later.",
-            "detail": str(exc),
+        result = recoverable_error(
+            "TIMEOUT_ERROR",
+            "Request timed out. Please retry later.",
+            path,
+            instruction,
+            trace_id,
+            timing_ms,
+        )
+        result["detail"] = {
+            "error_type": type(exc).__name__,
+            "error_message": str(exc),
         }
+        return result
 
     if isinstance(exc, openai.APIConnectionError):
-        return {
-            "status": "error",
-            "code": "NETWORK_ERROR",
-            "path": path,
-            "trace_id": trace_id,
-            "timing_ms": timing_ms,
-            "message": "Network error. Please check network connection and retry.",
-            "detail": str(exc),
+        result = recoverable_error(
+            "NETWORK_ERROR",
+            "Network error. Please check network connection and retry.",
+            path,
+            instruction,
+            trace_id,
+            timing_ms,
+        )
+        result["detail"] = {
+            "error_type": type(exc).__name__,
+            "error_message": str(exc),
         }
+        return result
 
     if isinstance(exc, openai.APIStatusError):
         status_code = exc.status_code
@@ -90,19 +101,13 @@ def openai_error_to_recoverable(
             error_code = "API_ERROR"
             message = "API error. Please simplify edit_snippet or add more explicit anchor lines."
 
-        return {
-            "status": "error",
-            "code": error_code,
-            "path": path,
-            "trace_id": trace_id,
-            "timing_ms": timing_ms,
-            "message": message,
-            "detail": {
-                "status_code": status_code,
-                "error_type": type(exc).__name__,
-                "error_message": str(exc),
-            },
+        result = recoverable_error(error_code, message, path, instruction, trace_id, timing_ms)
+        result["detail"] = {
+            "status_code": status_code,
+            "error_type": type(exc).__name__,
+            "error_message": str(exc),
         }
+        return result
 
     return recoverable_error(
         "API_ERROR",

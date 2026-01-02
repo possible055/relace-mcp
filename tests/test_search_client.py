@@ -182,8 +182,6 @@ def test_schema_error_retry_disables_parallel_and_strips_strict(tmp_path, monkey
     monkeypatch.delenv("RELACE_SEARCH_ENDPOINT", raising=False)
     monkeypatch.setenv("RELACE_SEARCH_MODEL", "openai/gpt-4o")
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
-    # Disable parallel_tool_calls to test strict-only retry path
-    monkeypatch.setenv("RELACE_SEARCH_PARALLEL_TOOL_CALLS", "0")
 
     tool_with_strict = [
         {"type": "function", "function": {"name": "report_back", "strict": True, "parameters": {}}}
@@ -208,22 +206,24 @@ def test_schema_error_retry_disables_parallel_and_strips_strict(tmp_path, monkey
         mock_openai.return_value = mock_client
 
         with patch("relace_mcp.backend.openai_backend.AsyncOpenAI"):
-            config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
-            client = SearchLLMClient(config)
+            # Patch constant to disable parallel_tool_calls for this test
+            with patch("relace_mcp.clients.search.SEARCH_PARALLEL_TOOL_CALLS", False):
+                config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
+                client = SearchLLMClient(config)
 
-            # First call triggers compatibility retry (strict=true rejected -> retry without strict).
-            client.chat(
-                messages=[{"role": "user", "content": "hi"}],
-                tools=tool_with_strict,
-                trace_id="t1",
-            )
+                # First call triggers compatibility retry (strict=true rejected -> retry without strict).
+                client.chat(
+                    messages=[{"role": "user", "content": "hi"}],
+                    tools=tool_with_strict,
+                    trace_id="t1",
+                )
 
-            # Second call should not send strict (already stripped after first retry).
-            client.chat(
-                messages=[{"role": "user", "content": "hi"}],
-                tools=tool_with_strict,
-                trace_id="t2",
-            )
+                # Second call should not send strict (already stripped after first retry).
+                client.chat(
+                    messages=[{"role": "user", "content": "hi"}],
+                    tools=tool_with_strict,
+                    trace_id="t2",
+                )
 
     # First call: 1 fail (strict) + 1 retry (stripped) = 2 calls
     # Second call: 1 success (already stripped) = 1 call

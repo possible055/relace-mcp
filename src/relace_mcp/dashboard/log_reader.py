@@ -4,10 +4,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from platformdirs import user_state_dir
-
-LOG_DIR = Path(user_state_dir("relace", appauthor=False))
-LOG_PATH = LOG_DIR / "relace.log"
+from ..config.settings import LOG_PATH
 
 APPLY_KINDS = frozenset({"create_success", "apply_success", "apply_error"})
 SEARCH_KINDS = frozenset(

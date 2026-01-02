@@ -32,13 +32,6 @@ class TestRelaceRepoClientInit:
         assert client._config == mock_config
         assert "api.relace.run" in client._base_url
 
-    def test_get_repo_name_from_base_dir(self, mock_config: RelaceConfig) -> None:
-        """Should derive repo name from base_dir."""
-        client = RelaceRepoClient(mock_config)
-        repo_name = client.get_repo_name_from_base_dir()
-        # tmp_path typically has a random name like pytest-xxx
-        assert repo_name == Path(mock_config.base_dir).name
-
 
 class TestRelaceRepoClientListRepos:
     """Test list_repos method."""

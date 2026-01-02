@@ -23,7 +23,6 @@ def mock_config(tmp_path: Path) -> RelaceConfig:
 @pytest.fixture
 def mock_repo_client(mock_config: RelaceConfig) -> MagicMock:
     client = MagicMock(spec=RelaceRepoClient)
-    client.get_repo_name_from_base_dir.return_value = "test-project"
     client.list_repos.return_value = [
         {
             "repo_id": "repo-1",
@@ -192,10 +191,11 @@ class TestCloudInfoLogic:
 
     def test_info_finds_cloud_repo(self, tmp_path: Path, mock_repo_client: MagicMock) -> None:
         """Should find matching cloud repo in list."""
+        repo_name = tmp_path.name  # Use actual tmp_path name for matching
         mock_repo_client.list_repos.return_value = [
             {
                 "repo_id": "cloud-repo-id",
-                "metadata": {"name": "test-project"},
+                "metadata": {"name": repo_name},
                 "auto_index": True,
                 "created_at": "2025-01-01T00:00:00Z",
                 "updated_at": "2025-01-15T00:00:00Z",

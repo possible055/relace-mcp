@@ -7,6 +7,7 @@ import yaml
 
 from .base_dir import resolve_base_dir
 from .compat import getenv_with_fallback
+from .provider import ProviderConfig, create_provider_config
 
 # Public API: RelaceConfig is the main configuration class
 from .settings import RelaceConfig
@@ -94,6 +95,8 @@ APPLY_SYSTEM_PROMPT: str = _APPLY_PROMPTS["apply_system_prompt"].strip()
 __all__ = [
     # Public API
     "RelaceConfig",
+    "ProviderConfig",
+    "create_provider_config",
     "resolve_base_dir",
     # Prompts - Relace native (for internal submodule use)
     "SEARCH_SYSTEM_PROMPT",
