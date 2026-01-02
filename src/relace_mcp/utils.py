@@ -1,9 +1,6 @@
 import os
 from pathlib import Path
 
-# File size limit (10MB) to prevent memory exhaustion
-MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
-
 
 def resolve_repo_path(
     path: str,

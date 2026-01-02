@@ -38,7 +38,6 @@ def mock_config(tmp_path: Path) -> RelaceConfig:
 @pytest.fixture
 def mock_repo_client(mock_config: RelaceConfig) -> MagicMock:
     client = MagicMock(spec=RelaceRepoClient)
-    client.get_repo_name_from_base_dir.return_value = "test-project"
     client.ensure_repo.return_value = "test-repo-id"
     client.update_repo.return_value = {"repo_head": "abc123def456", "changed_files": []}
     return client

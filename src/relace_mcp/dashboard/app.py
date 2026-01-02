@@ -7,6 +7,7 @@ from typing import Any
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.timer import Timer
 from textual.widgets import Button, ContentSwitcher, Footer, RichLog, Static
 
 from .log_reader import (
@@ -25,7 +26,7 @@ from .widgets import (
 )
 
 
-class LogViewerApp(App[None]):  # type: ignore[misc]
+class LogViewerApp(App[None]):
     TITLE = "Relace MCP"
     CSS_PATH = "styles.tcss"
     ENABLE_COMMAND_PALETTE = False
@@ -61,7 +62,7 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
         self._time_start: datetime = datetime.now(UTC) - timedelta(hours=24)
         self._time_end: datetime = datetime.now(UTC)
         self._tail_task: asyncio.Task[None] | None = None
-        self._flush_timer = None
+        self._flush_timer: Timer | None = None
 
         # Pending (unrendered) events per view. This decouples file tailing from UI rendering
         # so tab switches remain responsive under heavy log volume.
@@ -323,9 +324,9 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
                     tree.add_event(pending.popleft())
 
         elif current == "tree-insights":
-            tree = self.query_one("#insights-widget", InsightsTree)
-            pending = self._pending["tree-insights"]
-            if not pending:
+            insights_tree = self.query_one("#insights-widget", InsightsTree)
+            insights_pending = self._pending["tree-insights"]
+            if not insights_pending:
                 return
 
             # Insights is a bit different: it re-renders the whole tree based on session state
@@ -338,8 +339,8 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
             # actually takes a list of events.
             # For now, let's just trigger update_stats if we have NEW events.
             has_new = False
-            while pending:
-                pending.popleft()
+            while insights_pending:
+                insights_pending.popleft()
                 has_new = True
 
             if has_new:
@@ -352,7 +353,7 @@ class LogViewerApp(App[None]):  # type: ignore[misc]
                 from .log_reader import INSIGHTS_KINDS, read_log_events
 
                 events = read_log_events(enabled_kinds=set(INSIGHTS_KINDS), max_events=1000)
-                tree.update_stats(events, include_failed=self._insights_include_failed)
+                insights_tree.update_stats(events, include_failed=self._insights_include_failed)
 
     async def _tail_log(self) -> None:
         log_path = get_log_path()

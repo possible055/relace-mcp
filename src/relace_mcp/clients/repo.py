@@ -1,8 +1,6 @@
 import logging
-import os
 import random
 import time
-from pathlib import Path
 from typing import Any, cast
 
 import httpx
@@ -12,16 +10,13 @@ from ..config.settings import (
     MAX_RETRIES,
     RELACE_API_ENDPOINT,
     RELACE_REPO_ID,
+    REPO_LIST_MAX,
     REPO_SYNC_TIMEOUT_SECONDS,
     RETRY_BASE_DELAY,
 )
 from .exceptions import RelaceAPIError, raise_for_status
 
 logger = logging.getLogger(__name__)
-
-# Maximum repos to fetch (configurable via environment variable)
-# Default: 10000 (100 pages * 100 per page)
-REPO_LIST_MAX = int(os.getenv("RELACE_REPO_LIST_MAX", "10000"))
 
 
 class RelaceRepoClient:
@@ -457,15 +452,3 @@ class RelaceRepoClient:
             json=payload,
         )
         return cast(dict[str, Any], resp.json())
-
-    def get_repo_name_from_base_dir(self, base_dir: str | None = None) -> str:
-        """Derive repository name from base_dir.
-
-        Args:
-            base_dir: Optional base_dir override (useful when base_dir is resolved dynamically
-                from MCP Roots and not stored in config).
-        """
-        base_dir = base_dir or self._config.base_dir
-        if base_dir is None:
-            raise RuntimeError("base_dir is not configured")
-        return Path(base_dir).name

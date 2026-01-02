@@ -34,13 +34,13 @@ TOOL_ABBREVIATIONS = {
 }
 
 
-class ToggleInsightsFailed(Message):  # type: ignore[misc]
+class ToggleInsightsFailed(Message):
     def __init__(self, include_failed: bool) -> None:
         super().__init__()
         self.include_failed = include_failed
 
 
-class SearchTree(Tree[dict[str, Any]]):  # type: ignore[misc]
+class SearchTree(Tree[dict[str, Any]]):
     """A tree view for search sessions."""
 
     MAX_SESSIONS = 200  # Optimization: only keep last 200 sessions
@@ -49,8 +49,8 @@ class SearchTree(Tree[dict[str, Any]]):  # type: ignore[misc]
         super().__init__("Search Sessions", **kwargs)
         self.show_root = False
         self.root.expand()
-        self._current_session: TreeNode | None = None
-        self._current_turn: TreeNode | None = None
+        self._current_session: TreeNode[dict[str, Any]] | None = None
+        self._current_turn: TreeNode[dict[str, Any]] | None = None
         self._session_total_tokens: int = 0
         self._session_total_tools: int = 0
 
@@ -287,7 +287,7 @@ class SearchTree(Tree[dict[str, Any]]):  # type: ignore[misc]
         return palette[idx]
 
 
-class InsightsTree(Tree[dict[str, Any]]):  # type: ignore[misc]
+class InsightsTree(Tree[dict[str, Any]]):
     """A tree view for tool call frequency insights."""
 
     def __init__(self, **kwargs: Any) -> None:
@@ -386,7 +386,7 @@ class InsightsTree(Tree[dict[str, Any]]):  # type: ignore[misc]
         return palette[idx]
 
 
-class TimeCycleButton(Button):  # type: ignore[misc]
+class TimeCycleButton(Button):
     """A button that cycles through time ranges."""
 
     def __init__(self) -> None:
@@ -413,7 +413,7 @@ class TimeCycleButton(Button):  # type: ignore[misc]
         self.post_message(TimeRangeChanged(start, end))
 
 
-class FilterButton(Button):  # type: ignore[misc]
+class FilterButton(Button):
     """A compact filter tab button."""
 
     DEFAULT_CSS = """
@@ -440,7 +440,7 @@ class FilterButton(Button):  # type: ignore[misc]
     """
 
 
-class CompactHeader(Static):  # type: ignore[misc]
+class CompactHeader(Static):
     """Compact header looking like top tabs."""
 
     DEFAULT_CSS = """
@@ -526,13 +526,13 @@ class CompactHeader(Static):  # type: ignore[misc]
         self._set_filter(filter_type)
 
 
-class FilterChanged(Message):  # type: ignore[misc]
+class FilterChanged(Message):
     def __init__(self, enabled_kinds: set[str]) -> None:
         super().__init__()
         self.enabled_kinds = enabled_kinds
 
 
-class TimeRangeChanged(Message):  # type: ignore[misc]
+class TimeRangeChanged(Message):
     def __init__(self, start: datetime, end: datetime) -> None:
         super().__init__()
         self.start = start

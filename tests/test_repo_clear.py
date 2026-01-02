@@ -1,34 +1,31 @@
 from pathlib import Path
 from unittest.mock import ANY, MagicMock, patch
 
-import pytest
-
 from relace_mcp.clients.repo import RelaceRepoClient
 from relace_mcp.tools.repo.clear import cloud_clear_logic
 from relace_mcp.tools.repo.state import SyncState
 
 
-@pytest.fixture
-def mock_repo_client() -> MagicMock:
+def _create_mock_repo_client(repo_name: str) -> MagicMock:
+    """Create mock client with configurable repo name."""
     client = MagicMock(spec=RelaceRepoClient)
-    client.get_repo_name_from_base_dir.return_value = "test-project"
-    client.list_repos.return_value = [
-        {"metadata": {"name": "test-project"}, "repo_id": "api-repo-id"}
-    ]
+    client.list_repos.return_value = [{"metadata": {"name": repo_name}, "repo_id": "api-repo-id"}]
     client.delete_repo.return_value = True
     return client
 
 
-def test_cloud_clear_requires_confirm(mock_repo_client: MagicMock, tmp_path: Path) -> None:
+def test_cloud_clear_requires_confirm(tmp_path: Path) -> None:
     """Should return cancelled status if confirm is False."""
+    mock_repo_client = _create_mock_repo_client(tmp_path.name)
     result = cloud_clear_logic(mock_repo_client, str(tmp_path), confirm=False)
 
     assert result["status"] == "cancelled"
     mock_repo_client.delete_repo.assert_not_called()
 
 
-def test_cloud_clear_uses_sync_state(mock_repo_client: MagicMock, tmp_path: Path) -> None:
+def test_cloud_clear_uses_sync_state(tmp_path: Path) -> None:
     """Should use repo_id from sync state if available."""
+    mock_repo_client = _create_mock_repo_client(tmp_path.name)
     cached = SyncState(repo_id="state-repo-id", repo_head="abc", last_sync="", files={})
 
     with patch("relace_mcp.tools.repo.clear.load_sync_state", return_value=cached):
@@ -38,11 +35,13 @@ def test_cloud_clear_uses_sync_state(mock_repo_client: MagicMock, tmp_path: Path
             assert result["status"] == "deleted"
             assert result["repo_id"] == "state-repo-id"
             mock_repo_client.delete_repo.assert_called_with("state-repo-id", trace_id=ANY)
-            mock_clear_state.assert_called_with("test-project")
+            mock_clear_state.assert_called_with(tmp_path.name)
 
 
-def test_cloud_clear_searches_api_fallback(mock_repo_client: MagicMock, tmp_path: Path) -> None:
+def test_cloud_clear_searches_api_fallback(tmp_path: Path) -> None:
     """Should fallback to API search if sync state missing."""
+    mock_repo_client = _create_mock_repo_client(tmp_path.name)
+
     with patch("relace_mcp.tools.repo.clear.load_sync_state", return_value=None):
         with patch("relace_mcp.tools.repo.clear.clear_sync_state"):
             result = cloud_clear_logic(mock_repo_client, str(tmp_path), confirm=True)
@@ -53,8 +52,9 @@ def test_cloud_clear_searches_api_fallback(mock_repo_client: MagicMock, tmp_path
             mock_repo_client.delete_repo.assert_called_with("api-repo-id", trace_id=ANY)
 
 
-def test_cloud_clear_not_found(mock_repo_client: MagicMock, tmp_path: Path) -> None:
+def test_cloud_clear_not_found(tmp_path: Path) -> None:
     """Should handle repo not found scenario."""
+    mock_repo_client = _create_mock_repo_client(tmp_path.name)
     mock_repo_client.list_repos.return_value = []
 
     with patch("relace_mcp.tools.repo.clear.load_sync_state", return_value=None):
@@ -64,11 +64,12 @@ def test_cloud_clear_not_found(mock_repo_client: MagicMock, tmp_path: Path) -> N
             assert result["status"] == "not_found"
             mock_repo_client.delete_repo.assert_not_called()
             # Should still clear sync state just in case
-            mock_clear_state.assert_called_with("test-project")
+            mock_clear_state.assert_called_with(tmp_path.name)
 
 
-def test_cloud_clear_delete_failure(mock_repo_client: MagicMock, tmp_path: Path) -> None:
+def test_cloud_clear_delete_failure(tmp_path: Path) -> None:
     """Should handle delete failure."""
+    mock_repo_client = _create_mock_repo_client(tmp_path.name)
     cached = SyncState(repo_id="id", repo_head="", last_sync="")
     mock_repo_client.delete_repo.return_value = False
 

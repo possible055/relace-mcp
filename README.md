@@ -269,7 +269,7 @@ Common issues:
 - `FILE_NOT_WRITABLE` / `PERMISSION_ERROR`: Check file and directory write permissions.
 - `AUTH_ERROR`: Verify your `RELACE_API_KEY` is valid and not expired.
 - `RATE_LIMIT`: Too many requests; wait and retry later.
-- `TIMEOUT_ERROR` / `NETWORK_ERROR`: Check network connectivity; increase timeout via `RELACE_TIMEOUT_SECONDS`.
+- `TIMEOUT_ERROR` / `NETWORK_ERROR`: Check network connectivity; increase timeout via `APPLY_TIMEOUT_SECONDS`.
 
 > **Windows users:** The `bash` tool in `fast_search` is unavailable on Windows. Use WSL or rely on other exploration tools.
 

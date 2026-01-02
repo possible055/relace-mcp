@@ -24,7 +24,6 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `RELACE_BASE_DIR` | cwd | Restrict file access to this directory |
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
 | `RELACE_LOGGING` | `0` | Set to `1` to enable file logging |
-| `RELACE_TIMEOUT_SECONDS` | `60` | Default request timeout |
 | `RELACE_TEMPERATURE` | `1.0` | LLM sampling temperature (0.0-2.0) for fast_apply and fast_search |
 
 ### Fast Apply
@@ -36,8 +35,10 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `APPLY_MODEL` | `auto` | Override model name |
 | `APPLY_API_KEY` | — | API key for non-Relace providers |
 | `APPLY_PROMPT_FILE` | — | Override apply prompt YAML path |
+| `APPLY_TIMEOUT_SECONDS` | `60` | Request timeout |
+| `APPLY_POST_CHECK` | `0` | Post-merge validation (may increase failures) |
 
-> **Note:** `RELACE_APPLY_*` variants are deprecated but still supported with warnings.
+> **Note:** `RELACE_APPLY_*`, `RELACE_TIMEOUT_SECONDS`, `RELACE_EXPERIMENTAL_POST_CHECK` variants are deprecated but still supported with warnings.
 
 ### Fast Search
 
@@ -53,9 +54,9 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,find_symbol` | Tool allowlist (comma-separated) |
 | `SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls |
 | `SEARCH_TOOL_STRICT` | `1` | Include `strict` field in tool schemas |
-| `RELACE_LSP_TIMEOUT_SECONDS` | `15.0` | LSP startup/request timeout |
+| `SEARCH_LSP_TIMEOUT_SECONDS` | `15.0` | LSP startup/request timeout |
 
-> **Note:** `RELACE_SEARCH_*` variants are deprecated but still supported with warnings.
+> **Note:** `RELACE_SEARCH_*`, `RELACE_LSP_TIMEOUT_SECONDS` variants are deprecated but still supported with warnings.
 
 ### Cloud Sync
 
@@ -82,8 +83,9 @@ When using alternative providers, set the corresponding API key:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RELACE_EXPERIMENTAL_POST_CHECK` | `0` | Extra validation after `fast_apply` (may increase failures) |
 | `RELACE_EXPERIMENTAL_LOGGING` | — | Deprecated alias for `RELACE_LOGGING` |
+
+> **Note:** `RELACE_EXPERIMENTAL_POST_CHECK` has been renamed to `APPLY_POST_CHECK` and moved to Fast Apply section.
 
 ---
 

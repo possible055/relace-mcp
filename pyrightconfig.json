@@ -1,29 +1,36 @@
 {
-    "typeCheckingMode": "standard",
     "include": [
-        "src"
+        "src",
+        "tests"
     ],
     "exclude": [
-        "**/tests",
-        "**/test_*.py",
+        "**/__pycache__",
+        "**/node_modules",
         "**/.pytest_cache",
         "**/.ruff_cache",
+        "**/.venv",
         "**/build",
         "**/dist",
         "**/*.egg-info",
+        "**/.*",
         "docs",
         ".vscode",
         ".github"
     ],
-    "ignore": [
-        "**/__pycache__",
-        "**/node_modules"
+    "venvPath": ".",
+    "venv": ".venv",
+    "extraPaths": [
+        "src"
     ],
-    "pythonVersion": "3.12",
+    "typeCheckingMode": "standard",
+    "pythonVersion": "3.11",
+    "pythonPlatform": "Linux",
+    "reportMissingImports": "error",
     "reportMissingTypeStubs": "none",
-    "reportUnusedImport": "none",
-    "reportUnusedVariable": "none",
-    "reportUnusedParameter": "none",
-    "reportUnusedExpression": "none",
-    "reportDuplicateImport": "none"
+    "reportUnusedImport": "warning",
+    "reportUnusedVariable": "warning",
+    "reportUnusedParameter": "warning",
+    "reportUnusedFunction": "warning",
+    "reportUnusedClass": "warning",
+    "reportDuplicateImport": "error"
 }

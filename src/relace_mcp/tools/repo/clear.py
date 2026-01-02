@@ -1,5 +1,6 @@
 import logging
 import uuid
+from pathlib import Path
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
@@ -34,7 +35,13 @@ def cloud_clear_logic(
         }
 
     try:
-        repo_name = client.get_repo_name_from_base_dir(base_dir)
+        repo_name = Path(base_dir).name
+        if not repo_name:
+            return {
+                "status": "error",
+                "message": "Invalid base_dir: cannot derive repository name from root, current directory, or empty path.",
+                "repo_id": None,
+            }
 
         # 1. Try to get repo_id from local sync state (safest)
         repo_id = None

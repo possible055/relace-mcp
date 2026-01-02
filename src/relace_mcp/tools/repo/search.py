@@ -1,5 +1,6 @@
 import logging
 import uuid
+from pathlib import Path
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
@@ -40,7 +41,7 @@ def cloud_search_logic(
 
     try:
         # Get or create repo based on base_dir name
-        repo_name = client.get_repo_name_from_base_dir(base_dir)
+        repo_name = Path(base_dir).name
         repo_id = client.ensure_repo(repo_name, trace_id=trace_id)
 
         # Execute semantic retrieval

@@ -9,7 +9,7 @@ from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 
-from ....tools.apply.file_io import decode_text_best_effort, get_project_encoding
+from ....tools.apply.file_io import get_project_encoding, read_text_best_effort
 from ..schemas import GrepSearchParams
 from .constants import GREP_TIMEOUT_SECONDS, MAX_GREP_DEPTH, MAX_GREP_MATCHES
 
@@ -178,29 +178,6 @@ def _iter_searchable_files(
             yield filepath, rel_path
 
 
-def _read_file_with_encoding(filepath: Path) -> str | None:
-    """Read file content with project encoding support.
-
-    Args:
-        filepath: File path.
-
-    Returns:
-        File content as string, or None if read fails.
-    """
-    try:
-        raw = filepath.read_bytes()
-    except OSError:
-        return None
-
-    project_enc = get_project_encoding()
-    return decode_text_best_effort(
-        raw,
-        path=filepath,
-        preferred_encoding=project_enc,
-        errors="ignore",
-    )
-
-
 def _search_in_file(
     filepath: Path,
     pattern: re.Pattern[str],
@@ -221,7 +198,7 @@ def _search_in_file(
     if limit <= 0:
         return []
 
-    content = _read_file_with_encoding(filepath)
+    content = read_text_best_effort(filepath, errors="ignore")
     if content is None:
         return []
 

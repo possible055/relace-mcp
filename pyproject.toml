@@ -30,6 +30,7 @@ dependencies = [
     "httpx>=0.28.0",
     "openai>=1.0.0",
     "platformdirs>=4.0.0",
+    "psutil>=5.9.0",
     "python-dotenv>=1.0.0",
     "PyYAML>=6.0.0",
     "tenacity>=8.0.0",
@@ -51,6 +52,7 @@ dev = [
     "ruff>=0.1.0",
     "build>=1.0.0",
     "types-PyYAML>=6.0.0",
+    "bandit[toml]>=1.9.0",
 ]
 tools = [
     "textual>=0.50.0",
@@ -58,7 +60,7 @@ tools = [
 
 [project.scripts]
 relace-mcp = "relace_mcp.server:main"
-relace-dashboard = "relace_mcp.dashboard:main"
+relogs = "relace_mcp.dashboard:main"
 
 [tool.setuptools]
 include-package-data = true
@@ -79,7 +81,6 @@ python_version = "3.11"
 
 [[tool.mypy.overrides]]
 module = ["psutil"]
-ignore_missing_imports = true
 follow_untyped_imports = true
 
 [tool.pytest.ini_options]

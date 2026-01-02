@@ -1,7 +1,5 @@
-from .openai_backend import OPENAI_PROVIDER, RELACE_PROVIDER, OpenAIChatClient
+from .openai_backend import OpenAIChatClient
 
 __all__ = [
-    "OPENAI_PROVIDER",
-    "RELACE_PROVIDER",
     "OpenAIChatClient",
 ]
