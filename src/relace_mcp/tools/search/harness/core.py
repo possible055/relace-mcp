@@ -1,8 +1,10 @@
+import asyncio
 import importlib
 import logging
 import re
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from ....clients import SearchLLMClient
@@ -154,6 +156,47 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 "error": str(exc),
             }
 
+    async def run_async(self, query: str) -> dict[str, Any]:
+        """Execute one Fast Agentic Search asynchronously.
+
+        Note:
+            This method always returns a dict, never raises exceptions.
+            When errors occur, returns a partial report with error field.
+        """
+        trace_id = str(uuid.uuid4())[:8]
+        # Safe query truncation (avoid cutting in middle of multi-byte characters)
+        query_preview = query[:100] if len(query) <= 100 else query[:97] + "..."
+        logger.info("[%s] Starting Fast Agentic Search (async): %s", trace_id, query_preview)
+        log_search_start(trace_id, query)
+        start_time = time.perf_counter()
+
+        # Reset observed_files (used to accumulate explored files)
+        self._observed_files = {}
+
+        try:
+            result = await self._run_search_loop_async(query, trace_id)
+            total_ms = (time.perf_counter() - start_time) * 1000
+            log_search_complete(
+                trace_id,
+                result.get("turns_used", 0),
+                len(result.get("files", {})),
+                result.get("partial", False),
+                total_ms,
+            )
+            return result
+        except Exception as exc:
+            logger.error("[%s] Search failed with error: %s", trace_id, exc)
+            log_search_error(trace_id, str(exc))
+            merged_files = self._merge_observed_ranges()
+            return {
+                "query": query,
+                "explanation": f"[ERROR] Search failed: {exc}",
+                "files": merged_files,
+                "turns_used": 0,
+                "partial": True,
+                "error": str(exc),
+            }
+
     def _run_search_loop(self, query: str, trace_id: str) -> dict[str, Any]:
         """Internal method to execute the search loop."""
         messages: list[dict[str, Any]] = [
@@ -269,6 +312,151 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                     "files": self._normalize_report_files(report_back_result.get("files", {})),
                     "turns_used": turn + 1,
                 }
+
+        # Exceeded limit, return partial report (don't raise)
+        logger.warning(
+            "[%s] Search did not complete within %d turns, returning partial results",
+            trace_id,
+            _harness_mod.SEARCH_MAX_TURNS,
+        )
+        merged_files = self._merge_observed_ranges()
+        return {
+            "query": query,
+            "explanation": (
+                f"[PARTIAL] Search did not complete within {_harness_mod.SEARCH_MAX_TURNS} turns. "
+                f"Returning {len(merged_files)} observed files based on exploration."
+            ),
+            "files": merged_files,
+            "turns_used": _harness_mod.SEARCH_MAX_TURNS,
+            "partial": True,
+        }
+
+    async def _run_search_loop_async(self, query: str, trace_id: str) -> dict[str, Any]:
+        """Internal method to execute the search loop asynchronously."""
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": self._system_prompt},
+            {"role": "user", "content": self._user_prompt_template.format(query=query)},
+        ]
+
+        loop = asyncio.get_running_loop()
+        # Use an explicit ThreadPoolExecutor for blocking tool execution.
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            for turn in range(_harness_mod.SEARCH_MAX_TURNS):
+                logger.debug(
+                    "[%s] Turn %d/%d",
+                    trace_id,
+                    turn + 1,
+                    _harness_mod.SEARCH_MAX_TURNS,
+                )
+
+                # Inject unified turn hint (from turn 2 onwards)
+                if turn > 0:
+                    chars_for_hint = estimate_context_size(messages)
+                    turn_hint = self._get_turn_hint(
+                        turn, _harness_mod.SEARCH_MAX_TURNS, chars_for_hint
+                    )
+                    messages.append({"role": "user", "content": turn_hint})
+                    logger.debug(
+                        "[%s] Injected turn hint at turn %d (chars: %d/%d)",
+                        trace_id,
+                        turn + 1,
+                        chars_for_hint,
+                        MAX_CONTEXT_BUDGET_CHARS,
+                    )
+
+                # Check context size AFTER all user messages are added
+                ctx_size = estimate_context_size(messages)
+
+                if ctx_size > MAX_TOTAL_CONTEXT_CHARS:
+                    logger.warning(
+                        "[%s] Context size %d exceeds limit %d, truncating old messages",
+                        trace_id,
+                        ctx_size,
+                        MAX_TOTAL_CONTEXT_CHARS,
+                    )
+                    # Keep system + user + most recent 6 messages
+                    messages = self._truncate_messages(messages)
+
+                # Ensure tool_calls and tool results are paired correctly
+                self._repair_tool_call_integrity(messages, trace_id)
+
+                # Track LLM API latency
+                llm_start = time.perf_counter()
+                response = await self._client.chat_async(
+                    messages, tools=get_tool_schemas(self._lsp_languages), trace_id=trace_id
+                )
+                llm_latency_ms = (time.perf_counter() - llm_start) * 1000
+
+                # Parse response
+                choices = response.get("choices", [])
+                if not choices:
+                    name = self._client._provider_config.display_name
+                    raise RuntimeError(f"{name} Search API returned empty choices")
+
+                message = choices[0].get("message", {})
+                # Defense: some providers/mocks may lack role, avoid breaking block/repair logic
+                message.setdefault("role", "assistant")
+                tool_calls = message.get("tool_calls") or []
+
+                # Extract usage for token tracking
+                usage = response.get("usage")
+
+                # Log turn state after getting response (includes LLM latency and token usage)
+                log_search_turn(
+                    trace_id,
+                    turn + 1,
+                    _harness_mod.SEARCH_MAX_TURNS,
+                    ctx_size,
+                    len(tool_calls),
+                    llm_latency_ms=llm_latency_ms,
+                    usage=usage,
+                )
+
+                # If no tool_calls, check for content (model may respond directly)
+                if not tool_calls:
+                    content = message.get("content") or ""
+                    content_preview = (
+                        content[:200] if len(content) <= 200 else content[:197] + "..."
+                    )
+                    logger.warning(
+                        "[%s] No tool calls in turn %d, content: %s",
+                        trace_id,
+                        turn + 1,
+                        content_preview,
+                    )
+                    # Add assistant message to context and continue
+                    messages.append({"role": "assistant", "content": content})
+                    continue
+
+                # Add assistant message (with tool_calls) to messages
+                messages.append(self._sanitize_assistant_message(message))
+
+                # Execute tool calls off the event loop to avoid blocking.
+                tool_results, report_back_result = await loop.run_in_executor(
+                    executor,
+                    self._execute_tools_parallel,
+                    tool_calls,
+                    trace_id,
+                    turn + 1,
+                )
+
+                # Add all tool results to messages (per OpenAI protocol)
+                self._append_tool_results_to_messages(messages, tool_results)
+
+                # After processing all tool calls, if report_back was called, return
+                if report_back_result is not None:
+                    logger.info(
+                        "[%s] Search completed in %d turns, found %d files",
+                        trace_id,
+                        turn + 1,
+                        len(report_back_result.get("files", {})),
+                    )
+                    return {
+                        "query": query,
+                        "explanation": report_back_result.get("explanation", ""),
+                        "files": self._normalize_report_files(report_back_result.get("files", {})),
+                        "turns_used": turn + 1,
+                    }
 
         # Exceeded limit, return partial report (don't raise)
         logger.warning(
