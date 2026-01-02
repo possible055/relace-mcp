@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from ....config.settings import MAX_FILE_SIZE_BYTES
-from ....tools.apply.file_io import decode_text_best_effort, get_project_encoding
+from ....tools.apply.file_io import read_text_best_effort
 from ....utils import validate_file_path
 from .paths import map_repo_path
 
@@ -26,25 +26,6 @@ def _validate_file_for_view(resolved: Path, path: str) -> str | None:
         return f"Error: File too large ({file_size} bytes). Maximum: {MAX_FILE_SIZE_BYTES} bytes"
 
     return None
-
-
-def _read_file_with_encoding(resolved: Path) -> str | None:
-    """Read file content with project encoding support.
-
-    Args:
-        resolved: Resolved file path.
-
-    Returns:
-        File content as string, or None if file is likely binary.
-    """
-    raw = resolved.read_bytes()
-    project_enc = get_project_encoding()
-    return decode_text_best_effort(
-        raw,
-        path=resolved,
-        preferred_encoding=project_enc,
-        errors="replace",
-    )
 
 
 def _parse_view_range(view_range: list[int], total_lines: int) -> tuple[int, int]:
@@ -99,7 +80,7 @@ def view_file_handler(path: str, view_range: list[int], base_dir: str) -> str:
         if error:
             return error
 
-        content = _read_file_with_encoding(resolved)
+        content = read_text_best_effort(resolved)
         if content is None:
             return "Error: File appears to be binary and cannot be viewed as text."
         lines = content.splitlines()
