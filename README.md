@@ -2,7 +2,7 @@
   <strong>English</strong> | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-# Relace MCP Server
+# Unofficial Relace MCP Server
 
 [![PyPI](https://img.shields.io/pypi/v/relace-mcp.svg)](https://pypi.org/project/relace-mcp/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -10,6 +10,7 @@
 ![100% AI-Generated](https://img.shields.io/badge/100%25%20AI-Generated-ff69b4.svg)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/possible055/relace-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/possible055/relace-mcp)
 
+> **Unofficial** — Personal project, not affiliated with Relace.
 > **Built with AI** — Developed entirely with AI assistance (Antigravity, Codex, Cursor, Github Copilot, Windsurf).
 
 MCP server providing AI-powered code editing and intelligent codebase exploration tools.

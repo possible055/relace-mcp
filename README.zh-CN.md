@@ -2,7 +2,7 @@
   <a href="README.md">English</a> | <strong>简体中文</strong>
 </p>
 
-# Relace MCP 服务器
+# Unofficial Relace MCP 服务器
 
 [![PyPI](https://img.shields.io/pypi/v/relace-mcp.svg)](https://pypi.org/project/relace-mcp/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -10,6 +10,7 @@
 ![100% AI生成](https://img.shields.io/badge/100%25%20AI-Generated-ff69b4.svg)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/possible055/relace-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/possible055/relace-mcp)
 
+> **非官方** — 个人项目，与 Relace 无关联。
 > **AI 构建** — 完全由 AI 辅助开发（Antigravity、Codex、Cursor、Github Copilot、Windsurf）。
 
 提供 AI 驱动代码编辑和智能代码库探索工具的 MCP 服务器。
@@ -17,7 +18,7 @@
 ---
 
 <table>
-<tr><td width="50%">
+<tr><td width="45%">
 
 **Without** — AI 在陌生代码库中举步维艰
 
@@ -26,7 +27,7 @@
 - 完整文件重写浪费 tokens
 - 行号偏移破坏代码
 
-</td><td width="50%">
+</td><td width="55%">
 
 **With `fast_search` + `fast_apply`**
 
