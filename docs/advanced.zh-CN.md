@@ -24,7 +24,6 @@
 | `RELACE_BASE_DIR` | 当前目录 | 限制文件访问范围 |
 | `RELACE_DEFAULT_ENCODING` | — | 强制项目文件编码（如 `gbk`、`big5`） |
 | `RELACE_LOGGING` | `0` | 设为 `1` 启用文件日志 |
-| `RELACE_TEMPERATURE` | `1.0` | LLM 采样温度（0.0-2.0），用于 fast_apply 和 fast_search |
 
 ### Fast Apply
 
