@@ -6,7 +6,7 @@ Evaluates `fast_search` performance using [MULocBench](https://github.com/MULocB
 
 ## 1. Setup
 
-**Prerequisites**: Python 3.10+, `git`, network access
+**Prerequisites**: Python 3.11+, `git`, network access
 
 **Environment** (create `.env` in project root):
 ```bash
