@@ -1,5 +1,4 @@
-"""Tests for RootsMiddleware and roots cache invalidation."""
-
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -140,7 +139,8 @@ class TestRootsCacheInvalidation:
             "session-2": ("/test/path/2", "MCP Root (2)"),
         }
 
-        base_dir_module.invalidate_roots_cache(CtxNoRequest())
+        ctx: Any = CtxNoRequest()
+        base_dir_module.invalidate_roots_cache(ctx)
         assert base_dir_module._roots_cache == {"session-2": ("/test/path/2", "MCP Root (2)")}
 
 

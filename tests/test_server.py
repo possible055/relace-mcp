@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastmcp import Client
+from mcp.types import TextContent
 
 from relace_mcp.clients.apply import ApplyResponse
 from relace_mcp.config import RelaceConfig
@@ -136,7 +137,10 @@ class TestServerToolExecution:
             )
 
             assert result.isError is False
-            assert "INVALID_INPUT" in result.content[0].text
+            assert result.content
+            first = result.content[0]
+            assert isinstance(first, TextContent)
+            assert "INVALID_INPUT" in first.text
 
 
 class TestServerIntegration:

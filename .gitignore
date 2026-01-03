@@ -27,3 +27,11 @@ AGENTS.md
 # Logs / Env
 *.log
 .env
+
+# Benchmark artifacts
+benchmark/repos/*
+!benchmark/repos/.gitkeep
+benchmark/results/*
+!benchmark/results/.gitkeep
+benchmark/data/*
+!benchmark/data/.gitkeep
