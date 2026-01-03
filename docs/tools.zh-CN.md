@@ -10,7 +10,7 @@
 
 | 参数 | 必需 | 描述 |
 |------|------|------|
-| `path` | ✅ | `RELACE_BASE_DIR` 内的绝对路径 |
+| `path` | ✅ | `MCP_BASE_DIR` 内的路径（绝对或相对） |
 | `edit_snippet` | ✅ | 带有缩写占位符的代码 |
 | `instruction` | ❌ | 消歧提示 |
 
@@ -57,7 +57,7 @@
 
 ## `cloud_sync`
 
-将本地代码库同步到 Relace Cloud 以进行语义搜索。将 `RELACE_BASE_DIR` 中的源文件上传到 Relace Repos。
+将本地代码库同步到 Relace Cloud 以进行语义搜索。将 `MCP_BASE_DIR` 中的源文件上传到 Relace Repos。
 
 ### 参数
 

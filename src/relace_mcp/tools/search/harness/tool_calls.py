@@ -271,7 +271,7 @@ class ToolCallsMixin:
 
         base_dir = self._config.base_dir
         if base_dir is None:
-            return "Error: base_dir is not configured. Set RELACE_BASE_DIR or ensure MCP Roots are available."
+            return "Error: base_dir is not configured. Set MCP_BASE_DIR or ensure MCP Roots are available."
 
         if name == "view_file":
             path = args.get("path", "")

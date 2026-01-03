@@ -25,7 +25,7 @@ class TestBuildServer:
     ) -> None:
         """Should build server from environment variables."""
         monkeypatch.setenv("RELACE_API_KEY", "test-key")
-        monkeypatch.setenv("RELACE_BASE_DIR", str(tmp_path))
+        monkeypatch.setenv("MCP_BASE_DIR", str(tmp_path))
 
         server = build_server()
         assert server is not None
@@ -236,7 +236,7 @@ class TestMain:
         from relace_mcp.server import main
 
         monkeypatch.setenv("RELACE_API_KEY", "rlc-test")
-        monkeypatch.setenv("RELACE_BASE_DIR", str(tmp_path))
+        monkeypatch.setenv("MCP_BASE_DIR", str(tmp_path))
         monkeypatch.setattr(sys, "argv", ["relace-mcp"])
 
         with patch("relace_mcp.server.build_server") as mock_build:
@@ -256,7 +256,7 @@ class TestMain:
         from relace_mcp.server import main
 
         monkeypatch.setenv("RELACE_API_KEY", "rlc-test")
-        monkeypatch.setenv("RELACE_BASE_DIR", str(tmp_path))
+        monkeypatch.setenv("MCP_BASE_DIR", str(tmp_path))
         monkeypatch.setattr(
             sys,
             "argv",
@@ -295,7 +295,7 @@ class TestMain:
         from relace_mcp.server import main
 
         monkeypatch.setenv("RELACE_API_KEY", "rlc-test")
-        monkeypatch.setenv("RELACE_BASE_DIR", str(tmp_path))
+        monkeypatch.setenv("MCP_BASE_DIR", str(tmp_path))
         monkeypatch.setattr(sys, "argv", ["relace-mcp", "-t", "streamable-http", "-p", "8080"])
 
         with patch("relace_mcp.server.build_server") as mock_build:
@@ -320,7 +320,7 @@ class TestMain:
         from relace_mcp.server import main
 
         monkeypatch.setenv("RELACE_API_KEY", "rlc-test")
-        monkeypatch.setenv("RELACE_BASE_DIR", str(tmp_path))
+        monkeypatch.setenv("MCP_BASE_DIR", str(tmp_path))
         monkeypatch.setattr(sys, "argv", ["relace-mcp", "-t", "invalid"])
 
         with pytest.raises(SystemExit) as exc_info:

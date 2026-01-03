@@ -126,7 +126,7 @@ def mock_backend() -> AsyncMock:
 
 @pytest.fixture
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    for var in ["RELACE_API_KEY", "RELACE_BASE_DIR"]:
+    for var in ["RELACE_API_KEY", "MCP_BASE_DIR"]:
         monkeypatch.delenv(var, raising=False)
 
 

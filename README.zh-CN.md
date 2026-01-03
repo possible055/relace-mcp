@@ -11,6 +11,7 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/possible055/relace-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/possible055/relace-mcp)
 
 > **非官方** — 个人项目，与 Relace 无关联。
+>
 > **AI 构建** — 完全由 AI 辅助开发（Antigravity、Codex、Cursor、Github Copilot、Windsurf）。
 
 提供 AI 驱动代码编辑和智能代码库探索工具的 MCP 服务器。
@@ -49,7 +50,7 @@
       "args": ["tool", "run", "relace-mcp"],
       "env": {
         "RELACE_API_KEY": "rlc-your-api-key",
-        "RELACE_BASE_DIR": "/absolute/path/to/your/project"
+        "MCP_BASE_DIR": "/absolute/path/to/your/project"
       }
     }
   }
@@ -64,7 +65,7 @@
 ```bash
 claude mcp add relace \
   --env RELACE_API_KEY=rlc-your-api-key \
-  --env RELACE_BASE_DIR=/absolute/path/to/your/project \
+  --env MCP_BASE_DIR=/absolute/path/to/your/project \
   -- uv tool run relace-mcp
 ```
 
@@ -83,7 +84,7 @@ claude mcp add relace \
       "args": ["tool", "run", "relace-mcp"],
       "env": {
         "RELACE_API_KEY": "rlc-your-api-key",
-        "RELACE_BASE_DIR": "/absolute/path/to/your/project"
+        "MCP_BASE_DIR": "/absolute/path/to/your/project"
       }
     }
   }
@@ -107,7 +108,7 @@ claude mcp add relace \
         "args": ["tool", "run", "relace-mcp"],
         "env": {
           "RELACE_API_KEY": "rlc-your-api-key",
-          "RELACE_BASE_DIR": "${workspaceFolder}"
+          "MCP_BASE_DIR": "${workspaceFolder}"
         }
       }
     }
@@ -129,7 +130,7 @@ args = ["tool", "run", "relace-mcp"]
 
 [mcp_servers.relace.env]
 RELACE_API_KEY = "rlc-your-api-key"
-RELACE_BASE_DIR = "/absolute/path/to/your/project"
+MCP_BASE_DIR = "/absolute/path/to/your/project"
 ```
 
 </details>
@@ -139,7 +140,7 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 | 变量 | 必需 | 说明 |
 |------|------|------|
 | `RELACE_API_KEY` | ✅ | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥 |
-| `RELACE_BASE_DIR` | ❌ | 项目根目录（自动检测：MCP Roots → Git → CWD） |
+| `MCP_BASE_DIR` | ❌ | 项目根目录（自动检测：MCP Roots → Git → CWD） |
 | `RELACE_DOTENV_PATH` | ❌ | `.env` 文件路径，用于集中配置 |
 | `RELACE_CLOUD_TOOLS` | ❌ | 设为 `1` 启用云端工具 |
 | `RELACE_LOGGING` | ❌ | 设为 `1` 启用文件日志 |

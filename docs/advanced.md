@@ -5,6 +5,7 @@ This document covers advanced configuration options for power users and develope
 ## Table of Contents
 
 - [Environment Variables Reference](#environment-variables-reference)
+- [Using a .env File](#using-a-env-file)
 - [Sync Modes](#sync-modes)
 - [Logging](#logging)
 - [Alternative Providers](#alternative-providers)
@@ -21,9 +22,11 @@ All environment variables can be set in your shell or in the `env` section of yo
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `RELACE_API_KEY` | — | **Required.** Your Relace API key |
-| `RELACE_BASE_DIR` | cwd | Restrict file access to this directory |
+| `MCP_BASE_DIR` | cwd | Restrict file access to this directory |
+| `RELACE_DOTENV_PATH` | — | Path to a `.env` file to load at startup |
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
-| `RELACE_LOGGING` | `0` | Set to `1` to enable file logging |
+| `MCP_LOGGING` | `0` | Set to `1` to enable file logging (**preferred**; `RELACE_LOGGING` is deprecated) |
+| `RELACE_LOGGING` | `0` | Deprecated alias for `MCP_LOGGING` |
 
 ### Fast Apply
 
@@ -35,6 +38,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `APPLY_API_KEY` | — | API key for non-Relace providers |
 | `APPLY_PROMPT_FILE` | — | Override apply prompt YAML path |
 | `APPLY_TIMEOUT_SECONDS` | `60` | Request timeout |
+| `APPLY_TEMPERATURE` | `0.0` | LLM sampling temperature (0.0-2.0) |
 | `APPLY_POST_CHECK` | `0` | Post-merge validation (may increase failures) |
 
 > **Note:** `RELACE_APPLY_*`, `RELACE_TIMEOUT_SECONDS`, `RELACE_EXPERIMENTAL_POST_CHECK` variants are deprecated but still supported with warnings.
@@ -49,6 +53,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `SEARCH_API_KEY` | — | API key for non-Relace providers |
 | `SEARCH_PROMPT_FILE` | — | Override search prompt YAML path |
 | `SEARCH_TIMEOUT_SECONDS` | `120` | Request timeout |
+| `SEARCH_TEMPERATURE` | `1.0` | LLM sampling temperature (0.0-2.0) |
 | `SEARCH_MAX_TURNS` | `6` | Maximum agent loop turns |
 | `SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,find_symbol` | Tool allowlist (comma-separated) |
 | `SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls |
@@ -82,9 +87,45 @@ When using alternative providers, set the corresponding API key:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RELACE_EXPERIMENTAL_LOGGING` | — | Deprecated alias for `RELACE_LOGGING` |
+| `RELACE_EXPERIMENTAL_LOGGING` | — | Deprecated alias for `MCP_LOGGING` |
 
 > **Note:** `RELACE_EXPERIMENTAL_POST_CHECK` has been renamed to `APPLY_POST_CHECK` and moved to Fast Apply section.
+
+## Using a .env File
+
+If you prefer to keep configuration in one place, point the server to a centralized `.env` file.
+
+Example `.env`:
+
+```bash
+RELACE_API_KEY=rlc-your-api-key
+
+# Optional provider overrides
+SEARCH_PROVIDER=openai
+SEARCH_MODEL=gpt-4o
+SEARCH_API_KEY=sk-xxx
+
+# Logging
+MCP_LOGGING=1
+```
+
+Then set `RELACE_DOTENV_PATH` in your MCP client configuration:
+
+```json
+{
+  "mcpServers": {
+    "relace": {
+      "command": "uv",
+      "args": ["tool", "run", "relace-mcp"],
+      "env": {
+        "RELACE_DOTENV_PATH": "~/.config/relace/.env"
+      }
+    }
+  }
+}
+```
+
+Environment variables set directly in your MCP client config take precedence over values in the `.env` file.
 
 ---
 
@@ -104,7 +145,7 @@ When git HEAD changes since last sync (e.g., branch switch, rebase), Safe Full m
 
 ## Logging
 
-File logging is opt-in. Enable with `RELACE_LOGGING=1`.
+File logging is opt-in. Enable with `MCP_LOGGING=1` (`RELACE_LOGGING=1` still works but is deprecated).
 
 ### Log Location
 

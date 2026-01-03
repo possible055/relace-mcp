@@ -70,7 +70,7 @@ def _resolve_path(
         if not os.path.isabs(file_path):
             return errors.recoverable_error(
                 "INVALID_PATH",
-                "Relative paths require RELACE_BASE_DIR to be set. Use absolute path or set RELACE_BASE_DIR.",
+                "Relative paths require MCP_BASE_DIR to be set. Use absolute path or set MCP_BASE_DIR.",
                 file_path,
                 ctx.instruction,
                 ctx.trace_id,

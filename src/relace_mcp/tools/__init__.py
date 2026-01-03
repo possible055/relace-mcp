@@ -59,7 +59,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         To create a new file, simply specify the content in edit_snippet.
         """
         # Resolve base_dir dynamically (aligns with other tools).
-        # This allows relative paths when RELACE_BASE_DIR is not set but MCP Roots are available,
+        # This allows relative paths when MCP_BASE_DIR is not set but MCP Roots are available,
         # and provides a consistent security boundary for absolute paths.
         base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
         return await apply_file_logic(
@@ -221,8 +221,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
     # === MCP Resources ===
 
-    @mcp.resource("relace://tool_list", mime_type="application/json")
-    def tool_list() -> list[dict[str, Any]]:
+    @mcp.resource("relace://tools_list", mime_type="application/json")
+    def tools_list() -> list[dict[str, Any]]:
         """List all available tools with their status."""
         tools = [
             {
@@ -288,7 +288,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 return {
                     "synced": False,
                     "error": "base_dir not configured",
-                    "message": "Set RELACE_BASE_DIR or use MCP Roots to enable cloud status",
+                    "message": "Set MCP_BASE_DIR or use MCP Roots to enable cloud status",
                 }
 
             repo_name = Path(config.base_dir).name
