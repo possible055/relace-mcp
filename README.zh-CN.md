@@ -2,7 +2,7 @@
   <a href="README.md">English</a> | <strong>简体中文</strong>
 </p>
 
-# 非官方 Relace MCP 服务器
+# Relace MCP 服务器
 
 [![PyPI](https://img.shields.io/pypi/v/relace-mcp.svg)](https://pypi.org/project/relace-mcp/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -10,13 +10,35 @@
 ![100% AI生成](https://img.shields.io/badge/100%25%20AI-Generated-ff69b4.svg)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/possible055/relace-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/possible055/relace-mcp)
 
-> **非官方** — 个人项目，与 Relace 无关联。
->
 > **AI 构建** — 完全由 AI 辅助开发（Antigravity、Codex、Cursor、Github Copilot、Windsurf）。
 
-[Relace](https://www.relace.ai/) 的 MCP 服务器 — AI 驱动的即时代码合并和智能代码库搜索。
+提供 AI 驱动代码编辑和智能代码库探索工具的 MCP 服务器。
 
-**`fast_apply`** 使用推测性编辑以 10,000+ tokens/秒的速度合并代码变更 — 无需行号或完整文件重写。**`fast_search`** 运行智能循环，使用自然语言探索代码库，返回与查询相关的文件和行范围。
+---
+
+<table>
+<tr><td width="50%">
+
+**Without** — AI 在陌生代码库中举步维艰
+
+- 手动 grep 搜索，漏掉相关文件
+- 改一个文件，破坏另一个文件的导入
+- 完整文件重写浪费 tokens
+- 行号偏移破坏代码
+
+</td><td width="50%">
+
+**With `fast_search` + `fast_apply`**
+
+- 自然提问：*"认证怎么实现？"* → 精确位置
+- 追踪导入、调用链、所有相关文件
+- 描述变更即可，无需行号
+- 10,000+ tokens/秒 即时合并
+
+</td></tr>
+</table>
+
+---
 
 ## 功能特性
 

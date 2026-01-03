@@ -1,3 +1,5 @@
+# pyright: reportUnusedFunction=false
+# Decorator-registered functions (@mcp.tool, @mcp.resource) are accessed by the framework
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -80,9 +82,9 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         }
     )
     async def fast_search(query: str, ctx: Context) -> dict[str, Any]:
-        """Run Fast Agentic Search over the configured base_dir.
+        """Run Agentic Codebase Search over the configured base_dir.
 
-        Use this tool to quickly explore and understand the codebase.
+        Use this tool to explore and understand the codebase.
         The search agent will examine files, search for patterns, and report
         back with relevant files and line ranges for the given query.
 
@@ -94,7 +96,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         need to be modified and how they relate to each other.
         """
         # Resolve base_dir dynamically from MCP Roots if not configured
-        base_dir, source = await resolve_base_dir(config.base_dir, ctx)
+        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
 
         # Get cached LSP languages (auto-detects on first call per base_dir)
         from ..lsp.languages import get_lsp_languages

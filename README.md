@@ -2,7 +2,7 @@
   <strong>English</strong> | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-# Unofficial Relace MCP Server
+# Relace MCP Server
 
 [![PyPI](https://img.shields.io/pypi/v/relace-mcp.svg)](https://pypi.org/project/relace-mcp/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -10,13 +10,35 @@
 ![100% AI-Generated](https://img.shields.io/badge/100%25%20AI-Generated-ff69b4.svg)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/possible055/relace-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/possible055/relace-mcp)
 
-> **Unofficial** — Personal project, not affiliated with Relace.
->
 > **Built with AI** — Developed entirely with AI assistance (Antigravity, Codex, Cursor, Github Copilot, Windsurf).
 
-MCP server for [Relace](https://www.relace.ai/) — AI-powered instant code merging and agentic codebase search.
+MCP server providing AI-powered code editing and intelligent codebase exploration tools.
 
-**`fast_apply`** uses speculative edits to merge code changes at 10,000+ tokens/sec — no line numbers or full-file rewrites needed. **`fast_search`** runs an agentic loop that explores your codebase using natural language, returning relevant files and line ranges for any query.
+---
+
+<table>
+<tr><td width="50%">
+
+**Without** — AI struggles with unfamiliar codebases
+
+- Manual grep hunting, misses related files
+- Edits one file, breaks imports in another
+- Full file rewrites burn tokens
+- Line number errors corrupt code
+
+</td><td width="50%">
+
+**With `fast_search` + `fast_apply`**
+
+- Ask naturally: *"How is auth done?"* → precise locations
+- Traces imports, call chains, all related files
+- Describe the change, no line numbers needed
+- 10,000+ tokens/sec instant merging
+
+</td></tr>
+</table>
+
+---
 
 ## Features
 
