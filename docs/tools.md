@@ -32,7 +32,7 @@ UDiff of changes, or confirmation for new files.
 
 ## `fast_search`
 
-Search the codebase and return relevant files and line ranges.
+Search the codebase and return relevant files and line ranges. Uses an agentic loop to autonomously explore the codebase.
 
 ### Parameters
 

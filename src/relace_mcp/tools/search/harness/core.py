@@ -163,7 +163,16 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             When errors occur, returns a partial report with error field.
         """
         trace_id = str(uuid.uuid4())[:8]
-        logger.info("[%s] Starting Fast Agentic Search async (query_len=%d)", trace_id, len(query))
+        # Safe query truncation (avoid cutting in middle of multi-byte characters)
+        query_preview = query[:100] if len(query) <= 100 else query[:97] + "..."
+        # Sanitize preview for log injection safety (remove newlines and control chars)
+        query_preview = query_preview.replace("\n", " ").replace("\r", " ")
+        logger.info(
+            "[%s] Starting Fast Agentic Search async (query_len=%d, preview=%s)",
+            trace_id,
+            len(query),
+            query_preview,
+        )
         log_search_start(trace_id, query)
         start_time = time.perf_counter()
 
