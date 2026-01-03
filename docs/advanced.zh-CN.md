@@ -87,6 +87,43 @@
 
 > **注意：** `RELACE_EXPERIMENTAL_POST_CHECK` 已重命名为 `APPLY_POST_CHECK` 并移至 Fast Apply 部分。
 
+### 使用 .env 文件
+
+可以使用集中的 `.env` 文件代替在 MCP 配置中设置多个环境变量：
+
+```bash
+# ~/.config/relace/.env
+RELACE_API_KEY=rlc-your-api-key
+
+# 自定义搜索模型（可选）
+SEARCH_PROVIDER=openai
+SEARCH_ENDPOINT=https://api.openai.com/v1
+SEARCH_MODEL=gpt-4o
+SEARCH_API_KEY=sk-xxx
+
+# 其他设置
+RELACE_LOGGING=1
+SEARCH_MAX_TURNS=6
+```
+
+然后在 MCP 配置中指向该文件：
+
+```json
+{
+  "mcpServers": {
+    "relace": {
+      "command": "uv",
+      "args": ["tool", "run", "relace-mcp"],
+      "env": {
+        "RELACE_DOTENV_PATH": "~/.config/relace/.env"
+      }
+    }
+  }
+}
+```
+
+> **注意：** 直接在 `env` 中设置的变量优先于 `.env` 文件中的变量。
+
 ---
 
 ## 同步模式

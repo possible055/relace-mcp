@@ -19,7 +19,7 @@ uv add relace-mcp --extra tools
 Launch the dashboard from your terminal:
 
 ```bash
-relace-dashboard
+relogs
 ```
 
 Or via Python module:
