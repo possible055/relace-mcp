@@ -1,4 +1,3 @@
-from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
@@ -113,18 +112,6 @@ def _match_paths(
 ) -> tuple[dict[str, str], set[str], set[str]]:
     exact = ground_truth_paths & returned_paths
     gt_to_ret: dict[str, str] = {path: path for path in exact}
-
-    unmatched_gt = ground_truth_paths - exact
-    unmatched_ret = returned_paths - exact
-
-    gt_counts = Counter(Path(p).name for p in unmatched_gt)
-    ret_counts = Counter(Path(p).name for p in unmatched_ret)
-    gt_unique = {Path(p).name: p for p in unmatched_gt if gt_counts[Path(p).name] == 1}
-    ret_unique = {Path(p).name: p for p in unmatched_ret if ret_counts[Path(p).name] == 1}
-
-    for basename in gt_unique.keys() & ret_unique.keys():
-        gt_to_ret[gt_unique[basename]] = ret_unique[basename]
-
     matched_gt = set(gt_to_ret.keys())
     matched_ret = set(gt_to_ret.values())
     return gt_to_ret, matched_gt, matched_ret
@@ -151,6 +138,8 @@ def compute_file_recall(
 
     normalized_returned = _normalize_returned_files(returned_files, repo_root=repo_root)
     normalized_gt = _normalize_ground_truth_files(ground_truth, repo_root=repo_root)
+    if not normalized_gt:
+        return 1.0
     _, matched_gt, _ = _match_paths(set(normalized_gt), set(normalized_returned))
     return len(matched_gt) / len(normalized_gt)
 
@@ -174,6 +163,8 @@ def compute_file_precision(
         return 0.0
 
     normalized_returned = _normalize_returned_files(returned_files, repo_root=repo_root)
+    if not normalized_returned:
+        return 0.0
     normalized_gt = _normalize_ground_truth_files(ground_truth, repo_root=repo_root)
     _, _, matched_ret = _match_paths(set(normalized_gt), set(normalized_returned))
     return len(matched_ret) / len(normalized_returned)
@@ -228,7 +219,8 @@ def compute_line_precision(
 
     Line Precision = Σ(Returned_lines ∩ GT_lines) / Σ(Returned_lines)
 
-    Only considers files that exist in both returned and GT.
+    Counts all returned lines across all returned files; files not in ground truth
+    contribute 0 to the intersection (i.e., they reduce precision).
 
     Args:
         returned_files: Files returned by fast_search (path -> [[start, end], ...]).
@@ -311,3 +303,94 @@ def compute_line_precision_matched(
         correct_lines += _intersection_length(merged_ret, merged_gt)
 
     return correct_lines / total_matched_lines if total_matched_lines else 0.0
+
+
+def compute_line_iou_matched(
+    returned_files: dict[str, list[list[int]]],
+    ground_truth: dict[str, list[tuple[int, int]]],
+    *,
+    repo_root: Path | None = None,
+) -> float:
+    """Compute line IoU across matched files only.
+
+    IoU = Σ(Intersection) / Σ(Union), where Union = GT + Returned - Intersection.
+    This ignores unmatched files (file precision/recall covers that separately).
+    """
+    if not returned_files or not ground_truth:
+        return 0.0
+
+    normalized_returned = _normalize_returned_files(returned_files, repo_root=repo_root)
+    normalized_gt = _normalize_ground_truth_files(ground_truth, repo_root=repo_root)
+    gt_to_ret, _, _ = _match_paths(set(normalized_gt), set(normalized_returned))
+
+    intersection = 0
+    union = 0
+
+    for gt_path, gt_ranges in normalized_gt.items():
+        ret_path = gt_to_ret.get(gt_path)
+        if not ret_path:
+            continue
+
+        merged_gt = _merge_ranges(gt_ranges)
+        merged_ret = _normalize_line_ranges(normalized_returned.get(ret_path, []))
+
+        gt_len = sum(end - start + 1 for start, end in merged_gt)
+        ret_len = sum(end - start + 1 for start, end in merged_ret)
+        inter_len = _intersection_length(merged_gt, merged_ret)
+        intersection += inter_len
+        union += gt_len + ret_len - inter_len
+
+    return intersection / union if union else 0.0
+
+
+def compute_function_hits(
+    returned_files: dict[str, list[list[int]]],
+    function_targets: Sequence[tuple[str, Sequence[tuple[int, int]]]],
+    *,
+    repo_root: Path | None = None,
+) -> tuple[int, int]:
+    """Compute how many target functions have any returned-line overlap.
+
+    Args:
+        returned_files: fast_search output (path -> [[start, end], ...]).
+        function_targets: Sequence of (path, [(start, end), ...]) per function.
+        repo_root: Repository root for normalizing absolute paths.
+
+    Returns:
+        (hits, total)
+    """
+    if not function_targets:
+        return (0, 0)
+
+    normalized_returned = _normalize_returned_files(returned_files, repo_root=repo_root)
+    returned_paths = set(normalized_returned)
+
+    normalized_targets: list[tuple[str, list[tuple[int, int]]]] = []
+    for raw_path, raw_ranges in function_targets:
+        if not isinstance(raw_path, str) or not raw_path:
+            continue
+        normalized_path = _normalize_path(raw_path, repo_root=repo_root)
+        merged_ranges = _merge_ranges(raw_ranges)
+        if not merged_ranges:
+            continue
+        normalized_targets.append((normalized_path, merged_ranges))
+
+    if not normalized_targets:
+        return (0, 0)
+
+    gt_paths = {p for p, _ in normalized_targets}
+    gt_to_ret, _, _ = _match_paths(gt_paths, returned_paths)
+
+    hits = 0
+    total = 0
+
+    for gt_path, gt_ranges in normalized_targets:
+        total += 1
+        ret_path = gt_to_ret.get(gt_path)
+        if not ret_path:
+            continue
+        merged_ret = _normalize_line_ranges(normalized_returned.get(ret_path, []))
+        if _intersection_length(gt_ranges, merged_ret) > 0:
+            hits += 1
+
+    return (hits, total)

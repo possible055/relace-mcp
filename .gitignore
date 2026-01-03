@@ -33,3 +33,5 @@ benchmark/repos/*
 !benchmark/repos/.gitkeep
 benchmark/results/*
 !benchmark/results/.gitkeep
+benchmark/data/*
+!benchmark/data/.gitkeep

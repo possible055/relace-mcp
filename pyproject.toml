@@ -58,7 +58,6 @@ tools = [
     "textual>=0.50.0",
 ]
 benchmark = [
-    "datasets>=2.0.0",
     "click>=8.0.0",
 ]
 

@@ -9,7 +9,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![100% AI-Generated](https://img.shields.io/badge/100%25%20AI-Generated-ff69b4.svg)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/possible055/relace-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/possible055/relace-mcp)
-[![MCP Badge](https://lobehub.com/badge/mcp/possible055-relace-mcp)](https://lobehub.com/mcp/possible055-relace-mcp)
 
 > **Unofficial** — Personal project, not affiliated with Relace.
 >
