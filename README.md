@@ -49,7 +49,7 @@ Get your API key from [Relace Dashboard](https://app.relace.ai/settings/billing)
       "args": ["tool", "run", "relace-mcp"],
       "env": {
         "RELACE_API_KEY": "rlc-your-api-key",
-        "RELACE_BASE_DIR": "/absolute/path/to/your/project"
+        "MCP_BASE_DIR": "/absolute/path/to/your/project"
       }
     }
   }
@@ -64,7 +64,7 @@ Get your API key from [Relace Dashboard](https://app.relace.ai/settings/billing)
 ```bash
 claude mcp add relace \
   --env RELACE_API_KEY=rlc-your-api-key \
-  --env RELACE_BASE_DIR=/absolute/path/to/your/project \
+  --env MCP_BASE_DIR=/absolute/path/to/your/project \
   -- uv tool run relace-mcp
 ```
 
@@ -83,7 +83,7 @@ claude mcp add relace \
       "args": ["tool", "run", "relace-mcp"],
       "env": {
         "RELACE_API_KEY": "rlc-your-api-key",
-        "RELACE_BASE_DIR": "/absolute/path/to/your/project"
+        "MCP_BASE_DIR": "/absolute/path/to/your/project"
       }
     }
   }
@@ -107,7 +107,7 @@ claude mcp add relace \
         "args": ["tool", "run", "relace-mcp"],
         "env": {
           "RELACE_API_KEY": "rlc-your-api-key",
-          "RELACE_BASE_DIR": "${workspaceFolder}"
+          "MCP_BASE_DIR": "${workspaceFolder}"
         }
       }
     }
@@ -129,7 +129,7 @@ args = ["tool", "run", "relace-mcp"]
 
 [mcp_servers.relace.env]
 RELACE_API_KEY = "rlc-your-api-key"
-RELACE_BASE_DIR = "/absolute/path/to/your/project"
+MCP_BASE_DIR = "/absolute/path/to/your/project"
 ```
 
 </details>
@@ -139,10 +139,10 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `RELACE_API_KEY` | ✅ | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
-| `RELACE_BASE_DIR` | ❌ | Project root (auto-detected via MCP Roots → Git → CWD) |
-| `RELACE_DOTENV_PATH` | ❌ | Path to `.env` file for centralized config |
 | `RELACE_CLOUD_TOOLS` | ❌ | Set to `1` to enable cloud tools |
-| `RELACE_LOGGING` | ❌ | Set to `1` to enable file logging |
+| `MCP_BASE_DIR` | ❌ | Project root (auto-detected via MCP Roots → Git → CWD) |
+| `MCP_LOGGING` | ❌ | Set to `1` to enable file logging |
+| `MCP_DOTENV_PATH` | ❌ | Path to `.env` file for centralized config |
 
 For `.env` usage, encoding settings, custom LLM providers, and more, see [docs/advanced.md](docs/advanced.md).
 

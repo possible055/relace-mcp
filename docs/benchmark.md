@@ -70,6 +70,8 @@ Output includes: per-case table, metric distributions, worst-case identification
 | File Precision | Correct files / Returned files |
 | Line Coverage | GT lines covered / Total GT lines |
 | Line Precision | Correct lines / Returned lines |
+| Line Prec (Matched) | Correct lines / Returned lines (matched files only) |
+| Line IoU (Matched) | Intersection / Union (matched files only) |
 | Function Hit Rate | Functions with overlap / Total functions |
 
 Results JSON structure: `metadata`, `total_cases`, `success_rate`, `avg_*`, `results[]`

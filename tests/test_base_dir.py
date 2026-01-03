@@ -214,7 +214,7 @@ class TestResolveBaseDir:
         # The key is that it should be resolved from the input
         expected = str(Path("/explicit/path").resolve())
         assert base_dir == expected
-        assert source == "RELACE_BASE_DIR"
+        assert source == "MCP_BASE_DIR"
 
     @pytest.mark.asyncio
     async def test_uses_single_mcp_root(self, tmp_path: Path) -> None:

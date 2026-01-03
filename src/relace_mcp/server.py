@@ -19,20 +19,26 @@ logger = logging.getLogger(__name__)
 
 
 def _load_dotenv_from_path() -> None:
-    """Load .env file from RELACE_DOTENV_PATH or default locations.
+    """Load .env file from MCP_DOTENV_PATH or default locations.
 
     Priority:
-    1. RELACE_DOTENV_PATH environment variable (explicit path)
-    2. Default dotenv search (current directory and parents)
+    1. MCP_DOTENV_PATH environment variable (explicit path)
+    2. RELACE_DOTENV_PATH environment variable (deprecated alias)
+    3. Default dotenv search (current directory and parents)
     """
-    dotenv_path = os.getenv("RELACE_DOTENV_PATH", "").strip()
+    dotenv_path = os.getenv("MCP_DOTENV_PATH", "").strip()
+    if not dotenv_path:
+        legacy_path = os.getenv("RELACE_DOTENV_PATH", "").strip()
+        if legacy_path:
+            logger.warning("RELACE_DOTENV_PATH is deprecated; use MCP_DOTENV_PATH instead")
+            dotenv_path = legacy_path
     if dotenv_path:
         path = Path(dotenv_path).expanduser()
         if path.exists():
             load_dotenv(path)
-            logger.info("Loaded .env from RELACE_DOTENV_PATH: %s", path)
+            logger.info("Loaded .env from MCP_DOTENV_PATH: %s", path)
         else:
-            logger.warning("RELACE_DOTENV_PATH does not exist: %s", dotenv_path)
+            logger.warning("MCP_DOTENV_PATH does not exist: %s", dotenv_path)
             load_dotenv()  # Fallback to default
     else:
         load_dotenv()
