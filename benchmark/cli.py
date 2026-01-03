@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -6,9 +7,30 @@ import click
 from dotenv import load_dotenv
 
 from relace_mcp.config import RelaceConfig
+from relace_mcp.config.compat import getenv_with_fallback
+from relace_mcp.config.settings import RELACE_DEFAULT_ENCODING
 
-from .mulocbench import DEFAULT_DATASET_PATH, load_mulocbench
-from .runner import BenchmarkRunner
+from .datasets.mulocbench import DEFAULT_DATASET_PATH, load_mulocbench
+from .run.runner import BenchmarkRunner
+
+
+def _load_benchmark_config() -> RelaceConfig:
+    """Load config for running search benchmarks.
+
+    Note: RELACE_API_KEY is only required when SEARCH_PROVIDER=relace. For other
+    providers, SearchLLMClient will use SEARCH_API_KEY / OPENAI_API_KEY / etc.
+    """
+    search_provider = getenv_with_fallback("SEARCH_PROVIDER", "RELACE_SEARCH_PROVIDER").strip()
+    search_provider = (search_provider or "relace").lower()
+
+    relace_api_key = os.getenv("RELACE_API_KEY", "").strip()
+    if search_provider == "relace":
+        return RelaceConfig.from_env()
+
+    # Non-relace providers: allow running without RELACE_API_KEY.
+    return RelaceConfig(
+        api_key=relace_api_key, base_dir=None, default_encoding=RELACE_DEFAULT_ENCODING
+    )
 
 
 @click.command()
@@ -115,10 +137,14 @@ def main(
 
     # Load config from environment
     try:
-        config = RelaceConfig.from_env()
+        config = _load_benchmark_config()
     except Exception as e:
         click.echo(f"Error loading config: {e}", err=True)
-        click.echo("Ensure RELACE_API_KEY or RELACE_SEARCH_API_KEY is set.")
+        click.echo(
+            "For Relace search: set RELACE_API_KEY.\n"
+            "For non-Relace search: set SEARCH_PROVIDER and its API key "
+            "(e.g. SEARCH_API_KEY / OPENAI_API_KEY / OPENROUTER_API_KEY)."
+        )
         sys.exit(1)
 
     runner = BenchmarkRunner(config, verbose=verbose, progress=progress)
@@ -138,7 +164,7 @@ def main(
     )
 
     # Save results
-    with open(output_path, "w") as f:
+    with output_path.open("w", encoding="utf-8") as f:
         json.dump(summary.to_dict(), f, indent=2)
     click.echo(f"\nResults saved to {output_path}")
 
@@ -155,6 +181,7 @@ def main(
     click.echo(f"Avg File F1:       {summary.avg_file_f1:.1%}")
     click.echo(f"Avg Line Coverage: {summary.avg_line_coverage:.1%}")
     click.echo(f"Avg Line Precision:{summary.avg_line_precision:.1%}")
+    click.echo(f"Avg Line F1:       {summary.avg_line_f1:.1%}")
     click.echo(f"Avg Line Prec(M):  {summary.avg_line_precision_matched:.1%}")
     click.echo(f"Avg Line IoU(M):   {summary.avg_line_iou_matched:.1%}")
     click.echo(f"Func Cases:        {summary.function_cases}/{summary.total_cases}")

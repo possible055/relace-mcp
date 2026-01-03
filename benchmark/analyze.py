@@ -5,7 +5,7 @@ from typing import Any
 
 
 def load_results(path: str) -> dict[str, Any]:
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)  # type: ignore[no-any-return]
 
 
@@ -63,7 +63,7 @@ def print_worst_cases(results: list[dict[str, Any]], key: str, label: str, n: in
     sorted_results = sorted(results, key=lambda r: r[key])
     worst = sorted_results[:n]
 
-    print(f"\n⚠️  Worst {n} cases by {label}:")
+    print(f"\nWorst {n} cases by {label}:")
     for r in worst:
         print(f"  - {r['case_id']}")
         print(f"    {label}: {r[key] * 100:.1f}%")

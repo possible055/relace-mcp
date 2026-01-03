@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ..paths import get_benchmark_dir
+
 DEFAULT_DATASET_PATH = "data/mulocbench.jsonl"
 
 
@@ -30,15 +32,19 @@ class BenchmarkCase:
     pr_url: str | None = None
 
 
-def get_repos_dir() -> Path:
-    return Path(__file__).parent / "repos"
-
-
 @dataclass(frozen=True)
 class _LocScope:
     container: str | None
     function_name: str | None
     start_line: int | None
+
+
+def _resolve_dataset_path(dataset_path: str) -> Path:
+    path = Path(dataset_path)
+    if path.is_absolute():
+        return path
+    # CLI semantics: dataset paths are relative to benchmark/
+    return get_benchmark_dir() / path
 
 
 def _parse_scope(raw: str) -> _LocScope | None:
@@ -89,10 +95,10 @@ def _lines_to_ranges(lines: set[int]) -> list[tuple[int, int]]:
 
 def _make_case_id(repo: str, issue_url: str | None, *, index: int) -> str:
     if issue_url:
-        match = re.search(r"/issues/(\d+)", issue_url)
+        match = re.search(r"/(issues|pull)/(\d+)", issue_url)
         if match:
-            return f"{repo}#{match.group(1)}"
-        return issue_url
+            prefix = "#" if match.group(1) == "issues" else "!"
+            return f"{repo}{prefix}{match.group(2)}"
     return f"{repo}:{index}"
 
 
@@ -131,7 +137,7 @@ def load_mulocbench(
     require_function_scopes: bool = True,
 ) -> list[BenchmarkCase]:
     """Load MULocBench jsonl and convert rows to BenchmarkCase objects."""
-    path = Path(dataset_path)
+    path = _resolve_dataset_path(dataset_path)
     if not path.exists():
         raise FileNotFoundError(f"Dataset not found: {path}")
 
@@ -162,7 +168,7 @@ def load_mulocbench(
             pr_url = row.get("pr_html_url") if isinstance(row.get("pr_html_url"), str) else None
             title = row.get("title") if isinstance(row.get("title"), str) else ""
             body = row.get("body") if isinstance(row.get("body"), str) else ""
-            query = (title + "\n\n" + body).strip()
+            query = (title + "\\n\\n" + body).strip()
 
             file_loc = _parse_file_loc(row.get("file_loc"))
             if not file_loc:
