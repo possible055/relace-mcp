@@ -141,7 +141,7 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 |------|------|------|
 | `RELACE_API_KEY` | ✅ | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥 |
 | `MCP_BASE_DIR` | ❌ | 项目根目录（自动检测：MCP Roots → Git → CWD） |
-| `RELACE_DOTENV_PATH` | ❌ | `.env` 文件路径，用于集中配置 |
+| `MCP_DOTENV_PATH` | ❌ | `.env` 文件路径，用于集中配置 |
 | `RELACE_CLOUD_TOOLS` | ❌ | 设为 `1` 启用云端工具 |
 | `RELACE_LOGGING` | ❌ | 设为 `1` 启用文件日志 |
 

@@ -23,7 +23,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 |----------|---------|-------------|
 | `RELACE_API_KEY` | — | **Required.** Your Relace API key |
 | `MCP_BASE_DIR` | cwd | Restrict file access to this directory |
-| `RELACE_DOTENV_PATH` | — | Path to a `.env` file to load at startup |
+| `MCP_DOTENV_PATH` | — | Path to a `.env` file to load at startup |
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
 | `MCP_LOGGING` | `0` | Set to `1` to enable file logging (**preferred**; `RELACE_LOGGING` is deprecated) |
 | `RELACE_LOGGING` | `0` | Deprecated alias for `MCP_LOGGING` |
@@ -109,7 +109,7 @@ SEARCH_API_KEY=sk-xxx
 MCP_LOGGING=1
 ```
 
-Then set `RELACE_DOTENV_PATH` in your MCP client configuration:
+Then set `MCP_DOTENV_PATH` in your MCP client configuration:
 
 ```json
 {
@@ -118,7 +118,7 @@ Then set `RELACE_DOTENV_PATH` in your MCP client configuration:
       "command": "uv",
       "args": ["tool", "run", "relace-mcp"],
       "env": {
-        "RELACE_DOTENV_PATH": "~/.config/relace/.env"
+        "MCP_DOTENV_PATH": "~/.config/relace/.env"
       }
     }
   }
