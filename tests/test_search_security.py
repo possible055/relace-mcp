@@ -66,6 +66,11 @@ class TestIsBlockedCommand:
         blocked, _ = _is_blocked_command("ls\nls", DEFAULT_BASE_DIR)
         assert blocked
 
+    def test_blocks_process_substitution(self) -> None:
+        """Should block process substitution (e.g., <(cmd)) which can execute arbitrary commands."""
+        blocked, _ = _is_blocked_command("cat <(whoami)", DEFAULT_BASE_DIR)
+        assert blocked
+
 
 class TestAbsolutePathBlocking:
     """Test absolute path sandbox enforcement."""

@@ -265,7 +265,7 @@ class TestResolveBaseDirWithCache:
 
     @pytest.mark.asyncio
     async def test_explicit_config_bypasses_cache(self, tmp_path) -> None:
-        """RELACE_BASE_DIR should bypass both cache and MCP Roots."""
+        """MCP_BASE_DIR should bypass both cache and MCP Roots."""
         # Pre-populate cache directly
         base_dir_module._roots_cache = {"session-1": ("/cached/path", "MCP Root (cached)")}
 
@@ -278,7 +278,7 @@ class TestResolveBaseDirWithCache:
         from pathlib import Path
 
         assert base_dir == str(Path(explicit_path).resolve())
-        assert source == "RELACE_BASE_DIR"
+        assert source == "MCP_BASE_DIR"
 
         # Cleanup
         base_dir_module.invalidate_roots_cache()
