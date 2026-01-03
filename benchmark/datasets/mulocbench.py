@@ -168,7 +168,7 @@ def load_mulocbench(
             pr_url = row.get("pr_html_url") if isinstance(row.get("pr_html_url"), str) else None
             title = row.get("title") if isinstance(row.get("title"), str) else ""
             body = row.get("body") if isinstance(row.get("body"), str) else ""
-            query = (title + "\\n\\n" + body).strip()
+            query = (title + "\n\n" + body).strip()
 
             file_loc = _parse_file_loc(row.get("file_loc"))
             if not file_loc:

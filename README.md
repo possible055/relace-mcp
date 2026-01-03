@@ -141,8 +141,8 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 | `RELACE_API_KEY` | ✅ | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
 | `RELACE_BASE_DIR` | ❌ | Project root (auto-detected via MCP Roots → Git → CWD) |
 | `RELACE_DOTENV_PATH` | ❌ | Path to `.env` file for centralized config |
-| `RELACE_CLOUD_TOOLS` | ❌ | Set `1` to enable cloud tools |
-| `RELACE_LOGGING` | ❌ | Set `1` to enable file logging |
+| `RELACE_CLOUD_TOOLS` | ❌ | Set to `1` to enable cloud tools |
+| `RELACE_LOGGING` | ❌ | Set to `1` to enable file logging |
 
 For `.env` usage, encoding settings, custom LLM providers, and more, see [docs/advanced.md](docs/advanced.md).
 

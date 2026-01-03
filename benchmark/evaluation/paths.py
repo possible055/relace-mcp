@@ -29,7 +29,18 @@ def normalize_returned_files(
         normalized_path = normalize_path(raw_path, repo_root=repo_root)
         if not isinstance(raw_ranges, list):
             continue
-        normalized.setdefault(normalized_path, []).extend(raw_ranges)
+        ranges: list[list[int]] = []
+        for r in raw_ranges:
+            if (
+                isinstance(r, list)
+                and len(r) == 2
+                and isinstance(r[0], int)
+                and isinstance(r[1], int)
+                and r[0] > 0
+                and r[1] >= r[0]
+            ):
+                ranges.append([r[0], r[1]])
+        normalized.setdefault(normalized_path, []).extend(ranges)
     return normalized
 
 

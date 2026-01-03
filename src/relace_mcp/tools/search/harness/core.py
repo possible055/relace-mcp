@@ -165,6 +165,8 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         trace_id = str(uuid.uuid4())[:8]
         # Safe query truncation (avoid cutting in middle of multi-byte characters)
         query_preview = query[:100] if len(query) <= 100 else query[:97] + "..."
+        # Sanitize preview for log injection safety (remove newlines and control chars)
+        query_preview = query_preview.replace("\n", " ").replace("\r", " ")
         logger.info(
             "[%s] Starting Fast Agentic Search async (query_len=%d, preview=%s)",
             trace_id,
