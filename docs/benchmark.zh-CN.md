@@ -70,6 +70,8 @@ uv run python -m benchmark.analyze path/to/results.json
 | File Precision | 正确文件 / 返回文件总数 |
 | Line Coverage | 覆盖的 GT 行 / GT 行总数 |
 | Line Precision | 正确行 / 返回行总数 |
+| Line Prec(M) | 仅统计匹配文件：正确行 / 返回行总数 |
+| Line IoU(M) | 仅统计匹配文件：交集 / 并集 |
 | Function Hit Rate | 有重叠的函数 / 函数总数 |
 
 结果 JSON 结构：`metadata`、`total_cases`、`success_rate`、`avg_*`、`results[]`
