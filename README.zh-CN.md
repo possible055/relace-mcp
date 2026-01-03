@@ -143,7 +143,7 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 | `MCP_BASE_DIR` | ❌ | 项目根目录（自动检测：MCP Roots → Git → CWD） |
 | `MCP_DOTENV_PATH` | ❌ | `.env` 文件路径，用于集中配置 |
 | `RELACE_CLOUD_TOOLS` | ❌ | 设为 `1` 启用云端工具 |
-| `RELACE_LOGGING` | ❌ | 设为 `1` 启用文件日志 |
+| `MCP_LOGGING` | ❌ | 设为 `1` 启用文件日志 |
 
 `.env` 使用方法、编码设置、自定义 LLM 等进阶设置，请参见 [docs/advanced.zh-CN.md](docs/advanced.zh-CN.md)。
 
