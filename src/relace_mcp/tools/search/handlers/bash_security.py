@@ -81,6 +81,7 @@ BASH_BLOCKED_COMMANDS = frozenset(
 BASH_BLOCKED_PATTERNS = [
     r">\s*[^&]",  # Redirect write
     r">>\s*",  # Append write
+    r"<\(",  # Process substitution (executes commands)
     r"\|",  # Pipe (may bypass restrictions)
     r"`",  # Command substitution
     r"\$\(",  # Command substitution

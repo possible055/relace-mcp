@@ -119,16 +119,13 @@ class RelaceConfig:
         if not api_key:
             raise RuntimeError("RELACE_API_KEY is not set. Please export it in your environment.")
 
-        base_dir = os.getenv("RELACE_BASE_DIR")
+        base_dir = getenv_with_fallback("MCP_BASE_DIR", "RELACE_BASE_DIR") or None
         if base_dir:
-            base_dir = os.path.abspath(base_dir)
             if not os.path.isdir(base_dir):
-                raise RuntimeError(
-                    f"RELACE_BASE_DIR does not exist or is not a directory: {base_dir}"
-                )
-            logger.info("Using RELACE_BASE_DIR: %s", base_dir)
+                raise RuntimeError(f"MCP_BASE_DIR does not exist or is not a directory: {base_dir}")
+            logger.info("Using MCP_BASE_DIR: %s", base_dir)
         else:
-            logger.info("RELACE_BASE_DIR not set; will resolve from MCP Roots or cwd at runtime")
+            logger.info("MCP_BASE_DIR not set; will resolve from MCP Roots or cwd at runtime")
 
         # default_encoding from env (will be overridden by detection if None)
         default_encoding = RELACE_DEFAULT_ENCODING

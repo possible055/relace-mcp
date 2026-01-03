@@ -10,7 +10,7 @@ Apply edits to a file (or create a new file). Use truncation placeholders like `
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `path` | ✅ | Absolute path within `RELACE_BASE_DIR` |
+| `path` | ✅ | Path within `MCP_BASE_DIR` (absolute or relative) |
 | `edit_snippet` | ✅ | Code with abbreviation placeholders |
 | `instruction` | ❌ | Hint for disambiguation |
 
@@ -57,7 +57,7 @@ Search the codebase and return relevant files and line ranges. Uses an agentic l
 
 ## `cloud_sync`
 
-Synchronize local codebase to Relace Cloud for semantic search. Uploads source files from `RELACE_BASE_DIR` to Relace Repos.
+Synchronize local codebase to Relace Cloud for semantic search. Uploads source files from `MCP_BASE_DIR` to Relace Repos.
 
 ### Parameters
 

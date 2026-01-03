@@ -21,9 +21,13 @@
 | 变量 | 默认值 | 描述 |
 |------|--------|------|
 | `RELACE_API_KEY` | — | **必需。** 你的 Relace API key |
-| `RELACE_BASE_DIR` | 当前目录 | 限制文件访问范围 |
+| `MCP_BASE_DIR` | 当前目录 | 限制文件访问范围 |
+| `RELACE_BASE_DIR` | — | `MCP_BASE_DIR` 的弃用别名 |
+| `MCP_DOTENV_PATH` | — | 启动时加载的 `.env` 文件路径（集中配置） |
+| `RELACE_DOTENV_PATH` | — | `MCP_DOTENV_PATH` 的弃用别名 |
 | `RELACE_DEFAULT_ENCODING` | — | 强制项目文件编码（如 `gbk`、`big5`） |
-| `RELACE_LOGGING` | `0` | 设为 `1` 启用文件日志 |
+| `MCP_LOGGING` | `0` | 设为 `1` 启用文件日志（推荐；`RELACE_LOGGING` 已弃用） |
+| `RELACE_LOGGING` | `0` | `MCP_LOGGING` 的弃用别名 |
 
 ### Fast Apply
 
@@ -35,6 +39,7 @@
 | `APPLY_API_KEY` | — | 非 Relace 提供商的 API key |
 | `APPLY_PROMPT_FILE` | — | 覆盖 apply prompt YAML 路径 |
 | `APPLY_TIMEOUT_SECONDS` | `60` | 请求超时 |
+| `APPLY_TEMPERATURE` | `0.0` | 采样温度（0.0-2.0） |
 | `APPLY_POST_CHECK` | `0` | 合并后验证（可能增加失败率） |
 
 > **注意：** `RELACE_APPLY_*`、`RELACE_TIMEOUT_SECONDS`、`RELACE_EXPERIMENTAL_POST_CHECK` 变体已弃用，但仍支持（会显示警告）。
@@ -49,6 +54,7 @@
 | `SEARCH_API_KEY` | — | 非 Relace 提供商的 API key |
 | `SEARCH_PROMPT_FILE` | — | 覆盖 search prompt YAML 路径 |
 | `SEARCH_TIMEOUT_SECONDS` | `120` | 请求超时 |
+| `SEARCH_TEMPERATURE` | `1.0` | 采样温度（0.0-2.0） |
 | `SEARCH_MAX_TURNS` | `6` | 最大 agent 循环轮数 |
 | `SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,find_symbol` | 工具允许列表（逗号分隔） |
 | `SEARCH_PARALLEL_TOOL_CALLS` | `1` | 启用并行工具调用 |
@@ -82,7 +88,7 @@
 
 | 变量 | 默认值 | 描述 |
 |------|--------|------|
-| `RELACE_EXPERIMENTAL_LOGGING` | — | `RELACE_LOGGING` 的弃用别名 |
+| `RELACE_EXPERIMENTAL_LOGGING` | — | `MCP_LOGGING` 的弃用别名 |
 
 > **注意：** `RELACE_EXPERIMENTAL_POST_CHECK` 已重命名为 `APPLY_POST_CHECK` 并移至 Fast Apply 部分。
 
@@ -101,7 +107,7 @@ SEARCH_MODEL=gpt-4o
 SEARCH_API_KEY=sk-xxx
 
 # 其他设置
-RELACE_LOGGING=1
+MCP_LOGGING=1
 SEARCH_MAX_TURNS=6
 ```
 
@@ -114,7 +120,7 @@ SEARCH_MAX_TURNS=6
       "command": "uv",
       "args": ["tool", "run", "relace-mcp"],
       "env": {
-        "RELACE_DOTENV_PATH": "~/.config/relace/.env"
+        "MCP_DOTENV_PATH": "~/.config/relace/.env"
       }
     }
   }
@@ -141,7 +147,7 @@ SEARCH_MAX_TURNS=6
 
 ## 日志
 
-文件日志为可选功能。使用 `RELACE_LOGGING=1` 启用。
+文件日志为可选功能。使用 `MCP_LOGGING=1` 启用（`RELACE_LOGGING=1` 仍可用但已弃用）。
 
 ### 日志位置
 

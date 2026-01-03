@@ -277,7 +277,7 @@ def _check_project_safety(resolved: str, source: str) -> None:
     """Log warning if resolved path is potentially unsafe.
 
     This is called for auto-resolved paths (MCP Roots, Git root, cwd).
-    Explicit RELACE_BASE_DIR is trusted and skips this check.
+    Explicit MCP_BASE_DIR is trusted and skips this check.
     """
     is_safe, reason = validate_project_directory(resolved)
     if not is_safe:
@@ -296,7 +296,7 @@ async def resolve_base_dir(
     """Resolve base_dir with fallback chain.
 
     Priority:
-    1. RELACE_BASE_DIR env var (explicit config takes priority, trusted)
+    1. MCP_BASE_DIR env var (explicit config takes priority, trusted)
     2. Cached MCP Roots (invalidated by notifications/roots/list_changed)
     3. Fresh MCP Roots from client (dynamic, per-workspace)
     4. Git repository root detection (fallback)
@@ -312,8 +312,8 @@ async def resolve_base_dir(
     # 1. Explicit config takes priority - trusted, no safety check
     if config_base_dir:
         resolved_path = str(Path(config_base_dir).resolve())
-        logger.debug("[base_dir] Using RELACE_BASE_DIR: %s", resolved_path)
-        return resolved_path, "RELACE_BASE_DIR"
+        logger.debug("[base_dir] Using MCP_BASE_DIR: %s", resolved_path)
+        return resolved_path, "MCP_BASE_DIR"
 
     # 2. Try cached MCP Roots first (invalidated by RootsMiddleware on change)
     global _roots_cache
@@ -321,7 +321,7 @@ async def resolve_base_dir(
     if cache_key is not None:
         cached = _roots_cache.get(cache_key)
         if cached is not None:
-            cached_path, cached_source = cached
+            cached_path, _ = cached
             if validate_base_dir(cached_path):
                 logger.debug(
                     "[base_dir] Using cached roots (session=%s): %s",
@@ -372,7 +372,7 @@ async def resolve_base_dir(
         else:
             logger.info("[base_dir] Resolved from %s: %s (cwd: %s)", source, resolved, cwd)
             logger.warning(
-                "RELACE_BASE_DIR not set and MCP Roots unavailable. Using Git root: %s",
+                "MCP_BASE_DIR not set and MCP Roots unavailable. Using Git root: %s",
                 resolved,
             )
             _check_project_safety(resolved, source)
@@ -386,7 +386,7 @@ async def resolve_base_dir(
         raise RuntimeError(f"Cannot resolve a valid base_dir (cwd is invalid): {cwd}")
 
     logger.warning(
-        "RELACE_BASE_DIR not set, MCP Roots unavailable, no Git repo found. "
+        "MCP_BASE_DIR not set, MCP Roots unavailable, no Git repo found. "
         "Using cwd: %s (may be unreliable)",
         cwd,
     )
