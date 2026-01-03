@@ -11,6 +11,7 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/possible055/relace-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/possible055/relace-mcp)
 
 > **Unofficial** — Personal project, not affiliated with Relace.
+> 
 > **Built with AI** — Developed entirely with AI assistance (Antigravity, Codex, Cursor, Github Copilot, Windsurf).
 
 MCP server providing AI-powered code editing and intelligent codebase exploration tools.
