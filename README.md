@@ -15,31 +15,12 @@
 
 MCP server providing AI-powered code editing and intelligent codebase exploration tools.
 
----
-
-<table>
-<tr><td width="50%">
-
-**Without** — AI struggles with unfamiliar codebases
-
-- Manual grep hunting, misses related files
-- Edits one file, breaks imports in another
-- Full file rewrites burn tokens
-- Line number errors corrupt code
-
-</td><td width="50%">
-
-**With `fast_search` + `fast_apply`**
-
-- Ask naturally: *"How is auth done?"* → precise locations
-- Traces imports, call chains, all related files
-- Describe the change, no line numbers needed
-- 10,000+ tokens/sec instant merging
-
-</td></tr>
-</table>
-
----
+| Without | With `fast_search` + `fast_apply` |
+|:--------|:----------------------------------|
+| Manual grep, misses related files | Ask naturally, get precise locations |
+| Edits break imports elsewhere | Traces imports and call chains |
+| Full rewrites burn tokens | Describe changes, no line numbers |
+| Line number errors corrupt code | 10,000+ tokens/sec merging |
 
 ## Features
 
