@@ -22,7 +22,9 @@
 |------|--------|------|
 | `RELACE_API_KEY` | — | **必需。** 你的 Relace API key |
 | `MCP_BASE_DIR` | 当前目录 | 限制文件访问范围 |
+| `RELACE_BASE_DIR` | — | `MCP_BASE_DIR` 的弃用别名 |
 | `MCP_DOTENV_PATH` | — | 启动时加载的 `.env` 文件路径（集中配置） |
+| `RELACE_DOTENV_PATH` | — | `MCP_DOTENV_PATH` 的弃用别名 |
 | `RELACE_DEFAULT_ENCODING` | — | 强制项目文件编码（如 `gbk`、`big5`） |
 | `MCP_LOGGING` | `0` | 设为 `1` 启用文件日志（推荐；`RELACE_LOGGING` 已弃用） |
 | `RELACE_LOGGING` | `0` | `MCP_LOGGING` 的弃用别名 |

@@ -23,7 +23,9 @@ All environment variables can be set in your shell or in the `env` section of yo
 |----------|---------|-------------|
 | `RELACE_API_KEY` | — | **Required.** Your Relace API key |
 | `MCP_BASE_DIR` | cwd | Restrict file access to this directory |
+| `RELACE_BASE_DIR` | — | Deprecated alias for `MCP_BASE_DIR` |
 | `MCP_DOTENV_PATH` | — | Path to a `.env` file to load at startup |
+| `RELACE_DOTENV_PATH` | — | Deprecated alias for `MCP_DOTENV_PATH` |
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
 | `MCP_LOGGING` | `0` | Set to `1` to enable file logging (**preferred**; `RELACE_LOGGING` is deprecated) |
 | `RELACE_LOGGING` | `0` | Deprecated alias for `MCP_LOGGING` |
