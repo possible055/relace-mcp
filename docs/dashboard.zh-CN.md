@@ -19,7 +19,7 @@ uv add relace-mcp --extra tools
 从终端启动 dashboard：
 
 ```bash
-relace-dashboard
+relogs
 ```
 
 或通过 Python 模块：

@@ -16,23 +16,19 @@
 
 MCP server for [Relace](https://www.relace.ai/) — AI-powered instant code merging and agentic codebase search.
 
-## Prerequisites
+**`fast_apply`** uses speculative edits to merge code changes at 10,000+ tokens/sec — no line numbers or full-file rewrites needed. **`fast_search`** runs an agentic loop that explores your codebase using natural language, returning relevant files and line ranges for any query.
 
-- [uv](https://docs.astral.sh/uv/) — Python package manager
-- [git](https://git-scm.com/) — for `cloud_sync` to respect `.gitignore`
-- [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) — recommended for `fast_search` (falls back to Python regex if unavailable)
+## Features
 
-### Platform Notes
-
-| Platform | Status | Notes |
-|----------|--------|-------|
-| Linux | ✅ Fully supported | Primary development platform |
-| macOS | ✅ Fully supported | All features available |
-| Windows | ⚠️ Partial | `bash` tool unavailable; use WSL for full functionality |
-
-> **Windows users:** The `bash` tool requires a Unix shell. Install [WSL](https://learn.microsoft.com/windows/wsl/install) for full feature parity, or use other exploration tools (`view_file`, `grep_search`, `glob`).
+- **Fast Apply** — Apply code edits at 10,000+ tokens/sec via Relace API
+- **Fast Search** — Agentic codebase exploration with natural language queries
+- **Cloud Sync** — Upload local codebase to Relace Cloud for semantic search
+- **Cloud Search** — Semantic code search over cloud-synced repositories
+- **Dashboard** — Real-time terminal UI for monitoring operations
 
 ## Quick Start
+
+**Prerequisites:** [uv](https://docs.astral.sh/uv/), [git](https://git-scm.com/), [ripgrep](https://github.com/BurntSushi/ripgrep) (recommended)
 
 Get your API key from [Relace Dashboard](https://app.relace.ai/settings/billing), then add to your MCP client:
 
@@ -134,143 +130,53 @@ RELACE_BASE_DIR = "/absolute/path/to/your/project"
 
 </details>
 
-> **Note:** `RELACE_BASE_DIR` is optional. If not set, the server auto-detects via MCP Roots or Git. If set, it must be an absolute path.
-
-## Features
-
-- **Fast Apply** — Apply code edits at 10,000+ tokens/sec via Relace API
-- **Fast Search** — Agentic codebase exploration with natural language queries
-- **Cloud Sync** — Upload local codebase to Relace Cloud for semantic search
-- **Cloud Search** — Semantic code search over cloud-synced repositories
-- **Dashboard** — Real-time terminal UI for monitoring operations (requires `textual`)
-
-## Environment Variables
+## Configuration
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `RELACE_API_KEY` | ✅ | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
-| `RELACE_BASE_DIR` | ❌ | Absolute path to project root (auto-detected via MCP Roots if not set) |
-| `RELACE_DOTENV_PATH` | ❌ | Path to `.env` file for centralized configuration |
-| `RELACE_CLOUD_TOOLS` | ❌ | Set to `1` to enable cloud tools (cloud_sync, cloud_search, etc.) |
-| `RELACE_LOGGING` | ❌ | Set to `1` to enable file logging (default: disabled) |
-| `RELACE_DEFAULT_ENCODING` | ❌ | Force file encoding (e.g., `gbk`, `big5`) for legacy repos |
-| `RELACE_TEMPERATURE` | ❌ | LLM sampling temperature (default: `1.0`, range: 0.0-2.0) |
+| `RELACE_BASE_DIR` | ❌ | Project root (auto-detected via MCP Roots → Git → CWD) |
+| `RELACE_DOTENV_PATH` | ❌ | Path to `.env` file for centralized config |
+| `RELACE_CLOUD_TOOLS` | ❌ | Set `1` to enable cloud tools |
+| `RELACE_LOGGING` | ❌ | Set `1` to enable file logging |
 
-### Using a .env File
-
-Instead of setting many environment variables in your MCP config, you can use a centralized `.env` file:
-
-**1. Create a `.env` file** (e.g., `~/.config/relace/.env`):
-
-```bash
-# ~/.config/relace/.env
-RELACE_API_KEY=rlc-your-api-key
-
-# Custom search model (optional)
-SEARCH_PROVIDER=openai
-SEARCH_ENDPOINT=https://api.openai.com/v1
-SEARCH_MODEL=gpt-4o
-SEARCH_API_KEY=sk-xxx
-
-# Other settings
-RELACE_LOGGING=1
-SEARCH_MAX_TURNS=6
-```
-
-**2. Point to it in your MCP config:**
-
-```json
-{
-  "mcpServers": {
-    "relace": {
-      "command": "uv",
-      "args": ["tool", "run", "relace-mcp"],
-      "env": {
-        "RELACE_DOTENV_PATH": "~/.config/relace/.env"
-      }
-    }
-  }
-}
-```
-
-> **Note:** Variables set directly in `env` take precedence over those in the `.env` file.
-
-> **Note:** When `RELACE_BASE_DIR` is not set, the server automatically detects your project root using:
-> 1. MCP Roots (workspace info from your editor)
-> 2. Git repository root (if found)
-> 3. Current working directory (fallback)
->
-> ⚠️ **Warning:** Fallback to CWD/Git can be unstable if MCP Roots fail. Explicit `RELACE_BASE_DIR` is recommended.
-
-> For advanced settings, see [docs/advanced.md](docs/advanced.md).
+For `.env` usage, encoding settings, custom LLM providers, and more, see [docs/advanced.md](docs/advanced.md).
 
 ## Tools
 
-### Core Tools (always available)
+Core tools (`fast_apply`, `fast_search`) are always available. Cloud tools require `RELACE_CLOUD_TOOLS=1`.
 
-| Tool | Description |
-|------|-------------|
-| `fast_apply` | Apply code edits at 10,000+ tokens/sec |
-| `fast_search` | Agentic codebase search with natural language |
-
-### Cloud Tools (requires `RELACE_CLOUD_TOOLS=1`)
-
-| Tool | Description |
-|------|-------------|
-| `cloud_sync` | Upload local codebase to Relace Cloud |
-| `cloud_search` | Semantic search over cloud-synced repos |
-| `cloud_list` | List cloud repositories |
-| `cloud_info` | Get sync status |
-| `cloud_clear` | Delete cloud repo and local state |
-
-> For detailed parameters and examples, see [docs/tools.md](docs/tools.md).
-
-## Logging
-
-> **Note:** File logging is opt-in. Enable with `RELACE_LOGGING=1`.
-
-Operation logs are written to a cross-platform state directory:
-- **Linux**: `~/.local/state/relace/relace.log`
-- **macOS**: `~/Library/Application Support/relace/relace.log`
-- **Windows**: `%LOCALAPPDATA%\relace\relace.log`
-
-> For log format and advanced options, see [docs/advanced.md](docs/advanced.md#logging).
+For detailed parameters, see [docs/tools.md](docs/tools.md).
 
 ## Dashboard
 
-A real-time terminal UI for monitoring `fast_apply` and `fast_search` operations.
+Real-time terminal UI for monitoring operations.
 
 ```bash
-# Install with dashboard support
 pip install relace-mcp[tools]
-
-# Launch dashboard
-relace-dashboard
+relogs
 ```
 
-Features:
-- Multi-view tabs (All, Apply, Search, Insights, Errors)
-- Time range filtering (1h, 6h, 24h, All)
-- Real-time log tailing
-- Tree-structured search session view
-- Tool usage statistics
+For detailed usage, see [docs/dashboard.md](docs/dashboard.md).
 
-> For detailed usage, see [docs/dashboard.md](docs/dashboard.md).
+## Platform Support
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Linux | ✅ Fully supported | Primary development platform |
+| macOS | ✅ Fully supported | All features available |
+| Windows | ⚠️ Partial | `bash` tool unavailable; use WSL for full functionality |
 
 ## Troubleshooting
 
-Common issues:
-- `RELACE_API_KEY is not set`: Set the key in your environment or MCP config.
-- `RELACE_BASE_DIR does not exist` / `INVALID_PATH`: Ensure the path exists and is within `RELACE_BASE_DIR`.
-- `NEEDS_MORE_CONTEXT` / `APPLY_NOOP`: Include 1–3 real anchor lines before and after the target block.
-- `FILE_TOO_LARGE`: File exceeds the 1MB size limit; split large files or increase limit.
-- `ENCODING_ERROR`: Cannot detect file encoding; set `RELACE_DEFAULT_ENCODING` explicitly.
-- `FILE_NOT_WRITABLE` / `PERMISSION_ERROR`: Check file and directory write permissions.
-- `AUTH_ERROR`: Verify your `RELACE_API_KEY` is valid and not expired.
-- `RATE_LIMIT`: Too many requests; wait and retry later.
-- `TIMEOUT_ERROR` / `NETWORK_ERROR`: Check network connectivity; increase timeout via `APPLY_TIMEOUT_SECONDS`.
-
-> **Windows users:** The `bash` tool in `fast_search` is unavailable on Windows. Use WSL or rely on other exploration tools.
+| Error | Solution |
+|-------|----------|
+| `RELACE_API_KEY is not set` | Set the key in your environment or MCP config |
+| `NEEDS_MORE_CONTEXT` | Include 1–3 anchor lines before/after target block |
+| `FILE_TOO_LARGE` | File exceeds 1MB; split or increase limit |
+| `ENCODING_ERROR` | Set `RELACE_DEFAULT_ENCODING` explicitly |
+| `AUTH_ERROR` | Verify API key is valid and not expired |
+| `RATE_LIMIT` | Too many requests; wait and retry |
 
 ## Development
 
@@ -279,9 +185,8 @@ git clone https://github.com/possible055/relace-mcp.git
 cd relace-mcp
 uv sync --extra dev
 uv run pytest
+```
 
-# Lint / type checks (optional)
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy src tests
-uv run basedpyright --level error
+## License
+
+MIT
