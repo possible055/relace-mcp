@@ -278,6 +278,11 @@ Common issues:
 ```bash
 git clone https://github.com/possible055/relace-mcp.git
 cd relace-mcp
-uv sync
+uv sync --extra dev
 uv run pytest
-```
+
+# Lint / type checks (optional)
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy src tests
+uv run basedpyright --level error
