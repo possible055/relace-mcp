@@ -24,7 +24,6 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `RELACE_BASE_DIR` | cwd | Restrict file access to this directory |
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
 | `RELACE_LOGGING` | `0` | Set to `1` to enable file logging |
-| `RELACE_TEMPERATURE` | `1.0` | LLM sampling temperature (0.0-2.0) for fast_apply and fast_search |
 
 ### Fast Apply
 
