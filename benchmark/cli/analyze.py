@@ -3,6 +3,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ..config import get_results_dir
+
 
 def load_results(path: str) -> dict[str, Any]:
     with open(path, encoding="utf-8") as f:
@@ -95,7 +97,7 @@ def print_summary_stats(results: list[dict[str, Any]], key: str, label: str) -> 
 
 def main() -> None:
     # Default path
-    default_path = Path(__file__).parent / "results" / "benchmark_results.json"
+    default_path = get_results_dir() / "benchmark_results.json"
     path = sys.argv[1] if len(sys.argv) > 1 else str(default_path)
 
     if not Path(path).exists():

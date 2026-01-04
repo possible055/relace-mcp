@@ -27,6 +27,7 @@ AGENTS.md
 # Logs / Env
 *.log
 .env
+!.env.example
 
 # Benchmark artifacts
 benchmark/repos/*
@@ -35,3 +36,4 @@ benchmark/results/*
 !benchmark/results/.gitkeep
 benchmark/data/*
 !benchmark/data/.gitkeep
+benchmark/cache

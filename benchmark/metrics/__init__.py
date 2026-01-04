@@ -1,3 +1,9 @@
+"""Evaluation metrics for benchmark runs.
+
+Provides file-level, line-level, and function-level metrics for comparing
+search results against ground truth.
+"""
+
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -287,3 +293,27 @@ def compute_function_hits(
             hits += 1
 
     return (hits, total)
+
+
+def compute_f_score(
+    precision: float,
+    recall: float,
+    beta: float = 1.0,
+) -> float:
+    """Compute Fβ score from precision and recall.
+
+    Fβ = (1 + β²) * (precision * recall) / (β² * precision + recall)
+
+    Args:
+        precision: Precision value between 0.0 and 1.0.
+        recall: Recall value between 0.0 and 1.0.
+        beta: Beta parameter. β < 1 emphasizes precision, β > 1 emphasizes recall.
+              Default β=1.0 is the harmonic mean (F1).
+
+    Returns:
+        Fβ score between 0.0 and 1.0.
+    """
+    if precision <= 0.0 or recall <= 0.0:
+        return 0.0
+    beta_sq = beta * beta
+    return (1 + beta_sq) * precision * recall / (beta_sq * precision + recall)

@@ -2,11 +2,13 @@ import ast
 import json
 import random
 import re
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ..paths import get_benchmark_dir
+from ..config import EXCLUDED_REPOS, get_benchmark_dir
+from ..filters.query_type import classify_query_str
 
 DEFAULT_DATASET_PATH = "data/mulocbench.jsonl"
 
@@ -27,7 +29,10 @@ class BenchmarkCase:
     repo: str
     base_commit: str
     ground_truth_files: dict[str, list[tuple[int, int]]] = field(default_factory=dict)
+    ground_truth_files_raw: dict[str, list[int]] = field(default_factory=dict)
+    ground_truth_files_soft: dict[str, list[tuple[int, int]]] = field(default_factory=dict)
     ground_truth_functions: list[FunctionTarget] = field(default_factory=list)
+    query_type: str | None = None
     issue_url: str | None = None
     pr_url: str | None = None
 
@@ -127,16 +132,74 @@ def _extract_lines(change: Any) -> set[int]:
     return lines
 
 
+def _stratified_sample(
+    cases: list[BenchmarkCase], limit: int, rng: random.Random
+) -> list[BenchmarkCase]:
+    """Stratified sampling: ensure each repo has at least 1 case.
+
+    If there are more repos than the limit, randomly select `limit` repos
+    and pick one case from each. Otherwise, pick one case from each repo,
+    then fill remaining quota from the pool.
+    """
+    by_repo: dict[str, list[BenchmarkCase]] = defaultdict(list)
+    for c in cases:
+        by_repo[c.repo].append(c)
+
+    repos = list(by_repo.keys())
+
+    # If more repos than limit, select a random subset of repos
+    if len(repos) > limit:
+        selected_repos = rng.sample(repos, limit)
+        selected: list[BenchmarkCase] = []
+        for repo in selected_repos:
+            case = rng.choice(by_repo[repo])
+            selected.append(case)
+        rng.shuffle(selected)
+        return selected
+
+    # Otherwise: pick 1 from each repo, then fill remaining quota
+    selected: list[BenchmarkCase] = []
+    selected_set: set[str] = set()
+
+    # Phase 1: pick 1 case from each repo
+    for _repo, repo_cases in by_repo.items():
+        case = rng.choice(repo_cases)
+        selected.append(case)
+        selected_set.add(case.id)
+
+    # Phase 2: fill remaining quota proportionally
+    remaining = limit - len(selected)
+    if remaining > 0:
+        pool = [c for c in cases if c.id not in selected_set]
+        if len(pool) <= remaining:
+            selected.extend(pool)
+        else:
+            selected.extend(rng.sample(pool, remaining))
+
+    rng.shuffle(selected)
+    return selected
+
+
 def load_mulocbench(
     *,
     dataset_path: str = DEFAULT_DATASET_PATH,
-    limit: int = 50,
+    limit: int | None = None,
     shuffle: bool = True,
     seed: int = 0,
     include_added_files: bool = False,
     require_function_scopes: bool = True,
+    stratified: bool = False,
+    exclude_repos: frozenset[str] | None = None,
 ) -> list[BenchmarkCase]:
-    """Load MULocBench jsonl and convert rows to BenchmarkCase objects."""
+    """Load MULocBench jsonl and convert rows to BenchmarkCase objects.
+
+    Args:
+        exclude_repos: Repos to skip. Defaults to EXCLUDED_REPOS (large repos).
+                       Pass frozenset() to include all repos.
+    """
+    if exclude_repos is None:
+        exclude_repos = EXCLUDED_REPOS
+
     path = _resolve_dataset_path(dataset_path)
     if not path.exists():
         raise FileNotFoundError(f"Dataset not found: {path}")
@@ -162,6 +225,11 @@ def load_mulocbench(
                 continue
 
             repo = f"{org}/{repo_name}"
+
+            # Early skip for excluded repos (avoid clone)
+            if repo.lower() in {r.lower() for r in exclude_repos}:
+                continue
+
             issue_url = (
                 row.get("iss_html_url") if isinstance(row.get("iss_html_url"), str) else None
             )
@@ -183,6 +251,7 @@ def load_mulocbench(
                 continue
 
             ground_truth_files: dict[str, list[tuple[int, int]]] = {}
+            ground_truth_files_raw: dict[str, list[int]] = {}
             function_targets: list[FunctionTarget] = []
 
             for file_entry in files:
@@ -201,6 +270,7 @@ def load_mulocbench(
                     continue
 
                 file_lines: set[int] = set()
+                file_lines_raw: list[int] = []
 
                 for raw_scope, change in loc.items():
                     if not isinstance(raw_scope, str):
@@ -209,6 +279,7 @@ def load_mulocbench(
                     if not lines:
                         continue
                     file_lines |= lines
+                    file_lines_raw.extend(sorted(lines))
 
                     scope = _parse_scope(raw_scope)
                     if not scope or not scope.function_name or not scope.start_line:
@@ -230,6 +301,7 @@ def load_mulocbench(
                 if not ranges:
                     continue
                 ground_truth_files.setdefault(file_path, []).extend(ranges)
+                ground_truth_files_raw.setdefault(file_path, []).extend(sorted(file_lines))
 
             if not ground_truth_files:
                 continue
@@ -243,7 +315,9 @@ def load_mulocbench(
                     repo=repo,
                     base_commit=base_commit,
                     ground_truth_files=ground_truth_files,
+                    ground_truth_files_raw=ground_truth_files_raw,
                     ground_truth_functions=function_targets,
+                    query_type=classify_query_str(query),
                     issue_url=issue_url,
                     pr_url=pr_url,
                 )
@@ -253,4 +327,8 @@ def load_mulocbench(
         rng = random.Random(seed)
         rng.shuffle(cases)
 
-    return cases[:limit]
+    if stratified and limit is not None:
+        rng = random.Random(seed)
+        cases = _stratified_sample(cases, limit, rng)
+
+    return cases if limit is None else cases[:limit]

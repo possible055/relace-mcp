@@ -17,6 +17,9 @@ class BenchmarkResult:
     line_f1: float
     line_precision_matched: float
     line_iou_matched: float
+    file_f_beta: float
+    line_f_beta: float
+    joint_f: float
     function_hit_rate: float
     functions_hit: int
     functions_total: int
@@ -43,6 +46,9 @@ class BenchmarkSummary:
     avg_line_f1: float
     avg_line_precision_matched: float
     avg_line_iou_matched: float
+    avg_file_f_beta: float
+    avg_line_f_beta: float
+    avg_joint_f: float
     function_cases: int
     avg_function_hit_rate: float
     avg_turns: float
@@ -65,6 +71,9 @@ class BenchmarkSummary:
             "avg_line_f1": self.avg_line_f1,
             "avg_line_precision_matched": self.avg_line_precision_matched,
             "avg_line_iou_matched": self.avg_line_iou_matched,
+            "avg_file_f_beta": self.avg_file_f_beta,
+            "avg_line_f_beta": self.avg_line_f_beta,
+            "avg_joint_f": self.avg_joint_f,
             "function_cases": self.function_cases,
             "avg_function_hit_rate": self.avg_function_hit_rate,
             "avg_turns": self.avg_turns,

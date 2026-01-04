@@ -1,3 +1,4 @@
+import logging
 import time
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -8,8 +9,12 @@ from relace_mcp.clients import SearchLLMClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.tools.search import FastAgenticSearchHarness
 
+from ..analysis.ast_spans import normalize_to_ast_spans
+from ..analysis.call_graph import expand_ground_truth
+from ..config import get_repos_dir
 from ..datasets.mulocbench import BenchmarkCase
-from ..evaluation.metrics import (
+from ..metrics import (
+    compute_f_score,
     compute_file_precision,
     compute_file_recall,
     compute_function_hits,
@@ -18,18 +23,38 @@ from ..evaluation.metrics import (
     compute_line_precision,
     compute_line_precision_matched,
 )
-from ..paths import get_repos_dir
 from .git import ensure_repo
 from .metadata import build_run_metadata
-from .models import BenchmarkResult, BenchmarkSummary
-from .progress import format_progress_bar
+from .results import BenchmarkResult, BenchmarkSummary
+
+
+def _format_progress_bar(current: int, total: int, width: int = 30) -> str:
+    """Format a simple ASCII progress bar."""
+    if total == 0:
+        return "[" + " " * width + "]"
+    filled = int(width * current / total)
+    bar = "█" * filled + "░" * (width - filled)
+    pct = current * 100 // total
+    return f"[{bar}] {pct:3d}%"
 
 
 class BenchmarkRunner:
-    def __init__(self, config: RelaceConfig, *, verbose: bool = False, progress: bool = True):
+    def __init__(
+        self,
+        config: RelaceConfig,
+        *,
+        verbose: bool = False,
+        progress: bool = True,
+        beta: float = 0.5,
+        normalize_ast: bool = False,
+        soft_gt: bool = False,
+    ):
         self.config = config
         self.verbose = verbose
         self.progress = progress
+        self.beta = beta
+        self.normalize_ast = normalize_ast
+        self.soft_gt = soft_gt
         self.repos_dir = get_repos_dir()
         self.repos_dir.mkdir(parents=True, exist_ok=True)
 
@@ -40,6 +65,24 @@ class BenchmarkRunner:
         run_config: dict[str, Any] | None = None,
     ) -> BenchmarkSummary:
         """Run benchmark on all cases and return summary."""
+        # Suppress logger warnings during progress mode to avoid interfering with progress bar
+        relace_logger = logging.getLogger("relace_mcp")
+        original_level = relace_logger.level
+        if self.progress and not self.verbose:
+            relace_logger.setLevel(logging.ERROR)
+
+        try:
+            return self._run_benchmark_inner(cases, run_config=run_config)
+        finally:
+            relace_logger.setLevel(original_level)
+
+    def _run_benchmark_inner(
+        self,
+        cases: list[BenchmarkCase],
+        *,
+        run_config: dict[str, Any] | None = None,
+    ) -> BenchmarkSummary:
+        """Internal benchmark loop."""
         started_at = datetime.now(UTC)
         wall_start = time.perf_counter()
         results: list[BenchmarkResult] = []
@@ -50,7 +93,7 @@ class BenchmarkRunner:
             current = i + 1
 
             if self.progress and not self.verbose:
-                progress_bar = format_progress_bar(current - 1, total)
+                progress_bar = _format_progress_bar(current - 1, total)
                 line = f"{progress_bar} [{current}/{total}] {case.id}"
                 padding = " " * max(0, last_line_len - len(line))
                 print(f"\r{line}{padding}", end="", flush=True)
@@ -72,7 +115,7 @@ class BenchmarkRunner:
                 )
 
         if self.progress and not self.verbose:
-            progress_bar = format_progress_bar(total, total)
+            progress_bar = _format_progress_bar(total, total)
             line = f"{progress_bar} done"
             padding = " " * max(0, last_line_len - len(line))
             print(f"\r{line}{padding}", flush=True)
@@ -124,6 +167,9 @@ class BenchmarkRunner:
                 line_f1=0.0,
                 line_precision_matched=0.0,
                 line_iou_matched=0.0,
+                file_f_beta=0.0,
+                line_f_beta=0.0,
+                joint_f=0.0,
                 function_hit_rate=0.0,
                 functions_hit=0,
                 functions_total=len(case.ground_truth_functions),
@@ -147,16 +193,28 @@ class BenchmarkRunner:
             returned_files = {}
 
         returned_files_count = len(returned_files)
-        ground_truth_files_count = len(case.ground_truth_files)
+
+        # Optionally normalize ground truth to AST boundaries
+        if self.normalize_ast:
+            ground_truth_files = self._normalize_ground_truth(case, repo_path)
+        else:
+            ground_truth_files = case.ground_truth_files
+
+        # Optionally expand ground truth with called functions
+        if self.soft_gt:
+            soft_ranges = expand_ground_truth(repo_path, ground_truth_files)
+            ground_truth_files = self._merge_soft_gt(ground_truth_files, soft_ranges)
+
+        ground_truth_files_count = len(ground_truth_files)
 
         file_recall = compute_file_recall(
             returned_files,
-            case.ground_truth_files,
+            ground_truth_files,
             repo_root=repo_path,
         )
         file_precision = compute_file_precision(
             returned_files,
-            case.ground_truth_files,
+            ground_truth_files,
             repo_root=repo_path,
         )
         denom = file_recall + file_precision
@@ -164,24 +222,24 @@ class BenchmarkRunner:
 
         line_coverage = compute_line_coverage(
             returned_files,
-            case.ground_truth_files,
+            ground_truth_files,
             repo_root=repo_path,
         )
         line_precision = compute_line_precision(
             returned_files,
-            case.ground_truth_files,
+            ground_truth_files,
             repo_root=repo_path,
         )
         line_denom = line_coverage + line_precision
         line_f1 = (2 * line_coverage * line_precision / line_denom) if line_denom else 0.0
         line_precision_matched = compute_line_precision_matched(
             returned_files,
-            case.ground_truth_files,
+            ground_truth_files,
             repo_root=repo_path,
         )
         line_iou_matched = compute_line_iou_matched(
             returned_files,
-            case.ground_truth_files,
+            ground_truth_files,
             repo_root=repo_path,
         )
 
@@ -195,6 +253,10 @@ class BenchmarkRunner:
 
         error = result.get("error") if isinstance(result.get("error"), str) else None
         partial = bool(result.get("partial", False))
+
+        file_f_beta = compute_f_score(file_precision, file_recall, beta=self.beta)
+        line_f_beta = compute_f_score(line_precision, line_coverage, beta=self.beta)
+        joint_f = 0.5 * file_f_beta + 0.5 * line_f_beta
 
         return BenchmarkResult(
             case_id=case.id,
@@ -210,6 +272,9 @@ class BenchmarkRunner:
             line_f1=line_f1,
             line_precision_matched=line_precision_matched,
             line_iou_matched=line_iou_matched,
+            file_f_beta=file_f_beta,
+            line_f_beta=line_f_beta,
+            joint_f=joint_f,
             function_hit_rate=function_hit_rate,
             functions_hit=functions_hit,
             functions_total=functions_total,
@@ -218,6 +283,48 @@ class BenchmarkRunner:
             partial=partial,
             error=error,
         )
+
+    def _normalize_ground_truth(
+        self, case: BenchmarkCase, repo_path: Path
+    ) -> dict[str, list[tuple[int, int]]]:
+        """Normalize ground truth line ranges to AST node boundaries."""
+        normalized: dict[str, list[tuple[int, int]]] = {}
+
+        for file_path, raw_lines in case.ground_truth_files_raw.items():
+            if not raw_lines:
+                # Fall back to original ranges
+                if file_path in case.ground_truth_files:
+                    normalized[file_path] = case.ground_truth_files[file_path]
+                continue
+
+            full_path = repo_path / file_path
+            if not full_path.exists() or not file_path.endswith(".py"):
+                # Not a Python file or doesn't exist, use original ranges
+                if file_path in case.ground_truth_files:
+                    normalized[file_path] = case.ground_truth_files[file_path]
+                continue
+
+            ast_ranges = normalize_to_ast_spans(full_path, set(raw_lines), context_padding=2)
+            if ast_ranges:
+                normalized[file_path] = ast_ranges
+            elif file_path in case.ground_truth_files:
+                normalized[file_path] = case.ground_truth_files[file_path]
+
+        return normalized
+
+    def _merge_soft_gt(
+        self,
+        original: dict[str, list[tuple[int, int]]],
+        soft: dict[str, list[tuple[int, int]]],
+    ) -> dict[str, list[tuple[int, int]]]:
+        """Merge soft ground truth ranges into original ground truth."""
+        merged = dict(original)
+        for file_path, ranges in soft.items():
+            if file_path in merged:
+                merged[file_path] = merged[file_path] + ranges
+            else:
+                merged[file_path] = ranges
+        return merged
 
     def _compute_summary(
         self,
@@ -241,6 +348,9 @@ class BenchmarkRunner:
                 avg_line_f1=0.0,
                 avg_line_precision_matched=0.0,
                 avg_line_iou_matched=0.0,
+                avg_file_f_beta=0.0,
+                avg_line_f_beta=0.0,
+                avg_joint_f=0.0,
                 function_cases=0,
                 avg_function_hit_rate=0.0,
                 avg_turns=0.0,
@@ -271,6 +381,9 @@ class BenchmarkRunner:
             avg_line_f1=sum(r.line_f1 for r in results) / n,
             avg_line_precision_matched=sum(r.line_precision_matched for r in results) / n,
             avg_line_iou_matched=sum(r.line_iou_matched for r in results) / n,
+            avg_file_f_beta=sum(r.file_f_beta for r in results) / n,
+            avg_line_f_beta=sum(r.line_f_beta for r in results) / n,
+            avg_joint_f=sum(r.joint_f for r in results) / n,
             function_cases=function_cases,
             avg_function_hit_rate=avg_function_hit_rate,
             avg_turns=sum(r.turns_used for r in results) / n,

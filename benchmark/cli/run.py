@@ -10,8 +10,12 @@ from relace_mcp.config import RelaceConfig
 from relace_mcp.config.compat import getenv_with_fallback
 from relace_mcp.config.settings import RELACE_DEFAULT_ENCODING
 
-from .datasets.mulocbench import DEFAULT_DATASET_PATH, load_mulocbench
-from .run.runner import BenchmarkRunner
+from ..config import EXCLUDED_REPOS, get_benchmark_dir
+from ..datasets.mulocbench import DEFAULT_DATASET_PATH, load_mulocbench
+from ..runner.executor import BenchmarkRunner
+
+# Internal constants
+_BETA = 0.5
 
 
 def _load_benchmark_config() -> RelaceConfig:
@@ -41,7 +45,7 @@ def _load_benchmark_config() -> RelaceConfig:
     show_default=True,
     help="MULocBench jsonl path (relative to benchmark/ if not absolute)",
 )
-@click.option("--limit", default=5, help="Maximum number of cases to run")
+@click.option("--limit", default=None, type=int, help="Maximum cases to run (default: all)")
 @click.option(
     "--shuffle/--no-shuffle",
     default=True,
@@ -54,18 +58,6 @@ def _load_benchmark_config() -> RelaceConfig:
     show_default=True,
     type=int,
     help="Random seed used when shuffling cases",
-)
-@click.option(
-    "--include-added-files/--exclude-added-files",
-    default=False,
-    show_default=True,
-    help="Include files marked as 'added' in ground truth (usually not present at base_commit)",
-)
-@click.option(
-    "--require-functions/--allow-no-functions",
-    default=True,
-    show_default=True,
-    help="Require at least one function scope in ground truth",
 )
 @click.option(
     "--output",
@@ -85,19 +77,18 @@ def main(
     limit: int,
     shuffle: bool,
     seed: int,
-    include_added_files: bool,
-    require_functions: bool,
     output: str,
     verbose: bool,
     progress: bool,
     dry_run: bool,
 ) -> None:
-    """Run MULocBench benchmark on fast_search."""
-    # Load .env from current directory or parents
+    """Run MULocBench benchmark on fast_search.
+
+    Large repos are automatically excluded via EXCLUDED_REPOS in config.
+    """
     load_dotenv()
 
-    # Resolve output path relative to benchmark directory
-    benchmark_dir = Path(__file__).parent
+    benchmark_dir = get_benchmark_dir()
     resolved_dataset_path = (
         Path(dataset_path) if Path(dataset_path).is_absolute() else (benchmark_dir / dataset_path)
     )
@@ -106,24 +97,27 @@ def main(
 
     click.echo("Loading MULocBench...")
     click.echo(f"  dataset: {resolved_dataset_path}")
-    click.echo(f"  limit:   {limit}")
+    click.echo(f"  limit:   {limit if limit is not None else 'all'}")
     click.echo(f"  shuffle: {shuffle}")
     click.echo(f"  seed:    {seed}")
+    click.echo(f"  excluded repos: {len(EXCLUDED_REPOS)}")
 
     try:
+        # load_mulocbench already applies EXCLUDED_REPOS by default
         cases = load_mulocbench(
             dataset_path=str(resolved_dataset_path),
             limit=limit,
             shuffle=shuffle,
             seed=seed,
-            include_added_files=include_added_files,
-            require_function_scopes=require_functions,
+            include_added_files=False,
+            require_function_scopes=True,
+            stratified=True,
         )
     except Exception as e:
         click.echo(f"Error loading dataset: {e}", err=True)
         sys.exit(1)
 
-    click.echo(f"Loaded {len(cases)} cases")
+    click.echo(f"Loaded {len(cases)} cases (large repos excluded)")
 
     if dry_run:
         click.echo("\n[Dry Run] Cases loaded:")
@@ -147,7 +141,14 @@ def main(
         )
         sys.exit(1)
 
-    runner = BenchmarkRunner(config, verbose=verbose, progress=progress)
+    runner = BenchmarkRunner(
+        config,
+        verbose=verbose,
+        progress=progress,
+        beta=_BETA,
+        normalize_ast=False,
+        soft_gt=False,
+    )
 
     click.echo("\nRunning benchmark...")
     summary = runner.run_benchmark(
@@ -158,8 +159,7 @@ def main(
             "limit": limit,
             "shuffle": shuffle,
             "seed": seed,
-            "include_added_files": include_added_files,
-            "require_functions": require_functions,
+            "beta": _BETA,
         },
     )
 
@@ -184,6 +184,9 @@ def main(
     click.echo(f"Avg Line F1:       {summary.avg_line_f1:.1%}")
     click.echo(f"Avg Line Prec(M):  {summary.avg_line_precision_matched:.1%}")
     click.echo(f"Avg Line IoU(M):   {summary.avg_line_iou_matched:.1%}")
+    click.echo(f"Avg File Fβ:       {summary.avg_file_f_beta:.1%}  (β={_BETA})")
+    click.echo(f"Avg Line Fβ:       {summary.avg_line_f_beta:.1%}  (β={_BETA})")
+    click.echo(f"Avg Joint F:       {summary.avg_joint_f:.1%}")
     click.echo(f"Func Cases:        {summary.function_cases}/{summary.total_cases}")
     click.echo(f"Avg Func Hit Rate: {summary.avg_function_hit_rate:.1%}")
     click.echo(f"Avg Turns:         {summary.avg_turns:.2f}")
