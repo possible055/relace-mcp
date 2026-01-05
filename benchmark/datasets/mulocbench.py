@@ -214,6 +214,108 @@ def load_mulocbench(
                 row = json.loads(stripped)
             except json.JSONDecodeError:
                 continue
+            # Check for new schema (final.jsonl style)
+            if "repo" in row and "hard_gt" in row:
+                repo = row["repo"]
+
+                # Early skip for excluded repos
+                if repo.lower() in {r.lower() for r in exclude_repos}:
+                    continue
+
+                case_id = row.get("id") or _make_case_id(repo, row.get("issue_url"), index=index)
+                query = row.get("query", "")
+                # Only use valid strings for base_commit
+                base_commit = row.get("base_commit")
+                if not isinstance(base_commit, str):
+                    base_commit = ""
+
+                issue_url = row.get("issue_url")
+                pr_url = row.get("pr_url")
+
+                file_lines: dict[str, set[int]] = defaultdict(set)
+                function_targets: list[FunctionTarget] = []
+
+                hard_gt = row.get("hard_gt")
+                if isinstance(hard_gt, list):
+                    for item in hard_gt:
+                        if not isinstance(item, dict):
+                            continue
+                        path = item.get("path")
+                        rng = item.get("range")  # [start, end]
+                        if (
+                            not isinstance(path, str)
+                            or not path
+                            or not isinstance(rng, list)
+                            or len(rng) != 2
+                        ):
+                            continue
+
+                        start, end = rng
+                        # Add lines
+                        if isinstance(start, int) and isinstance(end, int):
+                            file_lines[path].update(range(start, end + 1))
+
+                            # Function target
+                            fn_name = item.get("function")
+                            container = item.get("class")
+                            if fn_name:
+                                function_targets.append(
+                                    FunctionTarget(
+                                        path=path,
+                                        container=container,
+                                        name=fn_name,
+                                        start_line=start,
+                                        ranges=[(start, end)],
+                                    )
+                                )
+
+                # Build ground truths
+                ground_truth_files: dict[str, list[tuple[int, int]]] = {}
+                ground_truth_files_raw: dict[str, list[int]] = {}
+
+                for path, lines in file_lines.items():
+                    ranges = _lines_to_ranges(lines)
+                    if ranges:
+                        ground_truth_files[path] = ranges
+                        ground_truth_files_raw[path] = sorted(lines)
+
+                ground_truth_files_soft: dict[str, list[tuple[int, int]]] = {}
+                soft_context = row.get("soft_context")
+                if isinstance(soft_context, list):
+                    for item in soft_context:
+                        if not isinstance(item, dict):
+                            continue
+                        path = item.get("path")
+                        rng = item.get("range")
+                        if (
+                            isinstance(path, str)
+                            and path
+                            and isinstance(rng, list)
+                            and len(rng) == 2
+                        ):
+                            ground_truth_files_soft.setdefault(path, []).append(tuple(rng))
+
+                if not ground_truth_files:
+                    continue
+
+                cases.append(
+                    BenchmarkCase(
+                        id=case_id,
+                        query=query,
+                        repo=repo,
+                        base_commit=base_commit,
+                        ground_truth_files=ground_truth_files,
+                        ground_truth_files_raw=ground_truth_files_raw,
+                        ground_truth_files_soft=ground_truth_files_soft,
+                        ground_truth_functions=function_targets,
+                        query_type=classify_query_str(query),
+                        issue_url=issue_url,
+                        pr_url=pr_url,
+                    )
+                )
+                continue
+
+            # Original schema handling
             org = row.get("organization")
             repo_name = row.get("repo_name")
             if (

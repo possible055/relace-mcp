@@ -1,12 +1,3 @@
-"""Validate filtered dataset quality and correctness.
-
-Validates:
-1. Ground truth files exist in the repository
-2. Line ranges are valid and within file bounds
-3. Function names match AST at specified lines
-4. Solvability evidence appears in query text
-"""
-
 import json
 import sys
 from dataclasses import dataclass, field

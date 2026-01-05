@@ -1,38 +1,18 @@
-"""Shared tree-sitter utilities for Python parsing.
+import tree_sitter_python as tspython
+from tree_sitter import Language, Node, Parser
 
-Consolidated parser initialization and signature extraction logic.
-"""
-
-from typing import TYPE_CHECKING
-
-try:
-    import tree_sitter_python as tspython
-    from tree_sitter import Language, Parser
-
-    PY_LANGUAGE = Language(tspython.language())
-    _PARSER: Parser | None = None
-
-    def get_parser() -> Parser:
-        global _PARSER
-        if _PARSER is None:
-            _PARSER = Parser(PY_LANGUAGE)
-        return _PARSER
-
-    TREE_SITTER_AVAILABLE = True
-
-except ImportError:
-    TREE_SITTER_AVAILABLE = False
-    PY_LANGUAGE = None  # type: ignore[assignment]
-
-    def get_parser() -> "Parser":  # type: ignore[misc]
-        raise ImportError("tree-sitter-python not installed")
+PY_LANGUAGE = Language(tspython.language())
+_PARSER: Parser | None = None
 
 
-if TYPE_CHECKING:
-    from tree_sitter import Node
+def get_parser() -> Parser:
+    global _PARSER
+    if _PARSER is None:
+        _PARSER = Parser(PY_LANGUAGE)
+    return _PARSER
 
 
-def extract_signature(node: "Node", source: bytes) -> str:
+def extract_signature(node: Node, source: bytes) -> str:
     """Extract function signature from the definition line.
 
     Args:

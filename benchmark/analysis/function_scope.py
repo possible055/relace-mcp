@@ -2,10 +2,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .treesitter import TREE_SITTER_AVAILABLE, extract_signature, get_parser
+from tree_sitter import Tree
 
-if TREE_SITTER_AVAILABLE:
-    from tree_sitter import Tree
+from .treesitter import extract_signature, get_parser
 
 
 @dataclass
@@ -94,9 +93,6 @@ def extract_function_scopes(
     Returns:
         List of FunctionScope objects for functions containing any target lines.
     """
-    if not TREE_SITTER_AVAILABLE:
-        return []
-
     if not file_path.exists() or not file_path.suffix == ".py":
         return []
 

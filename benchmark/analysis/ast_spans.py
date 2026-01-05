@@ -1,14 +1,13 @@
 from pathlib import Path
 
-from ..metrics.ranges import merge_ranges
-from .treesitter import TREE_SITTER_AVAILABLE, get_parser
+from tree_sitter import Tree
 
-if TREE_SITTER_AVAILABLE:
-    from tree_sitter import Tree
+from ..metrics.ranges import merge_ranges
+from .treesitter import get_parser
 
 
 def _find_enclosing_node(
-    tree: "Tree",
+    tree: Tree,
     line: int,
     *,
     node_types: frozenset[str] = frozenset({"function_definition", "class_definition"}),
@@ -26,6 +25,8 @@ def _find_enclosing_node(
     def visit() -> None:
         nonlocal best_match, best_size
         node = cursor.node
+        if node is None:
+            return
         start_row = node.start_point.row
         end_row = node.end_point.row
 

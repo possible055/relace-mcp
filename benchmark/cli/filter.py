@@ -1,11 +1,3 @@
-"""Dataset filtering pipeline with solvability and context evaluation.
-
-This module provides a CLI to filter MULocBench dataset by:
-1. Solvability - Ensure problem text is clear enough to locate code
-2. Function Scope - Normalize line ranges to complete functions
-3. Soft Context - Build call graph context with LLM relevance filtering
-"""
-
 import json
 import sys
 from pathlib import Path
@@ -16,6 +8,11 @@ from dotenv import load_dotenv
 
 from relace_mcp.config import RelaceConfig
 
+from ..analysis.call_graph import (
+    build_global_index,
+    get_context_functions,
+    is_wrapper_function,
+)
 from ..analysis.function_scope import normalize_gt_to_function_scopes
 from ..config import EXCLUDED_REPOS, get_benchmark_dir, get_repos_dir
 from ..datasets.filtered import FilteredCase, load_filtered_dataset
@@ -61,12 +58,18 @@ _RELEVANCE_THRESHOLD = 0.5
     is_flag=True,
     help="Show what would be done without writing output",
 )
+@click.option(
+    "--build-context",
+    is_flag=True,
+    help="Build soft context from call graph (adds related functions)",
+)
 def main(
     input_path: str,
     output_path: str,
     limit: int | None,
     verbose: bool,
     dry_run: bool,
+    build_context: bool,
 ) -> None:
     """Filter MULocBench dataset with solvability and context evaluation.
 
@@ -88,6 +91,7 @@ def main(
     click.echo(f"Input:  {resolved_input}")
     click.echo(f"Output: {resolved_output}")
     click.echo(f"Excluded repos: {len(EXCLUDED_REPOS)}")
+    click.echo(f"Build context: {build_context}")
 
     # Load config
     try:
@@ -230,6 +234,113 @@ def main(
                 click.echo()
 
         click.echo(f"  Accepted: {len(filtered_cases)}, Rejected: {rejected_count}")
+
+    # Build soft context if requested
+    if build_context and filtered_cases:
+        click.echo("\n[2.5/4] Building soft context from call graphs...")
+        relevance_evaluator = ContextRelevanceEvaluator(
+            config,
+            threshold=_RELEVANCE_THRESHOLD,
+            cache_dir=relevance_cache,
+        )
+
+        # Group cases by repo for efficiency
+        repo_cases: dict[str, list[int]] = {}
+        for idx, entry in enumerate(filtered_cases):
+            repo = entry["repo"]
+            if repo not in repo_cases:
+                repo_cases[repo] = []
+            repo_cases[repo].append(idx)
+
+        click.echo(f"  Processing {len(repo_cases)} repositories...")
+
+        for repo_name, case_indices in repo_cases.items():
+            if verbose:
+                click.echo(f"  Building index for {repo_name}...")
+
+            # Get repo path from first case
+            first_entry = filtered_cases[case_indices[0]]
+            try:
+                repo_path = ensure_repo(
+                    repos_dir=repos_dir,
+                    repo=repo_name,
+                    base_commit=first_entry["base_commit"],
+                    verbose=verbose,
+                )
+            except Exception as e:
+                if verbose:
+                    click.echo(f"    Skip {repo_name}: {e}")
+                continue
+
+            # Build call graph for this repo
+            graph = build_global_index(repo_path)
+
+            # Process each case in this repo
+            for idx in case_indices:
+                entry = filtered_cases[idx]
+                hard_gt = entry.get("hard_gt", [])
+                if not hard_gt:
+                    continue
+
+                # Extract seed function names from hard_gt
+                seed_functions = [gt.get("function", "").split(".")[-1] for gt in hard_gt]
+                seed_functions = [f for f in seed_functions if f]
+
+                if not seed_functions:
+                    continue
+
+                # Get context functions (callers + callees)
+                context_funcs = get_context_functions(
+                    graph,
+                    seed_functions,
+                    include_callers=True,
+                    include_callees=True,
+                )
+
+                # Filter out wrapper functions
+                context_funcs = [f for f in context_funcs if not is_wrapper_function(f)]
+
+                if not context_funcs:
+                    continue
+
+                # Evaluate relevance with LLM
+                query = entry.get("query", "")
+                relevance_results = relevance_evaluator.evaluate(query, context_funcs)
+
+                # Build soft_context from relevant functions
+                soft_context = []
+                for result in relevance_results:
+                    if result.include:
+                        # Find matching function for full info
+                        func = next(
+                            (
+                                f
+                                for f in context_funcs
+                                if f.name == result.function_name
+                                and f.file_path == result.file_path
+                            ),
+                            None,
+                        )
+                        if func:
+                            soft_context.append(
+                                {
+                                    "path": func.file_path,
+                                    "function": f"{func.class_name}.{func.name}"
+                                    if func.class_name
+                                    else func.name,
+                                    "range": [func.start_line, func.end_line],
+                                    "signature": func.signature,
+                                    "relevance_score": result.relevance_score,
+                                }
+                            )
+
+                entry["soft_context"] = soft_context
+
+                if verbose:
+                    click.echo(f"    {entry['id']}: {len(soft_context)} soft context functions")
+
+        total_soft = sum(len(e.get("soft_context", [])) for e in filtered_cases)
+        click.echo(f"  Added {total_soft} soft context functions total")
 
     # Generate report
     click.echo("\n[3/4] Generating report...")

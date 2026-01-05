@@ -1,6 +1,6 @@
-import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import click
@@ -61,8 +61,8 @@ def _load_benchmark_config() -> RelaceConfig:
 )
 @click.option(
     "--output",
-    default="results/benchmark_results.json",
-    help="Output file path (relative to benchmark/)",
+    default=None,
+    help="Output file prefix (relative to benchmark/results/). Default: run_<timestamp>",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.option(
@@ -92,9 +92,6 @@ def main(
     resolved_dataset_path = (
         Path(dataset_path) if Path(dataset_path).is_absolute() else (benchmark_dir / dataset_path)
     )
-    output_path = benchmark_dir / output
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
     click.echo("Loading MULocBench...")
     click.echo(f"  dataset: {resolved_dataset_path}")
     click.echo(f"  limit:   {limit if limit is not None else 'all'}")
@@ -164,9 +161,31 @@ def main(
     )
 
     # Save results
-    with output_path.open("w", encoding="utf-8") as f:
-        json.dump(summary.to_dict(), f, indent=2)
-    click.echo(f"\nResults saved to {output_path}")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    benchmark_dir = get_benchmark_dir()
+    results_dir = benchmark_dir / "results"
+
+    if output:
+        # Use provided path/prefix
+        if Path(output).is_absolute():
+            output_path = Path(output)
+        else:
+            output_path = benchmark_dir / output
+    else:
+        # Default to results/run_<timestamp>
+        output_path = results_dir / f"run_{timestamp}"
+
+    # summary.save handles directory creation and dual-file extensions (.jsonl, .report.json)
+    summary.save(output_path)
+
+    jsonl_path = (
+        output_path if output_path.suffix == ".jsonl" else output_path.with_suffix(".jsonl")
+    )
+    report_path = jsonl_path.with_suffix(".report.json")
+
+    click.echo("\nResults saved to:")
+    click.echo(f"  - {jsonl_path}")
+    click.echo(f"  - {report_path}")
 
     # Print summary
     click.echo("\n" + "=" * 50)

@@ -1,4 +1,6 @@
+import json
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any
 
 
@@ -81,3 +83,26 @@ class BenchmarkSummary:
             "avg_repo_prep_ms": self.avg_repo_prep_ms,
             "results": [asdict(r) for r in self.results],
         }
+
+    def save(self, output_path: Path) -> None:
+        """Save results to JSONL and summary to .report.json."""
+        # Ensure directory exists
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # 1. Save results to .jsonl
+        # If output_path is already .jsonl, use it. Otherwise, use .jsonl extension.
+        jsonl_path = (
+            output_path if output_path.suffix == ".jsonl" else output_path.with_suffix(".jsonl")
+        )
+
+        with jsonl_path.open("w", encoding="utf-8") as f:
+            for r in self.results:
+                f.write(json.dumps(asdict(r), ensure_ascii=False) + "\n")
+
+        # 2. Save summary to .report.json (exclude full results list)
+        summary_dict = self.to_dict()
+        del summary_dict["results"]
+
+        report_path = jsonl_path.with_suffix(".report.json")
+        with report_path.open("w", encoding="utf-8") as f:
+            json.dump(summary_dict, f, indent=2, ensure_ascii=False)

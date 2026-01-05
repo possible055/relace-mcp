@@ -7,8 +7,21 @@ from ..config import get_results_dir
 
 
 def load_results(path: str) -> dict[str, Any]:
+    path_obj = Path(path)
+    if path_obj.suffix == ".jsonl":
+        results = []
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped:
+                    results.append(json.loads(stripped))
+        return {"results": results}
+
     with open(path, encoding="utf-8") as f:
-        return json.load(f)  # type: ignore[no-any-return]
+        data = json.load(f)
+        if isinstance(data, list):
+            return {"results": data}
+        return data  # type: ignore[no-any-return]
 
 
 def print_detailed_table(results: list[dict[str, Any]]) -> None:

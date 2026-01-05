@@ -1,19 +1,10 @@
-"""Call graph analysis for soft ground truth expansion.
-
-Uses tree-sitter to analyze Python files and extract function call relationships.
-This enables expanding ground truth to include callee functions that may be
-relevant context for understanding the code change.
-
-Supports both local (GT files only) and global (entire repo) call graph analysis.
-"""
-
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
 
 from ..filters.blacklist import is_blacklisted
-from .treesitter import TREE_SITTER_AVAILABLE, extract_signature, get_parser
+from .treesitter import extract_signature, get_parser
 
 
 class FunctionDef(NamedTuple):
@@ -35,10 +26,11 @@ def _extract_name(node) -> str | None:
         return node.text.decode("utf-8") if node.text else None
     if node.type == "attribute":
         # a.b.c -> return "c" (the function name)
+        last_name = None
         for child in node.children:
             if child.type == "identifier":
                 last_name = child.text.decode("utf-8") if child.text else None
-        return last_name if "last_name" in dir() else None
+        return last_name
     return None
 
 
@@ -88,9 +80,6 @@ def analyze_file(file_path: Path) -> CallGraphResult | None:
     Returns:
         CallGraphResult with function definitions, or None on error.
     """
-    if not TREE_SITTER_AVAILABLE:
-        return None
-
     if not file_path.exists() or not file_path.suffix == ".py":
         return None
 
@@ -131,7 +120,7 @@ def expand_ground_truth(
     repo_path: Path,
     ground_truth_files: dict[str, list[tuple[int, int]]],
     *,
-    max_depth: int = 1,
+    _max_depth: int = 1,
 ) -> dict[str, list[tuple[int, int]]]:
     """Expand ground truth by including called functions.
 
@@ -141,14 +130,11 @@ def expand_ground_truth(
     Args:
         repo_path: Root path of the repository.
         ground_truth_files: Original ground truth (path -> line ranges).
-        max_depth: Maximum call depth to expand (1 = direct calls only).
+        _max_depth: Maximum call depth to expand (1 = direct calls only).
 
     Returns:
         Expanded ground truth including called functions.
     """
-    if not TREE_SITTER_AVAILABLE:
-        return {}
-
     # Build a map of all functions in the repo (only GT files for now)
     all_functions: dict[str, dict[str, tuple[str, FunctionDef]]] = {}  # file -> name -> (path, def)
 
@@ -254,14 +240,11 @@ class GlobalCallGraph:
 
 
 def _analyze_file_global(
-    file_path: Path,
+    _file_path: Path,
     relative_path: str,
     source: bytes,
 ) -> list[GlobalFunctionDef]:
     """Analyze a single file for global indexing."""
-    if not TREE_SITTER_AVAILABLE:
-        return []
-
     parser = get_parser()
     tree = parser.parse(source)
     functions: list[GlobalFunctionDef] = []
@@ -332,9 +315,6 @@ def build_global_index(
     Returns:
         GlobalCallGraph with all functions indexed.
     """
-    if not TREE_SITTER_AVAILABLE:
-        return GlobalCallGraph()
-
     if include_patterns is None:
         include_patterns = ["**/*.py"]
 
