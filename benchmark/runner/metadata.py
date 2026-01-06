@@ -15,7 +15,7 @@ from relace_mcp.config.settings import RELACE_PROVIDER
 from relace_mcp.tools.search.schemas.tool_schemas import get_tool_schemas
 
 if TYPE_CHECKING:
-    from ..datasets.mulocbench import BenchmarkCase
+    from benchmark.schemas import DatasetCase
 
 
 def sanitize_endpoint_url(url: str) -> str:
@@ -53,7 +53,7 @@ def build_run_metadata(
     *,
     config: RelaceConfig,
     repos_dir: Path,
-    cases: list["BenchmarkCase"],
+    cases: list["DatasetCase"],
     run_config: dict[str, Any] | None,
     started_at: datetime,
     completed_at: datetime,

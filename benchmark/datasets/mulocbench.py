@@ -1,173 +1,51 @@
-import ast
+"""Loader for benchmark datasets.
+
+Supports the unified DatasetCase format with hard_gt and soft_context.
+"""
+
 import json
 import random
-import re
 from collections import defaultdict
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
-from ..config import EXCLUDED_REPOS, get_benchmark_dir
-from ..filters.query_type import classify_query_str
-
-DEFAULT_DATASET_PATH = "data/mulocbench.jsonl"
-
-
-@dataclass(frozen=True)
-class FunctionTarget:
-    path: str
-    container: str | None
-    name: str
-    start_line: int
-    ranges: list[tuple[int, int]]
-
-
-@dataclass
-class BenchmarkCase:
-    id: str
-    query: str
-    repo: str
-    base_commit: str
-    ground_truth_files: dict[str, list[tuple[int, int]]] = field(default_factory=dict)
-    ground_truth_files_raw: dict[str, list[int]] = field(default_factory=dict)
-    ground_truth_files_soft: dict[str, list[tuple[int, int]]] = field(default_factory=dict)
-    ground_truth_functions: list[FunctionTarget] = field(default_factory=list)
-    query_type: str | None = None
-    issue_url: str | None = None
-    pr_url: str | None = None
-
-
-@dataclass(frozen=True)
-class _LocScope:
-    container: str | None
-    function_name: str | None
-    start_line: int | None
+from ..config import DEFAULT_MULOCBENCH_PATH, EXCLUDED_REPOS, get_benchmark_dir
+from ..schemas import ContextEntry, DatasetCase, GroundTruthEntry, SolvabilityInfo
 
 
 def _resolve_dataset_path(dataset_path: str) -> Path:
     path = Path(dataset_path)
     if path.is_absolute():
         return path
-    # CLI semantics: dataset paths are relative to benchmark/
     return get_benchmark_dir() / path
 
 
-def _parse_scope(raw: str) -> _LocScope | None:
-    try:
-        parsed = ast.literal_eval(raw)
-    except Exception:
-        return None
-
-    if not (isinstance(parsed, tuple) and len(parsed) == 3):
-        return None
-
-    container, function_name, start_line = parsed
-    if container is not None and not isinstance(container, str):
-        return None
-    if function_name is not None and not isinstance(function_name, str):
-        return None
-    if start_line is not None and not isinstance(start_line, int):
-        return None
-
-    return _LocScope(
-        container=container,
-        function_name=function_name,
-        start_line=start_line,
-    )
-
-
-def _lines_to_ranges(lines: set[int]) -> list[tuple[int, int]]:
-    if not lines:
-        return []
-
-    sorted_lines = sorted({line for line in lines if isinstance(line, int) and line > 0})
-    if not sorted_lines:
-        return []
-
-    ranges: list[tuple[int, int]] = []
-    start = prev = sorted_lines[0]
-
-    for line in sorted_lines[1:]:
-        if line == prev + 1:
-            prev = line
-            continue
-        ranges.append((start, prev))
-        start = prev = line
-
-    ranges.append((start, prev))
-    return ranges
-
-
-def _make_case_id(repo: str, issue_url: str | None, *, index: int) -> str:
-    if issue_url:
-        match = re.search(r"/(issues|pull)/(\d+)", issue_url)
-        if match:
-            prefix = "#" if match.group(1) == "issues" else "!"
-            return f"{repo}{prefix}{match.group(2)}"
-    return f"{repo}:{index}"
-
-
-def _parse_file_loc(raw: Any) -> dict[str, Any] | None:
-    if not isinstance(raw, str) or not raw.strip():
-        return None
-    try:
-        parsed = ast.literal_eval(raw)
-    except Exception:
-        return None
-    return parsed if isinstance(parsed, dict) else None
-
-
-def _extract_lines(change: Any) -> set[int]:
-    if not isinstance(change, dict):
-        return set()
-
-    lines: set[int] = set()
-    for key in ("add", "mod"):
-        values = change.get(key)
-        if not isinstance(values, list):
-            continue
-        for value in values:
-            if isinstance(value, int) and value > 0:
-                lines.add(value)
-    return lines
-
-
 def _stratified_sample(
-    cases: list[BenchmarkCase], limit: int, rng: random.Random
-) -> list[BenchmarkCase]:
-    """Stratified sampling: ensure each repo has at least 1 case.
-
-    If there are more repos than the limit, randomly select `limit` repos
-    and pick one case from each. Otherwise, pick one case from each repo,
-    then fill remaining quota from the pool.
-    """
-    by_repo: dict[str, list[BenchmarkCase]] = defaultdict(list)
+    cases: list[DatasetCase], limit: int, rng: random.Random
+) -> list[DatasetCase]:
+    """Stratified sampling: ensure each repo has at least 1 case."""
+    by_repo: dict[str, list[DatasetCase]] = defaultdict(list)
     for c in cases:
         by_repo[c.repo].append(c)
 
     repos = list(by_repo.keys())
 
-    # If more repos than limit, select a random subset of repos
     if len(repos) > limit:
         selected_repos = rng.sample(repos, limit)
-        selected: list[BenchmarkCase] = []
+        selected: list[DatasetCase] = []
         for repo in selected_repos:
             case = rng.choice(by_repo[repo])
             selected.append(case)
         rng.shuffle(selected)
         return selected
 
-    # Otherwise: pick 1 from each repo, then fill remaining quota
-    selected: list[BenchmarkCase] = []
+    selected = []
     selected_set: set[str] = set()
 
-    # Phase 1: pick 1 case from each repo
     for _repo, repo_cases in by_repo.items():
         case = rng.choice(repo_cases)
         selected.append(case)
         selected_set.add(case.id)
 
-    # Phase 2: fill remaining quota proportionally
     remaining = limit - len(selected)
     if remaining > 0:
         pool = [c for c in cases if c.id not in selected_set]
@@ -180,22 +58,31 @@ def _stratified_sample(
     return selected
 
 
-def load_mulocbench(
+def load_dataset(
     *,
-    dataset_path: str = DEFAULT_DATASET_PATH,
+    dataset_path: str = DEFAULT_MULOCBENCH_PATH,
     limit: int | None = None,
     shuffle: bool = True,
     seed: int = 0,
-    include_added_files: bool = False,
-    require_function_scopes: bool = True,
     stratified: bool = False,
     exclude_repos: frozenset[str] | None = None,
-) -> list[BenchmarkCase]:
-    """Load MULocBench jsonl and convert rows to BenchmarkCase objects.
+    min_confidence: float = 0.0,
+) -> list[DatasetCase]:
+    """Load benchmark dataset in unified format.
+
+    This loader supports the new standardized schema with hard_gt and soft_context.
 
     Args:
-        exclude_repos: Repos to skip. Defaults to EXCLUDED_REPOS (large repos).
-                       Pass frozenset() to include all repos.
+        dataset_path: Path to JSONL file (relative to benchmark/ if not absolute).
+        limit: Maximum cases to load.
+        shuffle: Whether to shuffle cases.
+        seed: Random seed for shuffling.
+        stratified: If True with limit, ensure each repo has at least 1 case.
+        exclude_repos: Repos to skip. Defaults to EXCLUDED_REPOS.
+        min_confidence: Minimum solvability confidence to include (0.0 = include all).
+
+    Returns:
+        List of DatasetCase objects.
     """
     if exclude_repos is None:
         exclude_repos = EXCLUDED_REPOS
@@ -204,224 +91,84 @@ def load_mulocbench(
     if not path.exists():
         raise FileNotFoundError(f"Dataset not found: {path}")
 
-    cases: list[BenchmarkCase] = []
+    excluded_lower = {r.lower() for r in exclude_repos}
+    cases: list[DatasetCase] = []
+
     with path.open("r", encoding="utf-8") as f:
-        for index, line in enumerate(f):
+        for line in f:
             stripped = line.strip()
             if not stripped:
                 continue
+
             try:
-                row = json.loads(stripped)
+                data = json.loads(stripped)
             except json.JSONDecodeError:
                 continue
-            # Check for new schema (final.jsonl style)
-            if "repo" in row and "hard_gt" in row:
-                repo = row["repo"]
 
-                # Early skip for excluded repos
-                if repo.lower() in {r.lower() for r in exclude_repos}:
+            repo = data.get("repo", "")
+            if repo.lower() in excluded_lower:
+                continue
+
+            # Parse solvability if present
+            solvability = None
+            if "solvability" in data and data["solvability"]:
+                solvability = SolvabilityInfo.from_dict(data["solvability"])
+                if min_confidence > 0 and solvability.confidence < min_confidence:
                     continue
 
-                case_id = row.get("id") or _make_case_id(repo, row.get("issue_url"), index=index)
-                query = row.get("query", "")
-                # Only use valid strings for base_commit
-                base_commit = row.get("base_commit")
-                if not isinstance(base_commit, str):
-                    base_commit = ""
-
-                issue_url = row.get("issue_url")
-                pr_url = row.get("pr_url")
-
-                file_lines: dict[str, set[int]] = defaultdict(set)
-                function_targets: list[FunctionTarget] = []
-
-                hard_gt = row.get("hard_gt")
-                if isinstance(hard_gt, list):
-                    for item in hard_gt:
-                        if not isinstance(item, dict):
-                            continue
-                        path = item.get("path")
-                        rng = item.get("range")  # [start, end]
-                        if (
-                            not isinstance(path, str)
-                            or not path
-                            or not isinstance(rng, list)
-                            or len(rng) != 2
-                        ):
-                            continue
-
-                        start, end = rng
-                        # Add lines
-                        if isinstance(start, int) and isinstance(end, int):
-                            file_lines[path].update(range(start, end + 1))
-
-                            # Function target
-                            fn_name = item.get("function")
-                            container = item.get("class")
-                            if fn_name:
-                                function_targets.append(
-                                    FunctionTarget(
-                                        path=path,
-                                        container=container,
-                                        name=fn_name,
-                                        start_line=start,
-                                        ranges=[(start, end)],
-                                    )
-                                )
-
-                # Build ground truths
-                ground_truth_files: dict[str, list[tuple[int, int]]] = {}
-                ground_truth_files_raw: dict[str, list[int]] = {}
-
-                for path, lines in file_lines.items():
-                    ranges = _lines_to_ranges(lines)
-                    if ranges:
-                        ground_truth_files[path] = ranges
-                        ground_truth_files_raw[path] = sorted(lines)
-
-                ground_truth_files_soft: dict[str, list[tuple[int, int]]] = {}
-                soft_context = row.get("soft_context")
-                if isinstance(soft_context, list):
-                    for item in soft_context:
-                        if not isinstance(item, dict):
-                            continue
-                        path = item.get("path")
-                        rng = item.get("range")
-                        if (
-                            isinstance(path, str)
-                            and path
-                            and isinstance(rng, list)
-                            and len(rng) == 2
-                        ):
-                            ground_truth_files_soft.setdefault(path, []).append(tuple(rng))
-
-                if not ground_truth_files:
+            # Parse hard_gt
+            hard_gt: list[GroundTruthEntry] = []
+            for gt in data.get("hard_gt", []):
+                if not isinstance(gt, dict):
                     continue
-
-                cases.append(
-                    BenchmarkCase(
-                        id=case_id,
-                        query=query,
-                        repo=repo,
-                        base_commit=base_commit,
-                        ground_truth_files=ground_truth_files,
-                        ground_truth_files_raw=ground_truth_files_raw,
-                        ground_truth_files_soft=ground_truth_files_soft,
-                        ground_truth_functions=function_targets,
-                        query_type=classify_query_str(query),
-                        issue_url=issue_url,
-                        pr_url=pr_url,
+                path_str = gt.get("path", "")
+                range_data = gt.get("range", [])
+                if not path_str or len(range_data) < 2:
+                    continue
+                hard_gt.append(
+                    GroundTruthEntry(
+                        path=path_str,
+                        function=gt.get("function", ""),
+                        range=(range_data[0], range_data[1]),
+                        class_name=gt.get("class"),
+                        signature=gt.get("signature"),
                     )
                 )
+
+            # Skip cases without ground truth
+            if not hard_gt:
                 continue
 
-            # Original schema handling
-            org = row.get("organization")
-            repo_name = row.get("repo_name")
-            if (
-                not isinstance(org, str)
-                or not isinstance(repo_name, str)
-                or not org
-                or not repo_name
-            ):
-                continue
-
-            repo = f"{org}/{repo_name}"
-
-            # Early skip for excluded repos (avoid clone)
-            if repo.lower() in {r.lower() for r in exclude_repos}:
-                continue
-
-            issue_url = (
-                row.get("iss_html_url") if isinstance(row.get("iss_html_url"), str) else None
-            )
-            pr_url = row.get("pr_html_url") if isinstance(row.get("pr_html_url"), str) else None
-            title = row.get("title") if isinstance(row.get("title"), str) else ""
-            body = row.get("body") if isinstance(row.get("body"), str) else ""
-            query = (title + "\n\n" + body).strip()
-
-            file_loc = _parse_file_loc(row.get("file_loc"))
-            if not file_loc:
-                continue
-
-            base_commit = file_loc.get("base_commit") or row.get("base_commit")
-            if not isinstance(base_commit, str) or not base_commit:
-                continue
-
-            files = file_loc.get("files")
-            if not isinstance(files, list):
-                continue
-
-            ground_truth_files: dict[str, list[tuple[int, int]]] = {}
-            ground_truth_files_raw: dict[str, list[int]] = {}
-            function_targets: list[FunctionTarget] = []
-
-            for file_entry in files:
-                if not isinstance(file_entry, dict):
+            # Parse soft_context
+            soft_context: list[ContextEntry] = []
+            for ctx in data.get("soft_context", []):
+                if not isinstance(ctx, dict):
                     continue
-                status = file_entry.get("status")
-                if status == "added" and not include_added_files:
+                path_str = ctx.get("path", "")
+                range_data = ctx.get("range", [])
+                if not path_str or len(range_data) < 2:
                     continue
-
-                file_path = file_entry.get("path")
-                if not isinstance(file_path, str) or not file_path:
-                    continue
-
-                loc = file_entry.get("Loc")
-                if not isinstance(loc, dict):
-                    continue
-
-                file_lines: set[int] = set()
-                file_lines_raw: list[int] = []
-
-                for raw_scope, change in loc.items():
-                    if not isinstance(raw_scope, str):
-                        continue
-                    lines = _extract_lines(change)
-                    if not lines:
-                        continue
-                    file_lines |= lines
-                    file_lines_raw.extend(sorted(lines))
-
-                    scope = _parse_scope(raw_scope)
-                    if not scope or not scope.function_name or not scope.start_line:
-                        continue
-                    ranges = _lines_to_ranges(lines)
-                    if not ranges:
-                        continue
-                    function_targets.append(
-                        FunctionTarget(
-                            path=file_path,
-                            container=scope.container,
-                            name=scope.function_name,
-                            start_line=scope.start_line,
-                            ranges=ranges,
-                        )
+                soft_context.append(
+                    ContextEntry(
+                        path=path_str,
+                        function=ctx.get("function", ""),
+                        range=(range_data[0], range_data[1]),
+                        signature=ctx.get("signature"),
+                        relevance_score=ctx.get("relevance_score"),
                     )
-
-                ranges = _lines_to_ranges(file_lines)
-                if not ranges:
-                    continue
-                ground_truth_files.setdefault(file_path, []).extend(ranges)
-                ground_truth_files_raw.setdefault(file_path, []).extend(sorted(file_lines))
-
-            if not ground_truth_files:
-                continue
-            if require_function_scopes and not function_targets:
-                continue
+                )
 
             cases.append(
-                BenchmarkCase(
-                    id=_make_case_id(repo, issue_url, index=index),
-                    query=query,
+                DatasetCase(
+                    id=data.get("id", ""),
+                    query=data.get("query", ""),
                     repo=repo,
-                    base_commit=base_commit,
-                    ground_truth_files=ground_truth_files,
-                    ground_truth_files_raw=ground_truth_files_raw,
-                    ground_truth_functions=function_targets,
-                    query_type=classify_query_str(query),
-                    issue_url=issue_url,
-                    pr_url=pr_url,
+                    base_commit=data.get("base_commit", ""),
+                    hard_gt=hard_gt,
+                    soft_context=soft_context,
+                    solvability=solvability,
+                    issue_url=data.get("issue_url"),
+                    pr_url=data.get("pr_url"),
                 )
             )
 
@@ -434,3 +181,7 @@ def load_mulocbench(
         cases = _stratified_sample(cases, limit, rng)
 
     return cases if limit is None else cases[:limit]
+
+
+# Backwards compatibility alias
+load_mulocbench = load_dataset

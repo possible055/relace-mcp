@@ -1,9 +1,9 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "benchmark"))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from datasets.query_classifier import QueryType, classify_query, classify_query_str
+from benchmark.filters.query_type import QueryType, classify_query, classify_query_str
 
 
 class TestClassifyQuery:

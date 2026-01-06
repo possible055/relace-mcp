@@ -1,6 +1,5 @@
 import os
 import sys
-from datetime import datetime
 from pathlib import Path
 
 import click
@@ -10,9 +9,10 @@ from relace_mcp.config import RelaceConfig
 from relace_mcp.config.compat import getenv_with_fallback
 from relace_mcp.config.settings import RELACE_DEFAULT_ENCODING
 
-from ..config import EXCLUDED_REPOS, get_benchmark_dir
-from ..datasets.mulocbench import DEFAULT_DATASET_PATH, load_mulocbench
+from ..config import DEFAULT_FILTERED_PATH, EXCLUDED_REPOS, get_benchmark_dir, get_reports_dir
+from ..datasets import load_dataset
 from ..runner.executor import BenchmarkRunner
+from ..schemas import generate_output_path
 
 # Internal constants
 _BETA = 0.5
@@ -41,9 +41,9 @@ def _load_benchmark_config() -> RelaceConfig:
 @click.option(
     "--dataset",
     "dataset_path",
-    default=DEFAULT_DATASET_PATH,
+    default=DEFAULT_FILTERED_PATH,
     show_default=True,
-    help="MULocBench jsonl path (relative to benchmark/ if not absolute)",
+    help="Dataset jsonl path (relative to benchmark/ if not absolute)",
 )
 @click.option("--limit", default=None, type=int, help="Maximum cases to run (default: all)")
 @click.option(
@@ -92,7 +92,7 @@ def main(
     resolved_dataset_path = (
         Path(dataset_path) if Path(dataset_path).is_absolute() else (benchmark_dir / dataset_path)
     )
-    click.echo("Loading MULocBench...")
+    click.echo("Loading dataset...")
     click.echo(f"  dataset: {resolved_dataset_path}")
     click.echo(f"  limit:   {limit if limit is not None else 'all'}")
     click.echo(f"  shuffle: {shuffle}")
@@ -100,14 +100,11 @@ def main(
     click.echo(f"  excluded repos: {len(EXCLUDED_REPOS)}")
 
     try:
-        # load_mulocbench already applies EXCLUDED_REPOS by default
-        cases = load_mulocbench(
+        cases = load_dataset(
             dataset_path=str(resolved_dataset_path),
             limit=limit,
             shuffle=shuffle,
             seed=seed,
-            include_added_files=False,
-            require_function_scopes=True,
             stratified=True,
         )
     except Exception as e:
@@ -160,20 +157,22 @@ def main(
         },
     )
 
-    # Save results
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Save results with standardized naming
     benchmark_dir = get_benchmark_dir()
     results_dir = benchmark_dir / "results"
+    reports_dir = get_reports_dir()
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    # Extract dataset name from path for output naming
+    dataset_name = Path(dataset_path).stem
 
     if output:
-        # Use provided path/prefix
         if Path(output).is_absolute():
             output_path = Path(output)
         else:
             output_path = benchmark_dir / output
     else:
-        # Default to results/run_<timestamp>
-        output_path = results_dir / f"run_{timestamp}"
+        output_path = generate_output_path(results_dir, "run", dataset_name)
 
     # summary.save handles directory creation and dual-file extensions (.jsonl, .report.json)
     summary.save(output_path)
@@ -191,26 +190,19 @@ def main(
     click.echo("\n" + "=" * 50)
     click.echo("BENCHMARK SUMMARY")
     click.echo("=" * 50)
+    s = summary.stats
     click.echo(f"Total Cases:       {summary.total_cases}")
-    click.echo(f"Success Rate:      {summary.success_rate:.1%}")
-    click.echo(f"Avg Returned Files:{summary.avg_returned_files:.2f}")
-    click.echo(f"Avg GT Files:      {summary.avg_ground_truth_files:.2f}")
-    click.echo(f"Avg File Recall:   {summary.avg_file_recall:.1%}")
-    click.echo(f"Avg File Precision:{summary.avg_file_precision:.1%}")
-    click.echo(f"Avg File F1:       {summary.avg_file_f1:.1%}")
-    click.echo(f"Avg Line Coverage: {summary.avg_line_coverage:.1%}")
-    click.echo(f"Avg Line Precision:{summary.avg_line_precision:.1%}")
-    click.echo(f"Avg Line F1:       {summary.avg_line_f1:.1%}")
-    click.echo(f"Avg Line Prec(M):  {summary.avg_line_precision_matched:.1%}")
-    click.echo(f"Avg Line IoU(M):   {summary.avg_line_iou_matched:.1%}")
-    click.echo(f"Avg File Fβ:       {summary.avg_file_f_beta:.1%}  (β={_BETA})")
-    click.echo(f"Avg Line Fβ:       {summary.avg_line_f_beta:.1%}  (β={_BETA})")
-    click.echo(f"Avg Joint F:       {summary.avg_joint_f:.1%}")
-    click.echo(f"Func Cases:        {summary.function_cases}/{summary.total_cases}")
-    click.echo(f"Avg Func Hit Rate: {summary.avg_function_hit_rate:.1%}")
-    click.echo(f"Avg Turns:         {summary.avg_turns:.2f}")
-    click.echo(f"Avg Latency:       {summary.avg_latency_ms:.0f}ms")
-    click.echo(f"Avg Repo Prep:     {summary.avg_repo_prep_ms / 1000:.2f}s")
+    click.echo(f"Success Rate:      {s['success_rate']:.1%}")
+    click.echo(f"Avg Returned Files:{s['avg_returned_files']:.2f}")
+    click.echo(f"Avg GT Files:      {s['avg_ground_truth_files']:.2f}")
+    click.echo(f"Avg File Recall:   {s['avg_file_recall']:.1%}")
+    click.echo(f"Avg File Precision:{s['avg_file_precision']:.1%}")
+    click.echo(f"Avg Line Coverage: {s['avg_line_coverage']:.1%}")
+    click.echo(f"Avg Line Prec(M):  {s['avg_line_precision_matched']:.1%}")
+    click.echo(f"Func Cases:        {int(s['function_cases'])}/{summary.total_cases}")
+    click.echo(f"Avg Func Hit Rate: {s['avg_function_hit_rate']:.1%}")
+    click.echo(f"Avg Turns:         {s['avg_turns']:.2f}")
+    click.echo(f"Avg Latency:       {s['avg_latency_ms']:.0f}ms")
 
 
 if __name__ == "__main__":

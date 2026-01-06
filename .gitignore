@@ -30,10 +30,14 @@ AGENTS.md
 !.env.example
 
 # Benchmark artifacts
-benchmark/repos/*
+benchmark/repos/
 !benchmark/repos/.gitkeep
-benchmark/results/*
+benchmark/cache/
+benchmark/results/*.jsonl
 !benchmark/results/.gitkeep
-benchmark/data/*
-!benchmark/data/.gitkeep
-benchmark/cache
+benchmark/reports/*.json
+!benchmark/reports/.gitkeep
+benchmark/data/raw/*.jsonl
+!benchmark/data/raw/.gitkeep
+benchmark/data/processed/*.jsonl
+!benchmark/data/processed/.gitkeep

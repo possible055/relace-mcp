@@ -7,8 +7,8 @@ from typing import Any
 import click
 
 from ..analysis.function_scope import extract_function_scopes
-from ..config import get_benchmark_dir, get_repos_dir
-from ..datasets.filtered import FilteredCase, load_filtered_dataset
+from ..config import DEFAULT_FILTERED_PATH, get_benchmark_dir, get_repos_dir
+from ..datasets import DatasetCase, load_dataset
 from ..runner.git import ensure_repo
 
 
@@ -116,7 +116,7 @@ def _validate_solvability_evidence(query: str, evidence: list[str]) -> list[str]
     return warnings
 
 
-def validate_case(case: FilteredCase, repos_dir: Path, verbose: bool) -> ValidationResult:
+def validate_case(case: DatasetCase, repos_dir: Path, verbose: bool) -> ValidationResult:
     """Validate a single case."""
     errors: list[str] = []
     warnings: list[str] = []
@@ -138,9 +138,9 @@ def validate_case(case: FilteredCase, repos_dir: Path, verbose: bool) -> Validat
 
     # Validate hard_gt
     for gt in case.hard_gt:
-        path = gt.get("path", "")
-        func_name = gt.get("function", "")
-        range_data = gt.get("range", [])
+        path = gt.path
+        func_name = gt.function
+        range_data = gt.range
 
         # File exists
         err = _validate_file_exists(repo_path, path)
@@ -149,7 +149,7 @@ def validate_case(case: FilteredCase, repos_dir: Path, verbose: bool) -> Validat
             continue
 
         # Line range valid
-        if len(range_data) == 2:
+        if range_data and len(range_data) == 2:
             err = _validate_line_range(repo_path, path, range_data[0], range_data[1])
             if err:
                 errors.append(f"[hard_gt] {err}")
@@ -164,16 +164,16 @@ def validate_case(case: FilteredCase, repos_dir: Path, verbose: bool) -> Validat
 
     # Validate soft_context
     for ctx in case.soft_context:
-        path = ctx.get("path", "")
-        func_name = ctx.get("function", "")
-        range_data = ctx.get("range", [])
+        path = ctx.path
+        func_name = ctx.function
+        range_data = ctx.range
 
         err = _validate_file_exists(repo_path, path)
         if err:
             errors.append(f"[soft_context] {err}")
             continue
 
-        if len(range_data) == 2:
+        if range_data and len(range_data) == 2:
             err = _validate_line_range(repo_path, path, range_data[0], range_data[1])
             if err:
                 errors.append(f"[soft_context] {err}")
@@ -186,9 +186,10 @@ def validate_case(case: FilteredCase, repos_dir: Path, verbose: bool) -> Validat
                     errors.append(f"[soft_context] {err}")
 
     # Validate solvability evidence
-    evidence = case.solvability.get("evidence", [])
-    evidence_warnings = _validate_solvability_evidence(case.query, evidence)
-    warnings.extend(evidence_warnings)
+    if case.solvability:
+        evidence = case.solvability.evidence
+        evidence_warnings = _validate_solvability_evidence(case.query, evidence)
+        warnings.extend(evidence_warnings)
 
     return ValidationResult(
         case_id=case.id,
@@ -202,7 +203,7 @@ def validate_case(case: FilteredCase, repos_dir: Path, verbose: bool) -> Validat
 @click.option(
     "--input",
     "input_path",
-    default="data/filtered.jsonl",
+    default=DEFAULT_FILTERED_PATH,
     show_default=True,
     help="Filtered dataset path",
 )
@@ -224,7 +225,7 @@ def main(input_path: str, output_path: str | None, limit: int | None, verbose: b
 
     # Load dataset
     try:
-        cases = load_filtered_dataset(input_path, limit=limit)
+        cases = load_dataset(dataset_path=input_path, limit=limit, shuffle=False)
     except Exception as e:
         click.echo(f"Error loading dataset: {e}", err=True)
         sys.exit(1)

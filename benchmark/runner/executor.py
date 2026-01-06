@@ -12,17 +12,14 @@ from relace_mcp.tools.search import FastAgenticSearchHarness
 from ..analysis.ast_spans import normalize_to_ast_spans
 from ..analysis.call_graph import expand_ground_truth
 from ..config import get_repos_dir
-from ..datasets.mulocbench import BenchmarkCase
 from ..metrics import (
-    compute_f_score,
     compute_file_precision,
     compute_file_recall,
     compute_function_hits,
     compute_line_coverage,
-    compute_line_iou_matched,
-    compute_line_precision,
     compute_line_precision_matched,
 )
+from ..schemas import DatasetCase
 from .git import ensure_repo
 from .metadata import build_run_metadata
 from .results import BenchmarkResult, BenchmarkSummary
@@ -60,7 +57,7 @@ class BenchmarkRunner:
 
     def run_benchmark(
         self,
-        cases: list[BenchmarkCase],
+        cases: list[DatasetCase],
         *,
         run_config: dict[str, Any] | None = None,
     ) -> BenchmarkSummary:
@@ -78,7 +75,7 @@ class BenchmarkRunner:
 
     def _run_benchmark_inner(
         self,
-        cases: list[BenchmarkCase],
+        cases: list[DatasetCase],
         *,
         run_config: dict[str, Any] | None = None,
     ) -> BenchmarkSummary:
@@ -109,7 +106,6 @@ class BenchmarkRunner:
                 status_icon = "✓" if result.success else "✗"
                 print(
                     f"  {status_icon} recall={result.file_recall:.0%} "
-                    f"prep={result.repo_prep_ms / 1000:.1f}s "
                     f"search={result.latency_ms / 1000:.1f}s",
                     flush=True,
                 )
@@ -133,25 +129,16 @@ class BenchmarkRunner:
         )
         return self._compute_summary(results, metadata=metadata)
 
-    def _run_case(self, case: BenchmarkCase) -> BenchmarkResult:
+    def _run_case(self, case: DatasetCase) -> BenchmarkResult:
         try:
-            repo_name = case.repo.replace("/", "__")
-            expected_repo_path = self.repos_dir / repo_name
-            repo_cached = expected_repo_path.exists()
-
-            prep_start = time.perf_counter()
             repo_path = ensure_repo(
                 repos_dir=self.repos_dir,
                 repo=case.repo,
                 base_commit=case.base_commit,
                 verbose=(self.verbose or self.progress),
             )
-            repo_prep_ms = (time.perf_counter() - prep_start) * 1000
 
-            result = self._execute_search(case, repo_path)
-            result.repo_prep_ms = repo_prep_ms
-            result.repo_cached = repo_cached
-            return result
+            return self._execute_search(case, repo_path)
         except Exception as e:
             return BenchmarkResult(
                 case_id=case.id,
@@ -161,15 +148,8 @@ class BenchmarkRunner:
                 ground_truth_files_count=len(case.ground_truth_files),
                 file_recall=0.0,
                 file_precision=0.0,
-                file_f1=0.0,
                 line_coverage=0.0,
-                line_precision=0.0,
-                line_f1=0.0,
                 line_precision_matched=0.0,
-                line_iou_matched=0.0,
-                file_f_beta=0.0,
-                line_f_beta=0.0,
-                joint_f=0.0,
                 function_hit_rate=0.0,
                 functions_hit=0,
                 functions_total=len(case.ground_truth_functions),
@@ -179,7 +159,7 @@ class BenchmarkRunner:
                 error=str(e),
             )
 
-    def _execute_search(self, case: BenchmarkCase, repo_path: Path) -> BenchmarkResult:
+    def _execute_search(self, case: DatasetCase, repo_path: Path) -> BenchmarkResult:
         effective_config = replace(self.config, base_dir=str(repo_path))
         client = SearchLLMClient(effective_config)
         harness = FastAgenticSearchHarness(effective_config, client)
@@ -217,27 +197,13 @@ class BenchmarkRunner:
             ground_truth_files,
             repo_root=repo_path,
         )
-        denom = file_recall + file_precision
-        file_f1 = (2 * file_recall * file_precision / denom) if denom else 0.0
 
         line_coverage = compute_line_coverage(
             returned_files,
             ground_truth_files,
             repo_root=repo_path,
         )
-        line_precision = compute_line_precision(
-            returned_files,
-            ground_truth_files,
-            repo_root=repo_path,
-        )
-        line_denom = line_coverage + line_precision
-        line_f1 = (2 * line_coverage * line_precision / line_denom) if line_denom else 0.0
         line_precision_matched = compute_line_precision_matched(
-            returned_files,
-            ground_truth_files,
-            repo_root=repo_path,
-        )
-        line_iou_matched = compute_line_iou_matched(
             returned_files,
             ground_truth_files,
             repo_root=repo_path,
@@ -254,10 +220,6 @@ class BenchmarkRunner:
         error = result.get("error") if isinstance(result.get("error"), str) else None
         partial = bool(result.get("partial", False))
 
-        file_f_beta = compute_f_score(file_precision, file_recall, beta=self.beta)
-        line_f_beta = compute_f_score(line_precision, line_coverage, beta=self.beta)
-        joint_f = 0.5 * file_f_beta + 0.5 * line_f_beta
-
         return BenchmarkResult(
             case_id=case.id,
             repo=case.repo,
@@ -266,15 +228,8 @@ class BenchmarkRunner:
             ground_truth_files_count=ground_truth_files_count,
             file_recall=file_recall,
             file_precision=file_precision,
-            file_f1=file_f1,
             line_coverage=line_coverage,
-            line_precision=line_precision,
-            line_f1=line_f1,
             line_precision_matched=line_precision_matched,
-            line_iou_matched=line_iou_matched,
-            file_f_beta=file_f_beta,
-            line_f_beta=line_f_beta,
-            joint_f=joint_f,
             function_hit_rate=function_hit_rate,
             functions_hit=functions_hit,
             functions_total=functions_total,
@@ -285,30 +240,32 @@ class BenchmarkRunner:
         )
 
     def _normalize_ground_truth(
-        self, case: BenchmarkCase, repo_path: Path
+        self, case: DatasetCase, repo_path: Path
     ) -> dict[str, list[tuple[int, int]]]:
         """Normalize ground truth line ranges to AST node boundaries."""
         normalized: dict[str, list[tuple[int, int]]] = {}
+        gt_files = case.ground_truth_files
 
-        for file_path, raw_lines in case.ground_truth_files_raw.items():
-            if not raw_lines:
-                # Fall back to original ranges
-                if file_path in case.ground_truth_files:
-                    normalized[file_path] = case.ground_truth_files[file_path]
+        for file_path, ranges in gt_files.items():
+            if not ranges:
                 continue
 
             full_path = repo_path / file_path
             if not full_path.exists() or not file_path.endswith(".py"):
                 # Not a Python file or doesn't exist, use original ranges
-                if file_path in case.ground_truth_files:
-                    normalized[file_path] = case.ground_truth_files[file_path]
+                normalized[file_path] = ranges
                 continue
 
-            ast_ranges = normalize_to_ast_spans(full_path, set(raw_lines), context_padding=2)
+            # Extract all lines from ranges for AST normalization
+            raw_lines: set[int] = set()
+            for start, end in ranges:
+                raw_lines.update(range(start, end + 1))
+
+            ast_ranges = normalize_to_ast_spans(full_path, raw_lines, context_padding=2)
             if ast_ranges:
                 normalized[file_path] = ast_ranges
-            elif file_path in case.ground_truth_files:
-                normalized[file_path] = case.ground_truth_files[file_path]
+            else:
+                normalized[file_path] = ranges
 
         return normalized
 
@@ -337,27 +294,24 @@ class BenchmarkRunner:
             return BenchmarkSummary(
                 metadata=metadata,
                 total_cases=0,
-                success_rate=0.0,
-                avg_returned_files=0.0,
-                avg_ground_truth_files=0.0,
-                avg_file_recall=0.0,
-                avg_file_precision=0.0,
-                avg_file_f1=0.0,
-                avg_line_coverage=0.0,
-                avg_line_precision=0.0,
-                avg_line_f1=0.0,
-                avg_line_precision_matched=0.0,
-                avg_line_iou_matched=0.0,
-                avg_file_f_beta=0.0,
-                avg_line_f_beta=0.0,
-                avg_joint_f=0.0,
-                function_cases=0,
-                avg_function_hit_rate=0.0,
-                avg_turns=0.0,
-                avg_latency_ms=0.0,
-                avg_repo_prep_ms=0.0,
+                stats={
+                    "success_rate": 0.0,
+                    "avg_returned_files": 0.0,
+                    "avg_ground_truth_files": 0.0,
+                    "avg_file_recall": 0.0,
+                    "avg_file_precision": 0.0,
+                    "avg_line_coverage": 0.0,
+                    "avg_line_precision_matched": 0.0,
+                    "function_cases": 0,
+                    "avg_function_hit_rate": 0.0,
+                    "avg_turns": 0.0,
+                    "avg_latency_ms": 0.0,
+                },
                 results=[],
             )
+
+        def avg(field: str) -> float:
+            return sum(getattr(r, field) for r in results) / n
 
         function_results = [r for r in results if r.functions_total > 0]
         function_cases = len(function_results)
@@ -367,27 +321,23 @@ class BenchmarkRunner:
             else 0.0
         )
 
+        stats: dict[str, float] = {
+            "success_rate": sum(1 for r in results if r.success) / n,
+            "avg_returned_files": avg("returned_files_count"),
+            "avg_ground_truth_files": avg("ground_truth_files_count"),
+            "avg_file_recall": avg("file_recall"),
+            "avg_file_precision": avg("file_precision"),
+            "avg_line_coverage": avg("line_coverage"),
+            "avg_line_precision_matched": avg("line_precision_matched"),
+            "function_cases": function_cases,
+            "avg_function_hit_rate": avg_function_hit_rate,
+            "avg_turns": avg("turns_used"),
+            "avg_latency_ms": avg("latency_ms"),
+        }
+
         return BenchmarkSummary(
             metadata=metadata,
             total_cases=n,
-            success_rate=sum(1 for r in results if r.success) / n,
-            avg_returned_files=sum(r.returned_files_count for r in results) / n,
-            avg_ground_truth_files=sum(r.ground_truth_files_count for r in results) / n,
-            avg_file_recall=sum(r.file_recall for r in results) / n,
-            avg_file_precision=sum(r.file_precision for r in results) / n,
-            avg_file_f1=sum(r.file_f1 for r in results) / n,
-            avg_line_coverage=sum(r.line_coverage for r in results) / n,
-            avg_line_precision=sum(r.line_precision for r in results) / n,
-            avg_line_f1=sum(r.line_f1 for r in results) / n,
-            avg_line_precision_matched=sum(r.line_precision_matched for r in results) / n,
-            avg_line_iou_matched=sum(r.line_iou_matched for r in results) / n,
-            avg_file_f_beta=sum(r.file_f_beta for r in results) / n,
-            avg_line_f_beta=sum(r.line_f_beta for r in results) / n,
-            avg_joint_f=sum(r.joint_f for r in results) / n,
-            function_cases=function_cases,
-            avg_function_hit_rate=avg_function_hit_rate,
-            avg_turns=sum(r.turns_used for r in results) / n,
-            avg_latency_ms=sum(r.latency_ms for r in results) / n,
-            avg_repo_prep_ms=sum(r.repo_prep_ms for r in results) / n,
+            stats=stats,
             results=results,
         )

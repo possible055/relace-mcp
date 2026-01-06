@@ -7,9 +7,14 @@ CACHE_DIR = BENCHMARK_DIR / "cache"
 REPOS_DIR = BENCHMARK_DIR / "repos"
 RESULTS_DIR = BENCHMARK_DIR / "results"
 
-# Default dataset paths
-DEFAULT_MULOCBENCH_PATH = "data/mulocbench.jsonl"
-DEFAULT_FILTERED_PATH = "data/filtered.jsonl"
+# Subdirectory structure
+RAW_DATA_DIR = DATA_DIR / "raw"
+PROCESSED_DATA_DIR = DATA_DIR / "processed"
+REPORTS_DIR = BENCHMARK_DIR / "reports"
+
+# Default dataset paths (updated for new structure)
+DEFAULT_MULOCBENCH_PATH = "data/raw/mulocbench_v1.jsonl"
+DEFAULT_FILTERED_PATH = "data/processed/filtered.jsonl"
 
 # Large repos (>=100MB) excluded by default to avoid slow cloning
 EXCLUDED_REPOS: frozenset[str] = frozenset(
@@ -57,3 +62,15 @@ def get_cache_dir() -> Path:
 
 def get_results_dir() -> Path:
     return RESULTS_DIR
+
+
+def get_raw_data_dir() -> Path:
+    return RAW_DATA_DIR
+
+
+def get_processed_data_dir() -> Path:
+    return PROCESSED_DATA_DIR
+
+
+def get_reports_dir() -> Path:
+    return REPORTS_DIR

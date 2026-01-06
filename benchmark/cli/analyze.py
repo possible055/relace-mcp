@@ -28,20 +28,8 @@ def print_detailed_table(results: list[dict[str, Any]]) -> None:
     print("\n" + "=" * 80)
     print("DETAILED RESULTS")
     print("=" * 80)
-    print(f"{'Case ID':<40} | F.Rec | F.Prec | L.Cov | L.Prec | L.Prec(M)")
-    print(
-        "-" * 40
-        + "-+-"
-        + "-" * 6
-        + "+-"
-        + "-" * 6
-        + "+-"
-        + "-" * 6
-        + "+-"
-        + "-" * 6
-        + "+-"
-        + "-" * 9
-    )
+    print(f"{'Case ID':<40} | F.Rec | F.Prec | L.Cov | L.Prec(M)")
+    print("-" * 40 + "-+-" + "-" * 6 + "+-" + "-" * 6 + "+-" + "-" * 6 + "+-" + "-" * 9)
 
     for r in results:
         case_id = r["case_id"][:38] if len(r["case_id"]) > 38 else r["case_id"]
@@ -50,7 +38,6 @@ def print_detailed_table(results: list[dict[str, Any]]) -> None:
             f"{r['file_recall'] * 100:5.1f}% | "
             f"{r['file_precision'] * 100:5.1f}% | "
             f"{r['line_coverage'] * 100:5.1f}% | "
-            f"{r['line_precision'] * 100:5.1f}% | "
             f"{r['line_precision_matched'] * 100:7.1f}%"
         )
 
