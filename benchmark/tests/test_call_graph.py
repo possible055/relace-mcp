@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 # Add project root to path for benchmark imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from benchmark.analysis.call_graph import (
     analyze_file,

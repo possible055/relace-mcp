@@ -1,7 +1,18 @@
 line-length = 100
 target-version = "py312"
 
-exclude = [".eggs", ".git", ".ruff_cache", "__pypackages__", "dist"]
+exclude = [
+    ".eggs",
+    ".git",
+    ".ruff_cache",
+    "__pypackages__",
+    "dist",
+    "benchmark/repos",
+    "benchmark/cache",
+    "benchmark/data",
+    "benchmark/reports",
+    "benchmark/results",
+]
 
 [lint]
 select = ["E", "F", "I", "B", "UP"]
