@@ -1,5 +1,16 @@
-"""Dataset loaders used by benchmark scripts.
+"""Dataset loaders for benchmark cases.
 
-Currently supports:
-    - mulocbench: MULocBench dataset (issue-to-code-location mappings)
+Provides unified loading for benchmark datasets in the standardized format.
 """
+
+from ..schemas import ContextEntry, DatasetCase, GroundTruthEntry, SolvabilityInfo
+from .mulocbench import load_dataset, load_mulocbench
+
+__all__ = [
+    "load_dataset",
+    "load_mulocbench",
+    "DatasetCase",
+    "GroundTruthEntry",
+    "ContextEntry",
+    "SolvabilityInfo",
+]

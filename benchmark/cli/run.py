@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 from pathlib import Path
@@ -10,8 +9,13 @@ from relace_mcp.config import RelaceConfig
 from relace_mcp.config.compat import getenv_with_fallback
 from relace_mcp.config.settings import RELACE_DEFAULT_ENCODING
 
-from .datasets.mulocbench import DEFAULT_DATASET_PATH, load_mulocbench
-from .run.runner import BenchmarkRunner
+from ..config import DEFAULT_FILTERED_PATH, EXCLUDED_REPOS, get_benchmark_dir, get_reports_dir
+from ..datasets import load_dataset
+from ..runner.executor import BenchmarkRunner
+from ..schemas import generate_output_path
+
+# Internal constants
+_BETA = 0.5
 
 
 def _load_benchmark_config() -> RelaceConfig:
@@ -37,11 +41,11 @@ def _load_benchmark_config() -> RelaceConfig:
 @click.option(
     "--dataset",
     "dataset_path",
-    default=DEFAULT_DATASET_PATH,
+    default=DEFAULT_FILTERED_PATH,
     show_default=True,
-    help="MULocBench jsonl path (relative to benchmark/ if not absolute)",
+    help="Dataset jsonl path (relative to benchmark/ if not absolute)",
 )
-@click.option("--limit", default=5, help="Maximum number of cases to run")
+@click.option("--limit", default=None, type=int, help="Maximum cases to run (default: all)")
 @click.option(
     "--shuffle/--no-shuffle",
     default=True,
@@ -56,21 +60,9 @@ def _load_benchmark_config() -> RelaceConfig:
     help="Random seed used when shuffling cases",
 )
 @click.option(
-    "--include-added-files/--exclude-added-files",
-    default=False,
-    show_default=True,
-    help="Include files marked as 'added' in ground truth (usually not present at base_commit)",
-)
-@click.option(
-    "--require-functions/--allow-no-functions",
-    default=True,
-    show_default=True,
-    help="Require at least one function scope in ground truth",
-)
-@click.option(
     "--output",
-    default="results/benchmark_results.json",
-    help="Output file path (relative to benchmark/)",
+    default=None,
+    help="Output file prefix (relative to benchmark/results/). Default: run_<timestamp>",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.option(
@@ -85,45 +77,41 @@ def main(
     limit: int,
     shuffle: bool,
     seed: int,
-    include_added_files: bool,
-    require_functions: bool,
     output: str,
     verbose: bool,
     progress: bool,
     dry_run: bool,
 ) -> None:
-    """Run MULocBench benchmark on fast_search."""
-    # Load .env from current directory or parents
+    """Run MULocBench benchmark on fast_search.
+
+    Large repos are automatically excluded via EXCLUDED_REPOS in config.
+    """
     load_dotenv()
 
-    # Resolve output path relative to benchmark directory
-    benchmark_dir = Path(__file__).parent
+    benchmark_dir = get_benchmark_dir()
     resolved_dataset_path = (
         Path(dataset_path) if Path(dataset_path).is_absolute() else (benchmark_dir / dataset_path)
     )
-    output_path = benchmark_dir / output
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    click.echo("Loading MULocBench...")
+    click.echo("Loading dataset...")
     click.echo(f"  dataset: {resolved_dataset_path}")
-    click.echo(f"  limit:   {limit}")
+    click.echo(f"  limit:   {limit if limit is not None else 'all'}")
     click.echo(f"  shuffle: {shuffle}")
     click.echo(f"  seed:    {seed}")
+    click.echo(f"  excluded repos: {len(EXCLUDED_REPOS)}")
 
     try:
-        cases = load_mulocbench(
+        cases = load_dataset(
             dataset_path=str(resolved_dataset_path),
             limit=limit,
             shuffle=shuffle,
             seed=seed,
-            include_added_files=include_added_files,
-            require_function_scopes=require_functions,
+            stratified=True,
         )
     except Exception as e:
         click.echo(f"Error loading dataset: {e}", err=True)
         sys.exit(1)
 
-    click.echo(f"Loaded {len(cases)} cases")
+    click.echo(f"Loaded {len(cases)} cases (large repos excluded)")
 
     if dry_run:
         click.echo("\n[Dry Run] Cases loaded:")
@@ -147,7 +135,14 @@ def main(
         )
         sys.exit(1)
 
-    runner = BenchmarkRunner(config, verbose=verbose, progress=progress)
+    runner = BenchmarkRunner(
+        config,
+        verbose=verbose,
+        progress=progress,
+        beta=_BETA,
+        normalize_ast=False,
+        soft_gt=False,
+    )
 
     click.echo("\nRunning benchmark...")
     summary = runner.run_benchmark(
@@ -158,37 +153,56 @@ def main(
             "limit": limit,
             "shuffle": shuffle,
             "seed": seed,
-            "include_added_files": include_added_files,
-            "require_functions": require_functions,
+            "beta": _BETA,
         },
     )
 
-    # Save results
-    with output_path.open("w", encoding="utf-8") as f:
-        json.dump(summary.to_dict(), f, indent=2)
-    click.echo(f"\nResults saved to {output_path}")
+    # Save results with standardized naming
+    benchmark_dir = get_benchmark_dir()
+    results_dir = benchmark_dir / "results"
+    reports_dir = get_reports_dir()
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    # Extract dataset name from path for output naming
+    dataset_name = Path(dataset_path).stem
+
+    if output:
+        if Path(output).is_absolute():
+            output_path = Path(output)
+        else:
+            output_path = benchmark_dir / output
+    else:
+        output_path = generate_output_path(results_dir, "run", dataset_name)
+
+    # summary.save handles directory creation and dual-file extensions (.jsonl, .report.json)
+    summary.save(output_path)
+
+    jsonl_path = (
+        output_path if output_path.suffix == ".jsonl" else output_path.with_suffix(".jsonl")
+    )
+    report_path = jsonl_path.with_suffix(".report.json")
+
+    click.echo("\nResults saved to:")
+    click.echo(f"  - {jsonl_path}")
+    click.echo(f"  - {report_path}")
 
     # Print summary
     click.echo("\n" + "=" * 50)
     click.echo("BENCHMARK SUMMARY")
     click.echo("=" * 50)
+    s = summary.stats
     click.echo(f"Total Cases:       {summary.total_cases}")
-    click.echo(f"Success Rate:      {summary.success_rate:.1%}")
-    click.echo(f"Avg Returned Files:{summary.avg_returned_files:.2f}")
-    click.echo(f"Avg GT Files:      {summary.avg_ground_truth_files:.2f}")
-    click.echo(f"Avg File Recall:   {summary.avg_file_recall:.1%}")
-    click.echo(f"Avg File Precision:{summary.avg_file_precision:.1%}")
-    click.echo(f"Avg File F1:       {summary.avg_file_f1:.1%}")
-    click.echo(f"Avg Line Coverage: {summary.avg_line_coverage:.1%}")
-    click.echo(f"Avg Line Precision:{summary.avg_line_precision:.1%}")
-    click.echo(f"Avg Line F1:       {summary.avg_line_f1:.1%}")
-    click.echo(f"Avg Line Prec(M):  {summary.avg_line_precision_matched:.1%}")
-    click.echo(f"Avg Line IoU(M):   {summary.avg_line_iou_matched:.1%}")
-    click.echo(f"Func Cases:        {summary.function_cases}/{summary.total_cases}")
-    click.echo(f"Avg Func Hit Rate: {summary.avg_function_hit_rate:.1%}")
-    click.echo(f"Avg Turns:         {summary.avg_turns:.2f}")
-    click.echo(f"Avg Latency:       {summary.avg_latency_ms:.0f}ms")
-    click.echo(f"Avg Repo Prep:     {summary.avg_repo_prep_ms / 1000:.2f}s")
+    click.echo(f"Success Rate:      {s['success_rate']:.1%}")
+    click.echo(f"Avg Returned Files:{s['avg_returned_files']:.2f}")
+    click.echo(f"Avg GT Files:      {s['avg_ground_truth_files']:.2f}")
+    click.echo(f"Avg File Recall:   {s['avg_file_recall']:.1%}")
+    click.echo(f"Avg File Precision:{s['avg_file_precision']:.1%}")
+    click.echo(f"Avg Line Coverage: {s['avg_line_coverage']:.1%}")
+    click.echo(f"Avg Line Prec(M):  {s['avg_line_precision_matched']:.1%}")
+    click.echo(f"Func Cases:        {int(s['function_cases'])}/{summary.total_cases}")
+    click.echo(f"Avg Func Hit Rate: {s['avg_function_hit_rate']:.1%}")
+    click.echo(f"Avg Turns:         {s['avg_turns']:.2f}")
+    click.echo(f"Avg Latency:       {s['avg_latency_ms']:.0f}ms")
 
 
 if __name__ == "__main__":
