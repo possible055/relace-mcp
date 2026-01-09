@@ -317,3 +317,45 @@ def compute_f_score(
         return 0.0
     beta_sq = beta * beta
     return (1 + beta_sq) * precision * recall / (beta_sq * precision + recall)
+
+
+def compute_joint_f_score(
+    returned_files: dict[str, list[list[int]]],
+    ground_truth: dict[str, list[tuple[int, int]]],
+    *,
+    beta: float = 1.0,
+    file_weight: float = 0.5,
+    repo_root: Path | None = None,
+) -> dict[str, float]:
+    """Compute combined file-level and line-level F-scores.
+
+    Args:
+        returned_files: Files returned by fast_search (path -> [[start, end], ...]).
+        ground_truth: Ground truth files from dataset annotations (path -> [(start, end), ...]).
+        beta: Beta parameter for F-score calculation.
+        file_weight: Weight for file F-score in joint score (0.0-1.0).
+        repo_root: Repository root for normalizing absolute paths.
+
+    Returns:
+        Dictionary with file_precision, file_recall, file_f, line_precision,
+        line_recall, line_f, and joint_f scores.
+    """
+    file_prec = compute_file_precision(returned_files, ground_truth, repo_root=repo_root)
+    file_rec = compute_file_recall(returned_files, ground_truth, repo_root=repo_root)
+    file_f = compute_f_score(file_prec, file_rec, beta=beta)
+
+    line_prec = compute_line_precision(returned_files, ground_truth, repo_root=repo_root)
+    line_rec = compute_line_coverage(returned_files, ground_truth, repo_root=repo_root)
+    line_f = compute_f_score(line_prec, line_rec, beta=beta)
+
+    joint_f = file_weight * file_f + (1 - file_weight) * line_f
+
+    return {
+        "file_precision": file_prec,
+        "file_recall": file_rec,
+        "file_f": file_f,
+        "line_precision": line_prec,
+        "line_recall": line_rec,
+        "line_f": line_f,
+        "joint_f": joint_f,
+    }

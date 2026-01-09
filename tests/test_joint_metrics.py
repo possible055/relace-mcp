@@ -3,9 +3,10 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "benchmark"))
+# Add project root to path for benchmark imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from evaluation.metrics import compute_f_score, compute_joint_f_score
+from benchmark.metrics import compute_f_score, compute_joint_f_score
 
 
 class TestComputeFScore:

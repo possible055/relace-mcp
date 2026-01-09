@@ -1,9 +1,10 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "benchmark"))
+# Add project root to path for benchmark imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from evaluation.call_graph import (
+from benchmark.analysis.call_graph import (
     analyze_file,
     expand_ground_truth,
 )

@@ -3,16 +3,16 @@ from pathlib import Path
 
 import pytest
 
-# Add benchmark directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "benchmark"))
+# Add project root to path for benchmark imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from evaluation.ast_normalizer import (
+from benchmark.analysis.ast_spans import (
     _find_enclosing_node,
-    _get_parser,
     _lines_to_ranges_fallback,
-    _merge_ranges,
     normalize_to_ast_spans,
 )
+from benchmark.analysis.treesitter import get_parser as _get_parser
+from benchmark.metrics.ranges import merge_ranges as _merge_ranges
 
 
 class TestMergeRanges:
