@@ -78,10 +78,13 @@ RELACE_DEFAULT_ENCODING = os.getenv("RELACE_DEFAULT_ENCODING", None)
 # Maximum files to sample for encoding detection (higher = more accurate but slower startup)
 ENCODING_DETECTION_SAMPLE_LIMIT = 30
 
-# EXPERIMENTAL: Post-check validation (validates merged_code semantic correctness, disabled by default)
-# Use APPLY_POST_CHECK=1 to enable (RELACE_EXPERIMENTAL_POST_CHECK still works for backward compat)
-_post_check_env = getenv_with_fallback("APPLY_POST_CHECK", "RELACE_EXPERIMENTAL_POST_CHECK")
-EXPERIMENTAL_POST_CHECK = _post_check_env.lower() in ("1", "true", "yes")
+
+# Semantic check (validates new/delete intent correctness, disabled by default)
+# Use APPLY_SEMANTIC_CHECK=1 to enable (APPLY_POST_CHECK still works for backward compat)
+_semantic_check_env = getenv_with_fallback("APPLY_SEMANTIC_CHECK", "APPLY_POST_CHECK")
+if not _semantic_check_env:
+    _semantic_check_env = os.getenv("RELACE_EXPERIMENTAL_POST_CHECK", "")
+APPLY_SEMANTIC_CHECK = _semantic_check_env.lower() in ("1", "true", "yes")
 
 # Local file logging (disabled by default)
 # Use MCP_LOGGING=1 to enable (RELACE_LOGGING still works for backward compat)

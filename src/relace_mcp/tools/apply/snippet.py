@@ -1,3 +1,5 @@
+import ast
+import os
 import re
 
 # Directive patterns for remove operations
@@ -316,3 +318,45 @@ def post_check_merged_code(
             )
 
     return True, None
+
+
+def validate_syntax_delta(
+    initial_code: str,
+    merged_code: str,
+    file_path: str,
+) -> tuple[bool, str | None]:
+    """Validate merged_code syntax using delta-check strategy.
+
+    Only fails if initial_code was syntactically valid but merged_code
+    is corrupted. This prevents false positives when editing files
+    that already contain syntax errors.
+
+    Currently supports Python (.py) files only.
+
+    Args:
+        initial_code: Original file content.
+        merged_code: Merged code from API.
+        file_path: File path (used to detect language by extension).
+
+    Returns:
+        (passed, failure_reason): failure_reason is None when passed=True.
+    """
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext != ".py":
+        return True, None  # Only Python supported for now
+
+    # Check if initial_code already has syntax error
+    initial_has_error = False
+    try:
+        ast.parse(initial_code)
+    except SyntaxError:
+        initial_has_error = True
+
+    # Check merged_code
+    try:
+        ast.parse(merged_code)
+        return True, None
+    except SyntaxError as e:
+        if initial_has_error:
+            return True, None  # Original was already broken, don't block
+        return False, f"SyntaxError at line {e.lineno}: {e.msg}"

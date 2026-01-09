@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 # Add project root to path for benchmark imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from benchmark.analysis.ast_spans import (
     _find_enclosing_node,

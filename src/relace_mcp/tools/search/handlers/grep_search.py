@@ -1,4 +1,5 @@
 import fnmatch
+import logging
 import os
 import re
 import signal
@@ -12,6 +13,8 @@ from pathlib import Path
 from ....tools.apply.file_io import get_project_encoding, read_text_best_effort
 from ..schemas import GrepSearchParams
 from .constants import GREP_TIMEOUT_SECONDS, MAX_GREP_DEPTH, MAX_GREP_MATCHES
+
+logger = logging.getLogger(__name__)
 
 
 def _timeout_context(seconds: int) -> "AbstractContextManager[None]":
@@ -307,6 +310,9 @@ def grep_search_handler(params: GrepSearchParams) -> str:
         # Non-ASCII patterns cannot be reliably matched across unknown legacy encodings via rg.
         # Fall back to per-file decoding to support GBK/Big5 mixed repos.
         if get_project_encoding() is None and not params.query.isascii():
+            logger.info(
+                "Non-ASCII query detected without RELACE_DEFAULT_ENCODING; falling back to robust Python search"
+            )
             return _grep_search_python_fallback(params)
         return _try_ripgrep(params)
     except (FileNotFoundError, subprocess.TimeoutExpired):
