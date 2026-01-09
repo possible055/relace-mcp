@@ -126,13 +126,18 @@ def mock_backend() -> AsyncMock:
 
 @pytest.fixture
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    for var in [
-        "RELACE_API_KEY",
-        "MCP_BASE_DIR",
-        "RELACE_BASE_DIR",
-        "MCP_DOTENV_PATH",
-        "RELACE_DOTENV_PATH",
-    ]:
+    """Clear all environment variables that might affect tests."""
+    prefixes = ["RELACE_", "SEARCH_", "APPLY_", "MCP_"]
+    # Iterate through all variables starting with these prefixes and delete them
+    import os
+
+    for key in list(os.environ.keys()):
+        for prefix in prefixes:
+            if key.startswith(prefix):
+                monkeypatch.delenv(key, raising=False)
+
+    # Additionally clear common third-party API keys
+    for var in ["OPENAI_API_KEY", "OPENROUTER_API_KEY", "MISTRAL_API_KEY", "ANTHROPIC_API_KEY"]:
         monkeypatch.delenv(var, raising=False)
 
 

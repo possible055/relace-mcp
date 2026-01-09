@@ -173,6 +173,7 @@ def decode_text_with_fallback(
             return preferred_text, preferred
 
         if best_ok:
+            logger.debug("Detected encoding %s for %s", best_enc, path or "<bytes>")
             return str(best), best_enc
 
     # Last resort: preferred encoding (if configured/detected)

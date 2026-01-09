@@ -1,8 +1,7 @@
 {
     "include": [
         "src",
-        "tests",
-        "benchmark"
+        "tests"
     ],
     "exclude": [
         "**/__pycache__",
@@ -17,7 +16,11 @@
         "docs",
         ".vscode",
         ".github",
-        "benchmark/repos"
+        "benchmark/repos",
+        "benchmark/data",
+        "benchmark/cache",
+        "benchmark/reports",
+        "benchmark/results"
     ],
     "venvPath": ".",
     "venv": ".venv",
