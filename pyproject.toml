@@ -59,6 +59,9 @@ tools = [
 ]
 benchmark = [
     "click>=8.0.0",
+    "rich>=13.0.0",
+    "tree-sitter>=0.24.0",
+    "tree-sitter-python>=0.24.0",
 ]
 
 [project.scripts]

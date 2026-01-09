@@ -1,12 +1,15 @@
 # Benchmark Module for fast_search Evaluation
 #
 # Sub-modules:
-#   datasets/   - Dataset loaders (MULocBench)
-#   evaluation/ - Metric implementations
-#   run/        - Execution pipeline
+#   cli/        - CLI entry points (run, filter, validate, analyze)
+#   datasets/   - Dataset loaders (MULocBench, filtered)
+#   metrics/    - Metric implementations
+#   analysis/   - AST and code analysis (tree-sitter)
+#   filters/    - LLM-based evaluators (solvability, relevance)
+#   runner/     - Execution pipeline
 #
 # Usage:
 #   from benchmark.datasets.mulocbench import load_mulocbench, BenchmarkCase
-#   from benchmark.evaluation.metrics import compute_file_recall, ...
-#   from benchmark.run.runner import BenchmarkRunner
-#   from benchmark.run.models import BenchmarkResult, BenchmarkSummary
+#   from benchmark.metrics import compute_file_recall, compute_line_coverage
+#   from benchmark.runner.executor import BenchmarkRunner
+#   from benchmark.runner.results import BenchmarkResult, BenchmarkSummary

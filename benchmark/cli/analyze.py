@@ -3,30 +3,33 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ..config import get_results_dir
+
 
 def load_results(path: str) -> dict[str, Any]:
+    path_obj = Path(path)
+    if path_obj.suffix == ".jsonl":
+        results = []
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped:
+                    results.append(json.loads(stripped))
+        return {"results": results}
+
     with open(path, encoding="utf-8") as f:
-        return json.load(f)  # type: ignore[no-any-return]
+        data = json.load(f)
+        if isinstance(data, list):
+            return {"results": data}
+        return data  # type: ignore[no-any-return]
 
 
 def print_detailed_table(results: list[dict[str, Any]]) -> None:
     print("\n" + "=" * 80)
     print("DETAILED RESULTS")
     print("=" * 80)
-    print(f"{'Case ID':<40} | F.Rec | F.Prec | L.Cov | L.Prec | L.Prec(M)")
-    print(
-        "-" * 40
-        + "-+-"
-        + "-" * 6
-        + "+-"
-        + "-" * 6
-        + "+-"
-        + "-" * 6
-        + "+-"
-        + "-" * 6
-        + "+-"
-        + "-" * 9
-    )
+    print(f"{'Case ID':<40} | F.Rec | F.Prec | L.Cov | L.Prec(M)")
+    print("-" * 40 + "-+-" + "-" * 6 + "+-" + "-" * 6 + "+-" + "-" * 6 + "+-" + "-" * 9)
 
     for r in results:
         case_id = r["case_id"][:38] if len(r["case_id"]) > 38 else r["case_id"]
@@ -35,7 +38,6 @@ def print_detailed_table(results: list[dict[str, Any]]) -> None:
             f"{r['file_recall'] * 100:5.1f}% | "
             f"{r['file_precision'] * 100:5.1f}% | "
             f"{r['line_coverage'] * 100:5.1f}% | "
-            f"{r['line_precision'] * 100:5.1f}% | "
             f"{r['line_precision_matched'] * 100:7.1f}%"
         )
 
@@ -95,7 +97,7 @@ def print_summary_stats(results: list[dict[str, Any]], key: str, label: str) -> 
 
 def main() -> None:
     # Default path
-    default_path = Path(__file__).parent / "results" / "benchmark_results.json"
+    default_path = get_results_dir() / "benchmark_results.json"
     path = sys.argv[1] if len(sys.argv) > 1 else str(default_path)
 
     if not Path(path).exists():
