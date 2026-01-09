@@ -10,7 +10,7 @@ from typing import Any
 import openai
 
 from ...clients.apply import ApplyLLMClient, ApplyRequest, ApplyResponse
-from ...config.settings import EXPERIMENTAL_POST_CHECK, MAX_FILE_SIZE_BYTES
+from ...config.settings import APPLY_SEMANTIC_CHECK, MAX_FILE_SIZE_BYTES
 from ...utils import validate_file_path
 from . import errors, file_io, snippet
 from . import logging as apply_logging
@@ -213,20 +213,40 @@ async def _apply_to_existing_file(
             diff=None,
         )
 
-    # EXPERIMENTAL: Post-check validation (disabled by default, enable via RELACE_EXPERIMENTAL_POST_CHECK)
-    if EXPERIMENTAL_POST_CHECK:
+    # L1 Syntax validation (always enabled for Python files)
+    syntax_passed, syntax_reason = snippet.validate_syntax_delta(
+        initial_code, merged_code, str(resolved_path)
+    )
+    if not syntax_passed:
+        logger.warning(
+            "[%s] SYNTAX_CHECK_FAILED for %s: %s",
+            ctx.trace_id,
+            resolved_path,
+            syntax_reason,
+        )
+        return errors.recoverable_error(
+            "SYNTAX_CHECK_FAILED",
+            f"Merged code has syntax error: {syntax_reason}",
+            ctx.file_path,
+            ctx.instruction,
+            ctx.trace_id,
+            ctx.elapsed_ms(),
+        )
+
+    # Semantic check (validates new/delete intent, disabled by default)
+    if APPLY_SEMANTIC_CHECK:
         post_check_passed, post_check_reason = snippet.post_check_merged_code(
             edit_snippet, merged_code, initial_code
         )
         if not post_check_passed:
             logger.warning(
-                "[%s] POST_CHECK_FAILED for %s: %s",
+                "[%s] SEMANTIC_CHECK_FAILED for %s: %s",
                 ctx.trace_id,
                 resolved_path,
                 post_check_reason,
             )
             return errors.recoverable_error(
-                "POST_CHECK_FAILED",
+                "SEMANTIC_CHECK_FAILED",
                 f"Merged code does not match expected changes: {post_check_reason}",
                 ctx.file_path,
                 ctx.instruction,
