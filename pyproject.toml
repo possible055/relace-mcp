@@ -45,6 +45,7 @@ Issues = "https://github.com/possible055/relace-mcp/issues"
 dev = [
     "pytest>=8.4.1",
     "pytest-asyncio>=1.3.0",
+    "pytest-cov>=6.0.0",
     "pre-commit>=4.5.1",
     "mypy>=1.19.1",
     "interrogate>=1.7.0",
