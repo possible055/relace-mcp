@@ -29,7 +29,7 @@ jobs:
 
       - name: Install dependencies and run tests with coverage
         run: |
-          uv sync
+          uv sync --extra dev
           uv run pytest --cov=src --cov-report=xml -q
 
       - name: SonarQube Scan
