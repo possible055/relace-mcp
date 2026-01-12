@@ -22,6 +22,7 @@ ruff_cache/
 .cursor/
 .kilocode/
 .kiro/
+.gemini/
 AGENTS.md
 
 # Logs / Env
@@ -41,3 +42,6 @@ benchmark/data/raw/*.jsonl
 !benchmark/data/raw/.gitkeep
 benchmark/data/processed/*.jsonl
 !benchmark/data/processed/.gitkeep
+
+# SonarQube
+sonar-project.properties
