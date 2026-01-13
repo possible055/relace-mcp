@@ -3,7 +3,17 @@ MAX_TOTAL_CONTEXT_CHARS = 400000
 
 # Read-only tools safe for parallel execution
 PARALLEL_SAFE_TOOLS = frozenset(
-    {"view_file", "view_directory", "grep_search", "glob", "find_symbol"}
+    {
+        "view_file",
+        "view_directory",
+        "grep_search",
+        "glob",
+        "find_symbol",
+        "search_symbol",
+        "list_symbols",
+        "get_type",
+        "call_graph",
+    }
 )
 
 # Maximum parallel workers (official recommendation: 4-12 tool calls per turn)

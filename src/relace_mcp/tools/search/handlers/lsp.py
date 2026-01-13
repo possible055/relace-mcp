@@ -71,6 +71,39 @@ class LSPQueryParams:
     column: int  # 1-indexed
 
 
+@dataclass
+class SearchSymbolParams:
+    """Parameters for search_symbol tool."""
+
+    query: str
+
+
+@dataclass
+class ListSymbolsParams:
+    """Parameters for list_symbols tool."""
+
+    file: str
+
+
+@dataclass
+class GetTypeParams:
+    """Parameters for get_type tool."""
+
+    file: str
+    line: int  # 1-indexed
+    column: int  # 1-indexed
+
+
+@dataclass
+class CallGraphParams:
+    """Parameters for call_graph tool."""
+
+    file: str
+    line: int  # 1-indexed
+    column: int  # 1-indexed
+    direction: str  # "incoming" | "outgoing"
+
+
 def _find_symbol_columns(line_content: str) -> list[int]:
     """Find column positions of potential symbols in a line (skipping keywords)."""
     columns = []
@@ -203,3 +236,246 @@ def _format_lsp_results(results: "list[Location]", base_dir: str) -> str:
         lines.append(f"... capped at {MAX_LSP_RESULTS} results (total: {len(results)})")
 
     return "\n".join(lines)
+
+
+def search_symbol_handler(params: SearchSymbolParams, base_dir: str) -> str:
+    """Search for symbols by name across the workspace using LSP.
+
+    Thread-safe through LSPClientManager's internal locking.
+    First call incurs startup delay, subsequent calls are fast.
+    """
+    if not params.query or not params.query.strip():
+        return "Error: query cannot be empty."
+
+    query = params.query.strip()
+
+    try:
+        from relace_mcp.lsp import PYTHON_CONFIG, LSPClientManager, LSPError
+    except ImportError as e:
+        return f"Error: LSP dependencies not available: {e}. Run: pip install basedpyright"
+
+    try:
+        resolved_base_dir = str(Path(base_dir).resolve())
+        manager = LSPClientManager.get_instance()
+        client = manager.get_client(
+            PYTHON_CONFIG, resolved_base_dir, timeout_seconds=LSP_TIMEOUT_SECONDS
+        )
+
+        results = client.workspace_symbols(query)
+
+        if not results:
+            return "No symbols found."
+
+        lines = []
+        for r in results[:MAX_LSP_RESULTS]:
+            lines.append(r.to_grep_format(resolved_base_dir))
+
+        if len(results) > MAX_LSP_RESULTS:
+            lines.append(f"... capped at {MAX_LSP_RESULTS} results (total: {len(results)})")
+
+        return "\n".join(lines)
+
+    except LSPError as e:
+        if "not found" in str(e).lower():
+            return "Error: basedpyright-langserver not found. Run: pip install basedpyright"
+        return f"Error: {e}"
+    except Exception as exc:
+        logger.warning("LSP symbol search failed: %s", exc)
+        return f"Error: LSP symbol search failed: {exc}"
+
+
+def list_symbols_handler(params: ListSymbolsParams, base_dir: str) -> str:
+    """List all symbols defined in a file using LSP.
+
+    Thread-safe through LSPClientManager's internal locking.
+    First call incurs startup delay, subsequent calls are fast.
+    """
+    if not params.file or not params.file.strip():
+        return "Error: file path cannot be empty."
+
+    try:
+        fs_path = map_path_no_resolve(params.file, base_dir)
+        if fs_path.is_symlink():
+            return f"Error: Symlinks not allowed: {params.file}"
+        abs_path = fs_path.resolve()
+        resolved_base_dir = str(Path(base_dir).resolve())
+
+        try:
+            rel_path = str(abs_path.relative_to(resolved_base_dir))
+        except ValueError:
+            return f"Error: Invalid path: {params.file}"
+
+        if not abs_path.exists():
+            return f"Error: File not found: {params.file}"
+        if abs_path.suffix not in (".py", ".pyi"):
+            return f"Error: list_symbols only supports Python files, got: {abs_path.suffix}"
+    except (OSError, RuntimeError, ValueError) as e:
+        return f"Error: Invalid path: {e}"
+
+    try:
+        from relace_mcp.lsp import PYTHON_CONFIG, LSPClientManager, LSPError
+    except ImportError as e:
+        return f"Error: LSP dependencies not available: {e}. Run: pip install basedpyright"
+
+    try:
+        manager = LSPClientManager.get_instance()
+        client = manager.get_client(
+            PYTHON_CONFIG, resolved_base_dir, timeout_seconds=LSP_TIMEOUT_SECONDS
+        )
+
+        results = client.document_symbols(rel_path)
+
+        if not results:
+            return "No symbols found in file."
+
+        lines = []
+        for sym in results:
+            lines.append(sym.to_outline_str())
+
+        return "\n".join(lines)
+
+    except LSPError as e:
+        if "not found" in str(e).lower():
+            return "Error: basedpyright-langserver not found. Run: pip install basedpyright"
+        return f"Error: {e}"
+    except Exception as exc:
+        logger.warning("LSP document symbols failed: %s", exc)
+        return f"Error: LSP document symbols failed: {exc}"
+
+
+def get_type_handler(params: GetTypeParams, base_dir: str) -> str:
+    """Get type information at a position using LSP hover.
+
+    Thread-safe through LSPClientManager's internal locking.
+    First call incurs startup delay, subsequent calls are fast.
+    """
+    if not isinstance(params.line, int) or not isinstance(params.column, int):
+        return "Error: line and column must be integers (1-indexed)."
+    if params.line < 1:
+        return "Error: line must be >= 1 (1-indexed)."
+    if params.column < 1:
+        return "Error: column must be >= 1 (1-indexed)."
+
+    # Convert to 0-indexed for LSP protocol
+    line_0 = params.line - 1
+    column_0 = params.column - 1
+
+    try:
+        fs_path = map_path_no_resolve(params.file, base_dir)
+        if fs_path.is_symlink():
+            return f"Error: Symlinks not allowed: {params.file}"
+        abs_path = fs_path.resolve()
+        resolved_base_dir = str(Path(base_dir).resolve())
+
+        try:
+            rel_path = str(abs_path.relative_to(resolved_base_dir))
+        except ValueError:
+            return f"Error: Invalid path: {params.file}"
+
+        if not abs_path.exists():
+            return f"Error: File not found: {params.file}"
+        if abs_path.suffix not in (".py", ".pyi"):
+            return f"Error: get_type only supports Python files, got: {abs_path.suffix}"
+    except (OSError, RuntimeError, ValueError) as e:
+        return f"Error: Invalid path: {e}"
+
+    try:
+        from relace_mcp.lsp import PYTHON_CONFIG, LSPClientManager, LSPError
+    except ImportError as e:
+        return f"Error: LSP dependencies not available: {e}. Run: pip install basedpyright"
+
+    try:
+        manager = LSPClientManager.get_instance()
+        client = manager.get_client(
+            PYTHON_CONFIG, resolved_base_dir, timeout_seconds=LSP_TIMEOUT_SECONDS
+        )
+
+        result = client.hover(rel_path, line_0, column_0)
+
+        if not result:
+            return "No type information available."
+
+        return result.to_display_str()
+
+    except LSPError as e:
+        if "not found" in str(e).lower():
+            return "Error: basedpyright-langserver not found. Run: pip install basedpyright"
+        return f"Error: {e}"
+    except Exception as exc:
+        logger.warning("LSP hover failed: %s", exc)
+        return f"Error: LSP hover failed: {exc}"
+
+
+def call_graph_handler(params: CallGraphParams, base_dir: str) -> str:
+    """Get call hierarchy (who calls / what is called) using LSP.
+
+    Thread-safe through LSPClientManager's internal locking.
+    First call incurs startup delay, subsequent calls are fast.
+    """
+    if params.direction not in ("incoming", "outgoing"):
+        return "Error: direction must be 'incoming' or 'outgoing'."
+
+    if not isinstance(params.line, int) or not isinstance(params.column, int):
+        return "Error: line and column must be integers (1-indexed)."
+    if params.line < 1:
+        return "Error: line must be >= 1 (1-indexed)."
+    if params.column < 1:
+        return "Error: column must be >= 1 (1-indexed)."
+
+    line_0 = params.line - 1
+    column_0 = params.column - 1
+
+    try:
+        fs_path = map_path_no_resolve(params.file, base_dir)
+        if fs_path.is_symlink():
+            return f"Error: Symlinks not allowed: {params.file}"
+        abs_path = fs_path.resolve()
+        resolved_base_dir = str(Path(base_dir).resolve())
+
+        try:
+            rel_path = str(abs_path.relative_to(resolved_base_dir))
+        except ValueError:
+            return f"Error: Invalid path: {params.file}"
+
+        if not abs_path.exists():
+            return f"Error: File not found: {params.file}"
+        if abs_path.suffix not in (".py", ".pyi"):
+            return f"Error: call_graph only supports Python files, got: {abs_path.suffix}"
+    except (OSError, RuntimeError, ValueError) as e:
+        return f"Error: Invalid path: {e}"
+
+    try:
+        from relace_mcp.lsp import PYTHON_CONFIG, LSPClientManager, LSPError
+    except ImportError as e:
+        return f"Error: LSP dependencies not available: {e}. Run: pip install basedpyright"
+
+    try:
+        manager = LSPClientManager.get_instance()
+        client = manager.get_client(
+            PYTHON_CONFIG, resolved_base_dir, timeout_seconds=LSP_TIMEOUT_SECONDS
+        )
+
+        results = client.call_hierarchy(rel_path, line_0, column_0, params.direction)
+
+        if not results:
+            direction_desc = "callers" if params.direction == "incoming" else "callees"
+            return f"No {direction_desc} found. Ensure cursor is on a function/method name."
+
+        lines = []
+        header = "Called by:" if params.direction == "incoming" else "Calls:"
+        lines.append(header)
+        for r in results[:MAX_LSP_RESULTS]:
+            lines.append("  " + r.to_display_str(resolved_base_dir))
+
+        if len(results) > MAX_LSP_RESULTS:
+            lines.append(f"  ... capped at {MAX_LSP_RESULTS} results (total: {len(results)})")
+
+        return "\n".join(lines)
+
+    except LSPError as e:
+        if "not found" in str(e).lower():
+            return "Error: basedpyright-langserver not found. Run: pip install basedpyright"
+        return f"Error: {e}"
+    except Exception as exc:
+        logger.warning("LSP call hierarchy failed: %s", exc)
+        return f"Error: LSP call hierarchy failed: {exc}"
