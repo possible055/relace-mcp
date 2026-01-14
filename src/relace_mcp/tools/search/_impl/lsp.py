@@ -427,6 +427,9 @@ def call_graph_handler(params: CallGraphParams, base_dir: str) -> str:
     if params.column < 1:
         return "Error: column must be >= 1 (1-indexed)."
 
+    if not params.file or not params.file.strip():
+        return "Error: file path cannot be empty."
+
     line_0 = params.line - 1
     column_0 = params.column - 1
 

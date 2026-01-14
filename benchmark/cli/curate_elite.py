@@ -360,7 +360,7 @@ def main():
     # Collect items by repo
     items_by_repo: dict[str, list] = defaultdict(list)
 
-    with open(base_path) as f:
+    with open(base_path, encoding="utf-8") as f:
         for line in f:
             if not line.strip():
                 continue
@@ -442,7 +442,7 @@ def main():
 
     # Write output
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         for item in output_items:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 

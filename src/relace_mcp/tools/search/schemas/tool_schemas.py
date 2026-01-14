@@ -284,9 +284,9 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "search_symbol",
             "strict": True,
             "description": (
-                "Search for symbol definitions by name across the workspace using LSP.\\n\\n"
-                "Returns symbol locations matching the query. Only searches DEFINITIONS,\\n"
-                "not string literals or comments. Supports partial name matching.\\n\\n"
+                "Search for symbol definitions by name across the workspace using LSP.\n\n"
+                "Returns symbol locations matching the query. Only searches DEFINITIONS,\n"
+                "not string literals or comments. Supports partial name matching.\n\n"
                 "First call has 2-5s startup delay."
             ),
             "parameters": {
@@ -308,8 +308,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "get_type",
             "strict": True,
             "description": (
-                "Get type information for a symbol at a position using LSP hover.\\n\\n"
-                "line/column are 1-indexed, matching view_file output directly.\\n"
+                "Get type information for a symbol at a position using LSP hover.\n\n"
+                "line/column are 1-indexed, matching view_file output directly.\n"
                 "First call has 2-5s startup delay."
             ),
             "parameters": {
@@ -339,9 +339,9 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "list_symbols",
             "strict": True,
             "description": (
-                "List all symbols defined in a Python file (classes, functions, variables).\\n\\n"
-                "Returns a hierarchical outline showing symbol names, kinds, and line ranges.\\n"
-                "Faster than grep for getting file structure.\\n\\n"
+                "List all symbols defined in a Python file (classes, functions, variables).\n\n"
+                "Returns a hierarchical outline showing symbol names, kinds, and line ranges.\n"
+                "Faster than grep for getting file structure.\n\n"
                 "First call has 2-5s startup delay."
             ),
             "parameters": {
@@ -363,10 +363,10 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "call_graph",
             "strict": True,
             "description": (
-                "Get call hierarchy for a function/method using LSP.\\n\\n"
-                "direction='incoming': who calls this function\\n"
-                "direction='outgoing': what functions this calls\\n\\n"
-                "line/column are 1-indexed, matching view_file output.\\n"
+                "Get call hierarchy for a function/method using LSP.\n\n"
+                "direction='incoming': who calls this function\n"
+                "direction='outgoing': what functions this calls\n\n"
+                "line/column are 1-indexed, matching view_file output.\n"
                 "First call has 2-5s startup delay."
             ),
             "parameters": {

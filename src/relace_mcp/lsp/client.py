@@ -14,6 +14,7 @@ from relace_mcp.lsp.protocol import MessageBuffer, encode_message
 from relace_mcp.lsp.types import (
     CallHierarchyItem,
     CallInfo,
+    DocumentSymbol,
     HoverInfo,
     Location,
     LSPError,
@@ -21,7 +22,7 @@ from relace_mcp.lsp.types import (
 )
 
 if TYPE_CHECKING:
-    from relace_mcp.lsp.types import DocumentSymbol
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -520,7 +521,7 @@ class LSPClient:
 
         return locations
 
-    def workspace_symbols(self, query: str) -> list["SymbolInfo"]:
+    def workspace_symbols(self, query: str) -> list[SymbolInfo]:
         """Search for symbols by name across the workspace."""
 
         with self._request_lock:
@@ -563,7 +564,7 @@ class LSPClient:
 
         return symbols
 
-    def document_symbols(self, file_path: str) -> list["DocumentSymbol"]:
+    def document_symbols(self, file_path: str) -> list[DocumentSymbol]:
         """Get all symbols defined in a file."""
 
         with self._request_lock:
@@ -581,7 +582,7 @@ class LSPClient:
             finally:
                 self._close_file(uri)
 
-    def _parse_document_symbols(self, result: Any) -> list["DocumentSymbol"]:
+    def _parse_document_symbols(self, result: Any) -> list[DocumentSymbol]:
         """Parse LSP DocumentSymbol from response."""
         if not isinstance(result, list):
             return []
@@ -615,7 +616,7 @@ class LSPClient:
         symbols = [parse_item(item) for item in result]
         return [s for s in symbols if s is not None]
 
-    def hover(self, file_path: str, line: int, column: int) -> "HoverInfo | None":
+    def hover(self, file_path: str, line: int, column: int) -> HoverInfo | None:
         """Get type information at position."""
 
         with self._request_lock:
@@ -669,7 +670,7 @@ class LSPClient:
 
     def call_hierarchy(
         self, file_path: str, line: int, column: int, direction: str = "incoming"
-    ) -> list["CallInfo"]:
+    ) -> list[CallInfo]:
         """Get call hierarchy for a symbol.
 
         Args:
