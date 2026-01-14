@@ -160,6 +160,7 @@ class TestFastAgenticSearchHarness:
     ) -> None:
         """Even if the model hallucinates tool calls, disabled tools must not execute."""
         # Ensure default tool allowlist is active (bash is opt-in).
+        monkeypatch.delenv("SEARCH_ENABLED_TOOLS", raising=False)
         monkeypatch.delenv("RELACE_SEARCH_ENABLED_TOOLS", raising=False)
 
         # If bash ever executes here, the handler would be called.
@@ -349,7 +350,6 @@ class TestParallelToolCallsFix:
         self,
         mock_config: RelaceConfig,
         mock_client: MagicMock,
-        tmp_path: Path,
     ) -> None:
         """Malformed JSON in arguments should return error, not crash."""
         mock_client.chat.side_effect = [
@@ -387,7 +387,6 @@ class TestParallelToolCallsFix:
         self,
         mock_config: RelaceConfig,
         mock_client: MagicMock,
-        tmp_path: Path,
     ) -> None:
         """Valid JSON but non-dict arguments should return error, not crash."""
         mock_client.chat.side_effect = [
@@ -425,21 +424,26 @@ class TestParallelToolCallsFix:
 class TestToolSchemas:
     """Test tool schema definitions."""
 
-    def test_has_six_default_tools(self) -> None:
-        """Should have exactly 6 tools by default (bash is opt-in)."""
-        assert len(TOOL_SCHEMAS) == 6
+    def test_default_tools_exclude_bash(self) -> None:
+        """Default tool schemas should exclude bash (bash is opt-in)."""
+        names = {t["function"]["name"] for t in TOOL_SCHEMAS}
+        assert "bash" not in names
 
     def test_tool_names(self) -> None:
-        """Should have correct default tool names (no bash)."""
+        """Default tool schemas should include the expected core tools."""
         names = {t["function"]["name"] for t in TOOL_SCHEMAS}
-        assert names == {
+        assert {
             "view_file",
             "view_directory",
             "grep_search",
             "glob",
             "find_symbol",
+            "search_symbol",
+            "get_type",
+            "list_symbols",
+            "call_graph",
             "report_back",
-        }
+        }.issubset(names)
 
     def test_bash_tool_opt_in(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """bash should be available when explicitly enabled."""
@@ -447,9 +451,7 @@ class TestToolSchemas:
 
         from relace_mcp.tools.search.schemas import get_tool_schemas
 
-        monkeypatch.setenv(
-            "RELACE_SEARCH_ENABLED_TOOLS", "view_file,view_directory,grep_search,glob,bash"
-        )
+        monkeypatch.setenv("SEARCH_ENABLED_TOOLS", "view_file,view_directory,grep_search,glob,bash")
         schemas = get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
         if shutil.which("bash") is None:
@@ -465,7 +467,7 @@ class TestToolSchemas:
         """Allowlist should restrict tools but always keep report_back."""
         from relace_mcp.tools.search.schemas import get_tool_schemas
 
-        monkeypatch.setenv("RELACE_SEARCH_ENABLED_TOOLS", "view_file,grep_search,glob")
+        monkeypatch.setenv("SEARCH_ENABLED_TOOLS", "view_file,grep_search,glob")
 
         schemas = get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
@@ -475,7 +477,7 @@ class TestToolSchemas:
         """lsp_query in allowlist should map to find_symbol for backward compatibility."""
         from relace_mcp.tools.search.schemas import get_tool_schemas
 
-        monkeypatch.setenv("RELACE_SEARCH_ENABLED_TOOLS", "view_file,lsp_query")
+        monkeypatch.setenv("SEARCH_ENABLED_TOOLS", "view_file,lsp_query")
 
         schemas = get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}

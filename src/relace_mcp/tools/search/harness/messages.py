@@ -2,7 +2,7 @@ import json
 import logging
 from typing import Any
 
-from ..handlers import (
+from .._impl import (
     MAX_BASH_CHARS,
     MAX_GLOB_CHARS,
     MAX_GREP_SEARCH_CHARS,

@@ -20,9 +20,8 @@ class TestBuildServer:
         assert server is not None
         assert server.name == "Relace Fast Apply MCP"
 
-    def test_build_from_env(
-        self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    @pytest.mark.usefixtures("clean_env")
+    def test_build_from_env(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """Should build server from environment variables."""
         monkeypatch.setenv("RELACE_API_KEY", "test-key")
         monkeypatch.setenv("MCP_BASE_DIR", str(tmp_path))
@@ -30,7 +29,8 @@ class TestBuildServer:
         server = build_server()
         assert server is not None
 
-    def test_build_fails_without_api_key(self, clean_env: None) -> None:
+    @pytest.mark.usefixtures("clean_env")
+    def test_build_fails_without_api_key(self) -> None:
         """Should raise when RELACE_API_KEY is not set."""
         with pytest.raises(RuntimeError, match="RELACE_API_KEY"):
             build_server()
@@ -227,9 +227,8 @@ class TestServerIntegration:
 class TestMain:
     """Test main() function with CLI arguments."""
 
-    def test_main_stdio_mode(
-        self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    @pytest.mark.usefixtures("clean_env")
+    def test_main_stdio_mode(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """STDIO mode (default) calls server.run() without arguments."""
         import sys
 
@@ -247,9 +246,8 @@ class TestMain:
 
             mock_server.run.assert_called_once_with()
 
-    def test_main_http_mode(
-        self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    @pytest.mark.usefixtures("clean_env")
+    def test_main_http_mode(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """HTTP mode calls server.run() with correct arguments via CLI."""
         import sys
 
@@ -286,8 +284,9 @@ class TestMain:
                 path="/api/mcp",
             )
 
+    @pytest.mark.usefixtures("clean_env")
     def test_main_streamable_http_mode(
-        self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """streamable-http mode via -t short flag."""
         import sys
@@ -311,9 +310,8 @@ class TestMain:
                 path="/mcp",
             )
 
-    def test_main_invalid_transport(
-        self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    @pytest.mark.usefixtures("clean_env")
+    def test_main_invalid_transport(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """Invalid transport value is rejected by argparse."""
         import sys
 
