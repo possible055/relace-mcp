@@ -5,7 +5,15 @@ from relace_mcp.lsp.languages import (
     LanguageServerConfig,
     get_config_for_file,
 )
-from relace_mcp.lsp.types import Location, LSPError
+from relace_mcp.lsp.types import (
+    CallHierarchyItem,
+    CallInfo,
+    DocumentSymbol,
+    HoverInfo,
+    Location,
+    LSPError,
+    SymbolInfo,
+)
 
 __all__ = [
     # Client
@@ -17,6 +25,11 @@ __all__ = [
     "PYTHON_CONFIG",
     "get_config_for_file",
     # Types
+    "CallHierarchyItem",
+    "CallInfo",
+    "DocumentSymbol",
+    "HoverInfo",
     "Location",
     "LSPError",
+    "SymbolInfo",
 ]
