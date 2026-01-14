@@ -6,7 +6,7 @@ Goals:
 - Avoid fragmented ground truth: <= 10 ranges (functions) per case
 - Exclude test/doc/config files from ground truth
 
-Output: benchmark/data/processed/elite_50.jsonl (DatasetCase-compatible JSONL)
+Output: benchmark/artifacts/data/processed/elite_50.jsonl (DatasetCase-compatible JSONL)
 """
 
 import ast
@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from ..analysis.function_scope import FunctionScope, extract_function_scopes
-from ..config import get_repos_dir
+from ..config import DEFAULT_MULOCBENCH_PATH, get_processed_data_dir, get_repos_dir
 from ..runner.git import ensure_repo
 
 # Target repositories (top 5 by item count)
@@ -349,8 +349,8 @@ def build_hard_gt(*, eligible_changes: list[dict[str, Any]], repo_path: Path) ->
 
 
 def main():
-    base_path = Path(__file__).resolve().parent.parent / "data" / "raw" / "mulocbench_v1.jsonl"
-    output_path = Path(__file__).resolve().parent.parent / "data" / "processed" / "elite_50.jsonl"
+    base_path = Path(DEFAULT_MULOCBENCH_PATH)
+    output_path = get_processed_data_dir() / "elite_50.jsonl"
 
     print(f"Reading {base_path}...")
 

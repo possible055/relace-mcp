@@ -15,7 +15,13 @@ from typing import Any
 import click
 
 from ..analysis.function_scope import extract_function_scopes
-from ..config import DEFAULT_MULOCBENCH_PATH, get_benchmark_dir, get_repos_dir
+from ..config import (
+    DEFAULT_MULOCBENCH_PATH,
+    get_benchmark_dir,
+    get_processed_data_dir,
+    get_reports_dir,
+    get_repos_dir,
+)
 from ..datasets import load_dataset
 from ..runner.git import ensure_repo
 from .curate_elite import (
@@ -113,9 +119,9 @@ def _load_raw_by_issue_url(raw_file: Path, issue_urls: set[str]) -> dict[str, di
 @click.option(
     "--dataset",
     "dataset_path",
-    default="data/processed/elite_50.jsonl",
+    default=str(get_processed_data_dir() / "elite_50.jsonl"),
     show_default=True,
-    help="Elite dataset path (relative to benchmark/ unless absolute)",
+    help="Elite dataset path (absolute or relative to benchmark/)",
 )
 @click.option(
     "--raw",
@@ -127,16 +133,16 @@ def _load_raw_by_issue_url(raw_file: Path, issue_urls: set[str]) -> dict[str, di
 @click.option(
     "--output",
     "output_path",
-    default="reports/elite_50.audit.json",
+    default=str(get_reports_dir() / "elite_50.audit.json"),
     show_default=True,
-    help="Output audit report path (relative to benchmark/ unless absolute)",
+    help="Output audit report path (absolute or relative to benchmark/)",
 )
 @click.option(
     "--tsv",
     "tsv_path",
-    default="reports/elite_50.span_context.tsv",
+    default=str(get_reports_dir() / "elite_50.span_context.tsv"),
     show_default=True,
-    help="Output TSV listing (relative to benchmark/ unless absolute)",
+    help="Output TSV listing (absolute or relative to benchmark/)",
 )
 @click.option(
     "--padding",
