@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any
 
 from ....config import settings
-from ..handlers import (
+from .._impl import (
     CallGraphParams,
     GetTypeParams,
     ListSymbolsParams,
@@ -41,9 +41,9 @@ class ToolCallsMixin:
 
         def _maybe_record_observed(
             self,
-            name: str,
-            args: dict[str, Any],
-            result: str | dict[str, Any],
+            _name: str,
+            _args: dict[str, Any],
+            _result: str | dict[str, Any],
         ) -> None: ...
 
     def _enabled_tool_names(self) -> set[str]:

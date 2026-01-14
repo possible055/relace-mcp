@@ -256,38 +256,6 @@ async def _apply_to_existing_file(
 
     file_io.atomic_write(resolved_path, merged_code, encoding=detected_encoding)
 
-    try:
-        written_content, _ = file_io.read_text_with_fallback(resolved_path)
-        if written_content != merged_code:
-            logger.error(
-                "[%s] WRITE_VERIFY_FAILED: Content mismatch after write for %s",
-                ctx.trace_id,
-                resolved_path,
-            )
-            return errors.recoverable_error(
-                "WRITE_VERIFY_FAILED",
-                "File content does not match expected after write. Possible race condition.",
-                ctx.file_path,
-                ctx.instruction,
-                ctx.trace_id,
-                ctx.elapsed_ms(),
-            )
-    except Exception as exc:
-        logger.error(
-            "[%s] WRITE_VERIFY_FAILED: Cannot verify write for %s: %s",
-            ctx.trace_id,
-            resolved_path,
-            exc,
-        )
-        return errors.recoverable_error(
-            "WRITE_VERIFY_FAILED",
-            f"Cannot verify file content after write: {exc}",
-            ctx.file_path,
-            ctx.instruction,
-            ctx.trace_id,
-            ctx.elapsed_ms(),
-        )
-
     apply_logging.log_apply_success(
         ctx.trace_id, ctx.started_at, resolved_path, file_size, edit_snippet, ctx.instruction, usage
     )

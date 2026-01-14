@@ -9,7 +9,7 @@ from relace_mcp.utils import map_path_no_resolve
 from .constants import LSP_TIMEOUT_SECONDS, MAX_LSP_RESULTS
 
 if TYPE_CHECKING:
-    from relace_mcp.lsp import Location
+    from relace_mcp.lsp import Location, LSPClient
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +55,100 @@ _PYTHON_KEYWORDS = frozenset(
         "yield",
     }
 )
+
+
+# ---------------------------------------------------------------------------
+# Internal Helpers (reduces ~200 lines of duplication across 5 handlers)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _ValidatedPath:
+    """Result of path validation for LSP handlers."""
+
+    rel_path: str  # Relative path for LSP client
+    abs_path: Path  # Absolute path for file operations
+    resolved_base_dir: str  # Resolved base directory
+
+
+def _validate_python_path(file: str, base_dir: str) -> _ValidatedPath | str:
+    """Validate and resolve a Python file path for LSP operations.
+
+    Args:
+        file: Input file path (may be /repo/... format).
+        base_dir: Base directory for path resolution.
+
+    Returns:
+        _ValidatedPath on success, or error message string on failure.
+    """
+    try:
+        fs_path = map_path_no_resolve(file, base_dir)
+        if fs_path.is_symlink():
+            return f"Error: Symlinks not allowed: {file}"
+        abs_path = fs_path.resolve()
+        resolved_base_dir = str(Path(base_dir).resolve())
+
+        try:
+            rel_path = str(abs_path.relative_to(resolved_base_dir))
+        except ValueError:
+            return f"Error: Invalid path: {file}"
+
+        if not abs_path.exists():
+            return f"Error: File not found: {file}"
+        if abs_path.suffix not in (".py", ".pyi"):
+            return f"Error: Only Python files supported, got: {abs_path.suffix}"
+
+        return _ValidatedPath(rel_path, abs_path, resolved_base_dir)
+    except (OSError, RuntimeError, ValueError) as e:
+        return f"Error: Invalid path: {e}"
+
+
+def _get_lsp_client(base_dir: str) -> "tuple[LSPClient, str, type] | str":
+    """Get LSP client with lazy import.
+
+    Args:
+        base_dir: Base directory for the LSP workspace.
+
+    Returns:
+        Tuple of (client, resolved_base_dir, LSPError_class) on success,
+        or error message string on failure.
+    """
+    try:
+        from relace_mcp.lsp import PYTHON_CONFIG, LSPClientManager, LSPError
+    except ImportError as e:
+        return f"Error: LSP dependencies not available: {e}. Run: pip install basedpyright"
+
+    resolved_base_dir = str(Path(base_dir).resolve())
+    manager = LSPClientManager.get_instance()
+    client = manager.get_client(
+        PYTHON_CONFIG, resolved_base_dir, timeout_seconds=LSP_TIMEOUT_SECONDS
+    )
+    return (client, resolved_base_dir, LSPError)
+
+
+def _handle_lsp_error(exc: Exception, operation: str) -> str:
+    """Format LSP error into user-friendly message.
+
+    Args:
+        exc: The exception that occurred.
+        operation: Description of the operation that failed.
+
+    Returns:
+        Formatted error message.
+    """
+    # Import LSPError for isinstance check
+    try:
+        from relace_mcp.lsp import LSPError
+
+        if isinstance(exc, LSPError):
+            if "not found" in str(exc).lower():
+                return "Error: basedpyright-langserver not found. Run: pip install basedpyright"
+            return f"Error: {exc}"
+    except ImportError:
+        pass
+
+    logger.warning("LSP %s failed: %s", operation, exc)
+    return f"Error: LSP {operation} failed: {exc}"
 
 
 @dataclass
@@ -144,44 +238,21 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
     line_0 = params.line - 1
     column_0 = params.column - 1
 
-    # Path validation and mapping
+    path_result = _validate_python_path(params.file, base_dir)
+    if isinstance(path_result, str):
+        return path_result
+
+    client_result = _get_lsp_client(base_dir)
+    if isinstance(client_result, str):
+        return client_result
+    client, resolved_base_dir, _ = client_result
+
     try:
-        fs_path = map_path_no_resolve(params.file, base_dir)
-        if fs_path.is_symlink():
-            return f"Error: Symlinks not allowed: {params.file}"
-        abs_path = fs_path.resolve()
-        resolved_base_dir = str(Path(base_dir).resolve())
-
-        # Validate path is within base_dir FIRST to prevent information disclosure
-        try:
-            rel_path = str(abs_path.relative_to(resolved_base_dir))
-        except ValueError:
-            return f"Error: Invalid path: {params.file}"
-
-        if not abs_path.exists():
-            return f"Error: File not found: {params.file}"
-        if abs_path.suffix not in (".py", ".pyi"):
-            return f"Error: find_symbol only supports Python files, got: {abs_path.suffix}"
-    except (OSError, RuntimeError, ValueError) as e:
-        return f"Error: Invalid path: {e}"
-
-    # Lazy import to avoid loading lsp module if not used
-    try:
-        from relace_mcp.lsp import PYTHON_CONFIG, LSPClientManager, LSPError
-    except ImportError as e:
-        return f"Error: LSP dependencies not available: {e}. Run: pip install basedpyright"
-
-    # Execute LSP request through manager
-    try:
-        manager = LSPClientManager.get_instance()
-        client = manager.get_client(
-            PYTHON_CONFIG, resolved_base_dir, timeout_seconds=LSP_TIMEOUT_SECONDS
-        )
 
         def do_query(line: int, column: int) -> "list[Location]":
             if params.action == "definition":
-                return client.definition(rel_path, line, column)
-            return client.references(rel_path, line, column)
+                return client.definition(path_result.rel_path, line, column)
+            return client.references(path_result.rel_path, line, column)
 
         # Try the requested position first
         results = do_query(line_0, column_0)
@@ -190,7 +261,7 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
         # This handles cases where column points to keywords (def, class) instead of symbol names
         if not results:
             try:
-                with open(abs_path, encoding="utf-8", errors="replace") as f:
+                with open(path_result.abs_path, encoding="utf-8", errors="replace") as f:
                     lines = f.readlines()
                     if 0 <= line_0 < len(lines):
                         line_content = lines[line_0]
@@ -213,13 +284,8 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
 
         return _format_lsp_results(results, resolved_base_dir)
 
-    except LSPError as e:
-        if "not found" in str(e).lower():
-            return "Error: basedpyright-langserver not found. Run: pip install basedpyright"
-        return f"Error: {e}"
     except Exception as exc:
-        logger.warning("LSP query failed: %s", exc)
-        return f"Error: LSP query failed: {exc}"
+        return _handle_lsp_error(exc, "query")
 
 
 def _format_lsp_results(results: "list[Location]", base_dir: str) -> str:
@@ -249,18 +315,12 @@ def search_symbol_handler(params: SearchSymbolParams, base_dir: str) -> str:
 
     query = params.query.strip()
 
-    try:
-        from relace_mcp.lsp import PYTHON_CONFIG, LSPClientManager, LSPError
-    except ImportError as e:
-        return f"Error: LSP dependencies not available: {e}. Run: pip install basedpyright"
+    client_result = _get_lsp_client(base_dir)
+    if isinstance(client_result, str):
+        return client_result
+    client, resolved_base_dir, _ = client_result
 
     try:
-        resolved_base_dir = str(Path(base_dir).resolve())
-        manager = LSPClientManager.get_instance()
-        client = manager.get_client(
-            PYTHON_CONFIG, resolved_base_dir, timeout_seconds=LSP_TIMEOUT_SECONDS
-        )
-
         results = client.workspace_symbols(query)
 
         if not results:
@@ -275,13 +335,8 @@ def search_symbol_handler(params: SearchSymbolParams, base_dir: str) -> str:
 
         return "\n".join(lines)
 
-    except LSPError as e:
-        if "not found" in str(e).lower():
-            return "Error: basedpyright-langserver not found. Run: pip install basedpyright"
-        return f"Error: {e}"
     except Exception as exc:
-        logger.warning("LSP symbol search failed: %s", exc)
-        return f"Error: LSP symbol search failed: {exc}"
+        return _handle_lsp_error(exc, "symbol search")
 
 
 def list_symbols_handler(params: ListSymbolsParams, base_dir: str) -> str:
@@ -293,37 +348,17 @@ def list_symbols_handler(params: ListSymbolsParams, base_dir: str) -> str:
     if not params.file or not params.file.strip():
         return "Error: file path cannot be empty."
 
-    try:
-        fs_path = map_path_no_resolve(params.file, base_dir)
-        if fs_path.is_symlink():
-            return f"Error: Symlinks not allowed: {params.file}"
-        abs_path = fs_path.resolve()
-        resolved_base_dir = str(Path(base_dir).resolve())
+    path_result = _validate_python_path(params.file, base_dir)
+    if isinstance(path_result, str):
+        return path_result
 
-        try:
-            rel_path = str(abs_path.relative_to(resolved_base_dir))
-        except ValueError:
-            return f"Error: Invalid path: {params.file}"
-
-        if not abs_path.exists():
-            return f"Error: File not found: {params.file}"
-        if abs_path.suffix not in (".py", ".pyi"):
-            return f"Error: list_symbols only supports Python files, got: {abs_path.suffix}"
-    except (OSError, RuntimeError, ValueError) as e:
-        return f"Error: Invalid path: {e}"
+    client_result = _get_lsp_client(base_dir)
+    if isinstance(client_result, str):
+        return client_result
+    client, _, _ = client_result
 
     try:
-        from relace_mcp.lsp import PYTHON_CONFIG, LSPClientManager, LSPError
-    except ImportError as e:
-        return f"Error: LSP dependencies not available: {e}. Run: pip install basedpyright"
-
-    try:
-        manager = LSPClientManager.get_instance()
-        client = manager.get_client(
-            PYTHON_CONFIG, resolved_base_dir, timeout_seconds=LSP_TIMEOUT_SECONDS
-        )
-
-        results = client.document_symbols(rel_path)
+        results = client.document_symbols(path_result.rel_path)
 
         if not results:
             return "No symbols found in file."
@@ -334,13 +369,8 @@ def list_symbols_handler(params: ListSymbolsParams, base_dir: str) -> str:
 
         return "\n".join(lines)
 
-    except LSPError as e:
-        if "not found" in str(e).lower():
-            return "Error: basedpyright-langserver not found. Run: pip install basedpyright"
-        return f"Error: {e}"
     except Exception as exc:
-        logger.warning("LSP document symbols failed: %s", exc)
-        return f"Error: LSP document symbols failed: {exc}"
+        return _handle_lsp_error(exc, "document symbols")
 
 
 def get_type_handler(params: GetTypeParams, base_dir: str) -> str:
@@ -360,50 +390,25 @@ def get_type_handler(params: GetTypeParams, base_dir: str) -> str:
     line_0 = params.line - 1
     column_0 = params.column - 1
 
-    try:
-        fs_path = map_path_no_resolve(params.file, base_dir)
-        if fs_path.is_symlink():
-            return f"Error: Symlinks not allowed: {params.file}"
-        abs_path = fs_path.resolve()
-        resolved_base_dir = str(Path(base_dir).resolve())
+    path_result = _validate_python_path(params.file, base_dir)
+    if isinstance(path_result, str):
+        return path_result
 
-        try:
-            rel_path = str(abs_path.relative_to(resolved_base_dir))
-        except ValueError:
-            return f"Error: Invalid path: {params.file}"
-
-        if not abs_path.exists():
-            return f"Error: File not found: {params.file}"
-        if abs_path.suffix not in (".py", ".pyi"):
-            return f"Error: get_type only supports Python files, got: {abs_path.suffix}"
-    except (OSError, RuntimeError, ValueError) as e:
-        return f"Error: Invalid path: {e}"
+    client_result = _get_lsp_client(base_dir)
+    if isinstance(client_result, str):
+        return client_result
+    client, _, _ = client_result
 
     try:
-        from relace_mcp.lsp import PYTHON_CONFIG, LSPClientManager, LSPError
-    except ImportError as e:
-        return f"Error: LSP dependencies not available: {e}. Run: pip install basedpyright"
-
-    try:
-        manager = LSPClientManager.get_instance()
-        client = manager.get_client(
-            PYTHON_CONFIG, resolved_base_dir, timeout_seconds=LSP_TIMEOUT_SECONDS
-        )
-
-        result = client.hover(rel_path, line_0, column_0)
+        result = client.hover(path_result.rel_path, line_0, column_0)
 
         if not result:
             return "No type information available."
 
         return result.to_display_str()
 
-    except LSPError as e:
-        if "not found" in str(e).lower():
-            return "Error: basedpyright-langserver not found. Run: pip install basedpyright"
-        return f"Error: {e}"
     except Exception as exc:
-        logger.warning("LSP hover failed: %s", exc)
-        return f"Error: LSP hover failed: {exc}"
+        return _handle_lsp_error(exc, "hover")
 
 
 def call_graph_handler(params: CallGraphParams, base_dir: str) -> str:
@@ -425,37 +430,17 @@ def call_graph_handler(params: CallGraphParams, base_dir: str) -> str:
     line_0 = params.line - 1
     column_0 = params.column - 1
 
-    try:
-        fs_path = map_path_no_resolve(params.file, base_dir)
-        if fs_path.is_symlink():
-            return f"Error: Symlinks not allowed: {params.file}"
-        abs_path = fs_path.resolve()
-        resolved_base_dir = str(Path(base_dir).resolve())
+    path_result = _validate_python_path(params.file, base_dir)
+    if isinstance(path_result, str):
+        return path_result
 
-        try:
-            rel_path = str(abs_path.relative_to(resolved_base_dir))
-        except ValueError:
-            return f"Error: Invalid path: {params.file}"
-
-        if not abs_path.exists():
-            return f"Error: File not found: {params.file}"
-        if abs_path.suffix not in (".py", ".pyi"):
-            return f"Error: call_graph only supports Python files, got: {abs_path.suffix}"
-    except (OSError, RuntimeError, ValueError) as e:
-        return f"Error: Invalid path: {e}"
+    client_result = _get_lsp_client(base_dir)
+    if isinstance(client_result, str):
+        return client_result
+    client, resolved_base_dir, _ = client_result
 
     try:
-        from relace_mcp.lsp import PYTHON_CONFIG, LSPClientManager, LSPError
-    except ImportError as e:
-        return f"Error: LSP dependencies not available: {e}. Run: pip install basedpyright"
-
-    try:
-        manager = LSPClientManager.get_instance()
-        client = manager.get_client(
-            PYTHON_CONFIG, resolved_base_dir, timeout_seconds=LSP_TIMEOUT_SECONDS
-        )
-
-        results = client.call_hierarchy(rel_path, line_0, column_0, params.direction)
+        results = client.call_hierarchy(path_result.rel_path, line_0, column_0, params.direction)
 
         if not results:
             direction_desc = "callers" if params.direction == "incoming" else "callees"
@@ -472,10 +457,5 @@ def call_graph_handler(params: CallGraphParams, base_dir: str) -> str:
 
         return "\n".join(lines)
 
-    except LSPError as e:
-        if "not found" in str(e).lower():
-            return "Error: basedpyright-langserver not found. Run: pip install basedpyright"
-        return f"Error: {e}"
     except Exception as exc:
-        logger.warning("LSP call hierarchy failed: %s", exc)
-        return f"Error: LSP call hierarchy failed: {exc}"
+        return _handle_lsp_error(exc, "call hierarchy")

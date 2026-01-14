@@ -531,10 +531,8 @@ class LSPClient:
             result = self._send_request("workspace/symbol", {"query": query})
             return self._parse_symbol_info(result)
 
-    def _parse_symbol_info(self, result: Any) -> list["SymbolInfo"]:
+    def _parse_symbol_info(self, result: Any) -> list[SymbolInfo]:
         """Parse LSP SymbolInformation from response."""
-        from relace_mcp.lsp.types import SymbolInfo
-
         if not isinstance(result, list):
             return []
 
@@ -585,8 +583,6 @@ class LSPClient:
 
     def _parse_document_symbols(self, result: Any) -> list["DocumentSymbol"]:
         """Parse LSP DocumentSymbol from response."""
-        from relace_mcp.lsp.types import DocumentSymbol
-
         if not isinstance(result, list):
             return []
 
@@ -640,10 +636,8 @@ class LSPClient:
             finally:
                 self._close_file(uri)
 
-    def _parse_hover(self, result: Any) -> "HoverInfo | None":
+    def _parse_hover(self, result: Any) -> HoverInfo | None:
         """Parse LSP Hover response."""
-        from relace_mcp.lsp.types import HoverInfo
-
         if not result or not isinstance(result, dict):
             return None
 
@@ -725,10 +719,8 @@ class LSPClient:
             finally:
                 self._close_file(uri)
 
-    def _parse_call_hierarchy_item(self, raw: dict) -> "CallHierarchyItem | None":
+    def _parse_call_hierarchy_item(self, raw: dict) -> CallHierarchyItem | None:
         """Parse a CallHierarchyItem from LSP response."""
-        from relace_mcp.lsp.types import CallHierarchyItem
-
         if not isinstance(raw, dict):
             return None
 
@@ -751,10 +743,8 @@ class LSPClient:
             selection_start_char=sel.get("start", {}).get("character", 0),
         )
 
-    def _parse_call_info_list(self, raw: Any, direction: str) -> list["CallInfo"]:
+    def _parse_call_info_list(self, raw: Any, direction: str) -> list[CallInfo]:
         """Parse incoming/outgoing calls response."""
-        from relace_mcp.lsp.types import CallInfo
-
         if not isinstance(raw, list):
             return []
 
