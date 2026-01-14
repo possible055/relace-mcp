@@ -14,7 +14,7 @@ from ..config.settings import RELACE_CLOUD_TOOLS
 from .apply import apply_file_logic
 from .repo import cloud_info_logic, cloud_list_logic, cloud_search_logic, cloud_sync_logic
 from .repo.state import load_sync_state
-from .search import FastAgenticSearchHarness
+from .search import DualChannelHarness
 
 __all__ = ["register_tools"]
 
@@ -104,8 +104,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         lsp_languages = get_lsp_languages(Path(base_dir))
 
         effective_config = replace(config, base_dir=base_dir)
-        # Avoid shared mutable state across concurrent calls.
-        return await FastAgenticSearchHarness(
+        # Use DualChannelHarness for 3+3+1 architecture (auto-fallback if no LSP)
+        return await DualChannelHarness(
             effective_config, search_client, lsp_languages=lsp_languages
         ).run_async(query=query)
 

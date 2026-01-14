@@ -29,6 +29,7 @@ RETRY_BASE_DELAY = 1.0
 # Temperature settings for each tool
 SEARCH_TEMPERATURE = float(os.getenv("SEARCH_TEMPERATURE", "1.0"))
 APPLY_TEMPERATURE = float(os.getenv("APPLY_TEMPERATURE", "0.0"))
+MERGER_TEMPERATURE = float(os.getenv("MERGER_TEMPERATURE", "0.3"))
 
 # Provider identifiers (used for API compatibility detection)
 OPENAI_PROVIDER = "openai"

@@ -71,6 +71,7 @@ class SearchLLMClient:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
         trace_id: str = "unknown",
+        temperature: float | None = None,
     ) -> dict[str, Any]:
         if self._strip_tool_strict:
             tools = _strip_tool_strict(tools)
@@ -113,10 +114,11 @@ class SearchLLMClient:
         if include_parallel_tool_calls:
             extra_body["parallel_tool_calls"] = True
 
+        temp = temperature if temperature is not None else SEARCH_TEMPERATURE
         try:
             data, _latency_ms = self._chat_client.chat_completions(
                 messages=messages,
-                temperature=SEARCH_TEMPERATURE,
+                temperature=temp,
                 extra_body=extra_body,
                 trace_id=trace_id,
             )
@@ -175,6 +177,7 @@ class SearchLLMClient:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
         trace_id: str = "unknown",
+        temperature: float | None = None,
     ) -> dict[str, Any]:
         if self._strip_tool_strict:
             tools = _strip_tool_strict(tools)
@@ -217,10 +220,11 @@ class SearchLLMClient:
         if include_parallel_tool_calls:
             extra_body["parallel_tool_calls"] = True
 
+        temp = temperature if temperature is not None else SEARCH_TEMPERATURE
         try:
             data, _latency_ms = await self._chat_client.chat_completions_async(
                 messages=messages,
-                temperature=SEARCH_TEMPERATURE,
+                temperature=temp,
                 extra_body=extra_body,
                 trace_id=trace_id,
             )
