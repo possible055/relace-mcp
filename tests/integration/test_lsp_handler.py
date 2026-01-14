@@ -2,7 +2,7 @@ import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from relace_mcp.tools.search.handlers.lsp import (
+from relace_mcp.tools.search._impl.lsp import (
     LSPQueryParams,
     _format_lsp_results,
     lsp_query_handler,
@@ -160,7 +160,12 @@ class TestLSPQueryHandler:
 
         # Create symlink to actual directory
         symlink_dir = tmp_path / "symlink"
-        symlink_dir.symlink_to(actual_dir)
+        try:
+            symlink_dir.symlink_to(actual_dir)
+        except (OSError, NotImplementedError) as e:
+            import pytest
+
+            pytest.skip(f"symlink is not supported in this environment: {e!r}")
 
         mock_client = MagicMock()
         mock_client.definition.return_value = [

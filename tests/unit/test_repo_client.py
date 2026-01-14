@@ -136,7 +136,7 @@ class TestRelaceRepoClientListRepos:
         """Should stop at 100 pages safety limit to prevent infinite loops."""
         call_count = 0
 
-        def mock_paginated_response(*args, **kwargs):
+        def mock_paginated_response(*_args, **kwargs):
             nonlocal call_count
             page_start = kwargs.get("params", {}).get("page_start", 0)
             call_count += 1
@@ -356,7 +356,7 @@ class TestRelaceRepoClientRetry:
         """Should retry on rate limit (429) error."""
         call_count = 0
 
-        def mock_request(*args, **kwargs):
+        def mock_request(*_args, **_kwargs):
             nonlocal call_count
             call_count += 1
             if call_count < 3:
@@ -419,7 +419,7 @@ class TestRelaceRepoClientDeleteRepo:
             retryable=False,
         )
 
-        def raise_not_found(*args, **kwargs):
+        def raise_not_found(*_args, **_kwargs):
             raise RuntimeError("Repos API error (not_found): Repo not found") from api_error
 
         with patch.object(repo_client, "_request_with_retry", side_effect=raise_not_found):
@@ -438,7 +438,7 @@ class TestRelaceRepoClientDeleteRepo:
             retryable=False,
         )
 
-        def raise_forbidden(*args, **kwargs):
+        def raise_forbidden(*_args, **_kwargs):
             raise RuntimeError("Repos API error (forbidden): Forbidden") from api_error
 
         with patch.object(repo_client, "_request_with_retry", side_effect=raise_forbidden):

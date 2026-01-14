@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 from relace_mcp.lsp.types import SymbolInfo
-from relace_mcp.tools.search.handlers.lsp import SearchSymbolParams, search_symbol_handler
+from relace_mcp.tools.search._impl.lsp import SearchSymbolParams, search_symbol_handler
 
 
 class TestSymbolInfo:
