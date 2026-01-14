@@ -4,7 +4,8 @@ from relace_mcp.config import RelaceConfig
 from relace_mcp.server import build_server
 
 
-def test_server_build_success(tmp_path, clean_env):
+@pytest.mark.usefixtures("clean_env")
+def test_server_build_success(tmp_path):
     """Verify that build_server can successfully create an instance."""
     config = RelaceConfig(api_key="rlc-smoke-test", base_dir=str(tmp_path))
     # Disable health check to avoid excessive IO during smoke tests
@@ -14,8 +15,9 @@ def test_server_build_success(tmp_path, clean_env):
     assert mcp.name == "Relace Fast Apply MCP"
 
 
+@pytest.mark.usefixtures("clean_env")
 @pytest.mark.asyncio
-async def test_tool_registration(tmp_path, clean_env):
+async def test_tool_registration(tmp_path):
     """Verify that core tools are registered."""
     config = RelaceConfig(api_key="rlc-smoke-test", base_dir=str(tmp_path))
     mcp = build_server(config, run_health_check=False)

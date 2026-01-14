@@ -284,6 +284,8 @@ def atomic_write(path: Path, content: str, encoding: str) -> None:
         # Without this, Windows would convert \n to \r\n in text mode.
         with temp_path.open("w", encoding=encoding, newline="") as f:
             f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
         # os.replace is atomic on POSIX systems
         os.replace(temp_path, path)
     except Exception:

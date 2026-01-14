@@ -28,7 +28,18 @@ from .constants import (
 from .context import estimate_context_size, truncate_for_context
 from .glob import glob_handler
 from .grep_search import grep_search_handler
-from .lsp import LSPQueryParams, lsp_query_handler
+from .lsp import (
+    CallGraphParams,
+    GetTypeParams,
+    ListSymbolsParams,
+    LSPQueryParams,
+    SearchSymbolParams,
+    call_graph_handler,
+    get_type_handler,
+    list_symbols_handler,
+    lsp_query_handler,
+    search_symbol_handler,
+)
 from .paths import map_repo_path
 from .report_back import report_back_handler
 from .view_directory import view_directory_handler
@@ -40,10 +51,13 @@ __all__ = [
     "BASH_MAX_OUTPUT_CHARS",
     "BASH_SAFE_COMMANDS",
     "BASH_TIMEOUT_SECONDS",
+    "CallGraphParams",
     "GIT_ALLOWED_SUBCOMMANDS",
     "GREP_TIMEOUT_SECONDS",
+    "GetTypeParams",
     "LSPQueryParams",
     "LSP_TIMEOUT_SECONDS",
+    "ListSymbolsParams",
     "MAX_BASH_CHARS",
     "MAX_DIR_ITEMS",
     "MAX_GLOB_CHARS",
@@ -57,14 +71,19 @@ __all__ = [
     "MAX_VIEW_DIRECTORY_CHARS",
     "MAX_VIEW_FILE_CHARS",
     "PYTHON_DANGEROUS_PATTERNS",
+    "SearchSymbolParams",
+    "call_graph_handler",
     "_is_blocked_command",
     "bash_handler",
     "estimate_context_size",
     "glob_handler",
     "grep_search_handler",
+    "get_type_handler",
+    "list_symbols_handler",
     "lsp_query_handler",
     "map_repo_path",
     "report_back_handler",
+    "search_symbol_handler",
     "truncate_for_context",
     "view_directory_handler",
     "view_file_handler",

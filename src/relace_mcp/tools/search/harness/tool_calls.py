@@ -5,13 +5,21 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any
 
 from ....config import settings
-from ..handlers import (
+from .._impl import (
+    CallGraphParams,
+    GetTypeParams,
+    ListSymbolsParams,
     LSPQueryParams,
+    SearchSymbolParams,
     bash_handler,
+    call_graph_handler,
+    get_type_handler,
     glob_handler,
     grep_search_handler,
+    list_symbols_handler,
     lsp_query_handler,
     report_back_handler,
+    search_symbol_handler,
     view_directory_handler,
     view_file_handler,
 )
@@ -33,9 +41,9 @@ class ToolCallsMixin:
 
         def _maybe_record_observed(
             self,
-            name: str,
-            args: dict[str, Any],
-            result: str | dict[str, Any],
+            _name: str,
+            _args: dict[str, Any],
+            _result: str | dict[str, Any],
         ) -> None: ...
 
     def _enabled_tool_names(self) -> set[str]:
@@ -317,5 +325,26 @@ class ToolCallsMixin:
                 column=args.get("column", 0),
             )
             return lsp_query_handler(lsp_params, base_dir)
+        elif name == "search_symbol":
+            search_params = SearchSymbolParams(query=args.get("query", ""))
+            return search_symbol_handler(search_params, base_dir)
+        elif name == "list_symbols":
+            list_params = ListSymbolsParams(file=args.get("file", ""))
+            return list_symbols_handler(list_params, base_dir)
+        elif name == "get_type":
+            type_params = GetTypeParams(
+                file=args.get("file", ""),
+                line=args.get("line", 0),
+                column=args.get("column", 0),
+            )
+            return get_type_handler(type_params, base_dir)
+        elif name == "call_graph":
+            graph_params = CallGraphParams(
+                file=args.get("file", ""),
+                line=args.get("line", 0),
+                column=args.get("column", 0),
+                direction=args.get("direction", "incoming"),
+            )
+            return call_graph_handler(graph_params, base_dir)
         else:
             return f"Error: Unknown tool '{name}'"

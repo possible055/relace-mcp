@@ -24,6 +24,7 @@ from ..config import (
     DEFAULT_MULOCBENCH_PATH,
     EXCLUDED_REPOS,
     get_benchmark_dir,
+    get_cache_dir,
     get_processed_data_dir,
     get_reports_dir,
     get_repos_dir,
@@ -139,7 +140,7 @@ def main(
         sys.exit(1)
 
     # Setup cache directories
-    cache_dir = benchmark_dir / "cache"
+    cache_dir = get_cache_dir()
     solvability_cache = cache_dir / "solvability"
     relevance_cache = cache_dir / "relevance"
 

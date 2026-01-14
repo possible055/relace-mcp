@@ -18,7 +18,9 @@ def _mock_chat_response(content: str = "ok") -> MagicMock:
     return response
 
 
-def test_relace_provider_uses_config_api_key_by_default(tmp_path, clean_env, monkeypatch) -> None:
+@pytest.mark.usefixtures("clean_env")
+def test_relace_provider_uses_config_api_key_by_default(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("SEARCH_PROVIDER", raising=False)
     monkeypatch.delenv("RELACE_SEARCH_PROVIDER", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
@@ -53,12 +55,11 @@ def test_relace_provider_uses_config_api_key_by_default(tmp_path, clean_env, mon
     assert extra_body.get("repetition_penalty") == 1.0
 
 
-def test_openai_provider_uses_openai_api_key_and_compat_payload(
-    tmp_path, clean_env, monkeypatch
-) -> None:
-    monkeypatch.setenv("RELACE_SEARCH_PROVIDER", "openai")
-    monkeypatch.delenv("RELACE_SEARCH_ENDPOINT", raising=False)
-    monkeypatch.delenv("RELACE_SEARCH_MODEL", raising=False)
+@pytest.mark.usefixtures("clean_env")
+def test_openai_provider_uses_openai_api_key_and_compat_payload(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SEARCH_PROVIDER", "openai")
+    monkeypatch.delenv("SEARCH_ENDPOINT", raising=False)
+    monkeypatch.delenv("SEARCH_MODEL", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
 
     mock_response = _mock_chat_response()
@@ -93,10 +94,11 @@ def test_openai_provider_uses_openai_api_key_and_compat_payload(
     assert "repetition_penalty" not in extra_body
 
 
-def test_openai_provider_requires_openai_key(tmp_path, clean_env, monkeypatch) -> None:
-    monkeypatch.setenv("RELACE_SEARCH_PROVIDER", "openai")
-    monkeypatch.delenv("RELACE_SEARCH_ENDPOINT", raising=False)
-    monkeypatch.delenv("RELACE_SEARCH_MODEL", raising=False)
+@pytest.mark.usefixtures("clean_env")
+def test_openai_provider_requires_openai_key(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SEARCH_PROVIDER", "openai")
+    monkeypatch.delenv("SEARCH_ENDPOINT", raising=False)
+    monkeypatch.delenv("SEARCH_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
@@ -105,12 +107,13 @@ def test_openai_provider_requires_openai_key(tmp_path, clean_env, monkeypatch) -
         SearchLLMClient(config)
 
 
+@pytest.mark.usefixtures("clean_env")
 def test_openrouter_provider_uses_openrouter_api_key_and_openai_payload(
-    tmp_path, clean_env, monkeypatch
+    tmp_path, monkeypatch
 ) -> None:
-    monkeypatch.setenv("RELACE_SEARCH_PROVIDER", "openrouter")
-    monkeypatch.delenv("RELACE_SEARCH_ENDPOINT", raising=False)
-    monkeypatch.setenv("RELACE_SEARCH_MODEL", "openai/gpt-4o")
+    monkeypatch.setenv("SEARCH_PROVIDER", "openrouter")
+    monkeypatch.delenv("SEARCH_ENDPOINT", raising=False)
+    monkeypatch.setenv("SEARCH_MODEL", "openai/gpt-4o")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
 
@@ -140,10 +143,11 @@ def test_openrouter_provider_uses_openrouter_api_key_and_openai_payload(
     assert "repetition_penalty" not in extra_body
 
 
-def test_openrouter_provider_endpoint_is_normalized(tmp_path, clean_env, monkeypatch) -> None:
-    monkeypatch.setenv("RELACE_SEARCH_PROVIDER", "openrouter")
-    monkeypatch.setenv("RELACE_SEARCH_ENDPOINT", "https://openrouter.ai/api/v1/chat/completions")
-    monkeypatch.setenv("RELACE_SEARCH_MODEL", "openai/gpt-4o")
+@pytest.mark.usefixtures("clean_env")
+def test_openrouter_provider_endpoint_is_normalized(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SEARCH_PROVIDER", "openrouter")
+    monkeypatch.setenv("SEARCH_ENDPOINT", "https://openrouter.ai/api/v1/chat/completions")
+    monkeypatch.setenv("SEARCH_MODEL", "openai/gpt-4o")
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
 
     mock_response = _mock_chat_response()
@@ -166,7 +170,8 @@ def test_openrouter_provider_endpoint_is_normalized(tmp_path, clean_env, monkeyp
     assert call_kwargs["base_url"] == "https://openrouter.ai/api/v1"
 
 
-def test_openrouter_provider_requires_provider_key(tmp_path, clean_env, monkeypatch) -> None:
+@pytest.mark.usefixtures("clean_env")
+def test_openrouter_provider_requires_provider_key(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("SEARCH_PROVIDER", "openrouter")
     monkeypatch.setenv("SEARCH_MODEL", "openai/gpt-4o")
     monkeypatch.delenv("SEARCH_API_KEY", raising=False)
@@ -179,12 +184,11 @@ def test_openrouter_provider_requires_provider_key(tmp_path, clean_env, monkeypa
         SearchLLMClient(config)
 
 
-def test_schema_error_retry_disables_parallel_and_strips_strict(
-    tmp_path, clean_env, monkeypatch
-) -> None:
-    monkeypatch.setenv("RELACE_SEARCH_PROVIDER", "openrouter")
-    monkeypatch.delenv("RELACE_SEARCH_ENDPOINT", raising=False)
-    monkeypatch.setenv("RELACE_SEARCH_MODEL", "openai/gpt-4o")
+@pytest.mark.usefixtures("clean_env")
+def test_schema_error_retry_disables_parallel_and_strips_strict(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SEARCH_PROVIDER", "openrouter")
+    monkeypatch.delenv("SEARCH_ENDPOINT", raising=False)
+    monkeypatch.setenv("SEARCH_MODEL", "openai/gpt-4o")
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
 
     tool_with_strict = [
@@ -239,11 +243,12 @@ def test_schema_error_retry_disables_parallel_and_strips_strict(
     assert all("strict" not in t.get("function", {}) for t in extra_body.get("tools", []))
 
 
-def test_error_message_uses_provider_name_not_relace(tmp_path, clean_env, monkeypatch) -> None:
+@pytest.mark.usefixtures("clean_env")
+def test_error_message_uses_provider_name_not_relace(tmp_path, monkeypatch) -> None:
     """Error messages should use actual provider name, not hardcoded 'Relace'."""
-    monkeypatch.setenv("RELACE_SEARCH_PROVIDER", "openai")
-    monkeypatch.delenv("RELACE_SEARCH_ENDPOINT", raising=False)
-    monkeypatch.delenv("RELACE_SEARCH_MODEL", raising=False)
+    monkeypatch.setenv("SEARCH_PROVIDER", "openai")
+    monkeypatch.delenv("SEARCH_ENDPOINT", raising=False)
+    monkeypatch.delenv("SEARCH_MODEL", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
     with patch("relace_mcp.backend.openai_backend.OpenAI") as mock_openai:

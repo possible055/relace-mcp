@@ -1,4 +1,4 @@
-from relace_mcp.tools.search.handlers import _is_blocked_command
+from relace_mcp.tools.search._impl import _is_blocked_command
 
 DEFAULT_BASE_DIR = "/repo"
 
@@ -83,22 +83,22 @@ class TestAbsolutePathBlocking:
 
     def test_blocks_cat_etc_shadow(self) -> None:
         """Should block reading /etc/shadow."""
-        blocked, reason = _is_blocked_command("cat /etc/shadow", DEFAULT_BASE_DIR)
+        blocked, _ = _is_blocked_command("cat /etc/shadow", DEFAULT_BASE_DIR)
         assert blocked
 
     def test_blocks_find_root(self) -> None:
         """Should block find starting from root."""
-        blocked, reason = _is_blocked_command("find / -name '*.py'", DEFAULT_BASE_DIR)
+        blocked, _ = _is_blocked_command("find / -name '*.py'", DEFAULT_BASE_DIR)
         assert blocked
 
     def test_blocks_ls_home(self) -> None:
         """Should block listing home directory."""
-        blocked, reason = _is_blocked_command("ls /home", DEFAULT_BASE_DIR)
+        blocked, _ = _is_blocked_command("ls /home", DEFAULT_BASE_DIR)
         assert blocked
 
     def test_blocks_head_var_log(self) -> None:
         """Should block reading system logs."""
-        blocked, reason = _is_blocked_command("head /var/log/syslog", DEFAULT_BASE_DIR)
+        blocked, _ = _is_blocked_command("head /var/log/syslog", DEFAULT_BASE_DIR)
         assert blocked
 
     def test_allows_repo_path(self) -> None:

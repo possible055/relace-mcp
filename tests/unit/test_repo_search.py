@@ -11,7 +11,7 @@ from relace_mcp.tools.repo.search import cloud_search_logic
 
 
 @pytest.fixture
-def mock_config(tmp_path: Path) -> RelaceConfig:
+def _mock_config(tmp_path: Path) -> RelaceConfig:
     return RelaceConfig(
         api_key="rlc-test-api-key",
         base_dir=str(tmp_path),
@@ -19,7 +19,7 @@ def mock_config(tmp_path: Path) -> RelaceConfig:
 
 
 @pytest.fixture
-def mock_repo_client(mock_config: RelaceConfig) -> MagicMock:
+def mock_repo_client(_mock_config: RelaceConfig) -> MagicMock:
     client = MagicMock(spec=RelaceRepoClient)
     client.ensure_repo.return_value = "test-repo-id"
     client.retrieve.return_value = {

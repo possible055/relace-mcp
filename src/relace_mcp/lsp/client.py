@@ -7,11 +7,22 @@ import subprocess  # nosec B404 - required for LSP server communication
 import sys
 import threading
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from relace_mcp.lsp.languages.base import LanguageServerConfig
 from relace_mcp.lsp.protocol import MessageBuffer, encode_message
-from relace_mcp.lsp.types import Location, LSPError
+from relace_mcp.lsp.types import (
+    CallHierarchyItem,
+    CallInfo,
+    DocumentSymbol,
+    HoverInfo,
+    Location,
+    LSPError,
+    SymbolInfo,
+)
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -509,6 +520,260 @@ class LSPClient:
                 )
 
         return locations
+
+    def workspace_symbols(self, query: str) -> list[SymbolInfo]:
+        """Search for symbols by name across the workspace."""
+
+        with self._request_lock:
+            with self._lock:
+                if not self._initialized:
+                    raise LSPError("Language server not initialized")
+
+            result = self._send_request("workspace/symbol", {"query": query})
+            return self._parse_symbol_info(result)
+
+    def _parse_symbol_info(self, result: Any) -> list[SymbolInfo]:
+        """Parse LSP SymbolInformation from response."""
+        if not isinstance(result, list):
+            return []
+
+        symbols: list[SymbolInfo] = []
+        for item in result:
+            if not isinstance(item, dict):
+                continue
+
+            name = item.get("name", "")
+            kind = item.get("kind", 0)
+            location = item.get("location", {})
+            uri = location.get("uri", "")
+            rng = location.get("range", {})
+            start = rng.get("start", {})
+            container = item.get("containerName")
+
+            if name and uri:
+                symbols.append(
+                    SymbolInfo(
+                        name=name,
+                        kind=kind,
+                        uri=uri,
+                        line=start.get("line", 0),
+                        character=start.get("character", 0),
+                        container_name=container,
+                    )
+                )
+
+        return symbols
+
+    def document_symbols(self, file_path: str) -> list[DocumentSymbol]:
+        """Get all symbols defined in a file."""
+
+        with self._request_lock:
+            with self._lock:
+                if not self._initialized:
+                    raise LSPError("Language server not initialized")
+
+            uri = self._open_file(file_path)
+            try:
+                result = self._send_request(
+                    "textDocument/documentSymbol",
+                    {"textDocument": {"uri": uri}},
+                )
+                return self._parse_document_symbols(result)
+            finally:
+                self._close_file(uri)
+
+    def _parse_document_symbols(self, result: Any) -> list[DocumentSymbol]:
+        """Parse LSP DocumentSymbol from response."""
+        if not isinstance(result, list):
+            return []
+
+        def parse_item(item: dict[str, Any]) -> DocumentSymbol | None:
+            if not isinstance(item, dict):
+                return None
+            name = item.get("name", "")
+            kind = item.get("kind", 0)
+            rng = item.get("range", {})
+            start = rng.get("start", {})
+            end = rng.get("end", {})
+
+            if not name:
+                return None
+
+            children_raw = item.get("children", [])
+            children = None
+            if children_raw:
+                parsed = [parse_item(c) for c in children_raw]
+                children = [c for c in parsed if c is not None]
+
+            return DocumentSymbol(
+                name=name,
+                kind=kind,
+                range_start=start.get("line", 0),
+                range_end=end.get("line", 0),
+                children=children if children else None,
+            )
+
+        symbols = [parse_item(item) for item in result]
+        return [s for s in symbols if s is not None]
+
+    def hover(self, file_path: str, line: int, column: int) -> HoverInfo | None:
+        """Get type information at position."""
+
+        with self._request_lock:
+            with self._lock:
+                if not self._initialized:
+                    raise LSPError("Language server not initialized")
+
+            uri = self._open_file(file_path)
+            try:
+                result = self._send_request(
+                    "textDocument/hover",
+                    {
+                        "textDocument": {"uri": uri},
+                        "position": {"line": line, "character": column},
+                    },
+                )
+                return self._parse_hover(result)
+            finally:
+                self._close_file(uri)
+
+    def _parse_hover(self, result: Any) -> HoverInfo | None:
+        """Parse LSP Hover response."""
+        if not result or not isinstance(result, dict):
+            return None
+
+        contents = result.get("contents")
+        if contents is None:
+            return None
+
+        # Handle MarkupContent
+        if isinstance(contents, dict):
+            value = contents.get("value", "")
+            return HoverInfo(content=value) if value else None
+
+        # Handle MarkedString (string variant)
+        if isinstance(contents, str):
+            return HoverInfo(content=contents) if contents else None
+
+        # Handle MarkedString[] / MarkupContent[]
+        if isinstance(contents, list):
+            parts = []
+            for item in contents:
+                if isinstance(item, str):
+                    parts.append(item)
+                elif isinstance(item, dict):
+                    parts.append(item.get("value", ""))
+            combined = "\n\n".join(p for p in parts if p)
+            return HoverInfo(content=combined) if combined else None
+
+        return None
+
+    def call_hierarchy(
+        self, file_path: str, line: int, column: int, direction: str = "incoming"
+    ) -> list[CallInfo]:
+        """Get call hierarchy for a symbol.
+
+        Args:
+            file_path: Relative path to the file.
+            line: 0-indexed line number.
+            column: 0-indexed column number.
+            direction: "incoming" (who calls this) or "outgoing" (what this calls).
+
+        Returns:
+            List of CallInfo representing callers or callees.
+        """
+
+        with self._request_lock:
+            with self._lock:
+                if not self._initialized:
+                    raise LSPError("Language server not initialized")
+
+            uri = self._open_file(file_path)
+            try:
+                # Step 1: Prepare call hierarchy
+                prepare_result = self._send_request(
+                    "textDocument/prepareCallHierarchy",
+                    {
+                        "textDocument": {"uri": uri},
+                        "position": {"line": line, "character": column},
+                    },
+                )
+
+                if not prepare_result or not isinstance(prepare_result, list):
+                    return []
+
+                # Parse the CallHierarchyItem
+                raw_item = prepare_result[0]
+                item = self._parse_call_hierarchy_item(raw_item)
+                if not item:
+                    return []
+
+                # Step 2: Get incoming or outgoing calls
+                method = (
+                    "callHierarchy/incomingCalls"
+                    if direction == "incoming"
+                    else "callHierarchy/outgoingCalls"
+                )
+                calls_result = self._send_request(method, {"item": raw_item})
+
+                return self._parse_call_info_list(calls_result, direction)
+            finally:
+                self._close_file(uri)
+
+    def _parse_call_hierarchy_item(self, raw: dict[str, Any]) -> CallHierarchyItem | None:
+        """Parse a CallHierarchyItem from LSP response."""
+        if not isinstance(raw, dict):
+            return None
+
+        name = raw.get("name", "")
+        kind = raw.get("kind", 0)
+        uri = raw.get("uri", "")
+        rng = raw.get("range", {})
+        sel = raw.get("selectionRange", {})
+
+        if not name or not uri:
+            return None
+
+        return CallHierarchyItem(
+            name=name,
+            kind=kind,
+            uri=uri,
+            range_start_line=rng.get("start", {}).get("line", 0),
+            range_start_char=rng.get("start", {}).get("character", 0),
+            selection_start_line=sel.get("start", {}).get("line", 0),
+            selection_start_char=sel.get("start", {}).get("character", 0),
+        )
+
+    def _parse_call_info_list(self, raw: Any, direction: str) -> list[CallInfo]:
+        """Parse incoming/outgoing calls response."""
+        if not isinstance(raw, list):
+            return []
+
+        results: list[CallInfo] = []
+        for call in raw:
+            if not isinstance(call, dict):
+                continue
+
+            # For incoming: "from" is the caller, "fromRanges" are call sites
+            # For outgoing: "to" is the callee, "fromRanges" are call sites in current func
+            item_key = "from" if direction == "incoming" else "to"
+            raw_item = call.get(item_key)
+            if not raw_item:
+                continue
+
+            item = self._parse_call_hierarchy_item(raw_item)
+            if not item:
+                continue
+
+            from_ranges = []
+            for rng in call.get("fromRanges", []):
+                if isinstance(rng, dict):
+                    start = rng.get("start", {})
+                    from_ranges.append((start.get("line", 0), start.get("character", 0)))
+
+            results.append(CallInfo(item=item, from_ranges=from_ranges))
+
+        return results
 
     def shutdown(self) -> None:
         """Shutdown the language server gracefully."""

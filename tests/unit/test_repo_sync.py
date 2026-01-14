@@ -28,7 +28,7 @@ from relace_mcp.tools.repo.sync import (
 
 
 @pytest.fixture
-def mock_config(tmp_path: Path) -> RelaceConfig:
+def _mock_config(tmp_path: Path) -> RelaceConfig:
     return RelaceConfig(
         api_key="rlc-test-api-key",
         base_dir=str(tmp_path),
@@ -36,7 +36,7 @@ def mock_config(tmp_path: Path) -> RelaceConfig:
 
 
 @pytest.fixture
-def mock_repo_client(mock_config: RelaceConfig) -> MagicMock:
+def mock_repo_client(_mock_config: RelaceConfig) -> MagicMock:
     client = MagicMock(spec=RelaceRepoClient)
     client.ensure_repo.return_value = "test-repo-id"
     client.update_repo.return_value = {"repo_head": "abc123def456", "changed_files": []}
@@ -236,7 +236,7 @@ class TestComputeDiffOperations:
         (tmp_path / "main.py").write_text("print('hello')")
         hashes = _compute_file_hashes(str(tmp_path), ["main.py"])
 
-        operations, new_hashes, new_skipped = _compute_diff_operations(str(tmp_path), hashes, None)
+        operations, _, new_skipped = _compute_diff_operations(str(tmp_path), hashes, None)
 
         assert len(operations) == 1
         assert operations[0]["type"] == "write"
@@ -278,9 +278,7 @@ class TestComputeDiffOperations:
             files={"main.py": "sha256:different_hash"},
         )
 
-        operations, new_hashes, new_skipped = _compute_diff_operations(
-            str(tmp_path), hashes, cached
-        )
+        operations, _, new_skipped = _compute_diff_operations(str(tmp_path), hashes, cached)
 
         assert len(operations) == 1
         assert operations[0]["type"] == "write"
@@ -300,9 +298,7 @@ class TestComputeDiffOperations:
             files={"deleted.py": "sha256:some_hash"},
         )
 
-        operations, new_hashes, new_skipped = _compute_diff_operations(
-            str(tmp_path), hashes, cached
-        )
+        operations, _, new_skipped = _compute_diff_operations(str(tmp_path), hashes, cached)
 
         assert len(operations) == 1
         assert operations[0]["type"] == "delete"
@@ -325,9 +321,7 @@ class TestComputeDiffOperations:
             },
         )
 
-        operations, new_hashes, new_skipped = _compute_diff_operations(
-            str(tmp_path), hashes, cached
-        )
+        operations, _, new_skipped = _compute_diff_operations(str(tmp_path), hashes, cached)
 
         types = {op["type"] for op in operations}
         filenames = {op["filename"] for op in operations}
@@ -352,7 +346,7 @@ class TestComputeDiffOperations:
             files={"exists.py": "sha256:old_hash"},  # Was synced before
         )
 
-        operations, _, new_skipped = _compute_diff_operations(str(tmp_path), current_hashes, cached)
+        operations, _, _ = _compute_diff_operations(str(tmp_path), current_hashes, cached)
 
         # File exists, should not be deleted even if hash failed
         assert len(operations) == 0
@@ -369,7 +363,7 @@ class TestComputeDiffOperations:
             files={"truly_deleted.py": "sha256:old_hash"},
         )
 
-        operations, _, new_skipped = _compute_diff_operations(str(tmp_path), current_hashes, cached)
+        operations, _, _ = _compute_diff_operations(str(tmp_path), current_hashes, cached)
 
         # File does not exist, should be deleted
         assert len(operations) == 1

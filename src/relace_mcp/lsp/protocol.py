@@ -84,11 +84,11 @@ class MessageBuffer:
     """Buffer for accumulating and parsing LSP messages from a stream."""
 
     def __init__(self) -> None:
-        self._buffer = b""
+        self._buffer = bytearray()
 
     def append(self, data: bytes) -> None:
         """Append data to the buffer."""
-        self._buffer += data
+        self._buffer.extend(data)
 
     def try_parse_message(self) -> dict[str, Any] | None:
         """Try to parse a complete message from the buffer.
@@ -96,7 +96,7 @@ class MessageBuffer:
         Returns:
             Parsed message if complete, None if more data needed.
         """
-        header_info = decode_header(self._buffer)
+        header_info = decode_header(bytes(self._buffer))
         if header_info is None:
             return None
 
@@ -106,11 +106,11 @@ class MessageBuffer:
         if len(self._buffer) < total_length:
             return None
 
-        body = self._buffer[header_end:total_length]
-        self._buffer = self._buffer[total_length:]
+        body = bytes(self._buffer[header_end:total_length])
+        del self._buffer[:total_length]
 
         return decode_message(body)
 
     def clear(self) -> None:
         """Clear the buffer."""
-        self._buffer = b""
+        self._buffer.clear()

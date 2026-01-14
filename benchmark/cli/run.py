@@ -9,7 +9,13 @@ from relace_mcp.config import RelaceConfig
 from relace_mcp.config.compat import getenv_with_fallback
 from relace_mcp.config.settings import RELACE_DEFAULT_ENCODING
 
-from ..config import DEFAULT_FILTERED_PATH, EXCLUDED_REPOS, get_benchmark_dir, get_reports_dir
+from ..config import (
+    DEFAULT_FILTERED_PATH,
+    EXCLUDED_REPOS,
+    get_benchmark_dir,
+    get_reports_dir,
+    get_results_dir,
+)
 from ..datasets import load_dataset
 from ..runner.executor import BenchmarkRunner
 from ..schemas import generate_output_path
@@ -62,7 +68,7 @@ def _load_benchmark_config() -> RelaceConfig:
 @click.option(
     "--output",
     default=None,
-    help="Output file prefix (relative to benchmark/results/). Default: run_<timestamp>",
+    help="Output file prefix (relative to benchmark/artifacts/results/). Default: run_<timestamp>",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.option(
@@ -159,7 +165,7 @@ def main(
 
     # Save results with standardized naming
     benchmark_dir = get_benchmark_dir()
-    results_dir = benchmark_dir / "results"
+    results_dir = get_results_dir()
     reports_dir = get_reports_dir()
     reports_dir.mkdir(parents=True, exist_ok=True)
 
