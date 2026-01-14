@@ -587,7 +587,7 @@ class LSPClient:
         if not isinstance(result, list):
             return []
 
-        def parse_item(item: dict) -> DocumentSymbol | None:
+        def parse_item(item: dict[str, Any]) -> DocumentSymbol | None:
             if not isinstance(item, dict):
                 return None
             name = item.get("name", "")
@@ -720,7 +720,7 @@ class LSPClient:
             finally:
                 self._close_file(uri)
 
-    def _parse_call_hierarchy_item(self, raw: dict) -> CallHierarchyItem | None:
+    def _parse_call_hierarchy_item(self, raw: dict[str, Any]) -> CallHierarchyItem | None:
         """Parse a CallHierarchyItem from LSP response."""
         if not isinstance(raw, dict):
             return None
