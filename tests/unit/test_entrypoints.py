@@ -24,9 +24,9 @@ def test_dashboard_entrypoint_calls_app_main(monkeypatch) -> None:
     monkeypatch.delitem(sys.modules, "relace_mcp.dashboard.app", raising=False)
 
     fake_app = types.ModuleType("relace_mcp.dashboard.app")
-    fake_app.main = MagicMock()
+    fake_app.main = MagicMock()  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "relace_mcp.dashboard.app", fake_app)
 
     dashboard_mod.main()
 
-    fake_app.main.assert_called_once()
+    fake_app.main.assert_called_once()  # type: ignore[attr-defined]
