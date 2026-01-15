@@ -3,6 +3,7 @@
 Goals:
 - 5 target repos x 10 items each (when available)
 - Ground truth ranges are anchored to Python functions (includes name + signature)
+- Use complete function scope (no arbitrary padding truncation)
 - Avoid fragmented ground truth: <= 10 ranges (functions) per case
 - Exclude test/doc/config files from ground truth
 
@@ -19,17 +20,20 @@ from ..analysis.function_scope import FunctionScope, extract_function_scopes
 from ..config import DEFAULT_MULOCBENCH_PATH, get_processed_data_dir, get_repos_dir
 from ..runner.git import ensure_repo
 
-# Target repositories (top 5 by item count)
+# Target repositories (expanded to reach 50 items)
 TARGET_REPOS = [
     ("scikit-learn", "scikit-learn"),
     ("scrapy", "scrapy"),
     ("localstack", "localstack"),
     ("AntonOsika", "gpt-engineer"),
     ("geekan", "MetaGPT"),
+    # Added to fill the gap (gpt-engineer and MetaGPT each have only 6 items)
+    ("keras-team", "keras"),
+    ("psf", "requests"),
+    ("pallets", "flask"),
 ]
 
 ITEMS_PER_REPO = 10
-CONTEXT_PADDING = 15
 MAX_GT_BLOCKS = 10
 MAX_SINGLE_LINE_RATIO = 0.5
 
@@ -280,10 +284,9 @@ def _build_function_gt_for_file(
         lines_in_scope = [ln for ln in target_lines if s.start_line <= ln <= s.end_line]
         if not lines_in_scope:
             continue
-        max_changed = max(lines_in_scope)
-        # Ensure the range includes the function signature (def line) + process-to-result context.
+        # Use complete function scope (no arbitrary padding truncation)
         start = s.start_line
-        end = min(s.end_line, max_changed + CONTEXT_PADDING)
+        end = s.end_line
         if start < 1:
             start = 1
         if end < start:

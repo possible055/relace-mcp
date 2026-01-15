@@ -78,6 +78,14 @@ def _load_benchmark_config() -> RelaceConfig:
     help="Print per-case progress (recommended; benchmarks can take a long time)",
 )
 @click.option("--dry-run", is_flag=True, help="Only load data, don't run searches")
+@click.option(
+    "--harness",
+    "harness_type",
+    type=click.Choice(["fast", "dual"]),
+    default="fast",
+    show_default=True,
+    help="Search harness type (fast=single turn-loop, dual=3+3+1 parallel)",
+)
 def main(
     dataset_path: str,
     limit: int,
@@ -87,6 +95,7 @@ def main(
     verbose: bool,
     progress: bool,
     dry_run: bool,
+    harness_type: str,
 ) -> None:
     """Run MULocBench benchmark on fast_search.
 
@@ -148,6 +157,7 @@ def main(
         beta=_BETA,
         normalize_ast=False,
         soft_gt=False,
+        harness_type=harness_type,
     )
 
     click.echo("\nRunning benchmark...")

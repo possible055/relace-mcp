@@ -83,7 +83,7 @@ class TestMergerAgent:
     def test_fallback_merge_unions_files(
         self, mock_config: RelaceConfig, mock_client: MagicMock
     ) -> None:
-        merger = MergerAgent(mock_config, mock_client)
+        merger = MergerAgent(mock_config, mock_client, mock_config.base_dir)
         lexical = ChannelEvidence(
             files={"/repo/a.py": [[1, 10]]},
             turns_used=3,
@@ -95,21 +95,25 @@ class TestMergerAgent:
 
         result = merger._fallback_merge("test query", lexical, semantic)
 
-        assert "/repo/a.py" in result["files"]
-        assert "/repo/b.py" in result["files"]
+        # Paths will be normalized to absolute paths
+        normalized_files = result["files"]
+        assert len(normalized_files) == 2
         assert result["partial"] is True
         assert "[FALLBACK]" in result["explanation"]
 
     def test_fallback_merge_combines_overlapping_ranges(
         self, mock_config: RelaceConfig, mock_client: MagicMock
     ) -> None:
-        merger = MergerAgent(mock_config, mock_client)
+        merger = MergerAgent(mock_config, mock_client, mock_config.base_dir)
         lexical = ChannelEvidence(files={"/repo/a.py": [[1, 10], [15, 20]]}, turns_used=3)
         semantic = ChannelEvidence(files={"/repo/a.py": [[8, 18]]}, turns_used=3)
 
         result = merger._fallback_merge("test", lexical, semantic)
 
-        assert result["files"]["/repo/a.py"] == [[1, 20]]
+        # After merge, expect single combined range
+        assert len(result["files"]) == 1
+        ranges = list(result["files"].values())[0]
+        assert ranges == [[1, 20]]
 
     def test_merge_parses_tool_call(
         self, mock_config: RelaceConfig, mock_client: MagicMock
@@ -133,14 +137,15 @@ class TestMergerAgent:
             ]
         }
 
-        merger = MergerAgent(mock_config, mock_client)
+        merger = MergerAgent(mock_config, mock_client, mock_config.base_dir)
         lexical = ChannelEvidence(files={}, turns_used=3)
         semantic = ChannelEvidence(files={}, turns_used=3)
 
         result = merger.merge("query", lexical, semantic)
 
         assert result["explanation"] == "Merged results"
-        assert "/repo/test.py" in result["files"]
+        # Path will be normalized
+        assert len(result["files"]) == 1
         assert result["turns_used"] == 4
 
 

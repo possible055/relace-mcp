@@ -1,13 +1,15 @@
+import asyncio
 import logging
 import time
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from relace_mcp.clients import SearchLLMClient
 from relace_mcp.config import RelaceConfig
-from relace_mcp.tools.search import FastAgenticSearchHarness
+from relace_mcp.lsp.languages import get_lsp_languages
+from relace_mcp.tools.search import DualChannelHarness, FastAgenticSearchHarness
 
 from ..analysis.ast_spans import normalize_to_ast_spans
 from ..analysis.call_graph import expand_ground_truth
@@ -45,6 +47,7 @@ class BenchmarkRunner:
         beta: float = 0.5,
         normalize_ast: bool = False,
         soft_gt: bool = False,
+        harness_type: Literal["fast", "dual"] = "fast",
     ):
         self.config = config
         self.verbose = verbose
@@ -52,6 +55,7 @@ class BenchmarkRunner:
         self.beta = beta
         self.normalize_ast = normalize_ast
         self.soft_gt = soft_gt
+        self.harness_type = harness_type
         self.repos_dir = get_repos_dir()
         self.repos_dir.mkdir(parents=True, exist_ok=True)
 
@@ -162,10 +166,15 @@ class BenchmarkRunner:
     def _execute_search(self, case: DatasetCase, repo_path: Path) -> BenchmarkResult:
         effective_config = replace(self.config, base_dir=str(repo_path))
         client = SearchLLMClient(effective_config)
-        harness = FastAgenticSearchHarness(effective_config, client)
 
         start_time = time.perf_counter()
-        result = harness.run(case.query)
+        if self.harness_type == "dual":
+            lsp_languages = get_lsp_languages(repo_path)
+            harness = DualChannelHarness(effective_config, client, lsp_languages=lsp_languages)
+            result = asyncio.run(harness.run_async(case.query))
+        else:
+            harness = FastAgenticSearchHarness(effective_config, client)
+            result = harness.run(case.query)
         latency_ms = (time.perf_counter() - start_time) * 1000
 
         returned_files = result.get("files", {})

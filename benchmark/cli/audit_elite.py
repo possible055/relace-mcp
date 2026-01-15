@@ -25,7 +25,6 @@ from ..config import (
 from ..datasets import load_dataset
 from ..runner.git import ensure_repo
 from .curate_elite import (
-    CONTEXT_PADDING,
     ITEMS_PER_REPO,
     MAX_GT_BLOCKS,
     MAX_SINGLE_LINE_RATIO,
@@ -146,12 +145,14 @@ def _load_raw_by_issue_url(raw_file: Path, issue_urls: set[str]) -> dict[str, di
 )
 @click.option(
     "--padding",
-    default=CONTEXT_PADDING,
+    default=None,
     show_default=True,
     type=int,
-    help="Expected context padding (±N) used when curating",
+    help="Expected context padding (deprecated; now uses full function scope)",
 )
-def main(dataset_path: str, raw_path: str, output_path: str, tsv_path: str, padding: int) -> None:
+def main(
+    dataset_path: str, raw_path: str, output_path: str, tsv_path: str, padding: int | None
+) -> None:
     dataset_file = _resolve_path(dataset_path)
     raw_file = _resolve_path(raw_path)
     out_file = _resolve_path(output_path)
@@ -347,7 +348,7 @@ def main(dataset_path: str, raw_path: str, output_path: str, tsv_path: str, padd
                 result_span_len = int(changed_max) - int(changed_min) + 1
                 start_padding = int(changed_min) - int(gt_start)
                 end_padding = int(gt_end) - int(changed_max)
-                if end_padding > padding:
+                if padding is not None and end_padding > padding:
                     range_errors.append("end_padding_exceeds_expected")
                     counters["end_padding_exceeds_expected_entries"] += 1
                 if result_span_len > 0:
@@ -393,6 +394,7 @@ def main(dataset_path: str, raw_path: str, output_path: str, tsv_path: str, padd
                 function_end_line is not None
                 and end_padding is not None
                 and gt_end == function_end_line
+                and padding is not None
                 and end_padding < padding
             ):
                 end_clamped = True
@@ -500,7 +502,7 @@ def main(dataset_path: str, raw_path: str, output_path: str, tsv_path: str, padd
     report = {
         "dataset_checks": dataset_checks,
         "constraints": {
-            "context_padding": padding,
+            "scope_strategy": "full_function",
             "max_gt_blocks": MAX_GT_BLOCKS,
             "max_single_line_ratio": MAX_SINGLE_LINE_RATIO,
             "hard_gt_paths": "python_only_and_not_tests_docs_config",

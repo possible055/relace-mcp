@@ -50,7 +50,7 @@ class DualChannelHarness:
         lex_result = lexical.run(query)
         sem_result = semantic.run(query)
 
-        merger = MergerAgent(self._config, self._client)
+        merger = MergerAgent(self._config, self._client, self._config.base_dir)
         return merger.merge(query, lex_result, sem_result)
 
     async def run_async(self, query: str) -> dict[str, Any]:
@@ -78,7 +78,7 @@ class DualChannelHarness:
         lex_result = self._handle_exception(results[0], "lexical")
         sem_result = self._handle_exception(results[1], "semantic")
 
-        merger = MergerAgent(self._config, self._client)
+        merger = MergerAgent(self._config, self._client, self._config.base_dir)
         return await merger.merge_async(query, lex_result, sem_result)
 
     def _handle_exception(

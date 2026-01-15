@@ -1,10 +1,12 @@
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
 from ....clients import SearchLLMClient
 from ....config import RelaceConfig
 from ....config.settings import MERGER_TEMPERATURE
+from ....utils import resolve_repo_path
 from .channels.base import ChannelEvidence
 
 logger = logging.getLogger(__name__)
@@ -64,9 +66,10 @@ MERGE_REPORT_TOOL = {
 class MergerAgent:
     """Single-turn agent that merges evidence from parallel channels."""
 
-    def __init__(self, config: RelaceConfig, client: SearchLLMClient) -> None:
+    def __init__(self, config: RelaceConfig, client: SearchLLMClient, base_dir: str) -> None:
         self._config = config
         self._client = client
+        self._base_dir = Path(base_dir).resolve()
 
     def merge(
         self, query: str, lexical: ChannelEvidence, semantic: ChannelEvidence
@@ -201,8 +204,7 @@ Please merge these findings and call merge_report with the result."""
         for path, ranges in semantic.files.items():
             merged_files.setdefault(path, []).extend(ranges)
 
-        for path in merged_files:
-            merged_files[path] = self._merge_overlapping_ranges(merged_files[path])
+        normalized_files = self._normalize_files(merged_files)
 
         explanation = "[FALLBACK] Merged results from both channels."
         if error:
@@ -211,28 +213,53 @@ Please merge these findings and call merge_report with the result."""
         return {
             "query": query,
             "explanation": explanation,
-            "files": merged_files,
+            "files": normalized_files,
             "turns_used": max(lexical.turns_used, semantic.turns_used) + 1,
             "partial": True,
             "error": error,
         }
 
     def _normalize_files(self, files: dict[str, Any]) -> dict[str, list[list[int]]]:
-        """Normalize file ranges to list of [start, end] pairs."""
+        """Normalize file ranges to absolute paths with [start, end] integer pairs."""
+        if not isinstance(files, dict):
+            return {}
+
         normalized: dict[str, list[list[int]]] = {}
-        for path, ranges in files.items():
-            if not isinstance(ranges, list):
+        for raw_path, raw_ranges in files.items():
+            if not isinstance(raw_path, str) or not raw_path:
                 continue
-            valid_ranges: list[list[int]] = []
-            for r in ranges:
-                if isinstance(r, list) and len(r) == 2:
-                    try:
-                        valid_ranges.append([int(r[0]), int(r[1])])
-                    except (ValueError, TypeError):
-                        pass
-            if valid_ranges:
-                normalized[path] = self._merge_overlapping_ranges(valid_ranges)
+
+            resolved_path = self._resolve_path(raw_path)
+            if not resolved_path:
+                continue
+
+            if not isinstance(raw_ranges, list):
+                continue
+
+            for r in raw_ranges:
+                if not isinstance(r, (list, tuple)) or len(r) != 2:
+                    continue
+                try:
+                    start = int(r[0])
+                    end = int(r[1])
+                except (ValueError, TypeError):
+                    continue
+                if start <= 0 or end < start:
+                    continue
+                normalized.setdefault(resolved_path, []).append([start, end])
+
+        for path, ranges in list(normalized.items()):
+            normalized[path] = self._merge_overlapping_ranges(ranges)
+
         return normalized
+
+    def _resolve_path(self, path: str) -> str | None:
+        """Resolve /repo, relative, or absolute paths to an absolute path within base_dir."""
+        try:
+            return resolve_repo_path(path, str(self._base_dir), require_within_base_dir=True)
+        except ValueError:
+            logger.warning("Filtered out invalid path from merge_report: %s", path)
+            return None
 
     def _merge_overlapping_ranges(self, ranges: list[list[int]]) -> list[list[int]]:
         """Merge overlapping or adjacent ranges."""
