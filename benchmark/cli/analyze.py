@@ -28,18 +28,48 @@ def print_detailed_table(results: list[dict[str, Any]]) -> None:
     print("\n" + "=" * 80)
     print("DETAILED RESULTS")
     print("=" * 80)
-    print(f"{'Case ID':<40} | F.Rec | F.Prec | L.Cov | L.Prec(M)")
-    print("-" * 40 + "-+-" + "-" * 6 + "+-" + "-" * 6 + "+-" + "-" * 6 + "+-" + "-" * 9)
+    has_context = all("context_line_precision_matched" in r for r in results)
+    if has_context:
+        print(f"{'Case ID':<40} | F.Rec | F.Prec | T.Cov | T.Prec(M) | C.Cov | C.Prec(M)")
+        print(
+            "-" * 40
+            + "-+-"
+            + "-" * 6
+            + "+-"
+            + "-" * 6
+            + "+-"
+            + "-" * 6
+            + "+-"
+            + "-" * 9
+            + "+-"
+            + "-" * 6
+            + "+-"
+            + "-" * 9
+        )
+    else:
+        print(f"{'Case ID':<40} | F.Rec | F.Prec | L.Cov | L.Prec(M)")
+        print("-" * 40 + "-+-" + "-" * 6 + "+-" + "-" * 6 + "+-" + "-" * 6 + "+-" + "-" * 9)
 
     for r in results:
         case_id = r["case_id"][:38] if len(r["case_id"]) > 38 else r["case_id"]
-        print(
-            f"{case_id:<40} | "
-            f"{r['file_recall'] * 100:5.1f}% | "
-            f"{r['file_precision'] * 100:5.1f}% | "
-            f"{r['line_coverage'] * 100:5.1f}% | "
-            f"{r['line_precision_matched'] * 100:7.1f}%"
-        )
+        if has_context:
+            print(
+                f"{case_id:<40} | "
+                f"{r['file_recall'] * 100:5.1f}% | "
+                f"{r['file_precision'] * 100:5.1f}% | "
+                f"{r['line_coverage'] * 100:5.1f}% | "
+                f"{r['line_precision_matched'] * 100:7.1f}% | "
+                f"{r['context_line_coverage'] * 100:5.1f}% | "
+                f"{r['context_line_precision_matched'] * 100:7.1f}%"
+            )
+        else:
+            print(
+                f"{case_id:<40} | "
+                f"{r['file_recall'] * 100:5.1f}% | "
+                f"{r['file_precision'] * 100:5.1f}% | "
+                f"{r['line_coverage'] * 100:5.1f}% | "
+                f"{r['line_precision_matched'] * 100:7.1f}%"
+            )
 
 
 def print_distribution(results: list[dict[str, Any]], key: str, label: str) -> None:
@@ -69,7 +99,9 @@ def print_worst_cases(results: list[dict[str, Any]], key: str, label: str, n: in
     for r in worst:
         print(f"  - {r['case_id']}")
         print(f"    {label}: {r[key] * 100:.1f}%")
-        print(f"    Line Coverage: {r['line_coverage'] * 100:.1f}%")
+        print(f"    Target Line Coverage: {r['line_coverage'] * 100:.1f}%")
+        if "context_line_coverage" in r:
+            print(f"    Context Line Coverage: {r['context_line_coverage'] * 100:.1f}%")
         print(f"    Turns: {r['turns_used']}, Latency: {r['latency_ms']:.0f}ms")
         if r.get("error"):
             print(f"    Error: {r['error']}")
@@ -118,10 +150,15 @@ def main() -> None:
 
     # Distribution
     print_distribution(results, "line_precision_matched", "Line Prec(M)")
+    if all("context_line_precision_matched" in r for r in results):
+        print_distribution(results, "context_line_precision_matched", "Context Line Prec(M)")
 
     # Summary stats
     print_summary_stats(results, "line_precision_matched", "Line Prec(M)")
     print_summary_stats(results, "line_coverage", "Line Coverage")
+    if all("context_line_precision_matched" in r for r in results):
+        print_summary_stats(results, "context_line_precision_matched", "Context Line Prec(M)")
+        print_summary_stats(results, "context_line_coverage", "Context Line Coverage")
 
     # Worst cases
     print_worst_cases(results, "line_precision_matched", "Line Prec(M)", n=3)

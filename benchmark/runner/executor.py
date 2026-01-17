@@ -154,6 +154,8 @@ class BenchmarkRunner:
                 file_precision=0.0,
                 line_coverage=0.0,
                 line_precision_matched=0.0,
+                context_line_coverage=0.0,
+                context_line_precision_matched=0.0,
                 function_hit_rate=0.0,
                 functions_hit=0,
                 functions_total=len(case.ground_truth_functions),
@@ -186,6 +188,8 @@ class BenchmarkRunner:
             returned_files = {}
 
         returned_files_count = len(returned_files)
+
+        context_ground_truth_files = case.ground_truth_context_files
 
         # Optionally normalize ground truth to AST boundaries
         if self.normalize_ast:
@@ -222,6 +226,17 @@ class BenchmarkRunner:
             repo_root=repo_path,
         )
 
+        context_line_coverage = compute_line_coverage(
+            returned_files,
+            context_ground_truth_files,
+            repo_root=repo_path,
+        )
+        context_line_precision_matched = compute_line_precision_matched(
+            returned_files,
+            context_ground_truth_files,
+            repo_root=repo_path,
+        )
+
         function_targets = [(t["path"], t["ranges"]) for t in case.ground_truth_functions]
         functions_hit, functions_total = compute_function_hits(
             returned_files,
@@ -243,6 +258,8 @@ class BenchmarkRunner:
             file_precision=file_precision,
             line_coverage=line_coverage,
             line_precision_matched=line_precision_matched,
+            context_line_coverage=context_line_coverage,
+            context_line_precision_matched=context_line_precision_matched,
             function_hit_rate=function_hit_rate,
             functions_hit=functions_hit,
             functions_total=functions_total,
@@ -315,6 +332,8 @@ class BenchmarkRunner:
                     "avg_file_precision": 0.0,
                     "avg_line_coverage": 0.0,
                     "avg_line_precision_matched": 0.0,
+                    "avg_context_line_coverage": 0.0,
+                    "avg_context_line_precision_matched": 0.0,
                     "function_cases": 0,
                     "avg_function_hit_rate": 0.0,
                     "avg_turns": 0.0,
@@ -342,6 +361,8 @@ class BenchmarkRunner:
             "avg_file_precision": avg("file_precision"),
             "avg_line_coverage": avg("line_coverage"),
             "avg_line_precision_matched": avg("line_precision_matched"),
+            "avg_context_line_coverage": avg("context_line_coverage"),
+            "avg_context_line_precision_matched": avg("context_line_precision_matched"),
             "function_cases": function_cases,
             "avg_function_hit_rate": avg_function_hit_rate,
             "avg_turns": avg("turns_used"),

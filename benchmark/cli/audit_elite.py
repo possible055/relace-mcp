@@ -23,6 +23,7 @@ from ..config import (
     get_repos_dir,
 )
 from ..datasets import load_dataset
+from ..metrics.ranges import merge_ranges
 from ..runner.git import ensure_repo
 from .curate_elite import (
     ITEMS_PER_REPO,
@@ -201,6 +202,9 @@ def main(
         "gt_range_start",
         "gt_range_end",
         "gt_range_len",
+        "target_ranges_count",
+        "target_span_len",
+        "missing_changed_in_target",
         "start_padding",
         "end_padding",
         "end_clamped",
@@ -332,9 +336,27 @@ def main(
             changed_min: int | None = None
             changed_max: int | None = None
             result_span_len: int | None = None
+            target_ranges_count: int | None = None
+            target_span_len: int | None = None
+            missing_changed_in_target: int | None = None
             start_padding: int | None = None
             end_padding: int | None = None
             ctx_to_result_ratio: float | None = None
+
+            target_ranges = gt.target_ranges
+            if not target_ranges:
+                range_errors.append("missing_target_ranges")
+                counters["missing_target_ranges_entries"] += 1
+            else:
+                target_ranges_count = len(target_ranges)
+                merged_target = merge_ranges([(int(a), int(b)) for a, b in target_ranges])
+                target_span_len = sum(int(b) - int(a) + 1 for a, b in merged_target)
+
+                for a, b in merged_target:
+                    if a < gt_start or b > gt_end:
+                        range_errors.append("target_range_outside_context")
+                        counters["target_range_outside_context_entries"] += 1
+                        break
 
             if not changed_lines:
                 range_errors.append("no_changed_lines_for_path")
@@ -343,6 +365,17 @@ def main(
                 range_errors.append("no_changed_lines_in_gt_range")
                 counters["no_changed_lines_in_range_entries"] += 1
             else:
+                if target_ranges:
+                    missing = [
+                        ln
+                        for ln in changed_in_range
+                        if not any(a <= ln <= b for a, b in target_ranges)
+                    ]
+                    missing_changed_in_target = len(missing)
+                    if missing:
+                        range_errors.append("changed_lines_missing_in_target_ranges")
+                        counters["changed_lines_missing_in_target_ranges_entries"] += 1
+
                 changed_min = min(changed_in_range)
                 changed_max = max(changed_in_range)
                 result_span_len = int(changed_max) - int(changed_min) + 1
@@ -388,6 +421,9 @@ def main(
                         if gt_end > scope.end_line:
                             range_errors.append("gt_end_exceeds_function_end")
                             counters["gt_end_exceeds_function_end_entries"] += 1
+                        if gt_end != scope.end_line:
+                            range_errors.append("gt_end_not_function_end")
+                            counters["gt_end_not_function_end_entries"] += 1
 
             end_clamped: bool | None = None
             if (
@@ -425,6 +461,9 @@ def main(
                         str(gt_start),
                         str(gt_end),
                         str(gt_range_len),
+                        _fmt_int(target_ranges_count),
+                        _fmt_int(target_span_len),
+                        _fmt_int(missing_changed_in_target),
                         _fmt_int(start_padding),
                         _fmt_int(end_padding),
                         _fmt_bool(end_clamped),
@@ -453,6 +492,9 @@ def main(
                     "signature": gt.signature,
                     "range": [gt_start, gt_end],
                     "gt_range_len": gt_range_len,
+                    "target_ranges_count": target_ranges_count,
+                    "target_span_len": target_span_len,
+                    "missing_changed_in_target": missing_changed_in_target,
                     "changed_count": len(changed_in_range),
                     "changed_min": changed_min,
                     "changed_max": changed_max,

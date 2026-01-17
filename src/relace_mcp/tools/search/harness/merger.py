@@ -205,7 +205,16 @@ Please merge these findings and call merge_report with the result."""
             if func.get("name") == "merge_report":
                 try:
                     args = json.loads(func.get("arguments", "{}"))
-                    return {
+                    # Propagate channel partial/error state to merge result
+                    channel_partial = lexical.partial or semantic.partial
+                    channel_errors: list[str] = []
+                    if lexical.error:
+                        channel_errors.append(f"lexical: {lexical.error}")
+                    if semantic.error:
+                        channel_errors.append(f"semantic: {semantic.error}")
+                    combined_error = "; ".join(channel_errors) if channel_errors else None
+
+                    result: dict[str, Any] = {
                         "query": query,
                         "explanation": args.get("explanation", ""),
                         "files": self._normalize_files(args.get("files", {})),
@@ -215,6 +224,11 @@ Please merge these findings and call merge_report with the result."""
                             "semantic": semantic.turns_used,
                         },
                     }
+                    if channel_partial:
+                        result["partial"] = True
+                    if combined_error:
+                        result["error"] = combined_error
+                    return result
                 except json.JSONDecodeError as exc:
                     logger.warning("Failed to parse merge_report args: %s", exc)
 

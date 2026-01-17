@@ -36,6 +36,8 @@ TARGET_REPOS = [
 ITEMS_PER_REPO = 10
 MAX_GT_BLOCKS = 10
 MAX_SINGLE_LINE_RATIO = 0.5
+TARGET_RANGE_GAP = 3
+MAX_TARGET_RANGES_PER_FUNCTION = 2
 
 # Large repos to exclude
 EXCLUDED_REPOS = {
@@ -163,6 +165,47 @@ def _collect_changed_lines(loc: dict[str, Any]) -> list[int]:
     return sorted(set(lines))
 
 
+def _cluster_lines_to_ranges(lines: list[int], *, gap: int) -> list[tuple[int, int]]:
+    if not lines:
+        return []
+
+    sorted_lines = sorted({ln for ln in lines if isinstance(ln, int) and ln > 0})
+    if not sorted_lines:
+        return []
+
+    ranges: list[tuple[int, int]] = []
+    start = prev = sorted_lines[0]
+
+    for ln in sorted_lines[1:]:
+        if ln <= prev + 1 + gap:
+            prev = ln
+            continue
+        ranges.append((start, prev))
+        start = prev = ln
+
+    ranges.append((start, prev))
+    return ranges
+
+
+def _build_target_ranges(
+    lines_in_scope: list[int],
+    *,
+    context_start: int,
+    context_end: int,
+) -> list[tuple[int, int]]:
+    target_ranges = _cluster_lines_to_ranges(lines_in_scope, gap=TARGET_RANGE_GAP)
+    if len(target_ranges) > MAX_TARGET_RANGES_PER_FUNCTION:
+        target_ranges = [(min(lines_in_scope), max(lines_in_scope))]
+
+    clamped: list[tuple[int, int]] = []
+    for start, end in target_ranges:
+        clamped_start = max(int(context_start), int(start))
+        clamped_end = min(int(context_end), int(end))
+        if clamped_end >= clamped_start:
+            clamped.append((clamped_start, clamped_end))
+    return clamped
+
+
 def parse_item(data: dict[str, Any]) -> dict[str, Any] | None:
     """Parse a raw MULocBench item; return candidate info if usable."""
     org = data.get("organization", "") or ""
@@ -284,6 +327,15 @@ def _build_function_gt_for_file(
         lines_in_scope = [ln for ln in target_lines if s.start_line <= ln <= s.end_line]
         if not lines_in_scope:
             continue
+
+        clamped_target_ranges = _build_target_ranges(
+            lines_in_scope,
+            context_start=s.start_line,
+            context_end=s.end_line,
+        )
+        if not clamped_target_ranges:
+            return None
+
         # Use complete function scope (no arbitrary padding truncation)
         start = s.start_line
         end = s.end_line
@@ -297,6 +349,7 @@ def _build_function_gt_for_file(
                 "function": s.function_name,
                 "class": s.class_name,
                 "range": [start, end],
+                "target_ranges": [[a, b] for a, b in clamped_target_ranges],
                 "signature": s.signature,
             }
         )

@@ -38,6 +38,7 @@ class GroundTruthEntry:
     path: str
     function: str
     range: tuple[int, int]
+    target_ranges: list[tuple[int, int]] = field(default_factory=list)
     class_name: str | None = None
     signature: str | None = None
 
@@ -47,6 +48,8 @@ class GroundTruthEntry:
             "function": self.function,
             "range": list(self.range),
         }
+        if self.target_ranges:
+            d["target_ranges"] = [list(r) for r in self.target_ranges]
         if self.class_name:
             d["class"] = self.class_name
         if self.signature:
@@ -56,10 +59,22 @@ class GroundTruthEntry:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "GroundTruthEntry":
         range_data = data.get("range", [0, 0])
+        target_ranges_data = data.get("target_ranges", [])
+        target_ranges: list[tuple[int, int]] = []
+        if isinstance(target_ranges_data, list):
+            for r in target_ranges_data:
+                if (
+                    isinstance(r, (list, tuple))
+                    and len(r) >= 2
+                    and isinstance(r[0], int)
+                    and isinstance(r[1], int)
+                ):
+                    target_ranges.append((r[0], r[1]))
         return cls(
             path=data.get("path", ""),
             function=data.get("function", ""),
             range=(range_data[0], range_data[1]) if len(range_data) >= 2 else (0, 0),
+            target_ranges=target_ranges,
             class_name=data.get("class"),
             signature=data.get("signature"),
         )
@@ -119,12 +134,24 @@ class DatasetCase:
 
     @property
     def ground_truth_files(self) -> dict[str, list[tuple[int, int]]]:
-        """Convert hard_gt to file -> ranges format for metrics."""
+        """Convert hard_gt to file -> target ranges format for metrics.
+
+        Uses `target_ranges` when present; falls back to the full `range`.
+        """
         files: dict[str, list[tuple[int, int]]] = {}
         for gt in self.hard_gt:
             if gt.path not in files:
                 files[gt.path] = []
-            files[gt.path].append(gt.range)
+            ranges = gt.target_ranges if gt.target_ranges else [gt.range]
+            files[gt.path].extend(ranges)
+        return files
+
+    @property
+    def ground_truth_context_files(self) -> dict[str, list[tuple[int, int]]]:
+        """Convert hard_gt to file -> context ranges (full function scopes)."""
+        files: dict[str, list[tuple[int, int]]] = {}
+        for gt in self.hard_gt:
+            files.setdefault(gt.path, []).append(gt.range)
         return files
 
     @property
