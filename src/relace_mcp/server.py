@@ -58,7 +58,8 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
         elif not os.access(base_dir, os.X_OK):
             errors.append(f"base_dir is not traversable: {config.base_dir}")
         elif not os.access(base_dir, os.W_OK):
-            errors.append(f"base_dir is not writable: {config.base_dir}")
+            logger.warning("base_dir is not writable: %s (fast_apply will fail)", config.base_dir)
+            results["base_dir"] = "read-only (fast_apply disabled)"
         else:
             try:
                 with tempfile.NamedTemporaryFile(
@@ -66,7 +67,8 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
                 ):
                     pass
             except OSError as exc:
-                errors.append(f"base_dir is not writable (tempfile failed): {exc}")
+                logger.warning("base_dir tempfile failed: %s (fast_apply may fail)", exc)
+                results["base_dir"] = "read-only (tempfile failed)"
             else:
                 results["base_dir"] = "ok"
     else:
@@ -82,12 +84,6 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
                 results["log_path"] = "ok"
         except OSError as exc:
             errors.append(f"cannot create log directory: {exc}")
-
-    if not config.api_key.startswith("rlc-"):
-        logger.warning("API key does not start with 'rlc-', may be invalid")
-        results["api_key_format"] = "warning"
-    else:
-        results["api_key_format"] = "ok"
 
     if errors:
         raise RuntimeError("; ".join(errors))

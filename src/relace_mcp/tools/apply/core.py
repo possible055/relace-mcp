@@ -106,7 +106,8 @@ def _resolve_path(
 
 def _create_new_file(ctx: ApplyContext, resolved_path: Path, edit_snippet: str) -> dict[str, Any]:
     resolved_path.parent.mkdir(parents=True, exist_ok=True)
-    file_io.atomic_write(resolved_path, edit_snippet, encoding="utf-8")
+    encoding = file_io.get_project_encoding() or "utf-8"
+    file_io.atomic_write(resolved_path, edit_snippet, encoding=encoding)
 
     apply_logging.log_create_success(ctx.trace_id, resolved_path, edit_snippet, ctx.instruction)
     logger.info("[%s] Created new file %s", ctx.trace_id, resolved_path)
