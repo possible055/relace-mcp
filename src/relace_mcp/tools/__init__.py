@@ -278,20 +278,22 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     if RELACE_CLOUD_TOOLS:
 
         @mcp.resource("relace://cloud/status", mime_type="application/json")
-        def cloud_status() -> dict[str, Any]:
+        async def cloud_status(ctx: Context | None = None) -> dict[str, Any]:
             """Current cloud sync status - lightweight read from local state file.
 
             Returns sync state without making API calls. Use this to quickly check
             if cloud_sync has been run and what the current sync status is.
             """
-            if not config.base_dir:
+            try:
+                base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+            except RuntimeError:
                 return {
                     "synced": False,
                     "error": "base_dir not configured",
                     "message": "Set MCP_BASE_DIR or use MCP Roots to enable cloud status",
                 }
 
-            repo_name = Path(config.base_dir).name
+            repo_name = Path(base_dir).name
             state = load_sync_state(repo_name)
 
             if state is None:
