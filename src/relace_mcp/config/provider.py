@@ -42,7 +42,7 @@ def create_provider_config(
     default_base_url: str,
     default_model: str,
     default_timeout: float,
-    relace_api_key: str,
+    relace_api_key: str | None,
 ) -> ProviderConfig:
     """Create provider configuration from environment variables.
 
