@@ -59,6 +59,15 @@ SEARCH_PARALLEL_TOOL_CALLS = env_bool(
     deprecated_name="RELACE_SEARCH_PARALLEL_TOOL_CALLS",
 )
 
+# Search harness type: "fast" (single-agent turn-loop) or "dual" (3+3+1 parallel channels)
+_harness_type_raw = (
+    getenv_with_fallback("SEARCH_HARNESS_TYPE", "RELACE_SEARCH_HARNESS_TYPE") or "dual"
+).lower()
+if _harness_type_raw not in ("fast", "dual"):
+    logger.warning("Invalid SEARCH_HARNESS_TYPE=%s, using 'dual'", _harness_type_raw)
+    _harness_type_raw = "dual"
+SEARCH_HARNESS_TYPE: str = _harness_type_raw
+
 # Relace Repos API (Infrastructure Endpoint for cloud sync/search)
 RELACE_API_ENDPOINT = os.getenv(
     "RELACE_API_ENDPOINT",

@@ -63,6 +63,36 @@ MERGE_REPORT_TOOL = {
 }
 
 
+def fallback_union_merge(
+    query: str,
+    lexical: ChannelEvidence,
+    semantic: ChannelEvidence,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Fallback merge: simple union of files without LLM or path resolution.
+
+    Used when base_dir is unavailable (e.g., MCP Roots mode without explicit base).
+    """
+    merged_files: dict[str, list[list[int]]] = {}
+    for path, ranges in lexical.files.items():
+        merged_files.setdefault(path, []).extend(ranges)
+    for path, ranges in semantic.files.items():
+        merged_files.setdefault(path, []).extend(ranges)
+
+    explanation = "[FALLBACK] Merged without path resolution (base_dir unavailable)."
+    if error:
+        explanation = f"[FALLBACK] {error}"
+
+    return {
+        "query": query,
+        "explanation": explanation,
+        "files": merged_files,
+        "turns_used": max(lexical.turns_used, semantic.turns_used),
+        "partial": True,
+        "error": error or "base_dir is None",
+    }
+
+
 class MergerAgent:
     """Single-turn agent that merges evidence from parallel channels."""
 

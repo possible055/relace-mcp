@@ -7,7 +7,7 @@ from ....config import RelaceConfig
 from .channels import LexicalChannel, SemanticChannel
 from .channels.base import ChannelEvidence
 from .core import FastAgenticSearchHarness
-from .merger import MergerAgent
+from .merger import MergerAgent, fallback_union_merge
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +50,8 @@ class DualChannelHarness:
         lex_result = lexical.run(query)
         sem_result = semantic.run(query)
 
+        if self._config.base_dir is None:
+            return fallback_union_merge(query, lex_result, sem_result)
         merger = MergerAgent(self._config, self._client, self._config.base_dir)
         return merger.merge(query, lex_result, sem_result)
 
@@ -78,6 +80,8 @@ class DualChannelHarness:
         lex_result = self._handle_exception(results[0], "lexical")
         sem_result = self._handle_exception(results[1], "semantic")
 
+        if self._config.base_dir is None:
+            return fallback_union_merge(query, lex_result, sem_result)
         merger = MergerAgent(self._config, self._client, self._config.base_dir)
         return await merger.merge_async(query, lex_result, sem_result)
 

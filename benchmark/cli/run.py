@@ -1,13 +1,14 @@
 import os
 import sys
 from pathlib import Path
+from typing import Literal
 
 import click
 from dotenv import load_dotenv
 
 from relace_mcp.config import RelaceConfig
 from relace_mcp.config.compat import getenv_with_fallback
-from relace_mcp.config.settings import RELACE_DEFAULT_ENCODING
+from relace_mcp.config.settings import RELACE_DEFAULT_ENCODING, SEARCH_HARNESS_TYPE
 
 from ..config import (
     DEFAULT_FILTERED_PATH,
@@ -82,9 +83,8 @@ def _load_benchmark_config() -> RelaceConfig:
     "--harness",
     "harness_type",
     type=click.Choice(["fast", "dual"]),
-    default="fast",
-    show_default=True,
-    help="Search harness type (fast=single turn-loop, dual=3+3+1 parallel)",
+    default=None,
+    help="Search harness type (default: from SEARCH_HARNESS_TYPE env or 'dual')",
 )
 def main(
     dataset_path: str,
@@ -95,7 +95,7 @@ def main(
     verbose: bool,
     progress: bool,
     dry_run: bool,
-    harness_type: str,
+    harness_type: str | None,
 ) -> None:
     """Run MULocBench benchmark on fast_search.
 
@@ -150,6 +150,11 @@ def main(
         )
         sys.exit(1)
 
+    # Resolve harness type from env if not specified via CLI
+    effective_harness_type: Literal["fast", "dual"] = (
+        harness_type if harness_type in ("fast", "dual") else SEARCH_HARNESS_TYPE  # type: ignore[assignment]
+    )
+
     runner = BenchmarkRunner(
         config,
         verbose=verbose,
@@ -157,7 +162,7 @@ def main(
         beta=_BETA,
         normalize_ast=False,
         soft_gt=False,
-        harness_type=harness_type,
+        harness_type=effective_harness_type,
     )
 
     click.echo("\nRunning benchmark...")

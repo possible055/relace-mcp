@@ -47,7 +47,7 @@ class BenchmarkRunner:
         beta: float = 0.5,
         normalize_ast: bool = False,
         soft_gt: bool = False,
-        harness_type: Literal["fast", "dual"] = "fast",
+        harness_type: Literal["fast", "dual"] = "dual",
     ):
         self.config = config
         self.verbose = verbose
@@ -168,13 +168,17 @@ class BenchmarkRunner:
         client = SearchLLMClient(effective_config)
 
         start_time = time.perf_counter()
+        lsp_languages = get_lsp_languages(repo_path)
         if self.harness_type == "dual":
-            lsp_languages = get_lsp_languages(repo_path)
-            harness = DualChannelHarness(effective_config, client, lsp_languages=lsp_languages)
-            result = asyncio.run(harness.run_async(case.query))
+            result = asyncio.run(
+                DualChannelHarness(effective_config, client, lsp_languages=lsp_languages).run_async(
+                    case.query
+                )
+            )
         else:
-            harness = FastAgenticSearchHarness(effective_config, client)
-            result = harness.run(case.query)
+            result = FastAgenticSearchHarness(
+                effective_config, client, lsp_languages=lsp_languages
+            ).run(case.query)
         latency_ms = (time.perf_counter() - start_time) * 1000
 
         returned_files = result.get("files", {})
@@ -218,7 +222,7 @@ class BenchmarkRunner:
             repo_root=repo_path,
         )
 
-        function_targets = [(t.path, t.ranges) for t in case.ground_truth_functions]
+        function_targets = [(t["path"], t["ranges"]) for t in case.ground_truth_functions]
         functions_hit, functions_total = compute_function_hits(
             returned_files,
             function_targets,

@@ -75,8 +75,19 @@ class BaseChannelHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCallsMixin
         self._turn_instructions = CHANNEL_TURN_INSTRUCTIONS
 
     def _enabled_tool_names(self) -> set[str]:
-        """Return allowed tools for this channel."""
-        return set(self.ALLOWED_TOOLS)
+        """Return allowed tools for this channel.
+
+        Intersects channel's ALLOWED_TOOLS with the global schema allowlist
+        (honors SEARCH_ENABLED_TOOLS env var for defense-in-depth).
+        """
+        schema_enabled: set[str] = set()
+        for schema in get_tool_schemas(self._lsp_languages):
+            func = schema.get("function")
+            if isinstance(func, dict):
+                name = func.get("name")
+                if isinstance(name, str):
+                    schema_enabled.add(name)
+        return set(self.ALLOWED_TOOLS) & schema_enabled
 
     def _get_tool_schemas(self) -> list[dict[str, Any]]:
         """Get tool schemas filtered to this channel's allowed tools."""
