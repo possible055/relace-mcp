@@ -29,6 +29,8 @@
 | `MCP_LOGGING` | `0` | 设为 `1` 启用文件日志（推荐；`RELACE_LOGGING` 已弃用） |
 | `RELACE_LOGGING` | `0` | `MCP_LOGGING` 的弃用别名 |
 
+> **注意：** 仅当**同时满足**以下条件时可省略 `RELACE_API_KEY`：(1) `APPLY_PROVIDER` 和 `SEARCH_PROVIDER` 均使用非 Relace 提供商，且 (2) `RELACE_CLOUD_TOOLS=false`。否则必须设置。
+
 ### Fast Apply
 
 | 变量 | 默认值 | 描述 |

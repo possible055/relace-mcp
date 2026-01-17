@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -6,9 +7,16 @@ from relace_mcp.config import RelaceConfig
 
 
 class TestRelaceConfigFromEnv:
-    def test_missing_api_key_raises(self, clean_env: None) -> None:
-        with pytest.raises(RuntimeError, match="RELACE_API_KEY is not set"):
-            RelaceConfig.from_env()
+    def test_missing_api_key_allowed_by_default(self, clean_env: None) -> None:
+        """When RELACE_CLOUD_TOOLS is off (default), API key is optional."""
+        config = RelaceConfig.from_env()
+        assert config.api_key is None
+
+    def test_missing_api_key_raises_with_cloud_tools(self, clean_env: None) -> None:
+        """When RELACE_CLOUD_TOOLS is on, API key is required."""
+        with patch("relace_mcp.config.settings.RELACE_CLOUD_TOOLS", True):
+            with pytest.raises(RuntimeError, match="RELACE_API_KEY is required"):
+                RelaceConfig.from_env()
 
     def test_loads_api_key(
         self, clean_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

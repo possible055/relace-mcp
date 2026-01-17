@@ -112,15 +112,20 @@ MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
 @dataclass(frozen=True)
 class RelaceConfig:
-    api_key: str
+    api_key: str | None = None  # Optional; required only when using Relace services
     base_dir: str | None = None  # Optional; resolved dynamically from MCP Roots if not set
     default_encoding: str | None = None  # Project-level encoding (detected or env-specified)
 
     @classmethod
     def from_env(cls) -> "RelaceConfig":
-        api_key = os.getenv("RELACE_API_KEY")
-        if not api_key:
-            raise RuntimeError("RELACE_API_KEY is not set. Please export it in your environment.")
+        api_key = os.getenv("RELACE_API_KEY") or None
+
+        # Cloud tools require Relace API key (Repo API is Relace-only)
+        if RELACE_CLOUD_TOOLS and not api_key:
+            raise RuntimeError(
+                "RELACE_API_KEY is required when RELACE_CLOUD_TOOLS=true. "
+                "Set RELACE_CLOUD_TOOLS=false or provide RELACE_API_KEY."
+            )
 
         base_dir = getenv_with_fallback("MCP_BASE_DIR", "RELACE_BASE_DIR") or None
         if base_dir:
