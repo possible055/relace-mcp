@@ -140,10 +140,17 @@ class DatasetCase:
         """
         files: dict[str, list[tuple[int, int]]] = {}
         for gt in self.hard_gt:
-            if gt.path not in files:
-                files[gt.path] = []
+            files.setdefault(gt.path, [])
             ranges = gt.target_ranges if gt.target_ranges else [gt.range]
-            files[gt.path].extend(ranges)
+            for r in ranges:
+                if not isinstance(r, (list, tuple)) or len(r) < 2:
+                    continue
+                start, end = r[0], r[1]
+                if not isinstance(start, int) or not isinstance(end, int):
+                    continue
+                if start <= 0 or end < start:
+                    continue
+                files[gt.path].append((start, end))
         return files
 
     @property

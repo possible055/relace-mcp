@@ -109,16 +109,14 @@ class BaseChannelHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCallsMixin
     def run(self, query: str) -> ChannelEvidence:
         """Execute channel search synchronously."""
         trace_id = f"{self.CHANNEL_NAME}-{uuid.uuid4().hex[:6]}"
-        logger.info(
-            "[%s] Starting %s channel (max_turns=%d)", trace_id, self.CHANNEL_NAME, self._max_turns
-        )
+        logger.info("Starting channel")
 
         self._observed_files = {}
 
         try:
             return self._run_channel_loop(query, trace_id)
         except Exception as exc:
-            logger.exception("[%s] Channel failed", trace_id)
+            logger.exception("Channel failed")
             return ChannelEvidence(
                 files=self._merge_observed_ranges(),
                 observations=[f"Error: {exc}"],
@@ -130,19 +128,14 @@ class BaseChannelHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCallsMixin
     async def run_async(self, query: str) -> ChannelEvidence:
         """Execute channel search asynchronously."""
         trace_id = f"{self.CHANNEL_NAME}-{uuid.uuid4().hex[:6]}"
-        logger.info(
-            "[%s] Starting %s channel async (max_turns=%d)",
-            trace_id,
-            self.CHANNEL_NAME,
-            self._max_turns,
-        )
+        logger.info("Starting channel async")
 
         self._observed_files = {}
 
         try:
             return await self._run_channel_loop_async(query, trace_id)
         except Exception as exc:
-            logger.exception("[%s] Channel failed", trace_id)
+            logger.exception("Channel failed")
             return ChannelEvidence(
                 files=self._merge_observed_ranges(),
                 observations=[f"Error: {exc}"],

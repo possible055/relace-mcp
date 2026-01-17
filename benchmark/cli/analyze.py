@@ -28,7 +28,9 @@ def print_detailed_table(results: list[dict[str, Any]]) -> None:
     print("\n" + "=" * 80)
     print("DETAILED RESULTS")
     print("=" * 80)
-    has_context = all("context_line_precision_matched" in r for r in results)
+    has_context = all(
+        ("context_line_precision_matched" in r and "context_line_coverage" in r) for r in results
+    )
     if has_context:
         print(f"{'Case ID':<40} | F.Rec | F.Prec | T.Cov | T.Prec(M) | C.Cov | C.Prec(M)")
         print(
@@ -150,13 +152,17 @@ def main() -> None:
 
     # Distribution
     print_distribution(results, "line_precision_matched", "Line Prec(M)")
-    if all("context_line_precision_matched" in r for r in results):
+    if all(
+        ("context_line_precision_matched" in r and "context_line_coverage" in r) for r in results
+    ):
         print_distribution(results, "context_line_precision_matched", "Context Line Prec(M)")
 
     # Summary stats
     print_summary_stats(results, "line_precision_matched", "Line Prec(M)")
     print_summary_stats(results, "line_coverage", "Line Coverage")
-    if all("context_line_precision_matched" in r for r in results):
+    if all(
+        ("context_line_precision_matched" in r and "context_line_coverage" in r) for r in results
+    ):
         print_summary_stats(results, "context_line_precision_matched", "Context Line Prec(M)")
         print_summary_stats(results, "context_line_coverage", "Context Line Coverage")
 

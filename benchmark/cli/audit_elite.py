@@ -434,7 +434,7 @@ def main(
                 and end_padding < padding
             ):
                 end_clamped = True
-            elif function_end_line is not None and end_padding is not None:
+            elif padding is not None and function_end_line is not None and end_padding is not None:
                 end_clamped = False
 
             anchor_ok = not anchor_errors

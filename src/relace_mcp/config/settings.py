@@ -1,5 +1,6 @@
 import logging
 import os
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -64,7 +65,12 @@ _harness_type_raw = (
     getenv_with_fallback("SEARCH_HARNESS_TYPE", "RELACE_SEARCH_HARNESS_TYPE") or "dual"
 ).lower()
 if _harness_type_raw not in ("fast", "dual"):
-    logger.warning("Invalid SEARCH_HARNESS_TYPE=%s, using 'dual'", _harness_type_raw)
+    logger.warning("Invalid SEARCH_HARNESS_TYPE, using 'dual'")
+    warnings.warn(
+        f"Invalid SEARCH_HARNESS_TYPE={_harness_type_raw!r}, using 'dual'",
+        RuntimeWarning,
+        stacklevel=2,
+    )
     _harness_type_raw = "dual"
 SEARCH_HARNESS_TYPE: str = _harness_type_raw
 

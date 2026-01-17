@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import warnings
 from typing import Any
 
 from ....clients import SearchLLMClient
@@ -90,7 +91,12 @@ class DualChannelHarness:
     ) -> ChannelEvidence:
         """Convert exceptions to error ChannelEvidence."""
         if isinstance(result, BaseException):
-            logger.error("Channel %s failed with exception: %s", channel, result)
+            logger.error("Channel failed")
+            warnings.warn(
+                f"Channel {channel!r} failed with exception: {result!r}",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             return ChannelEvidence(
                 files={},
                 observations=[f"Channel failed: {result}"],

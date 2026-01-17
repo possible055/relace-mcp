@@ -135,7 +135,10 @@ def load_dataset(
                             and isinstance(r[0], int)
                             and isinstance(r[1], int)
                         ):
-                            target_ranges.append((r[0], r[1]))
+                            start, end = r[0], r[1]
+                            if start <= 0 or end < start:
+                                continue
+                            target_ranges.append((start, end))
                 hard_gt.append(
                     GroundTruthEntry(
                         path=path_str,

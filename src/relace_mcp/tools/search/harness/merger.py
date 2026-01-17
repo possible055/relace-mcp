@@ -74,10 +74,24 @@ def fallback_union_merge(
     Used when base_dir is unavailable (e.g., MCP Roots mode without explicit base).
     """
     merged_files: dict[str, list[list[int]]] = {}
-    for path, ranges in lexical.files.items():
-        merged_files.setdefault(path, []).extend(ranges)
-    for path, ranges in semantic.files.items():
-        merged_files.setdefault(path, []).extend(ranges)
+    for files_map in (lexical.files, semantic.files):
+        for path, ranges in files_map.items():
+            if not isinstance(path, str) or not path:
+                continue
+            if not isinstance(ranges, list):
+                continue
+            merged_ranges = merged_files.setdefault(path, [])
+            for r in ranges:
+                if not isinstance(r, (list, tuple)) or len(r) != 2:
+                    continue
+                try:
+                    start = int(r[0])
+                    end = int(r[1])
+                except (TypeError, ValueError):
+                    continue
+                if start <= 0 or end < start:
+                    continue
+                merged_ranges.append([start, end])
 
     explanation = "[FALLBACK] Merged without path resolution (base_dir unavailable)."
     if error:
@@ -302,7 +316,7 @@ Please merge these findings and call merge_report with the result."""
         try:
             return resolve_repo_path(path, str(self._base_dir), require_within_base_dir=True)
         except ValueError:
-            logger.warning("Filtered out invalid path from merge_report: %s", path)
+            logger.warning("Filtered out invalid path from merge_report")
             return None
 
     def _merge_overlapping_ranges(self, ranges: list[list[int]]) -> list[list[int]]:
