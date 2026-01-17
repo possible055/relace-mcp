@@ -42,7 +42,7 @@ def create_provider_config(
     default_base_url: str,
     default_model: str,
     default_timeout: float,
-    relace_api_key: str,
+    relace_api_key: str | None,
 ) -> ProviderConfig:
     """Create provider configuration from environment variables.
 
@@ -105,7 +105,12 @@ def create_provider_config(
 
     if not api_key:
         if api_compat == RELACE_PROVIDER:
-            api_key = relace_api_key
+            api_key = relace_api_key or ""
+            if not api_key:
+                raise RuntimeError(
+                    f"RELACE_API_KEY is required when using {prefix}_PROVIDER=relace (default). "
+                    f"Set RELACE_API_KEY or switch to a different provider via {prefix}_PROVIDER."
+                )
         elif provider == OPENAI_PROVIDER:
             api_key = os.getenv("OPENAI_API_KEY", "").strip()
             if not api_key:

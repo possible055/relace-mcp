@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import tempfile
+import warnings
 from dataclasses import replace
 from pathlib import Path
 
@@ -58,7 +59,11 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
         elif not os.access(base_dir, os.X_OK):
             errors.append(f"base_dir is not traversable: {config.base_dir}")
         elif not os.access(base_dir, os.W_OK):
-            errors.append(f"base_dir is not writable: {config.base_dir}")
+            warnings.warn(
+                f"base_dir is not writable: {config.base_dir}", RuntimeWarning, stacklevel=2
+            )
+            logger.warning("base_dir is not writable (fast_apply will fail)")
+            results["base_dir"] = "read-only (fast_apply disabled)"
         else:
             try:
                 with tempfile.NamedTemporaryFile(
@@ -66,7 +71,9 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
                 ):
                     pass
             except OSError as exc:
-                errors.append(f"base_dir is not writable (tempfile failed): {exc}")
+                warnings.warn(f"base_dir tempfile failed: {exc}", RuntimeWarning, stacklevel=2)
+                logger.warning("base_dir tempfile failed (fast_apply may fail)")
+                results["base_dir"] = "read-only (tempfile failed)"
             else:
                 results["base_dir"] = "ok"
     else:
@@ -82,12 +89,6 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
                 results["log_path"] = "ok"
         except OSError as exc:
             errors.append(f"cannot create log directory: {exc}")
-
-    if not config.api_key.startswith("rlc-"):
-        logger.warning("API key does not start with 'rlc-', may be invalid")
-        results["api_key_format"] = "warning"
-    else:
-        results["api_key_format"] = "ok"
 
     if errors:
         raise RuntimeError("; ".join(errors))
