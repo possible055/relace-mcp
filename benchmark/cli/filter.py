@@ -5,6 +5,7 @@ soft context from call graphs.
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -91,7 +92,23 @@ def main(
 
     Large repos are automatically excluded via EXCLUDED_REPOS in config.
     """
-    load_dotenv()
+    dotenv_path = os.getenv("MCP_DOTENV_PATH", "").strip()
+    if not dotenv_path:
+        dotenv_path = os.getenv("RELACE_DOTENV_PATH", "").strip()
+        if dotenv_path:
+            click.echo(
+                "Warning: RELACE_DOTENV_PATH is deprecated; use MCP_DOTENV_PATH instead",
+                err=True,
+            )
+    if dotenv_path:
+        path = Path(dotenv_path).expanduser()
+        if path.exists():
+            load_dotenv(path)
+        else:
+            click.echo(f"Warning: MCP_DOTENV_PATH does not exist: {dotenv_path}", err=True)
+            load_dotenv()  # Fallback to default search
+    else:
+        load_dotenv()
 
     benchmark_dir = get_benchmark_dir()
     repos_dir = get_repos_dir()
