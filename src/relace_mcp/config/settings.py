@@ -53,6 +53,10 @@ SEARCH_TIMEOUT_SECONDS = float(
     getenv_with_fallback("SEARCH_TIMEOUT_SECONDS", "RELACE_SEARCH_TIMEOUT_SECONDS") or "120.0"
 )
 SEARCH_MAX_TURNS = int(getenv_with_fallback("SEARCH_MAX_TURNS", "RELACE_SEARCH_MAX_TURNS") or "6")
+# Dual harness per-channel turns (lexical + semantic). Total turns = (2 * channel_turns) + 1 merge.
+SEARCH_DUAL_CHANNEL_TURNS = int(
+    getenv_with_fallback("SEARCH_DUAL_CHANNEL_TURNS", "RELACE_SEARCH_DUAL_CHANNEL_TURNS") or "3"
+)
 # Search parallel tool calls (default: true)
 SEARCH_PARALLEL_TOOL_CALLS = env_bool(
     "SEARCH_PARALLEL_TOOL_CALLS",
