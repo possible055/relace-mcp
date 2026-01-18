@@ -1,4 +1,5 @@
 import json
+import warnings
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -83,7 +84,9 @@ class TestMergerAgent:
     def test_fallback_merge_unions_files(
         self, mock_config: RelaceConfig, mock_client: MagicMock
     ) -> None:
-        merger = MergerAgent(mock_config, mock_client, mock_config.base_dir)
+        base_dir = mock_config.base_dir
+        assert base_dir is not None
+        merger = MergerAgent(mock_config, mock_client, base_dir)
         lexical = ChannelEvidence(
             files={"/repo/a.py": [[1, 10]]},
             turns_used=3,
@@ -104,7 +107,9 @@ class TestMergerAgent:
     def test_fallback_merge_combines_overlapping_ranges(
         self, mock_config: RelaceConfig, mock_client: MagicMock
     ) -> None:
-        merger = MergerAgent(mock_config, mock_client, mock_config.base_dir)
+        base_dir = mock_config.base_dir
+        assert base_dir is not None
+        merger = MergerAgent(mock_config, mock_client, base_dir)
         lexical = ChannelEvidence(files={"/repo/a.py": [[1, 10], [15, 20]]}, turns_used=3)
         semantic = ChannelEvidence(files={"/repo/a.py": [[8, 18]]}, turns_used=3)
 
@@ -137,7 +142,9 @@ class TestMergerAgent:
             ]
         }
 
-        merger = MergerAgent(mock_config, mock_client, mock_config.base_dir)
+        base_dir = mock_config.base_dir
+        assert base_dir is not None
+        merger = MergerAgent(mock_config, mock_client, base_dir)
         lexical = ChannelEvidence(files={}, turns_used=3)
         semantic = ChannelEvidence(files={}, turns_used=3)
 
@@ -178,7 +185,9 @@ class TestDualChannelHarness:
         harness = DualChannelHarness(mock_config, mock_client, lsp_languages=frozenset({"python"}))
 
         exc = RuntimeError("Test error")
-        result = harness._handle_exception(exc, "lexical")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            result = harness._handle_exception(exc, "lexical")
 
         assert isinstance(result, ChannelEvidence)
         assert result.error == "Test error"

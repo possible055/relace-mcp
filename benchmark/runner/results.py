@@ -1,5 +1,5 @@
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +24,7 @@ class BenchmarkResult:
     latency_ms: float
     partial: bool = False
     error: str | None = None
+    returned_files: dict[str, list[list[int]]] = field(default_factory=dict)
 
 
 @dataclass
