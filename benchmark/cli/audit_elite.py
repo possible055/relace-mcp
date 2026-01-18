@@ -15,11 +15,17 @@ from typing import Any
 import click
 
 from ..analysis.function_scope import extract_function_scopes
-from ..config import DEFAULT_MULOCBENCH_PATH, get_benchmark_dir, get_repos_dir
+from ..config import (
+    DEFAULT_MULOCBENCH_PATH,
+    get_benchmark_dir,
+    get_processed_data_dir,
+    get_reports_dir,
+    get_repos_dir,
+)
 from ..datasets import load_dataset
+from ..metrics.ranges import merge_ranges
 from ..runner.git import ensure_repo
 from .curate_elite import (
-    CONTEXT_PADDING,
     ITEMS_PER_REPO,
     MAX_GT_BLOCKS,
     MAX_SINGLE_LINE_RATIO,
@@ -113,9 +119,9 @@ def _load_raw_by_issue_url(raw_file: Path, issue_urls: set[str]) -> dict[str, di
 @click.option(
     "--dataset",
     "dataset_path",
-    default="data/processed/elite_50.jsonl",
+    default=str(get_processed_data_dir() / "elite_50.jsonl"),
     show_default=True,
-    help="Elite dataset path (relative to benchmark/ unless absolute)",
+    help="Elite dataset path (absolute or relative to benchmark/)",
 )
 @click.option(
     "--raw",
@@ -127,25 +133,27 @@ def _load_raw_by_issue_url(raw_file: Path, issue_urls: set[str]) -> dict[str, di
 @click.option(
     "--output",
     "output_path",
-    default="reports/elite_50.audit.json",
+    default=str(get_reports_dir() / "elite_50.audit.json"),
     show_default=True,
-    help="Output audit report path (relative to benchmark/ unless absolute)",
+    help="Output audit report path (absolute or relative to benchmark/)",
 )
 @click.option(
     "--tsv",
     "tsv_path",
-    default="reports/elite_50.span_context.tsv",
+    default=str(get_reports_dir() / "elite_50.span_context.tsv"),
     show_default=True,
-    help="Output TSV listing (relative to benchmark/ unless absolute)",
+    help="Output TSV listing (absolute or relative to benchmark/)",
 )
 @click.option(
     "--padding",
-    default=CONTEXT_PADDING,
+    default=None,
     show_default=True,
     type=int,
-    help="Expected context padding (±N) used when curating",
+    help="Expected context padding (deprecated; now uses full function scope)",
 )
-def main(dataset_path: str, raw_path: str, output_path: str, tsv_path: str, padding: int) -> None:
+def main(
+    dataset_path: str, raw_path: str, output_path: str, tsv_path: str, padding: int | None
+) -> None:
     dataset_file = _resolve_path(dataset_path)
     raw_file = _resolve_path(raw_path)
     out_file = _resolve_path(output_path)
@@ -194,6 +202,9 @@ def main(dataset_path: str, raw_path: str, output_path: str, tsv_path: str, padd
         "gt_range_start",
         "gt_range_end",
         "gt_range_len",
+        "target_ranges_count",
+        "target_span_len",
+        "missing_changed_in_target",
         "start_padding",
         "end_padding",
         "end_clamped",
@@ -325,9 +336,27 @@ def main(dataset_path: str, raw_path: str, output_path: str, tsv_path: str, padd
             changed_min: int | None = None
             changed_max: int | None = None
             result_span_len: int | None = None
+            target_ranges_count: int | None = None
+            target_span_len: int | None = None
+            missing_changed_in_target: int | None = None
             start_padding: int | None = None
             end_padding: int | None = None
             ctx_to_result_ratio: float | None = None
+
+            target_ranges = gt.target_ranges
+            if not target_ranges:
+                range_errors.append("missing_target_ranges")
+                counters["missing_target_ranges_entries"] += 1
+            else:
+                target_ranges_count = len(target_ranges)
+                merged_target = merge_ranges([(int(a), int(b)) for a, b in target_ranges])
+                target_span_len = sum(int(b) - int(a) + 1 for a, b in merged_target)
+
+                for a, b in merged_target:
+                    if a < gt_start or b > gt_end:
+                        range_errors.append("target_range_outside_context")
+                        counters["target_range_outside_context_entries"] += 1
+                        break
 
             if not changed_lines:
                 range_errors.append("no_changed_lines_for_path")
@@ -336,12 +365,23 @@ def main(dataset_path: str, raw_path: str, output_path: str, tsv_path: str, padd
                 range_errors.append("no_changed_lines_in_gt_range")
                 counters["no_changed_lines_in_range_entries"] += 1
             else:
+                if target_ranges:
+                    missing = [
+                        ln
+                        for ln in changed_in_range
+                        if not any(a <= ln <= b for a, b in target_ranges)
+                    ]
+                    missing_changed_in_target = len(missing)
+                    if missing:
+                        range_errors.append("changed_lines_missing_in_target_ranges")
+                        counters["changed_lines_missing_in_target_ranges_entries"] += 1
+
                 changed_min = min(changed_in_range)
                 changed_max = max(changed_in_range)
                 result_span_len = int(changed_max) - int(changed_min) + 1
                 start_padding = int(changed_min) - int(gt_start)
                 end_padding = int(gt_end) - int(changed_max)
-                if end_padding > padding:
+                if padding is not None and end_padding > padding:
                     range_errors.append("end_padding_exceeds_expected")
                     counters["end_padding_exceeds_expected_entries"] += 1
                 if result_span_len > 0:
@@ -381,16 +421,20 @@ def main(dataset_path: str, raw_path: str, output_path: str, tsv_path: str, padd
                         if gt_end > scope.end_line:
                             range_errors.append("gt_end_exceeds_function_end")
                             counters["gt_end_exceeds_function_end_entries"] += 1
+                        if gt_end != scope.end_line:
+                            range_errors.append("gt_end_not_function_end")
+                            counters["gt_end_not_function_end_entries"] += 1
 
             end_clamped: bool | None = None
             if (
                 function_end_line is not None
                 and end_padding is not None
                 and gt_end == function_end_line
+                and padding is not None
                 and end_padding < padding
             ):
                 end_clamped = True
-            elif function_end_line is not None and end_padding is not None:
+            elif padding is not None and function_end_line is not None and end_padding is not None:
                 end_clamped = False
 
             anchor_ok = not anchor_errors
@@ -417,6 +461,9 @@ def main(dataset_path: str, raw_path: str, output_path: str, tsv_path: str, padd
                         str(gt_start),
                         str(gt_end),
                         str(gt_range_len),
+                        _fmt_int(target_ranges_count),
+                        _fmt_int(target_span_len),
+                        _fmt_int(missing_changed_in_target),
                         _fmt_int(start_padding),
                         _fmt_int(end_padding),
                         _fmt_bool(end_clamped),
@@ -445,6 +492,9 @@ def main(dataset_path: str, raw_path: str, output_path: str, tsv_path: str, padd
                     "signature": gt.signature,
                     "range": [gt_start, gt_end],
                     "gt_range_len": gt_range_len,
+                    "target_ranges_count": target_ranges_count,
+                    "target_span_len": target_span_len,
+                    "missing_changed_in_target": missing_changed_in_target,
                     "changed_count": len(changed_in_range),
                     "changed_min": changed_min,
                     "changed_max": changed_max,
@@ -494,7 +544,7 @@ def main(dataset_path: str, raw_path: str, output_path: str, tsv_path: str, padd
     report = {
         "dataset_checks": dataset_checks,
         "constraints": {
-            "context_padding": padding,
+            "scope_strategy": "full_function",
             "max_gt_blocks": MAX_GT_BLOCKS,
             "max_single_line_ratio": MAX_SINGLE_LINE_RATIO,
             "hard_gt_paths": "python_only_and_not_tests_docs_config",

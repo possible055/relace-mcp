@@ -15,6 +15,8 @@ class BenchmarkResult:
     file_precision: float
     line_coverage: float
     line_precision_matched: float
+    context_line_coverage: float
+    context_line_precision_matched: float
     function_hit_rate: float
     functions_hit: int
     functions_total: int

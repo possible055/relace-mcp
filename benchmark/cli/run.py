@@ -1,13 +1,14 @@
 import os
 import sys
 from pathlib import Path
+from typing import Literal
 
 import click
 from dotenv import load_dotenv
 
 from relace_mcp.config import RelaceConfig
 from relace_mcp.config.compat import getenv_with_fallback
-from relace_mcp.config.settings import RELACE_DEFAULT_ENCODING
+from relace_mcp.config.settings import RELACE_DEFAULT_ENCODING, SEARCH_HARNESS_TYPE
 
 from ..config import (
     DEFAULT_FILTERED_PATH,
@@ -78,6 +79,13 @@ def _load_benchmark_config() -> RelaceConfig:
     help="Print per-case progress (recommended; benchmarks can take a long time)",
 )
 @click.option("--dry-run", is_flag=True, help="Only load data, don't run searches")
+@click.option(
+    "--harness",
+    "harness_type",
+    type=click.Choice(["fast", "dual"]),
+    default=None,
+    help="Search harness type (default: from SEARCH_HARNESS_TYPE env or 'dual')",
+)
 def main(
     dataset_path: str,
     limit: int,
@@ -87,6 +95,7 @@ def main(
     verbose: bool,
     progress: bool,
     dry_run: bool,
+    harness_type: str | None,
 ) -> None:
     """Run MULocBench benchmark on fast_search.
 
@@ -141,6 +150,11 @@ def main(
         )
         sys.exit(1)
 
+    # Resolve harness type from env if not specified via CLI
+    effective_harness_type: Literal["fast", "dual"] = (
+        harness_type if harness_type in ("fast", "dual") else SEARCH_HARNESS_TYPE  # type: ignore[assignment]
+    )
+
     runner = BenchmarkRunner(
         config,
         verbose=verbose,
@@ -148,6 +162,7 @@ def main(
         beta=_BETA,
         normalize_ast=False,
         soft_gt=False,
+        harness_type=effective_harness_type,
     )
 
     click.echo("\nRunning benchmark...")
@@ -203,8 +218,10 @@ def main(
     click.echo(f"Avg GT Files:      {s['avg_ground_truth_files']:.2f}")
     click.echo(f"Avg File Recall:   {s['avg_file_recall']:.1%}")
     click.echo(f"Avg File Precision:{s['avg_file_precision']:.1%}")
-    click.echo(f"Avg Line Coverage: {s['avg_line_coverage']:.1%}")
-    click.echo(f"Avg Line Prec(M):  {s['avg_line_precision_matched']:.1%}")
+    click.echo(f"Avg Target Line Cov:{s['avg_line_coverage']:.1%}")
+    click.echo(f"Avg Target Line Prec(M): {s['avg_line_precision_matched']:.1%}")
+    click.echo(f"Avg Context Line Cov:{s['avg_context_line_coverage']:.1%}")
+    click.echo(f"Avg Context Line Prec(M): {s['avg_context_line_precision_matched']:.1%}")
     click.echo(f"Func Cases:        {int(s['function_cases'])}/{summary.total_cases}")
     click.echo(f"Avg Func Hit Rate: {s['avg_function_hit_rate']:.1%}")
     click.echo(f"Avg Turns:         {s['avg_turns']:.2f}")
