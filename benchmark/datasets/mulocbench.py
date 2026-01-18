@@ -125,11 +125,26 @@ def load_dataset(
                 range_data = gt.get("range", [])
                 if not path_str or len(range_data) < 2:
                     continue
+                target_ranges_data = gt.get("target_ranges", [])
+                target_ranges: list[tuple[int, int]] = []
+                if isinstance(target_ranges_data, list):
+                    for r in target_ranges_data:
+                        if (
+                            isinstance(r, (list, tuple))
+                            and len(r) >= 2
+                            and isinstance(r[0], int)
+                            and isinstance(r[1], int)
+                        ):
+                            start, end = r[0], r[1]
+                            if start <= 0 or end < start:
+                                continue
+                            target_ranges.append((start, end))
                 hard_gt.append(
                     GroundTruthEntry(
                         path=path_str,
                         function=gt.get("function", ""),
                         range=(range_data[0], range_data[1]),
+                        target_ranges=target_ranges,
                         class_name=gt.get("class"),
                         signature=gt.get("signature"),
                     )
