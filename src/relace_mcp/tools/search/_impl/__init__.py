@@ -5,7 +5,7 @@ from .bash_security import (
     BASH_SAFE_COMMANDS,
     GIT_ALLOWED_SUBCOMMANDS,
     PYTHON_DANGEROUS_PATTERNS,
-    _is_blocked_command,
+    is_blocked_command,
 )
 from .constants import (
     BASH_MAX_OUTPUT_CHARS,
@@ -73,7 +73,7 @@ __all__ = [
     "PYTHON_DANGEROUS_PATTERNS",
     "SearchSymbolParams",
     "call_graph_handler",
-    "_is_blocked_command",
+    "is_blocked_command",
     "bash_handler",
     "estimate_context_size",
     "glob_handler",

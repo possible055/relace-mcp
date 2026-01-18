@@ -1,14 +1,12 @@
+import logging
 import os
 import sys
+import warnings
 from pathlib import Path
 from typing import Literal
 
 import click
 from dotenv import load_dotenv
-
-from relace_mcp.config import RelaceConfig
-from relace_mcp.config.compat import getenv_with_fallback
-from relace_mcp.config.settings import RELACE_DEFAULT_ENCODING, SEARCH_HARNESS_TYPE
 
 from ..config import (
     DEFAULT_FILTERED_PATH,
@@ -18,19 +16,53 @@ from ..config import (
     get_results_dir,
 )
 from ..datasets import load_dataset
-from ..runner.executor import BenchmarkRunner
 from ..schemas import generate_output_path
 
 # Internal constants
 _BETA = 0.5
 
+logger = logging.getLogger(__name__)
 
-def _load_benchmark_config() -> RelaceConfig:
+
+def _load_dotenv_from_env_path() -> None:
+    """Load .env file from MCP_DOTENV_PATH or default locations.
+
+    Priority:
+    1. MCP_DOTENV_PATH environment variable (explicit path)
+    2. RELACE_DOTENV_PATH environment variable (deprecated alias)
+    3. Default dotenv search (current directory and parents)
+    """
+    dotenv_path = os.getenv("MCP_DOTENV_PATH", "").strip()
+    if not dotenv_path:
+        legacy_path = os.getenv("RELACE_DOTENV_PATH", "").strip()
+        if legacy_path:
+            logger.warning("RELACE_DOTENV_PATH is deprecated; use MCP_DOTENV_PATH instead")
+            dotenv_path = legacy_path
+    if dotenv_path:
+        path = Path(dotenv_path).expanduser()
+        if path.exists():
+            load_dotenv(path)
+            logger.info("Loaded .env from MCP_DOTENV_PATH")
+        else:
+            logger.warning("MCP_DOTENV_PATH does not exist")
+            warnings.warn(
+                f"MCP_DOTENV_PATH does not exist: {dotenv_path}", RuntimeWarning, stacklevel=2
+            )
+            load_dotenv()  # Fallback to default
+    else:
+        load_dotenv()
+
+
+def _load_benchmark_config():
     """Load config for running search benchmarks.
 
     Note: RELACE_API_KEY is only required when SEARCH_PROVIDER=relace. For other
     providers, SearchLLMClient will use SEARCH_API_KEY / OPENAI_API_KEY / etc.
     """
+    from relace_mcp.config import RelaceConfig
+    from relace_mcp.config.compat import getenv_with_fallback
+    from relace_mcp.config.settings import RELACE_DEFAULT_ENCODING
+
     search_provider = getenv_with_fallback("SEARCH_PROVIDER", "RELACE_SEARCH_PROVIDER").strip()
     search_provider = (search_provider or "relace").lower()
 
@@ -86,6 +118,35 @@ def _load_benchmark_config() -> RelaceConfig:
     default=None,
     help="Search harness type (default: from SEARCH_HARNESS_TYPE env or 'dual')",
 )
+@click.option(
+    "--search-max-turns",
+    default=None,
+    type=int,
+    help="Override SEARCH_MAX_TURNS for this run",
+)
+@click.option(
+    "--search-temperature",
+    default=None,
+    type=float,
+    help="Override SEARCH_TEMPERATURE for this run",
+)
+@click.option(
+    "--merger-temperature",
+    default=None,
+    type=float,
+    help="Override MERGER_TEMPERATURE for this run (dual harness merge step)",
+)
+@click.option(
+    "--dual-channel-turns",
+    default=None,
+    type=int,
+    help="Override SEARCH_DUAL_CHANNEL_TURNS for this run (dual harness per-channel turns)",
+)
+@click.option(
+    "--search-prompt-file",
+    default=None,
+    help="Override SEARCH_PROMPT_FILE for this run (YAML prompt file)",
+)
 def main(
     dataset_path: str,
     limit: int,
@@ -96,33 +157,38 @@ def main(
     progress: bool,
     dry_run: bool,
     harness_type: str | None,
+    search_max_turns: int | None,
+    search_temperature: float | None,
+    merger_temperature: float | None,
+    dual_channel_turns: int | None,
+    search_prompt_file: str | None,
 ) -> None:
     """Run MULocBench benchmark on fast_search.
 
     Large repos are automatically excluded via EXCLUDED_REPOS in config.
     """
-    dotenv_path = os.getenv("MCP_DOTENV_PATH", "").strip()
-    if not dotenv_path:
-        dotenv_path = os.getenv("RELACE_DOTENV_PATH", "").strip()
-        if dotenv_path:
-            click.echo(
-                "Warning: RELACE_DOTENV_PATH is deprecated; use MCP_DOTENV_PATH instead",
-                err=True,
-            )
-    if dotenv_path:
-        path = Path(dotenv_path).expanduser()
-        if path.exists():
-            load_dotenv(path)
-        else:
-            click.echo(f"Warning: MCP_DOTENV_PATH does not exist: {dotenv_path}", err=True)
-            load_dotenv()  # Fallback to default search
-    else:
-        load_dotenv()
+    _load_dotenv_from_env_path()
+
+    if search_prompt_file:
+        os.environ["SEARCH_PROMPT_FILE"] = search_prompt_file
+    if search_max_turns is not None:
+        os.environ["SEARCH_MAX_TURNS"] = str(search_max_turns)
+    if search_temperature is not None:
+        os.environ["SEARCH_TEMPERATURE"] = str(search_temperature)
+    if merger_temperature is not None:
+        os.environ["MERGER_TEMPERATURE"] = str(merger_temperature)
+    if dual_channel_turns is not None:
+        os.environ["SEARCH_DUAL_CHANNEL_TURNS"] = str(dual_channel_turns)
+
+    from relace_mcp.config.settings import SEARCH_HARNESS_TYPE
+
+    from ..runner.executor import BenchmarkRunner
 
     benchmark_dir = get_benchmark_dir()
     resolved_dataset_path = (
         Path(dataset_path) if Path(dataset_path).is_absolute() else (benchmark_dir / dataset_path)
     )
+    dataset_id = resolved_dataset_path.stem
     click.echo("Loading dataset...")
     click.echo(f"  dataset: {resolved_dataset_path}")
     click.echo(f"  limit:   {limit if limit is not None else 'all'}")
@@ -185,12 +251,13 @@ def main(
     summary = runner.run_benchmark(
         cases,
         run_config={
-            "dataset": "mulocbench",
+            "dataset": dataset_id,
             "dataset_path": str(resolved_dataset_path),
             "limit": limit,
             "shuffle": shuffle,
             "seed": seed,
             "beta": _BETA,
+            "harness_type": effective_harness_type,
         },
     )
 
@@ -200,16 +267,13 @@ def main(
     reports_dir = get_reports_dir()
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    # Extract dataset name from path for output naming
-    dataset_name = Path(dataset_path).stem
-
     if output:
         if Path(output).is_absolute():
             output_path = Path(output)
         else:
             output_path = benchmark_dir / output
     else:
-        output_path = generate_output_path(results_dir, "run", dataset_name)
+        output_path = generate_output_path(results_dir, "run", dataset_id)
 
     # summary.save handles directory creation and dual-file extensions (.jsonl, .report.json)
     summary.save(output_path)

@@ -21,6 +21,7 @@ from ..metrics import (
     compute_line_coverage,
     compute_line_precision_matched,
 )
+from ..metrics.paths import normalize_returned_files
 from ..schemas import DatasetCase
 from .git import ensure_repo
 from .metadata import build_run_metadata
@@ -183,10 +184,11 @@ class BenchmarkRunner:
             ).run(case.query)
         latency_ms = (time.perf_counter() - start_time) * 1000
 
-        returned_files = result.get("files", {})
-        if not isinstance(returned_files, dict):
-            returned_files = {}
+        returned_files_raw = result.get("files", {})
+        if not isinstance(returned_files_raw, dict):
+            returned_files_raw = {}
 
+        returned_files = normalize_returned_files(returned_files_raw, repo_root=repo_path)
         returned_files_count = len(returned_files)
 
         context_ground_truth_files = case.ground_truth_context_files
@@ -267,6 +269,7 @@ class BenchmarkRunner:
             latency_ms=latency_ms,
             partial=partial,
             error=error,
+            returned_files=returned_files,
         )
 
     def _normalize_ground_truth(

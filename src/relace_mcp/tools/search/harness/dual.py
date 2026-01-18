@@ -5,6 +5,7 @@ from typing import Any
 
 from ....clients import SearchLLMClient
 from ....config import RelaceConfig
+from ....config.settings import SEARCH_DUAL_CHANNEL_TURNS
 from .channels import LexicalChannel, SemanticChannel
 from .channels.base import ChannelEvidence
 from .core import FastAgenticSearchHarness
@@ -42,10 +43,16 @@ class DualChannelHarness:
             return harness.run(query)
 
         lexical = LexicalChannel(
-            self._config, self._client, max_turns=3, lsp_languages=self._lsp_languages
+            self._config,
+            self._client,
+            max_turns=SEARCH_DUAL_CHANNEL_TURNS,
+            lsp_languages=self._lsp_languages,
         )
         semantic = SemanticChannel(
-            self._config, self._client, max_turns=3, lsp_languages=self._lsp_languages
+            self._config,
+            self._client,
+            max_turns=SEARCH_DUAL_CHANNEL_TURNS,
+            lsp_languages=self._lsp_languages,
         )
 
         lex_result = lexical.run(query)
@@ -66,10 +73,16 @@ class DualChannelHarness:
             return await harness.run_async(query)
 
         lexical = LexicalChannel(
-            self._config, self._client, max_turns=3, lsp_languages=self._lsp_languages
+            self._config,
+            self._client,
+            max_turns=SEARCH_DUAL_CHANNEL_TURNS,
+            lsp_languages=self._lsp_languages,
         )
         semantic = SemanticChannel(
-            self._config, self._client, max_turns=3, lsp_languages=self._lsp_languages
+            self._config,
+            self._client,
+            max_turns=SEARCH_DUAL_CHANNEL_TURNS,
+            lsp_languages=self._lsp_languages,
         )
 
         results = await asyncio.gather(

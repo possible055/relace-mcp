@@ -1,4 +1,5 @@
 import hashlib
+import os
 import platform
 import subprocess  # nosec B404
 import sys
@@ -85,10 +86,12 @@ def build_run_metadata(
 
     request_params: dict[str, Any] = {
         "temperature": relace_settings.SEARCH_TEMPERATURE,
+        "merger_temperature": relace_settings.MERGER_TEMPERATURE,
         "top_p": 0.95,
         "top_k": 100 if provider_config.api_compat == RELACE_PROVIDER else None,
         "repetition_penalty": (1.0 if provider_config.api_compat == RELACE_PROVIDER else None),
     }
+    search_prompt_file = os.getenv("SEARCH_PROMPT_FILE", "").strip() or None
 
     case_list = [
         {
@@ -163,6 +166,8 @@ def build_run_metadata(
             "model": provider_config.model,
             "timeout_seconds": relace_settings.SEARCH_TIMEOUT_SECONDS,
             "max_turns": relace_settings.SEARCH_MAX_TURNS,
+            "dual_channel_turns": relace_settings.SEARCH_DUAL_CHANNEL_TURNS,
+            "prompt_file": search_prompt_file,
             "tools": tool_names,
             "tool_strict": tool_has_strict,
             "parallel_tool_calls_requested": parallel_tool_calls_requested,
