@@ -4,7 +4,7 @@ from pathlib import Path
 # Add project root to path for benchmark imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from benchmark.cli.curate_elite import _build_target_ranges, _cluster_lines_to_ranges
+from benchmark.cli.build_locbench import _build_target_ranges, _cluster_lines_to_ranges
 from benchmark.schemas import DatasetCase, GroundTruthEntry
 
 

@@ -89,7 +89,7 @@ BASH_BLOCKED_PATTERNS = [
     r";\s*\w",  # Command chaining
     r"&&",  # Conditional execution
     r"\|\|",  # Conditional execution
-    r"-exec\b",  # find -exec (may execute dangerous commands)
+    r"-(exec|execdir|ok|okdir)\b",  # find -exec/-execdir/-ok/-okdir (executes commands)
     r"-delete\b",  # find -delete
 ]
 
@@ -134,7 +134,6 @@ BASH_SAFE_COMMANDS = frozenset(
         "fgrep",
         "rg",
         "ag",
-        "awk",
         "sed",
         "sort",
         "uniq",
@@ -155,43 +154,6 @@ BASH_SAFE_COMMANDS = frozenset(
     }
 )
 
-# Python dangerous patterns (check dangerous operations in python -c commands)
-PYTHON_DANGEROUS_PATTERNS = [
-    # File operations
-    (r"open\s*\(", "file operations"),
-    (r"\bwrite\s*\(", "write operations"),
-    (r"\bremove\s*\(", "file removal"),
-    (r"\bunlink\s*\(", "file removal"),
-    (r"\brmdir\s*\(", "directory removal"),
-    (r"\brename\s*\(", "file rename"),
-    (r"\bmkdir\s*\(", "directory creation"),
-    (r"\bchmod\s*\(", "permission change"),
-    (r"\bchown\s*\(", "ownership change"),
-    # Module imports (dangerous)
-    (r"os\.remove", "os.remove"),
-    (r"os\.unlink", "os.unlink"),
-    (r"os\.rmdir", "os.rmdir"),
-    (r"os\.system", "os.system"),
-    (r"os\.popen", "os.popen"),
-    (r"shutil\.rmtree", "shutil.rmtree"),
-    (r"shutil\.move", "shutil.move"),
-    (r"shutil\.copy", "shutil.copy"),
-    (r"pathlib", "pathlib (file operations)"),
-    (r"subprocess", "subprocess execution"),
-    # Network operations
-    (r"urllib", "network access"),
-    (r"requests\.", "network access"),
-    (r"http\.client", "network access"),
-    (r"http\.server", "network access"),
-    (r"socket", "network access"),
-    # Dangerous built-in functions
-    (r"\beval\s*\(", "eval"),
-    (r"\bexec\s*\(", "exec"),
-    (r"__import__", "__import__"),
-    (r"compile\s*\(", "compile"),
-]
-
-
 _COMMANDS_WITH_PATH_ARGS = frozenset(
     {
         "ls",
@@ -208,7 +170,6 @@ _COMMANDS_WITH_PATH_ARGS = frozenset(
         "fgrep",
         "rg",
         "ag",
-        "awk",
         "sed",
         "diff",
         "basename",
@@ -439,32 +400,6 @@ def _check_git_subcommand(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
     return False, ""
 
 
-def _check_python_code(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
-    """Check for dangerous operations in python -c code.
-
-    Args:
-        tokens: Command tokens.
-        base_cmd: Base command (should be 'python' or 'python3').
-
-    Returns:
-        (is_blocked, reason) tuple.
-    """
-    if base_cmd not in ("python", "python3"):
-        return False, ""
-
-    # Special handling for python (only allow -c, and check dangerous patterns)
-    if len(tokens) < 3 or tokens[1] != "-c":
-        return True, "Python without -c flag is not allowed (prevents script execution)"
-
-    # Check dangerous patterns in -c code (covers all possible file modification and network operations)
-    python_code = " ".join(tokens[2:])
-    for pattern, desc in PYTHON_DANGEROUS_PATTERNS:
-        if re.search(pattern, python_code, re.IGNORECASE):
-            return True, f"Blocked Python pattern: {desc}"
-
-    return False, ""
-
-
 def _check_sed_in_place(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
     """Block sed in-place editing (-i/--in-place) while allowing safe read-only usage.
 
@@ -530,44 +465,6 @@ def _check_ripgrep_preprocessor(tokens: list[str], base_cmd: str) -> tuple[bool,
     return False, ""
 
 
-def _check_awk_script(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
-    """Block awk constructs that can spawn subprocesses or perform I/O.
-
-    awk supports multiple ways to execute shell commands:
-    - system() - execute a shell command
-    - "cmd" | getline - execute cmd and read its output
-    - print | "cmd" - pipe print output to cmd
-    We also block loading scripts from files (-f/--file) because we don't
-    inspect their contents here.
-    """
-    if base_cmd != "awk":
-        return False, ""
-
-    # Disallow script files: too hard to validate safely without reading them.
-    for token in tokens[1:]:
-        if token in {"-f", "--file"} or token.startswith("--file="):  # nosec B105 - CLI flag
-            return True, "Blocked awk script file flag (-f/--file)"
-
-    # Best-effort: scan all remaining arguments for dangerous patterns.
-    # (Avoids having to fully parse awk option grammar.)
-    args_blob = " ".join(tokens[1:])
-
-    # Block system() - direct command execution
-    if re.search(r"\bsystem\s*\(", args_blob, flags=re.IGNORECASE):
-        return True, "Blocked awk system() (subprocess execution)"
-
-    # Block getline with pipe: "cmd" | getline (executes cmd and reads output)
-    # Pattern: string/variable followed by | and getline
-    if re.search(r"\|\s*getline\b", args_blob, flags=re.IGNORECASE):
-        return True, "Blocked awk pipe to getline (subprocess execution)"
-
-    # Block print/printf piped to command: print | "cmd"
-    if re.search(r'\bprint[f]?\s*[^|]*\|\s*["\']', args_blob, flags=re.IGNORECASE):
-        return True, "Blocked awk print pipe to command (subprocess execution)"
-
-    return False, ""
-
-
 # Regex to extract substitution command flags: s<delim>...<delim>...<delim>[flags]
 # Captures the flags portion after the third delimiter
 _SED_SUBST_FLAGS_RE = re.compile(
@@ -575,12 +472,12 @@ _SED_SUBST_FLAGS_RE = re.compile(
     flags=re.IGNORECASE,
 )
 
-# Standalone e/w commands at script start or after semicolon/newline
-_SED_STANDALONE_CMD_RE = re.compile(r"(^|[;\n])\s*[ew](\s|$)", flags=re.IGNORECASE)
+# Standalone e/w/r commands at script start or after semicolon/newline
+_SED_STANDALONE_CMD_RE = re.compile(r"(^|[;\n])\s*[ewr](\s|$)", flags=re.IGNORECASE)
 
-# Address-prefixed e/w commands: 5e, 1,10e, $e (GNU sed: e executes pattern space)
-# Matches: <number>[,<number>]<e|w> or $[ew]
-_SED_ADDRESSED_CMD_RE = re.compile(r"(\d+|\$)(,(\d+|\$))?\s*[ew]", flags=re.IGNORECASE)
+# Address-prefixed e/w/r commands: 5e, 1,10e, $w, 3r (r reads a file)
+# Matches: <number>[,<number>]<e|w|r> or $[ewr]
+_SED_ADDRESSED_CMD_RE = re.compile(r"(\d+|\$)(,(\d+|\$))?\s*[ewr]", flags=re.IGNORECASE)
 
 
 def _sed_script_has_dangerous_flag(script: str) -> bool:
@@ -588,8 +485,8 @@ def _sed_script_has_dangerous_flag(script: str) -> bool:
 
     Detects:
     - e/w flags in substitution commands (s/.../.../<flags>)
-    - Standalone e/w commands at script boundaries
-    - Address-prefixed e/w commands (5e, 1,10e, $w)
+    - Standalone e/w/r commands at script boundaries
+    - Address-prefixed e/w/r commands (5e, 1,10w, $r)
     """
     # Check substitution command flags (all occurrences)
     for match in _SED_SUBST_FLAGS_RE.finditer(script):
@@ -613,6 +510,7 @@ def _check_sed_script(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
 
     - `w` writes to a file even without `-i`
     - `e` executes a shell command (GNU sed) and can be used for sandbox escape
+    - `r` reads a file; hard to validate path inside sed script safely
     - `-f/--file` loads scripts from a file (not inspected here)
     """
     if base_cmd != "sed":
@@ -734,15 +632,7 @@ def _validate_specialized_commands(tokens: list[str], base_cmd: str) -> tuple[bo
     if blocked:
         return blocked, reason
 
-    blocked, reason = _check_python_code(tokens, base_cmd)
-    if blocked:
-        return blocked, reason
-
     blocked, reason = _check_ripgrep_preprocessor(tokens, base_cmd)
-    if blocked:
-        return blocked, reason
-
-    blocked, reason = _check_awk_script(tokens, base_cmd)
     if blocked:
         return blocked, reason
 

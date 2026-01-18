@@ -179,6 +179,21 @@ class TestWriteOperationBlocking:
         blocked, _ = _is_blocked_command("find . -name '*.py' -exec rm {} \\;", DEFAULT_BASE_DIR)
         assert blocked
 
+    def test_blocks_find_execdir(self) -> None:
+        """Should block find -execdir."""
+        blocked, _ = _is_blocked_command("find . -name '*.py' -execdir ls {} \\;", DEFAULT_BASE_DIR)
+        assert blocked
+
+    def test_blocks_find_ok(self) -> None:
+        """Should block find -ok."""
+        blocked, _ = _is_blocked_command("find . -name '*.py' -ok ls {} \\;", DEFAULT_BASE_DIR)
+        assert blocked
+
+    def test_blocks_find_okdir(self) -> None:
+        """Should block find -okdir."""
+        blocked, _ = _is_blocked_command("find . -name '*.py' -okdir ls {} \\;", DEFAULT_BASE_DIR)
+        assert blocked
+
     def test_blocks_find_delete(self) -> None:
         """Should block find -delete."""
         blocked, _ = _is_blocked_command("find . -name '*.pyc' -delete", DEFAULT_BASE_DIR)
@@ -383,6 +398,12 @@ class TestSandboxEscapeBypassBlocking:
         blocked, reason = _is_blocked_command("sed 'w out.txt' file.txt", DEFAULT_BASE_DIR)
         assert blocked
         assert "sed" in reason.lower() or "write" in reason.lower() or "e/w" in reason.lower()
+
+    def test_blocks_sed_read_command(self) -> None:
+        """sed `r` can read arbitrary files; must be blocked."""
+        blocked, reason = _is_blocked_command("sed 'r /etc/hosts' file.txt", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "sed" in reason.lower() or "e/w" in reason.lower()
 
     def test_blocks_sed_script_file(self) -> None:
         """sed -f loads uninspected commands; must be blocked."""

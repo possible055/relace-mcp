@@ -6,9 +6,8 @@ import sys
 from pathlib import Path
 
 import click
-from dotenv import load_dotenv
 
-from ..config import DEFAULT_FILTERED_PATH, get_benchmark_dir, get_reports_dir, get_results_dir
+from ..config import DEFAULT_LOCBENCH_PATH, get_benchmark_dir, get_reports_dir, get_results_dir
 from ..schemas import generate_output_path
 
 
@@ -23,7 +22,7 @@ def _format_float_for_filename(value: float) -> str:
 @click.option(
     "--dataset",
     "dataset_path",
-    default=DEFAULT_FILTERED_PATH,
+    default=DEFAULT_LOCBENCH_PATH,
     show_default=True,
     help="Dataset jsonl path (relative to benchmark/ if not absolute)",
 )
@@ -105,8 +104,6 @@ def main(
     output: str | None,
     dry_run: bool,
 ) -> None:
-    load_dotenv(dotenv_path=Path(".env"))
-
     benchmark_dir = get_benchmark_dir()
     resolved_dataset_path = (
         Path(dataset_path) if Path(dataset_path).is_absolute() else (benchmark_dir / dataset_path)

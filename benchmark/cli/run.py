@@ -9,7 +9,7 @@ import click
 from dotenv import load_dotenv
 
 from ..config import (
-    DEFAULT_FILTERED_PATH,
+    DEFAULT_LOCBENCH_PATH,
     EXCLUDED_REPOS,
     get_benchmark_dir,
     get_reports_dir,
@@ -17,9 +17,6 @@ from ..config import (
 )
 from ..datasets import load_dataset
 from ..schemas import generate_output_path
-
-# Internal constants
-_BETA = 0.5
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +77,7 @@ def _load_benchmark_config():
 @click.option(
     "--dataset",
     "dataset_path",
-    default=DEFAULT_FILTERED_PATH,
+    default=DEFAULT_LOCBENCH_PATH,
     show_default=True,
     help="Dataset jsonl path (relative to benchmark/ if not absolute)",
 )
@@ -163,7 +160,7 @@ def main(
     dual_channel_turns: int | None,
     search_prompt_file: str | None,
 ) -> None:
-    """Run MULocBench benchmark on fast_search.
+    """Run benchmark on fast_search.
 
     Large repos are automatically excluded via EXCLUDED_REPOS in config.
     """
@@ -241,9 +238,6 @@ def main(
         config,
         verbose=verbose,
         progress=progress,
-        beta=_BETA,
-        normalize_ast=False,
-        soft_gt=False,
         harness_type=effective_harness_type,
     )
 
@@ -256,7 +250,6 @@ def main(
             "limit": limit,
             "shuffle": shuffle,
             "seed": seed,
-            "beta": _BETA,
             "harness_type": effective_harness_type,
         },
     )
