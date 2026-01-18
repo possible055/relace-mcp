@@ -347,7 +347,7 @@ Please merge these findings and call merge_report with the result."""
         elif raw.startswith("repo/"):
             raw = "/" + raw
         base_lstrip = str(self._base_dir).lstrip("/")
-        if raw.startswith(base_lstrip):
+        if raw == base_lstrip or raw.startswith(base_lstrip + "/"):
             raw = "/" + raw
         try:
             return resolve_repo_path(raw, str(self._base_dir), require_within_base_dir=True)

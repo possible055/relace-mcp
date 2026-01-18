@@ -140,7 +140,7 @@ def _extract_changed_lines_by_file(patch: str) -> dict[str, set[int]]:
             base_line += 1
             continue
         if prefix == "+":
-            anchor = base_line - 1 if base_line > 1 else base_line
+            anchor = max(1, base_line - 1) if base_line > 0 else 1
             changed[current_file].add(anchor)
             continue
         if prefix == "\\":
