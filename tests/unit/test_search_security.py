@@ -1,4 +1,4 @@
-from relace_mcp.tools.search._impl import _is_blocked_command
+from relace_mcp.tools.search._impl import is_blocked_command as _is_blocked_command
 
 DEFAULT_BASE_DIR = "/repo"
 

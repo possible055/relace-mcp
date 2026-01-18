@@ -1,5 +1,6 @@
 """Tests for cloud_status MCP resource with MCP Roots resolution."""
 
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -24,7 +25,7 @@ class TestCloudStatusLogic:
         )
 
     @pytest.fixture(autouse=True)
-    def clear_roots_cache(self) -> None:
+    def clear_roots_cache(self) -> Iterator[None]:
         """Clear roots cache before and after each test."""
         from relace_mcp.config import base_dir as base_dir_module
 
@@ -94,14 +95,15 @@ class TestCloudStatusLogic:
         assert state is None
 
         # This is what cloud_status returns in this case
+        message = "No sync state found. Run cloud_sync to upload codebase."
         result = {
             "synced": False,
             "repo_name": repo_name,
-            "message": "No sync state found. Run cloud_sync to upload codebase.",
+            "message": message,
         }
 
         assert result["synced"] is False
-        assert "No sync state found" in result["message"]
+        assert "No sync state found" in message
 
     @pytest.mark.asyncio
     async def test_cloud_status_builds_correct_response(

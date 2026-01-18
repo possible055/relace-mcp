@@ -7,12 +7,14 @@ from relace_mcp.config import RelaceConfig
 
 
 class TestRelaceConfigFromEnv:
-    def test_missing_api_key_allowed_by_default(self, clean_env: None) -> None:
+    @pytest.mark.usefixtures("clean_env")
+    def test_missing_api_key_allowed_by_default(self) -> None:
         """When RELACE_CLOUD_TOOLS is off (default), API key is optional."""
         config = RelaceConfig.from_env()
         assert config.api_key is None
 
-    def test_missing_api_key_raises_with_cloud_tools(self, clean_env: None) -> None:
+    @pytest.mark.usefixtures("clean_env")
+    def test_missing_api_key_raises_with_cloud_tools(self) -> None:
         """When RELACE_CLOUD_TOOLS is on, API key is required."""
         with patch("relace_mcp.config.settings.RELACE_CLOUD_TOOLS", True):
             with pytest.raises(RuntimeError, match="RELACE_API_KEY is required"):
