@@ -1,13 +1,15 @@
+import asyncio
 import logging
 import time
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from relace_mcp.clients import SearchLLMClient
 from relace_mcp.config import RelaceConfig
-from relace_mcp.tools.search import FastAgenticSearchHarness
+from relace_mcp.lsp.languages import get_lsp_languages
+from relace_mcp.tools.search import DualChannelHarness, FastAgenticSearchHarness
 
 from ..analysis.ast_spans import normalize_to_ast_spans
 from ..analysis.call_graph import expand_ground_truth
@@ -45,6 +47,7 @@ class BenchmarkRunner:
         beta: float = 0.5,
         normalize_ast: bool = False,
         soft_gt: bool = False,
+        harness_type: Literal["fast", "dual"] = "dual",
     ):
         self.config = config
         self.verbose = verbose
@@ -52,6 +55,7 @@ class BenchmarkRunner:
         self.beta = beta
         self.normalize_ast = normalize_ast
         self.soft_gt = soft_gt
+        self.harness_type = harness_type
         self.repos_dir = get_repos_dir()
         self.repos_dir.mkdir(parents=True, exist_ok=True)
 
@@ -150,6 +154,8 @@ class BenchmarkRunner:
                 file_precision=0.0,
                 line_coverage=0.0,
                 line_precision_matched=0.0,
+                context_line_coverage=0.0,
+                context_line_precision_matched=0.0,
                 function_hit_rate=0.0,
                 functions_hit=0,
                 functions_total=len(case.ground_truth_functions),
@@ -162,10 +168,19 @@ class BenchmarkRunner:
     def _execute_search(self, case: DatasetCase, repo_path: Path) -> BenchmarkResult:
         effective_config = replace(self.config, base_dir=str(repo_path))
         client = SearchLLMClient(effective_config)
-        harness = FastAgenticSearchHarness(effective_config, client)
 
         start_time = time.perf_counter()
-        result = harness.run(case.query)
+        lsp_languages = get_lsp_languages(repo_path)
+        if self.harness_type == "dual":
+            result = asyncio.run(
+                DualChannelHarness(effective_config, client, lsp_languages=lsp_languages).run_async(
+                    case.query
+                )
+            )
+        else:
+            result = FastAgenticSearchHarness(
+                effective_config, client, lsp_languages=lsp_languages
+            ).run(case.query)
         latency_ms = (time.perf_counter() - start_time) * 1000
 
         returned_files = result.get("files", {})
@@ -173,6 +188,8 @@ class BenchmarkRunner:
             returned_files = {}
 
         returned_files_count = len(returned_files)
+
+        context_ground_truth_files = case.ground_truth_context_files
 
         # Optionally normalize ground truth to AST boundaries
         if self.normalize_ast:
@@ -209,7 +226,18 @@ class BenchmarkRunner:
             repo_root=repo_path,
         )
 
-        function_targets = [(t.path, t.ranges) for t in case.ground_truth_functions]
+        context_line_coverage = compute_line_coverage(
+            returned_files,
+            context_ground_truth_files,
+            repo_root=repo_path,
+        )
+        context_line_precision_matched = compute_line_precision_matched(
+            returned_files,
+            context_ground_truth_files,
+            repo_root=repo_path,
+        )
+
+        function_targets = [(t["path"], t["ranges"]) for t in case.ground_truth_functions]
         functions_hit, functions_total = compute_function_hits(
             returned_files,
             function_targets,
@@ -230,6 +258,8 @@ class BenchmarkRunner:
             file_precision=file_precision,
             line_coverage=line_coverage,
             line_precision_matched=line_precision_matched,
+            context_line_coverage=context_line_coverage,
+            context_line_precision_matched=context_line_precision_matched,
             function_hit_rate=function_hit_rate,
             functions_hit=functions_hit,
             functions_total=functions_total,
@@ -302,6 +332,8 @@ class BenchmarkRunner:
                     "avg_file_precision": 0.0,
                     "avg_line_coverage": 0.0,
                     "avg_line_precision_matched": 0.0,
+                    "avg_context_line_coverage": 0.0,
+                    "avg_context_line_precision_matched": 0.0,
                     "function_cases": 0,
                     "avg_function_hit_rate": 0.0,
                     "avg_turns": 0.0,
@@ -329,6 +361,8 @@ class BenchmarkRunner:
             "avg_file_precision": avg("file_precision"),
             "avg_line_coverage": avg("line_coverage"),
             "avg_line_precision_matched": avg("line_precision_matched"),
+            "avg_context_line_coverage": avg("context_line_coverage"),
+            "avg_context_line_precision_matched": avg("context_line_precision_matched"),
             "function_cases": function_cases,
             "avg_function_hit_rate": avg_function_hit_rate,
             "avg_turns": avg("turns_used"),
