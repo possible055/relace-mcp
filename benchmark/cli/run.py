@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import warnings
 from pathlib import Path
 from typing import Literal
 
@@ -41,9 +42,12 @@ def _load_dotenv_from_env_path() -> None:
         path = Path(dotenv_path).expanduser()
         if path.exists():
             load_dotenv(path)
-            logger.info("Loaded .env from MCP_DOTENV_PATH: %s", path)
+            logger.info("Loaded .env from MCP_DOTENV_PATH")
         else:
-            logger.warning("MCP_DOTENV_PATH does not exist: %s", dotenv_path)
+            logger.warning("MCP_DOTENV_PATH does not exist")
+            warnings.warn(
+                f"MCP_DOTENV_PATH does not exist: {dotenv_path}", RuntimeWarning, stacklevel=2
+            )
             load_dotenv()  # Fallback to default
     else:
         load_dotenv()
