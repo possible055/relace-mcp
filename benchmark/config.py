@@ -17,6 +17,7 @@ PROCESSED_DATA_DIR = DATA_DIR / "processed"
 # Default dataset paths
 # Use absolute paths based on the config to ensure they follow the directory structure
 DEFAULT_MULOCBENCH_PATH = str(RAW_DATA_DIR / "mulocbench_v1.jsonl")
+DEFAULT_LOCBENCH_PATH = str(RAW_DATA_DIR / "locbench_v1.jsonl")
 DEFAULT_FILTERED_PATH = str(PROCESSED_DATA_DIR / "filtered.jsonl")
 
 # Large repos (>=100MB) excluded by default to avoid slow cloning

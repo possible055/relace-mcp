@@ -115,6 +115,30 @@ class MergerAgent:
         self._client = client
         self._base_dir = Path(base_dir).resolve()
 
+    def _format_files_for_prompt(self, files: dict[str, list[list[int]]]) -> str:
+        """Format file/range evidence for the merge prompt.
+
+        Uses /repo/... paths to avoid leaking absolute FS paths into the LLM prompt and
+        reduce path-formatting errors during merge_report.
+        """
+        if not files:
+            return "{}"
+
+        normalized: dict[str, list[list[int]]] = {}
+        for raw_path, ranges in files.items():
+            if not isinstance(raw_path, str) or not raw_path:
+                continue
+            try:
+                rel = Path(raw_path).resolve().relative_to(self._base_dir)
+                display_path = f"/repo/{rel.as_posix()}"
+            except ValueError:
+                display_path = raw_path
+            normalized.setdefault(display_path, []).extend(
+                ranges if isinstance(ranges, list) else []
+            )
+
+        return json.dumps(normalized, indent=2, ensure_ascii=False)
+
     def merge(
         self, query: str, lexical: ChannelEvidence, semantic: ChannelEvidence
     ) -> dict[str, Any]:
@@ -174,8 +198,8 @@ class MergerAgent:
     def _build_merge_prompt(
         self, query: str, lexical: ChannelEvidence, semantic: ChannelEvidence
     ) -> str:
-        lex_files = json.dumps(lexical.files, indent=2) if lexical.files else "{}"
-        sem_files = json.dumps(semantic.files, indent=2) if semantic.files else "{}"
+        lex_files = self._format_files_for_prompt(lexical.files)
+        sem_files = self._format_files_for_prompt(semantic.files)
         lex_obs = "\n".join(f"- {o[:200]}" for o in lexical.observations[:3])
         sem_obs = "\n".join(f"- {o[:200]}" for o in semantic.observations[:3])
 
@@ -313,8 +337,20 @@ Please merge these findings and call merge_report with the result."""
 
     def _resolve_path(self, path: str) -> str | None:
         """Resolve /repo, relative, or absolute paths to an absolute path within base_dir."""
+        # Heuristic: Some models may drop the leading "/" from an absolute FS path
+        # (e.g., "home/user/..." instead of "/home/user/..."), which would otherwise be
+        # treated as a repo-relative path and incorrectly re-rooted under base_dir.
+        raw = path.strip()
+        # Same issue for /repo virtual paths (e.g., "repo/foo.py" instead of "/repo/foo.py").
+        if raw == "repo" or raw == "repo/":
+            raw = "/repo"
+        elif raw.startswith("repo/"):
+            raw = "/" + raw
+        base_lstrip = str(self._base_dir).lstrip("/")
+        if raw.startswith(base_lstrip):
+            raw = "/" + raw
         try:
-            return resolve_repo_path(path, str(self._base_dir), require_within_base_dir=True)
+            return resolve_repo_path(raw, str(self._base_dir), require_within_base_dir=True)
         except ValueError:
             logger.warning("Filtered out invalid path from merge_report")
             return None

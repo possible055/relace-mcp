@@ -757,7 +757,7 @@ def _validate_specialized_commands(tokens: list[str], base_cmd: str) -> tuple[bo
     return _check_command_in_arguments(tokens)
 
 
-def _is_blocked_command(command: str, base_dir: str) -> tuple[bool, str]:
+def is_blocked_command(command: str, base_dir: str) -> tuple[bool, str]:
     """Check if command violates security rules.
 
     Args:
