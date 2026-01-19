@@ -119,12 +119,24 @@ def cloud_search_logic(
                 "results may miss those files."
             )
 
+        # Determine whether to use cached hash for search
+        # Only use hash when: (1) no branch specified, or (2) branch matches sync state
+        # This prevents ignoring user's branch selection when API prioritizes hash over branch
+        use_cached_hash = (not branch) or (branch == cached_state.git_branch)
+        hash_to_send = git_head if use_cached_hash else ""
+
+        if branch and not use_cached_hash:
+            warnings.append(
+                f"Searching branch '{branch}' without commit pinning (differs from synced branch "
+                f"'{cached_state.git_branch}'). Results reflect the latest indexed state of '{branch}'."
+            )
+
         # Execute semantic retrieval with commit hash
         result = client.retrieve(
             repo_id=repo_id,
             query=query,
             branch=branch,
-            hash=git_head,
+            hash=hash_to_send,
             score_threshold=score_threshold,
             token_limit=token_limit,
             include_content=True,
@@ -144,7 +156,7 @@ def cloud_search_logic(
             "trace_id": trace_id,
             "query": query,
             "branch": branch,
-            "hash": git_head,
+            "hash": hash_to_send,
             "results": results,
             "repo_id": repo_id,
             "result_count": len(results),
