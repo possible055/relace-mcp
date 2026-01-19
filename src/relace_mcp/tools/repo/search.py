@@ -37,10 +37,7 @@ def cloud_search_logic(
         - error: Error message if failed (optional)
     """
     trace_id = str(uuid.uuid4())[:8]
-    query_preview = query[:100] if len(query) <= 100 else query[:97] + "..."
-    logger.info("[%s] Starting cloud semantic search (query=%s)", trace_id, query_preview)
-    if branch:
-        logger.info("[%s] Searching branch: %s", trace_id, branch)
+    logger.info("[%s] Starting cloud semantic search", trace_id)
 
     local_repo_name: str | None = None
     cloud_repo_name: str | None = None

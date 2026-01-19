@@ -376,7 +376,7 @@ def cloud_sync_logic(
         - error: Error message if failed (optional)
     """
     trace_id = str(uuid.uuid4())[:8]
-    logger.info("[%s] Starting cloud sync (force=%s, mirror=%s)", trace_id, force, mirror)
+    logger.info("[%s] Starting cloud sync", trace_id)
 
     original_base_dir = base_dir
     base_dir = get_repo_root(base_dir)
@@ -428,7 +428,7 @@ def cloud_sync_logic(
     try:
         # Ensure repo exists
         repo_id = client.ensure_repo(cloud_repo_name, trace_id=trace_id)
-        logger.info("[%s] Using cloud repo %s (repo_id=%s)", trace_id, cloud_repo_name, repo_id)
+        logger.info("[%s] Cloud repo resolved", trace_id)
 
         # Load cached sync state (unless force)
         cached_state: SyncState | None = None

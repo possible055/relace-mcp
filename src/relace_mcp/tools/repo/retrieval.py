@@ -76,7 +76,7 @@ async def agentic_retrieval_logic(
             warnings_list.append(
                 f"Cloud search failed: {cloud_result['error']}. Proceeding without hints."
             )
-            logger.warning("[%s] Cloud search failed: %s", trace_id, cloud_result["error"])
+            logger.warning("[%s] Cloud search failed, see warnings", trace_id)
         else:
             cloud_results = cloud_result.get("results", [])
             if not cloud_results:

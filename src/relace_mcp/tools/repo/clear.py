@@ -30,7 +30,7 @@ def cloud_clear_logic(
         Dict containing operation result.
     """
     trace_id = str(uuid.uuid4())[:8]
-    logger.info("[%s] Starting cloud clear (base_dir=%s)", trace_id, base_dir)
+    logger.info("[%s] Starting cloud clear", trace_id)
 
     if not confirm:
         result = {
