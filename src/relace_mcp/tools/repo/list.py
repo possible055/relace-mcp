@@ -3,6 +3,8 @@ import uuid
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
+from .errors import build_cloud_error_details
+from .logging import log_cloud_list_complete, log_cloud_list_error, log_cloud_list_start
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,7 @@ def cloud_list_logic(client: RelaceRepoClient) -> dict[str, Any]:
     logger.info("[%s] Listing cloud repositories", trace_id)
 
     try:
+        log_cloud_list_start(trace_id)
         repos = client.list_repos(trace_id=trace_id)
 
         # Extract relevant fields from each repo
@@ -49,17 +52,24 @@ def cloud_list_logic(client: RelaceRepoClient) -> dict[str, Any]:
 
         logger.info("[%s] Found %d repositories", trace_id, len(repo_summaries))
 
-        return {
+        result = {
+            "trace_id": trace_id,
             "count": len(repo_summaries),
             "repos": repo_summaries,
             "has_more": has_more,
         }
+        log_cloud_list_complete(trace_id, result)
+        return result
 
     except Exception as exc:
         logger.error("[%s] Cloud list failed: %s", trace_id, exc)
-        return {
+        result = {
+            "trace_id": trace_id,
             "count": 0,
             "repos": [],
             "has_more": False,
             "error": str(exc),
+            **build_cloud_error_details(exc),
         }
+        log_cloud_list_error(trace_id, result)
+        return result

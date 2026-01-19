@@ -59,6 +59,12 @@ class TestSearchSymbolHandler:
         result = search_symbol_handler(params, "/tmp")
         assert "Error" in result
 
+    def test_short_query_returns_error(self) -> None:
+        params = SearchSymbolParams(query="x")
+        result = search_symbol_handler(params, "/tmp")
+        assert "Error" in result
+        assert "too short" in result
+
     @patch("relace_mcp.lsp.LSPClientManager")
     def test_basic_search(self, mock_manager_cls: MagicMock, tmp_path) -> None:
         mock_client = MagicMock()
@@ -66,13 +72,16 @@ class TestSearchSymbolHandler:
             SymbolInfo(
                 name="TestClass",
                 kind=5,
-                uri=f"file://{tmp_path}/test.py",
+                uri=(tmp_path / "test.py").as_uri(),
                 line=10,
                 character=6,
             )
         ]
+        mock_session = MagicMock()
+        mock_session.__enter__.return_value = mock_client
+        mock_session.__exit__.return_value = False
         mock_manager = MagicMock()
-        mock_manager.get_client.return_value = mock_client
+        mock_manager.session.return_value = mock_session
         mock_manager_cls.get_instance.return_value = mock_manager
 
         params = SearchSymbolParams(query="TestClass")
@@ -86,8 +95,11 @@ class TestSearchSymbolHandler:
     def test_no_results(self, mock_manager_cls: MagicMock, tmp_path) -> None:
         mock_client = MagicMock()
         mock_client.workspace_symbols.return_value = []
+        mock_session = MagicMock()
+        mock_session.__enter__.return_value = mock_client
+        mock_session.__exit__.return_value = False
         mock_manager = MagicMock()
-        mock_manager.get_client.return_value = mock_client
+        mock_manager.session.return_value = mock_session
         mock_manager_cls.get_instance.return_value = mock_manager
 
         params = SearchSymbolParams(query="NonExistent")

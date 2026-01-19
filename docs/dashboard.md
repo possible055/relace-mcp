@@ -2,6 +2,8 @@
 
 A real-time terminal-based log viewer for monitoring `fast_apply` and `fast_search` operations.
 
+Cloud tool events (`cloud_*`) also appear in the **All** and **Errors** views when `MCP_LOGGING=1`.
+
 ## Installation
 
 The dashboard requires the `textual` library, which is included in the `tools` optional dependency:
@@ -36,11 +38,11 @@ The dashboard provides five different views accessible via the tab bar at the to
 
 | Tab | Description | Keyboard Shortcut |
 |-----|-------------|-------------------|
-| **All** | All log events from both `apply` and `search` operations | Default view |
+| **All** | All log events (includes `apply`, `search`, and `cloud_*`) | Default view |
 | **Apply** | Only file creation and editing events (`create_success`, `apply_success`, `apply_error`) | - |
 | **Search** | Tree-structured view of search sessions with turns and tool calls | - |
 | **Insights** | Aggregated tool usage statistics with visual bar charts | - |
-| **Errors** | Only error events (`apply_error`, `search_error`) | - |
+| **Errors** | All error events (`*_error`, including `cloud_*_error`) | - |
 
 ### 2. Navigation
 
@@ -157,6 +159,28 @@ Logs are stored using `platformdirs`:
 | `tool_call` | Tool executed during search | `fast_search` |
 | `search_complete` | Search session completed | `fast_search` |
 | `search_error` | Search session failed | `fast_search` |
+
+### Cloud Events
+
+Cloud operations emit structured events:
+
+| Kind | Description | Source |
+|------|-------------|--------|
+| `cloud_sync_start` | Cloud sync started | `cloud_sync` |
+| `cloud_sync_complete` | Cloud sync completed | `cloud_sync` |
+| `cloud_sync_error` | Cloud sync failed | `cloud_sync` |
+| `cloud_search_start` | Cloud search started | `cloud_search` |
+| `cloud_search_complete` | Cloud search completed | `cloud_search` |
+| `cloud_search_error` | Cloud search failed | `cloud_search` |
+| `cloud_info_start` | Cloud info started | `cloud_info` |
+| `cloud_info_complete` | Cloud info completed | `cloud_info` |
+| `cloud_info_error` | Cloud info failed | `cloud_info` |
+| `cloud_list_start` | Cloud list started | `cloud_list` |
+| `cloud_list_complete` | Cloud list completed | `cloud_list` |
+| `cloud_list_error` | Cloud list failed | `cloud_list` |
+| `cloud_clear_start` | Cloud clear started | `cloud_clear` |
+| `cloud_clear_complete` | Cloud clear completed | `cloud_clear` |
+| `cloud_clear_error` | Cloud clear failed | `cloud_clear` |
 
 ## Troubleshooting
 

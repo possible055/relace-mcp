@@ -6,7 +6,6 @@ from typing import Any
 
 import click
 import httpx
-import pyarrow.parquet as pq
 
 from ..analysis.function_scope import FunctionScope, extract_function_scopes
 from ..config import EXCLUDED_REPOS, get_benchmark_dir, get_raw_data_dir, get_repos_dir
@@ -405,6 +404,13 @@ def main(
 
     # Use local parquet if provided, otherwise fetch from HuggingFace API
     if local_parquet:
+        try:
+            import pyarrow.parquet as pq
+        except ImportError as err:
+            raise click.ClickException(
+                "pyarrow is required for --local-parquet. Install with: pip install pyarrow"
+            ) from err
+
         parquet_path = Path(local_parquet)
         if not parquet_path.exists():
             raise click.ClickException(f"Local parquet file not found: {parquet_path}")

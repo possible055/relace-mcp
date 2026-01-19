@@ -36,17 +36,14 @@ uv run python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.json
 uv run python -m benchmark.cli.run \
   --dataset artifacts/data/processed/elite_50.jsonl \
   --limit 64 --seed 0 --shuffle \
-  --harness fast \
   --search-max-turns 8 \
   --search-temperature 0.2 \
   --no-progress
-
-# Dual harness with extra controls
-uv run python -m benchmark.cli.run \
-  --harness dual \
-  --dual-channel-turns 4 \
-  --merger-temperature 0.1
 ```
+
+**Outputs**:
+- Results: `benchmark/artifacts/results/<name>.jsonl`
+- Report: `benchmark/artifacts/reports/<name>.report.json`
 
 **Key options**:
 | Option | Default | Description |
@@ -54,11 +51,8 @@ uv run python -m benchmark.cli.run \
 | `--limit` | all | Number of cases |
 | `--shuffle/--no-shuffle` | `--shuffle` | Randomize selection |
 | `--seed` | `0` | Random seed |
-| `--harness` | `dual` | Harness type (`fast` or `dual`) |
 | `--search-max-turns` | env | Override `SEARCH_MAX_TURNS` |
 | `--search-temperature` | env | Override `SEARCH_TEMPERATURE` |
-| `--dual-channel-turns` | env | Override `SEARCH_DUAL_CHANNEL_TURNS` (dual only) |
-| `--merger-temperature` | env | Override `MERGER_TEMPERATURE` (dual only) |
 | `--search-prompt-file` | env | Override `SEARCH_PROMPT_FILE` (YAML) |
 | `--progress/--no-progress` | `--progress` | Show progress |
 | `--verbose` | off | Detailed logging |
@@ -72,17 +66,8 @@ Run Cartesian product of `turns × temperature` combinations:
 uv run python -m benchmark.cli.grid \
   --dataset artifacts/data/processed/elite_50.jsonl \
   --limit 64 --seed 0 --shuffle \
-  --harness fast \
   --turns 4 --turns 6 --turns 8 \
   --temperatures 0 --temperatures 0.2 --temperatures 0.4 --temperatures 0.6
-
-# Dual harness extra dimensions
-uv run python -m benchmark.cli.grid \
-  --harness dual \
-  --turns 4 --turns 8 \
-  --temperatures 0 --temperatures 0.3 \
-  --dual-channel-turns 2 --dual-channel-turns 4 \
-  --merger-temperatures 0 --merger-temperatures 0.1
 ```
 
 **Grid options**:
@@ -90,8 +75,6 @@ uv run python -m benchmark.cli.grid \
 |--------|----------|-------------|
 | `--turns` | ✓ | Grid values for `SEARCH_MAX_TURNS` (repeatable) |
 | `--temperatures` | ✓ | Grid values for `SEARCH_TEMPERATURE` (repeatable) |
-| `--dual-channel-turns` | | Grid values for `SEARCH_DUAL_CHANNEL_TURNS` (repeatable) |
-| `--merger-temperatures` | | Grid values for `MERGER_TEMPERATURE` (repeatable) |
 | `--search-prompt-file` | | Override prompt file for all runs |
 | `--output` | | Output directory prefix |
 | `--dry-run` | | Print planned runs without executing |
@@ -119,7 +102,7 @@ uv run python -m benchmark.cli.analyze run1.report.json run2.report.json
 | Line Prec (Matched) | Correct lines / Returned lines (matched files only) |
 | Function Hit Rate | Functions with overlap / Total functions |
 
-Each `*.report.json` includes metadata tracking: `temperature`, `max_turns`, `dual_channel_turns`, `prompt_file` for reproducibility.
+Each `*.report.json` includes metadata tracking: `temperature`, `max_turns`, `prompt_file` for reproducibility.
 
 ## 6. Troubleshooting
 
@@ -145,5 +128,5 @@ benchmark/
 │   ├── data/        # Dataset files
 │   ├── repos/       # Cached repositories
 │   ├── results/     # Run outputs (.jsonl)
-│   └── reports/     # Summary reports (.json)
+│   └── reports/     # Summary reports (.report.json, .grid.json)
 ```

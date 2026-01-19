@@ -43,8 +43,8 @@ class BenchmarkSummary:
         }
         return d
 
-    def save(self, output_path: Path) -> None:
-        """Save results to JSONL and summary to .report.json."""
+    def save(self, output_path: Path, report_path: Path | None = None) -> None:
+        """Save results to JSONL and summary to a report JSON file."""
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         jsonl_path = (
@@ -58,6 +58,7 @@ class BenchmarkSummary:
         summary_dict = self.to_dict()
         del summary_dict["results"]
 
-        report_path = jsonl_path.with_suffix(".report.json")
-        with report_path.open("w", encoding="utf-8") as f:
+        resolved_report_path = report_path or jsonl_path.with_suffix(".report.json")
+        resolved_report_path.parent.mkdir(parents=True, exist_ok=True)
+        with resolved_report_path.open("w", encoding="utf-8") as f:
             json.dump(summary_dict, f, indent=2, ensure_ascii=False)
