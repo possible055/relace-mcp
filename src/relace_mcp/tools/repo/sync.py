@@ -2,6 +2,7 @@ import logging
 import os
 import subprocess  # nosec B404 - used safely with hardcoded commands only
 import uuid
+import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -376,12 +377,11 @@ def cloud_sync_logic(
         - error: Error message if failed (optional)
     """
     trace_id = str(uuid.uuid4())[:8]
-    logger.info(
-        "[%s] Starting cloud sync from %s (force=%s, mirror=%s)",
-        trace_id,
-        base_dir,
-        force,
-        mirror,
+    logger.info("[%s] Starting cloud sync", trace_id)
+    warnings.warn(
+        f"[{trace_id}] cloud_sync base_dir={base_dir!r} force={force!r} mirror={mirror!r}",
+        DeprecationWarning,
+        stacklevel=2,
     )
 
     original_base_dir = base_dir
@@ -434,12 +434,11 @@ def cloud_sync_logic(
     try:
         # Ensure repo exists
         repo_id = client.ensure_repo(cloud_repo_name, trace_id=trace_id)
-        logger.info(
-            "[%s] Using cloud repo '%s' (id=%s) for local '%s'",
-            trace_id,
-            cloud_repo_name,
-            repo_id,
-            local_repo_name,
+        logger.info("[%s] Using cloud repo for local repo", trace_id)
+        warnings.warn(
+            f"[{trace_id}] cloud_sync cloud_repo_name={cloud_repo_name!r} repo_id={repo_id!r} local_repo_name={local_repo_name!r}",
+            DeprecationWarning,
+            stacklevel=2,
         )
 
         # Load cached sync state (unless force)
@@ -622,23 +621,25 @@ def cloud_sync_logic(
         )
         state_saved = save_sync_state(base_dir, new_state)
 
-        warnings: list[str] = []
+        warnings_list: list[str] = []
         if base_dir != original_base_dir:
-            warnings.append(f"Normalized base_dir to git root: {original_base_dir} -> {base_dir}.")
+            warnings_list.append(
+                f"Normalized base_dir to git root: {original_base_dir} -> {base_dir}."
+            )
         if files_truncated:
-            warnings.append(
+            warnings_list.append(
                 f"File count {files_found} exceeded limit {REPO_SYNC_MAX_FILES}; synced first {files_selected} files only."
             )
         if files_skipped:
-            warnings.append(
+            warnings_list.append(
                 f"Skipped {files_skipped} files (binary/oversize/unreadable); cloud search may miss those files."
             )
         if deletes_suppressed:
-            warnings.append(
+            warnings_list.append(
                 f"Suppressed {deletes_suppressed} delete operations (safe_full); cloud repo may contain stale files."
             )
         if not state_saved:
-            warnings.append(
+            warnings_list.append(
                 "Failed to save local sync state; next cloud_search may fail until re-sync."
             )
 
@@ -666,7 +667,7 @@ def cloud_sync_logic(
             "sync_mode": sync_mode,
             "deletes_suppressed": deletes_suppressed,
             "state_saved": state_saved,
-            "warnings": warnings,
+            "warnings": warnings_list,
         }
         log_cloud_sync_complete(trace_id, result_payload)
         return result_payload
