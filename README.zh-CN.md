@@ -166,6 +166,17 @@ relogs
 
 详细用法请参见 [docs/dashboard.zh-CN.md](docs/dashboard.zh-CN.md)。
 
+## 基准测试
+
+使用标准代码定位数据集评估 `fast_search` 性能。
+
+```bash
+pip install relace-mcp[benchmark]
+uv run python -m benchmark.cli.run --dataset artifacts/data/processed/elite_50.jsonl --limit 20
+```
+
+详细说明请参见 [docs/benchmark.zh-CN.md](docs/benchmark.zh-CN.md)。
+
 ## 平台支持
 
 | 平台 | 状态 | 备注 |
