@@ -97,12 +97,7 @@ BASH_BLOCKED_PATTERNS = [
 GIT_ALLOWED_SUBCOMMANDS = frozenset(
     {
         "log",
-        "show",
-        "diff",
         "status",
-        "branch",
-        "blame",
-        "annotate",
         "shortlog",
         "ls-files",
         "ls-tree",
@@ -113,7 +108,6 @@ GIT_ALLOWED_SUBCOMMANDS = frozenset(
         "name-rev",
         "for-each-ref",
         "grep",
-        "tag",
     }
 )
 
@@ -134,7 +128,6 @@ BASH_SAFE_COMMANDS = frozenset(
         "fgrep",
         "rg",
         "ag",
-        "sed",
         "sort",
         "uniq",
         "cut",
@@ -170,7 +163,6 @@ _COMMANDS_WITH_PATH_ARGS = frozenset(
         "fgrep",
         "rg",
         "ag",
-        "sed",
         "diff",
         "basename",
         "dirname",
@@ -400,48 +392,26 @@ def _check_git_subcommand(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
     return False, ""
 
 
-def _check_sed_in_place(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
-    """Block sed in-place editing (-i/--in-place) while allowing safe read-only usage.
+_GIT_BLOCKED_FLAGS = frozenset(
+    {
+        # Can invoke external diff/textconv drivers depending on repo config.
+        "--ext-diff",
+        "--textconv",
+        "--no-index",
+        # `git log -p` is effectively a diff/show escape hatch.
+        "-p",
+        "--patch",
+    }
+)
 
-    This check is token-based (not regex on the raw command string) to avoid false
-    positives when `-i` appears inside a sed script, e.g. `sed 's/this-is-fine/ok/'`.
-    """
-    if base_cmd != "sed":
+
+def _check_git_dangerous_flags(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
+    if base_cmd != "git":
         return False, ""
 
-    # Parse options conservatively and stop at `--`.
-    i = 1
-    while i < len(tokens):
-        token = tokens[i]
-        if token == "--":  # nosec B105 - CLI argument, not password
-            break
-
-        # GNU sed supports --in-place[=SUFFIX]
-        if token == "--in-place" or token.startswith("--in-place="):  # nosec B105
-            return True, "Blocked pattern: sed in-place edit (--in-place)"
-
-        if token.startswith("-") and token != "-" and not token.startswith("--"):  # nosec B105
-            # Fast path: -i[SUFFIX]
-            if token.startswith("-i"):
-                return True, "Blocked pattern: sed in-place edit (-i)"
-
-            # Handle combined short options, while respecting options that consume
-            # arguments (-e/-f). Remainder of token after -e/-f is the argument.
-            j = 1
-            while j < len(token):
-                opt = token[j]
-                if opt == "i":
-                    return True, "Blocked pattern: sed in-place edit (-i)"
-                if opt in ("e", "f"):
-                    # -eSCRIPT or -fFILE: consume remainder as argument.
-                    if j + 1 < len(token):
-                        break
-                    # -e SCRIPT or -f FILE: consume next token as argument.
-                    i += 1
-                    break
-                j += 1
-
-        i += 1
+    for token in tokens[1:]:
+        if token in _GIT_BLOCKED_FLAGS:
+            return True, f"Blocked git flag: {token}"
 
     return False, ""
 
@@ -461,107 +431,6 @@ def _check_ripgrep_preprocessor(tokens: list[str], base_cmd: str) -> tuple[bool,
             return True, "Blocked rg preprocessor flag (--pre)"
         if token == "--pre-glob" or token.startswith("--pre-glob="):  # nosec B105 - CLI flag
             return True, "Blocked rg preprocessor flag (--pre-glob)"
-
-    return False, ""
-
-
-# Regex to extract substitution command flags: s<delim>...<delim>...<delim>[flags]
-# Captures the flags portion after the third delimiter
-_SED_SUBST_FLAGS_RE = re.compile(
-    r"s([/\#@|:,!])(?:[^\\]|\\.)*?\1(?:[^\\]|\\.)*?\1([giIpPmM0-9ew]*)",
-    flags=re.IGNORECASE,
-)
-
-# Standalone e/w/r commands at script start or after semicolon/newline
-_SED_STANDALONE_CMD_RE = re.compile(r"(^|[;\n])\s*[ewr](\s|$)", flags=re.IGNORECASE)
-
-# Address-prefixed e/w/r commands: 5e, 1,10e, $w, 3r (r reads a file)
-# Matches: <number>[,<number>]<e|w|r> or $[ewr]
-_SED_ADDRESSED_CMD_RE = re.compile(r"(\d+|\$)(,(\d+|\$))?\s*[ewr]", flags=re.IGNORECASE)
-
-
-def _sed_script_has_dangerous_flag(script: str) -> bool:
-    """Check if sed script contains dangerous e/w commands.
-
-    Detects:
-    - e/w flags in substitution commands (s/.../.../<flags>)
-    - Standalone e/w/r commands at script boundaries
-    - Address-prefixed e/w/r commands (5e, 1,10w, $r)
-    """
-    # Check substitution command flags (all occurrences)
-    for match in _SED_SUBST_FLAGS_RE.finditer(script):
-        flags = match.group(2).lower()
-        if "e" in flags or "w" in flags:
-            return True
-
-    # Check standalone e/w commands
-    if _SED_STANDALONE_CMD_RE.search(script):
-        return True
-
-    # Check address-prefixed e/w commands (e.g., 5e, 1,10e, $w)
-    if _SED_ADDRESSED_CMD_RE.search(script):
-        return True
-
-    return False
-
-
-def _check_sed_script(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
-    """Block sed features that can write files or execute commands.
-
-    - `w` writes to a file even without `-i`
-    - `e` executes a shell command (GNU sed) and can be used for sandbox escape
-    - `r` reads a file; hard to validate path inside sed script safely
-    - `-f/--file` loads scripts from a file (not inspected here)
-    """
-    if base_cmd != "sed":
-        return False, ""
-
-    # Reject external script files (-f/--file) to prevent uninspected `e`/`w`.
-    i = 1
-    while i < len(tokens):
-        token = tokens[i]
-        if token == "--":  # nosec B105 - CLI argument, not password
-            break
-
-        if token == "-f" or token == "--file" or token.startswith("--file="):  # nosec B105
-            return True, "Blocked sed script file flag (-f/--file)"
-
-        # Consume arguments for flags that take parameters (best-effort).
-        if token in {"-e", "-f", "-i"}:  # nosec B105
-            i += 1
-            i += 1
-            continue
-        i += 1
-
-    # Best-effort: inspect inline scripts (from -e and/or first non-flag token).
-    scripts: list[str] = []
-    saw_e_flag = False
-    i = 1
-    while i < len(tokens):
-        token = tokens[i]
-        if token == "--":  # nosec B105
-            i += 1
-            break
-
-        if token == "-e":  # nosec B105
-            if i + 1 < len(tokens):
-                scripts.append(tokens[i + 1])
-            saw_e_flag = True
-            i += 2
-            continue
-
-        if token.startswith("-") and token != "-":  # nosec B105
-            i += 1
-            continue
-
-        # First positional argument is a script ONLY when no -e/-f scripts are provided.
-        if not saw_e_flag and not scripts:
-            scripts.append(token)
-        break
-
-    for script in scripts:
-        if _sed_script_has_dangerous_flag(script):
-            return True, "Blocked sed script containing e/w (command exec or file write)"
 
     return False, ""
 
@@ -619,7 +488,7 @@ def _validate_command_base(base_cmd: str) -> tuple[bool, str]:
 
 
 def _validate_specialized_commands(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
-    """Validate specialized commands (git, python) and arguments.
+    """Validate specialized commands (git, ripgrep) and arguments.
 
     Args:
         tokens: Command tokens.
@@ -632,15 +501,11 @@ def _validate_specialized_commands(tokens: list[str], base_cmd: str) -> tuple[bo
     if blocked:
         return blocked, reason
 
+    blocked, reason = _check_git_dangerous_flags(tokens, base_cmd)
+    if blocked:
+        return blocked, reason
+
     blocked, reason = _check_ripgrep_preprocessor(tokens, base_cmd)
-    if blocked:
-        return blocked, reason
-
-    blocked, reason = _check_sed_in_place(tokens, base_cmd)
-    if blocked:
-        return blocked, reason
-
-    blocked, reason = _check_sed_script(tokens, base_cmd)
     if blocked:
         return blocked, reason
 

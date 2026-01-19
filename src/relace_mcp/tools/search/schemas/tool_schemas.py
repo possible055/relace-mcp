@@ -217,7 +217,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "- List directory trees (tree, ls -la)\n"
                 "- Check file types and encodings (file, head, tail, wc)\n"
                 "- Run static analysis tools (read-only)\n"
-                "- Inspect git history (git log, git show, git diff)\n\n"
+                "- Inspect git history (git log)\n\n"
                 "Restrictions:\n"
                 "- Commands run in the repository root (/repo)\n"
                 "- Timeout: 30 seconds\n"

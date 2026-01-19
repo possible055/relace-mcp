@@ -34,6 +34,11 @@ UDiff of changes, or confirmation for new files.
 
 Search the codebase and return relevant files and line ranges. Uses an agentic loop to autonomously explore the codebase.
 
+### Behavior
+
+- Sends periodic progress notifications during long runs.
+- May return `partial=true` (and optionally `error`) when hitting `SEARCH_MAX_TURNS` or `SEARCH_TIMEOUT_SECONDS`.
+
 ### Parameters
 
 | Parameter | Required | Description |
@@ -49,7 +54,8 @@ Search the codebase and return relevant files and line ranges. Uses an agentic l
   "files": {
     "/home/user/project/src/auth/login.py": [[10, 80]]
   },
-  "turns_used": 4
+  "turns_used": 4,
+  "partial": false
 }
 ```
 

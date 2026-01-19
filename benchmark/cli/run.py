@@ -3,7 +3,6 @@ import os
 import sys
 import warnings
 from pathlib import Path
-from typing import Literal
 
 import click
 from dotenv import load_dotenv
@@ -98,7 +97,10 @@ def _load_benchmark_config():
 @click.option(
     "--output",
     default=None,
-    help="Output file prefix (relative to benchmark/artifacts/results/). Default: run_<timestamp>",
+    help=(
+        "Output file prefix (absolute or relative to benchmark/artifacts/results/). "
+        "Default: run_<dataset>_<timestamp>"
+    ),
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.option(
@@ -108,13 +110,6 @@ def _load_benchmark_config():
     help="Print per-case progress (recommended; benchmarks can take a long time)",
 )
 @click.option("--dry-run", is_flag=True, help="Only load data, don't run searches")
-@click.option(
-    "--harness",
-    "harness_type",
-    type=click.Choice(["fast", "dual"]),
-    default=None,
-    help="Search harness type (default: from SEARCH_HARNESS_TYPE env or 'dual')",
-)
 @click.option(
     "--search-max-turns",
     default=None,
@@ -128,18 +123,6 @@ def _load_benchmark_config():
     help="Override SEARCH_TEMPERATURE for this run",
 )
 @click.option(
-    "--merger-temperature",
-    default=None,
-    type=float,
-    help="Override MERGER_TEMPERATURE for this run (dual harness merge step)",
-)
-@click.option(
-    "--dual-channel-turns",
-    default=None,
-    type=int,
-    help="Override SEARCH_DUAL_CHANNEL_TURNS for this run (dual harness per-channel turns)",
-)
-@click.option(
     "--search-prompt-file",
     default=None,
     help="Override SEARCH_PROMPT_FILE for this run (YAML prompt file)",
@@ -149,15 +132,12 @@ def main(
     limit: int,
     shuffle: bool,
     seed: int,
-    output: str,
+    output: str | None,
     verbose: bool,
     progress: bool,
     dry_run: bool,
-    harness_type: str | None,
     search_max_turns: int | None,
     search_temperature: float | None,
-    merger_temperature: float | None,
-    dual_channel_turns: int | None,
     search_prompt_file: str | None,
 ) -> None:
     """Run benchmark on fast_search.
@@ -172,12 +152,6 @@ def main(
         os.environ["SEARCH_MAX_TURNS"] = str(search_max_turns)
     if search_temperature is not None:
         os.environ["SEARCH_TEMPERATURE"] = str(search_temperature)
-    if merger_temperature is not None:
-        os.environ["MERGER_TEMPERATURE"] = str(merger_temperature)
-    if dual_channel_turns is not None:
-        os.environ["SEARCH_DUAL_CHANNEL_TURNS"] = str(dual_channel_turns)
-
-    from relace_mcp.config.settings import SEARCH_HARNESS_TYPE
 
     from ..runner.executor import BenchmarkRunner
 
@@ -229,16 +203,10 @@ def main(
         )
         sys.exit(1)
 
-    # Resolve harness type from env if not specified via CLI
-    effective_harness_type: Literal["fast", "dual"] = (
-        harness_type if harness_type in ("fast", "dual") else SEARCH_HARNESS_TYPE  # type: ignore[assignment]
-    )
-
     runner = BenchmarkRunner(
         config,
         verbose=verbose,
         progress=progress,
-        harness_type=effective_harness_type,
     )
 
     click.echo("\nRunning benchmark...")
@@ -250,7 +218,6 @@ def main(
             "limit": limit,
             "shuffle": shuffle,
             "seed": seed,
-            "harness_type": effective_harness_type,
         },
     )
 
@@ -261,20 +228,24 @@ def main(
     reports_dir.mkdir(parents=True, exist_ok=True)
 
     if output:
-        if Path(output).is_absolute():
-            output_path = Path(output)
+        output_candidate = Path(output)
+        if output_candidate.is_absolute():
+            output_path = output_candidate
         else:
-            output_path = benchmark_dir / output
+            output_path = results_dir / output_candidate
     else:
         output_path = generate_output_path(results_dir, "run", dataset_id)
-
-    # summary.save handles directory creation and dual-file extensions (.jsonl, .report.json)
-    summary.save(output_path)
 
     jsonl_path = (
         output_path if output_path.suffix == ".jsonl" else output_path.with_suffix(".jsonl")
     )
-    report_path = jsonl_path.with_suffix(".report.json")
+    report_path = (
+        (reports_dir / jsonl_path.relative_to(results_dir)).with_suffix(".report.json")
+        if jsonl_path.is_relative_to(results_dir)
+        else jsonl_path.with_suffix(".report.json")
+    )
+
+    summary.save(output_path, report_path=report_path)
 
     click.echo("\nResults saved to:")
     click.echo(f"  - {jsonl_path}")

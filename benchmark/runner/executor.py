@@ -1,15 +1,14 @@
-import asyncio
 import logging
 import time
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from relace_mcp.clients import SearchLLMClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.lsp.languages import get_lsp_languages
-from relace_mcp.tools.search import DualChannelHarness, FastAgenticSearchHarness
+from relace_mcp.tools.search import FastAgenticSearchHarness
 
 from ..config import get_repos_dir
 from ..metrics import (
@@ -43,12 +42,10 @@ class BenchmarkRunner:
         *,
         verbose: bool = False,
         progress: bool = True,
-        harness_type: Literal["fast", "dual"] = "dual",
     ):
         self.config = config
         self.verbose = verbose
         self.progress = progress
-        self.harness_type = harness_type
         self.repos_dir = get_repos_dir()
         self.repos_dir.mkdir(parents=True, exist_ok=True)
 
@@ -164,16 +161,9 @@ class BenchmarkRunner:
 
         start_time = time.perf_counter()
         lsp_languages = get_lsp_languages(repo_path)
-        if self.harness_type == "dual":
-            result = asyncio.run(
-                DualChannelHarness(effective_config, client, lsp_languages=lsp_languages).run_async(
-                    case.query
-                )
-            )
-        else:
-            result = FastAgenticSearchHarness(
-                effective_config, client, lsp_languages=lsp_languages
-            ).run(case.query)
+        result = FastAgenticSearchHarness(
+            effective_config, client, lsp_languages=lsp_languages
+        ).run(case.query)
         latency_ms = (time.perf_counter() - start_time) * 1000
 
         returned_files_raw = result.get("files", {})

@@ -129,9 +129,7 @@ def build_run_metadata(
             "base_url": sanitize_endpoint_url(base_url) if base_url else None,
             "timeout_seconds": relace_settings.SEARCH_TIMEOUT_SECONDS,
             "max_turns": relace_settings.SEARCH_MAX_TURNS,
-            "dual_channel_turns": relace_settings.SEARCH_DUAL_CHANNEL_TURNS,
             "temperature": relace_settings.SEARCH_TEMPERATURE,
-            "merger_temperature": relace_settings.MERGER_TEMPERATURE,
             "prompt_file": prompt_file,
         },
         "environment": {

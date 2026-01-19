@@ -43,9 +43,10 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `APPLY_PROMPT_FILE` | — | Override apply prompt YAML path |
 | `APPLY_TIMEOUT_SECONDS` | `60` | Request timeout |
 | `APPLY_TEMPERATURE` | `0.0` | LLM sampling temperature (0.0-2.0) |
-| `APPLY_POST_CHECK` | `0` | Post-merge validation (may increase failures) |
+| `APPLY_SEMANTIC_CHECK` | `0` | Post-merge semantic validation (may increase failures) |
+| `APPLY_POST_CHECK` | `0` | Deprecated alias for `APPLY_SEMANTIC_CHECK` |
 
-> **Note:** `RELACE_APPLY_*`, `RELACE_TIMEOUT_SECONDS`, `RELACE_EXPERIMENTAL_POST_CHECK` variants are deprecated but still supported with warnings.
+> **Note:** `RELACE_APPLY_*` and `RELACE_TIMEOUT_SECONDS` are deprecated but still supported with warnings.
 
 ### Fast Search
 
@@ -56,15 +57,20 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `SEARCH_MODEL` | `relace-search` | Override model name |
 | `SEARCH_API_KEY` | — | API key for non-Relace providers |
 | `SEARCH_PROMPT_FILE` | — | Override search prompt YAML path |
-| `SEARCH_TIMEOUT_SECONDS` | `120` | Request timeout |
+| `SEARCH_TIMEOUT_SECONDS` | `120` | Request timeout (also used as `fast_search` wall-clock budget; returns `partial=true` on timeout) |
 | `SEARCH_TEMPERATURE` | `1.0` | LLM sampling temperature (0.0-2.0) |
 | `SEARCH_MAX_TURNS` | `6` | Maximum agent loop turns |
-| `SEARCH_ENABLED_TOOLS` | `view_file,view_directory,grep_search,glob,find_symbol` | Tool allowlist (comma-separated) |
+| `SEARCH_ENABLED_TOOLS` | (all except `bash`) | Tool allowlist (comma/space-separated). If unset, all tools except `bash` are enabled by default. |
 | `SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls |
 | `SEARCH_TOOL_STRICT` | `1` | Include `strict` field in tool schemas |
 | `SEARCH_LSP_TIMEOUT_SECONDS` | `15.0` | LSP startup/request timeout |
 
 > **Note:** `RELACE_SEARCH_*`, `RELACE_LSP_TIMEOUT_SECONDS` variants are deprecated but still supported with warnings.
+
+#### Progress & Timeouts
+
+- `fast_search` sends periodic progress notifications to avoid idle client timeouts.
+- If you still hit a hard client/host timeout, reduce `SEARCH_MAX_TURNS` or increase `SEARCH_TIMEOUT_SECONDS`.
 
 ### Cloud Sync
 
@@ -86,14 +92,6 @@ When using alternative providers, set the corresponding API key:
 | `OPENAI_API_KEY` | `*_PROVIDER=openai` and no `*_API_KEY` set |
 | `OPENROUTER_API_KEY` | `*_PROVIDER=openrouter` and no `*_API_KEY` set |
 | `CEREBRAS_API_KEY` | `*_PROVIDER=cerebras` and no `*_API_KEY` set |
-
-### Experimental
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RELACE_EXPERIMENTAL_LOGGING` | — | Deprecated alias for `MCP_LOGGING` |
-
-> **Note:** `RELACE_EXPERIMENTAL_POST_CHECK` has been renamed to `APPLY_POST_CHECK` and moved to Fast Apply section.
 
 ## Using a .env File
 

@@ -34,6 +34,11 @@
 
 搜索代码库并返回相关文件和行范围。使用智能循环自主探索代码库。
 
+### 行为
+
+- 长任务期间会周期性发送 progress 通知。
+- 达到 `SEARCH_MAX_TURNS` 或 `SEARCH_TIMEOUT_SECONDS` 时，可能返回 `partial=true`（并可选带 `error`）。
+
 ### 参数
 
 | 参数 | 必需 | 描述 |
@@ -49,7 +54,8 @@
   "files": {
     "/home/user/project/src/auth/login.py": [[10, 80]]
   },
-  "turns_used": 4
+  "turns_used": 4,
+  "partial": false
 }
 ```
 

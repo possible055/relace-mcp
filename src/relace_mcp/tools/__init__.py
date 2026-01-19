@@ -13,11 +13,11 @@ from fastmcp.server.context import Context
 from ..clients import RelaceRepoClient, SearchLLMClient
 from ..clients.apply import ApplyLLMClient
 from ..config import RelaceConfig, resolve_base_dir
-from ..config.settings import RELACE_CLOUD_TOOLS, SEARCH_HARNESS_TYPE
+from ..config.settings import RELACE_CLOUD_TOOLS
 from .apply import apply_file_logic
 from .repo import cloud_info_logic, cloud_list_logic, cloud_search_logic, cloud_sync_logic
 from .repo.state import load_sync_state
-from .search import DualChannelHarness, FastAgenticSearchHarness
+from .search import FastAgenticSearchHarness
 
 __all__ = ["register_tools"]
 
@@ -132,12 +132,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             lsp_languages = get_lsp_languages(Path(base_dir))
 
             effective_config = replace(config, base_dir=base_dir)
-            # Select harness based on SEARCH_HARNESS_TYPE (fast=single-agent, dual=3+3+1 parallel)
-            if SEARCH_HARNESS_TYPE == "fast":
-                return await FastAgenticSearchHarness(
-                    effective_config, search_client, lsp_languages=lsp_languages
-                ).run_async(query=query)
-            return await DualChannelHarness(
+            return await FastAgenticSearchHarness(
                 effective_config, search_client, lsp_languages=lsp_languages
             ).run_async(query=query)
         finally:

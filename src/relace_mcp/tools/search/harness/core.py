@@ -9,7 +9,7 @@ from typing import Any
 
 from ....clients import SearchLLMClient
 from ....config import RelaceConfig
-from ....config.settings import RELACE_PROVIDER
+from ....config.settings import RELACE_PROVIDER, SEARCH_TIMEOUT_SECONDS
 from .._impl import estimate_context_size
 from ..logging import (
     log_search_complete,
@@ -132,7 +132,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         self._observed_files = {}
 
         try:
-            result = self._run_search_loop(query, trace_id)
+            result = self._run_search_loop(query, trace_id, start_time=start_time)
             total_ms = (time.perf_counter() - start_time) * 1000
             log_search_complete(
                 trace_id,
@@ -180,7 +180,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         self._observed_files = {}
 
         try:
-            result = await self._run_search_loop_async(query, trace_id)
+            result = await self._run_search_loop_async(query, trace_id, start_time=start_time)
             total_ms = (time.perf_counter() - start_time) * 1000
             log_search_complete(
                 trace_id,
@@ -203,7 +203,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 "error": str(exc),
             }
 
-    def _run_search_loop(self, query: str, trace_id: str) -> dict[str, Any]:
+    def _run_search_loop(self, query: str, trace_id: str, *, start_time: float) -> dict[str, Any]:
         """Internal method to execute the search loop."""
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self._system_prompt},
@@ -211,6 +211,19 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         ]
 
         for turn in range(_harness_mod.SEARCH_MAX_TURNS):
+            if (time.perf_counter() - start_time) > SEARCH_TIMEOUT_SECONDS:
+                merged_files = self._merge_observed_ranges()
+                return {
+                    "query": query,
+                    "explanation": (
+                        f"[PARTIAL] Search exceeded SEARCH_TIMEOUT_SECONDS={SEARCH_TIMEOUT_SECONDS}s. "
+                        f"Returning {len(merged_files)} observed files based on exploration."
+                    ),
+                    "files": merged_files,
+                    "turns_used": turn,
+                    "partial": True,
+                    "error": f"Search timed out after {SEARCH_TIMEOUT_SECONDS}s",
+                }
             logger.debug(
                 "[%s] Turn %d/%d",
                 trace_id,
@@ -336,7 +349,9 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             "partial": True,
         }
 
-    async def _run_search_loop_async(self, query: str, trace_id: str) -> dict[str, Any]:
+    async def _run_search_loop_async(
+        self, query: str, trace_id: str, *, start_time: float
+    ) -> dict[str, Any]:
         """Internal method to execute the search loop asynchronously."""
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self._system_prompt},
@@ -347,6 +362,19 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         # Use an explicit ThreadPoolExecutor for blocking tool execution.
         with ThreadPoolExecutor(max_workers=1) as executor:
             for turn in range(_harness_mod.SEARCH_MAX_TURNS):
+                if (time.perf_counter() - start_time) > SEARCH_TIMEOUT_SECONDS:
+                    merged_files = self._merge_observed_ranges()
+                    return {
+                        "query": query,
+                        "explanation": (
+                            f"[PARTIAL] Search exceeded SEARCH_TIMEOUT_SECONDS={SEARCH_TIMEOUT_SECONDS}s. "
+                            f"Returning {len(merged_files)} observed files based on exploration."
+                        ),
+                        "files": merged_files,
+                        "turns_used": turn,
+                        "partial": True,
+                        "error": f"Search timed out after {SEARCH_TIMEOUT_SECONDS}s",
+                    }
                 logger.debug(
                     "[%s] Turn %d/%d",
                     trace_id,

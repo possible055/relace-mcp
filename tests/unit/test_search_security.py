@@ -154,10 +154,13 @@ class TestWriteOperationBlocking:
         blocked, _ = _is_blocked_command("sed -i 's/old/new/g' file.txt", DEFAULT_BASE_DIR)
         assert blocked
 
-    def test_allows_sed_script_containing_dash_i(self) -> None:
-        """Should not false-positive on '-i' inside sed script text."""
-        blocked, _ = _is_blocked_command("sed 's/this-is-fine/ok/g' file.txt", DEFAULT_BASE_DIR)
-        assert not blocked
+    def test_blocks_sed_basic(self) -> None:
+        """sed support is removed (KISS); should be blocked."""
+        blocked, reason = _is_blocked_command(
+            "sed 's/this-is-fine/ok/g' file.txt", DEFAULT_BASE_DIR
+        )
+        assert blocked
+        assert "sed" in reason.lower() or "allowlist" in reason.lower()
 
     def test_blocks_sed_inplace_combined_short_options(self) -> None:
         """Should block -i even when combined with other short options."""
@@ -213,25 +216,34 @@ class TestGitSecurityBlocking:
         blocked, _ = _is_blocked_command("git log -n 10", DEFAULT_BASE_DIR)
         assert not blocked
 
-    def test_allows_git_show(self) -> None:
-        """Should allow git show."""
-        blocked, _ = _is_blocked_command("git show HEAD", DEFAULT_BASE_DIR)
-        assert not blocked
+    def test_blocks_git_log_patch(self) -> None:
+        """git log -p is effectively a diff/show escape hatch; should be blocked."""
+        blocked, reason = _is_blocked_command("git log -p -n 1", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "-p" in reason
 
-    def test_allows_git_diff(self) -> None:
-        """Should allow git diff."""
-        blocked, _ = _is_blocked_command("git diff HEAD~1", DEFAULT_BASE_DIR)
-        assert not blocked
+    def test_blocks_git_show(self) -> None:
+        """git show may invoke repo-configured external drivers; should be blocked."""
+        blocked, reason = _is_blocked_command("git show HEAD", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "allowlist" in reason.lower() or "git" in reason.lower()
+
+    def test_blocks_git_diff(self) -> None:
+        """git diff may invoke repo-configured external drivers; should be blocked."""
+        blocked, reason = _is_blocked_command("git diff HEAD~1", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "allowlist" in reason.lower() or "git" in reason.lower()
 
     def test_allows_git_status(self) -> None:
         """Should allow git status."""
         blocked, _ = _is_blocked_command("git status", DEFAULT_BASE_DIR)
         assert not blocked
 
-    def test_allows_git_blame(self) -> None:
-        """Should allow git blame."""
-        blocked, _ = _is_blocked_command("git blame file.py", DEFAULT_BASE_DIR)
-        assert not blocked
+    def test_blocks_git_blame(self) -> None:
+        """git blame may invoke textconv; should be blocked."""
+        blocked, reason = _is_blocked_command("git blame file.py", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "allowlist" in reason.lower() or "git" in reason.lower()
 
     def test_blocks_git_clone(self) -> None:
         """Should block git clone (network operation)."""
@@ -393,91 +405,8 @@ class TestSandboxEscapeBypassBlocking:
         assert blocked
         assert "awk" in reason.lower() or "system" in reason.lower()
 
-    def test_blocks_sed_write_command(self) -> None:
-        """sed `w` can write files without shell redirection; must be blocked."""
-        blocked, reason = _is_blocked_command("sed 'w out.txt' file.txt", DEFAULT_BASE_DIR)
+    def test_blocks_sed_command(self) -> None:
+        """sed support is removed (KISS); must be blocked."""
+        blocked, reason = _is_blocked_command("sed 's/foo/bar/g' file.txt", DEFAULT_BASE_DIR)
         assert blocked
-        assert "sed" in reason.lower() or "write" in reason.lower() or "e/w" in reason.lower()
-
-    def test_blocks_sed_read_command(self) -> None:
-        """sed `r` can read arbitrary files; must be blocked."""
-        blocked, reason = _is_blocked_command("sed 'r /etc/hosts' file.txt", DEFAULT_BASE_DIR)
-        assert blocked
-        assert "sed" in reason.lower() or "e/w" in reason.lower()
-
-    def test_blocks_sed_script_file(self) -> None:
-        """sed -f loads uninspected commands; must be blocked."""
-        blocked, reason = _is_blocked_command("sed -f script.sed file.txt", DEFAULT_BASE_DIR)
-        assert blocked
-        assert "sed" in reason.lower() or "script" in reason.lower()
-
-    def test_blocks_sed_combined_flags_ew(self) -> None:
-        """sed combined flags like /ew must be blocked (e executes shell commands)."""
-        blocked, reason = _is_blocked_command("sed 's/foo/bar/ew' file.txt", DEFAULT_BASE_DIR)
-        assert blocked
-        assert "sed" in reason.lower() or "e/w" in reason.lower()
-
-    def test_blocks_sed_combined_flags_gew(self) -> None:
-        """sed flags /gew must be blocked even when e is not at flag boundary."""
-        blocked, reason = _is_blocked_command("sed 's/foo/bar/gew' file.txt", DEFAULT_BASE_DIR)
-        assert blocked
-        assert "sed" in reason.lower() or "e/w" in reason.lower()
-
-    def test_blocks_sed_e_flag_alone(self) -> None:
-        """sed e flag executes replacement as shell command; must be blocked."""
-        blocked, reason = _is_blocked_command("sed 's/foo/bar/e' file.txt", DEFAULT_BASE_DIR)
-        assert blocked
-        assert "sed" in reason.lower() or "e/w" in reason.lower()
-
-    def test_allows_sed_normal_substitution(self) -> None:
-        """sed normal substitution without dangerous flags should be allowed."""
-        blocked, _ = _is_blocked_command("sed 's/foo/bar/gi' file.txt", DEFAULT_BASE_DIR)
-        assert not blocked
-
-    def test_allows_sed_replacement_containing_e(self) -> None:
-        """sed with 'e' in replacement text (not flags) should be allowed."""
-        blocked, _ = _is_blocked_command("sed 's/test/new/g' file.txt", DEFAULT_BASE_DIR)
-        assert not blocked
-
-    def test_blocks_sed_multiple_subst_with_e_in_second(self) -> None:
-        """sed with dangerous flag in second substitution must be blocked."""
-        # Use -e syntax to avoid ; being caught by command chaining pattern
-        blocked, reason = _is_blocked_command(
-            "sed -e 's/a/b/g' -e 's/x/y/e' file.txt", DEFAULT_BASE_DIR
-        )
-        assert blocked
-        assert "sed" in reason.lower() or "e/w" in reason.lower()
-
-    def test_blocks_sed_address_prefixed_e(self) -> None:
-        """sed address+e executes pattern space as shell command; must be blocked."""
-        blocked, reason = _is_blocked_command("sed 5e file.txt", DEFAULT_BASE_DIR)
-        assert blocked
-        assert "sed" in reason.lower() or "e/w" in reason.lower()
-
-    def test_blocks_sed_range_address_e(self) -> None:
-        """sed range+e like 1,10e must be blocked."""
-        blocked, reason = _is_blocked_command("sed 1,10e file.txt", DEFAULT_BASE_DIR)
-        assert blocked
-        assert "sed" in reason.lower() or "e/w" in reason.lower()
-
-    def test_blocks_sed_last_line_e(self) -> None:
-        """sed $e (last line execute) must be blocked."""
-        blocked, reason = _is_blocked_command("sed '$e' file.txt", DEFAULT_BASE_DIR)
-        assert blocked
-        assert "sed" in reason.lower() or "e/w" in reason.lower()
-
-    def test_blocks_sed_address_prefixed_w(self) -> None:
-        """sed address+w writes to file; must be blocked."""
-        blocked, reason = _is_blocked_command("sed '5w out.txt' file.txt", DEFAULT_BASE_DIR)
-        assert blocked
-        assert "sed" in reason.lower() or "e/w" in reason.lower()
-
-    def test_allows_sed_print_command(self) -> None:
-        """sed print command (p) should be allowed."""
-        blocked, _ = _is_blocked_command("sed 5p file.txt", DEFAULT_BASE_DIR)
-        assert not blocked
-
-    def test_allows_sed_delete_command(self) -> None:
-        """sed delete command (d) should be allowed."""
-        blocked, _ = _is_blocked_command("sed 1,10d file.txt", DEFAULT_BASE_DIR)
-        assert not blocked
+        assert "sed" in reason.lower() or "allowlist" in reason.lower()

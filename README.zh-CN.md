@@ -178,7 +178,7 @@ relogs
 |------|----------|
 | `RELACE_API_KEY is not set` | 在环境变量或 MCP 配置中设置密钥 |
 | `NEEDS_MORE_CONTEXT` | 在目标块前后包含 1-3 行锚定行 |
-| `FILE_TOO_LARGE` | 文件超过 1MB；拆分或增加限制 |
+| `FILE_TOO_LARGE` | 文件超过 10MB；拆分文件 |
 | `ENCODING_ERROR` | 显式设置 `RELACE_DEFAULT_ENCODING` |
 | `AUTH_ERROR` | 验证 API 密钥是否有效且未过期 |
 | `RATE_LIMIT` | 请求过多；稍后重试 |

@@ -178,7 +178,7 @@ For detailed usage, see [docs/dashboard.md](docs/dashboard.md).
 |-------|----------|
 | `RELACE_API_KEY is not set` | Set the key in your environment or MCP config |
 | `NEEDS_MORE_CONTEXT` | Include 1–3 anchor lines before/after target block |
-| `FILE_TOO_LARGE` | File exceeds 1MB; split or increase limit |
+| `FILE_TOO_LARGE` | File exceeds 10MB; split file |
 | `ENCODING_ERROR` | Set `RELACE_DEFAULT_ENCODING` explicitly |
 | `AUTH_ERROR` | Verify API key is valid and not expired |
 | `RATE_LIMIT` | Too many requests; wait and retry |
