@@ -42,6 +42,15 @@ def mock_repo_client(_mock_config: RelaceConfig) -> MagicMock:
     return client
 
 
+@pytest.fixture(autouse=True)
+def _patch_repo_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep cloud_repo_name == local repo dir name for unit tests."""
+    monkeypatch.setattr(
+        "relace_mcp.tools.repo.info.get_repo_identity",
+        lambda base_dir: (Path(base_dir).resolve().name, Path(base_dir).resolve().name, "fp"),
+    )
+
+
 class TestCloudListLogic:
     """Test cloud_list_logic function."""
 
@@ -52,6 +61,8 @@ class TestCloudListLogic:
         assert result["count"] == 2
         assert len(result["repos"]) == 2
         assert result["has_more"] is False
+        assert isinstance(result.get("trace_id"), str)
+        assert len(result["trace_id"]) == 8
 
     def test_list_extracts_repo_fields(self, mock_repo_client: MagicMock) -> None:
         """Should extract correct fields from repos."""
@@ -81,6 +92,8 @@ class TestCloudListLogic:
         assert "error" in result
         assert "API connection failed" in result["error"]
         assert result["count"] == 0
+        assert isinstance(result.get("trace_id"), str)
+        assert len(result["trace_id"]) == 8
 
     def test_list_detects_pagination(self, mock_repo_client: MagicMock) -> None:
         """Should detect when there are more repos (pagination safety limit).
@@ -122,6 +135,8 @@ class TestCloudInfoLogic:
 
         assert result["local"]["git_branch"] == "main"
         assert result["local"]["git_head"] == "abc123de"
+        assert isinstance(result.get("trace_id"), str)
+        assert len(result["trace_id"]) == 8
 
     def test_info_returns_synced_state(self, tmp_path: Path, mock_repo_client: MagicMock) -> None:
         """Should return synced state info."""

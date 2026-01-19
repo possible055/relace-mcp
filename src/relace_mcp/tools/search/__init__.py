@@ -1,3 +1,3 @@
-from .harness import DualChannelHarness, FastAgenticSearchHarness
+from .harness import FastAgenticSearchHarness
 
-__all__ = ["DualChannelHarness", "FastAgenticSearchHarness"]
+__all__ = ["FastAgenticSearchHarness"]

@@ -6,9 +6,8 @@ import sys
 from pathlib import Path
 
 import click
-from dotenv import load_dotenv
 
-from ..config import DEFAULT_FILTERED_PATH, get_benchmark_dir, get_reports_dir, get_results_dir
+from ..config import DEFAULT_LOCBENCH_PATH, get_benchmark_dir, get_reports_dir, get_results_dir
 from ..schemas import generate_output_path
 
 
@@ -23,7 +22,7 @@ def _format_float_for_filename(value: float) -> str:
 @click.option(
     "--dataset",
     "dataset_path",
-    default=DEFAULT_FILTERED_PATH,
+    default=DEFAULT_LOCBENCH_PATH,
     show_default=True,
     help="Dataset jsonl path (relative to benchmark/ if not absolute)",
 )
@@ -42,13 +41,6 @@ def _format_float_for_filename(value: float) -> str:
     help="Random seed used when shuffling cases",
 )
 @click.option(
-    "--harness",
-    "harness_type",
-    type=click.Choice(["fast", "dual"]),
-    default=None,
-    help="Search harness type (default: from SEARCH_HARNESS_TYPE env or 'dual')",
-)
-@click.option(
     "--turns",
     "search_max_turns_values",
     multiple=True,
@@ -65,22 +57,6 @@ def _format_float_for_filename(value: float) -> str:
     help="Grid values for SEARCH_TEMPERATURE (repeatable, 0.0~1.0 recommended)",
 )
 @click.option(
-    "--dual-channel-turns",
-    "dual_channel_turns_values",
-    multiple=True,
-    type=int,
-    default=(),
-    help="Optional grid values for SEARCH_DUAL_CHANNEL_TURNS (repeatable, dual harness only)",
-)
-@click.option(
-    "--merger-temperatures",
-    "merger_temperature_values",
-    multiple=True,
-    type=float,
-    default=(),
-    help="Optional grid values for MERGER_TEMPERATURE (repeatable, dual harness only)",
-)
-@click.option(
     "--search-prompt-file",
     default=None,
     help="Override SEARCH_PROMPT_FILE for all runs (YAML prompt file)",
@@ -88,7 +64,10 @@ def _format_float_for_filename(value: float) -> str:
 @click.option(
     "--output",
     default=None,
-    help="Output directory prefix (absolute or relative to benchmark/). Default: artifacts/results/grid_<dataset>_<timestamp>/",
+    help=(
+        "Output directory prefix (absolute or relative to benchmark/artifacts/results/). "
+        "Default: grid_<dataset>_<timestamp>/"
+    ),
 )
 @click.option("--dry-run", is_flag=True, help="Print planned runs without executing")
 def main(
@@ -96,17 +75,12 @@ def main(
     limit: int | None,
     shuffle: bool,
     seed: int,
-    harness_type: str | None,
     search_max_turns_values: tuple[int, ...],
     search_temperature_values: tuple[float, ...],
-    dual_channel_turns_values: tuple[int, ...],
-    merger_temperature_values: tuple[float, ...],
     search_prompt_file: str | None,
     output: str | None,
     dry_run: bool,
 ) -> None:
-    load_dotenv(dotenv_path=Path(".env"))
-
     benchmark_dir = get_benchmark_dir()
     resolved_dataset_path = (
         Path(dataset_path) if Path(dataset_path).is_absolute() else (benchmark_dir / dataset_path)
@@ -116,7 +90,7 @@ def main(
     results_dir = get_results_dir()
     default_grid_root = generate_output_path(results_dir, "grid", dataset_id)
     grid_root = (
-        (Path(output) if Path(output).is_absolute() else (benchmark_dir / output))
+        (Path(output) if Path(output).is_absolute() else (results_dir / output))
         if output
         else default_grid_root
     )
@@ -124,37 +98,23 @@ def main(
     grid_dir = grid_root
     grid_dir.mkdir(parents=True, exist_ok=True)
 
-    if not dual_channel_turns_values:
-        dual_channel_turns_values = (None,)  # type: ignore[assignment]
-    if not merger_temperature_values:
-        merger_temperature_values = (None,)  # type: ignore[assignment]
-
     project_root = Path(__file__).resolve().parents[2]
 
     planned: list[dict[str, object]] = []
-    for turns, temp, dual_turns, merger_temp in itertools.product(
+    for turns, temp in itertools.product(
         search_max_turns_values,
         search_temperature_values,
-        dual_channel_turns_values,
-        merger_temperature_values,
     ):
         name_parts = [
-            f"h{harness_type or 'auto'}",
             f"t{turns}",
             f"temp{_format_float_for_filename(temp)}",
         ]
-        if dual_turns is not None:
-            name_parts.append(f"dual{dual_turns}")
-        if merger_temp is not None:
-            name_parts.append(f"mtemp{_format_float_for_filename(merger_temp)}")
         run_name = "__".join(name_parts)
         output_prefix = grid_dir / run_name
         planned.append(
             {
                 "search_max_turns": turns,
                 "search_temperature": temp,
-                "dual_channel_turns": dual_turns,
-                "merger_temperature": merger_temp,
                 "output_prefix": str(output_prefix),
             }
         )
@@ -175,10 +135,6 @@ def main(
         env = dict(os.environ)
         env["SEARCH_MAX_TURNS"] = str(item["search_max_turns"])
         env["SEARCH_TEMPERATURE"] = str(item["search_temperature"])
-        if item["dual_channel_turns"] is not None:
-            env["SEARCH_DUAL_CHANNEL_TURNS"] = str(item["dual_channel_turns"])
-        if item["merger_temperature"] is not None:
-            env["MERGER_TEMPERATURE"] = str(item["merger_temperature"])
         if search_prompt_file:
             env["SEARCH_PROMPT_FILE"] = search_prompt_file
 
@@ -197,8 +153,6 @@ def main(
         if limit is not None:
             cmd.extend(["--limit", str(limit)])
         cmd.append("--shuffle" if shuffle else "--no-shuffle")
-        if harness_type:
-            cmd.extend(["--harness", harness_type])
 
         click.echo(f"[{i}/{len(planned)}] {' '.join(cmd)}")
         completed = subprocess.run(  # nosec B603
@@ -220,7 +174,11 @@ def main(
             if output_prefix.suffix == ".jsonl"
             else output_prefix.with_suffix(".jsonl")
         )
-        report_path = jsonl_path.with_suffix(".report.json")
+        report_path = (
+            (get_reports_dir() / jsonl_path.relative_to(results_dir)).with_suffix(".report.json")
+            if jsonl_path.is_relative_to(results_dir)
+            else jsonl_path.with_suffix(".report.json")
+        )
         report = json.loads(report_path.read_text(encoding="utf-8"))
 
         summaries.append(

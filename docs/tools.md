@@ -34,6 +34,11 @@ UDiff of changes, or confirmation for new files.
 
 Search the codebase and return relevant files and line ranges. Uses an agentic loop to autonomously explore the codebase.
 
+### Behavior
+
+- Sends periodic progress notifications during long runs.
+- May return `partial=true` (and optionally `error`) when hitting `SEARCH_MAX_TURNS` or `SEARCH_TIMEOUT_SECONDS`.
+
 ### Parameters
 
 | Parameter | Required | Description |
@@ -49,13 +54,16 @@ Search the codebase and return relevant files and line ranges. Uses an agentic l
   "files": {
     "/home/user/project/src/auth/login.py": [[10, 80]]
   },
-  "turns_used": 4
+  "turns_used": 4,
+  "partial": false
 }
 ```
 
 ---
 
 ## `cloud_sync`
+
+> **Note:** All `cloud_*` tools include a `trace_id` field in responses. On failures, responses may also include `status_code`, `error_code`, `retryable`, and `recommended_action`.
 
 Synchronize local codebase to Relace Cloud for semantic search. Uploads source files from `MCP_BASE_DIR` to Relace Repos.
 
@@ -71,7 +79,7 @@ Synchronize local codebase to Relace Cloud for semantic search. Uploads source f
 - Respects `.gitignore` patterns (uses `git ls-files` when available)
 - Supports 60+ common source code file types (`.py`, `.js`, `.ts`, `.java`, etc.)
 - Skips files > 1MB and common non-source directories (`node_modules`, `__pycache__`, etc.)
-- Sync state stored in `~/.local/state/relace/sync/`
+- Sync state stored in your platform state directory (e.g., `~/.local/state/relace/sync/` on Linux), keyed by repo name + fingerprint
 
 > For advanced sync modes (incremental, safe full, mirror), see [advanced.md](advanced.md#sync-modes).
 
@@ -116,6 +124,8 @@ None
 
 Delete the cloud repository and local sync state. Use when switching projects or resetting after major restructuring.
 
+If `confirm=false`, returns `status="cancelled"` and does nothing.
+
 ### Parameters
 
 | Parameter | Required | Default | Description |
@@ -126,8 +136,11 @@ Delete the cloud repository and local sync state. Use when switching projects or
 
 ```json
 {
-  "deleted": true,
-  "repo_id": "uuid",
-  "state_cleared": true
+  "trace_id": "a1b2c3d4",
+  "status": "deleted",
+  "message": "Repository 'example' (uuid) and local sync state deleted successfully.",
+  "repo_name": "example",
+  "cloud_repo_name": "example__fingerprint",
+  "repo_id": "uuid"
 }
 ```

@@ -4,7 +4,6 @@ from .bash_security import (
     BASH_BLOCKED_PATTERNS,
     BASH_SAFE_COMMANDS,
     GIT_ALLOWED_SUBCOMMANDS,
-    PYTHON_DANGEROUS_PATTERNS,
     is_blocked_command,
 )
 from .constants import (
@@ -70,7 +69,6 @@ __all__ = [
     "MAX_TOOL_RESULT_CHARS",
     "MAX_VIEW_DIRECTORY_CHARS",
     "MAX_VIEW_FILE_CHARS",
-    "PYTHON_DANGEROUS_PATTERNS",
     "SearchSymbolParams",
     "call_graph_handler",
     "is_blocked_command",

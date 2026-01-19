@@ -90,6 +90,14 @@ python_version = "3.11"
 module = ["psutil"]
 follow_untyped_imports = true
 
+[[tool.mypy.overrides]]
+module = ["textual.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["relace_mcp.dashboard.*"]
+ignore_errors = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"

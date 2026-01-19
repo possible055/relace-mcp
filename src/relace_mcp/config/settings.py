@@ -1,6 +1,5 @@
 import logging
 import os
-import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,7 +29,6 @@ RETRY_BASE_DELAY = 1.0
 # Temperature settings for each tool
 SEARCH_TEMPERATURE = float(os.getenv("SEARCH_TEMPERATURE", "1.0"))
 APPLY_TEMPERATURE = float(os.getenv("APPLY_TEMPERATURE", "0.0"))
-MERGER_TEMPERATURE = float(os.getenv("MERGER_TEMPERATURE", "0.3"))
 
 # Provider identifiers (used for API compatibility detection)
 OPENAI_PROVIDER = "openai"
@@ -53,10 +51,6 @@ SEARCH_TIMEOUT_SECONDS = float(
     getenv_with_fallback("SEARCH_TIMEOUT_SECONDS", "RELACE_SEARCH_TIMEOUT_SECONDS") or "120.0"
 )
 SEARCH_MAX_TURNS = int(getenv_with_fallback("SEARCH_MAX_TURNS", "RELACE_SEARCH_MAX_TURNS") or "6")
-# Dual harness per-channel turns (lexical + semantic). Total turns = (2 * channel_turns) + 1 merge.
-SEARCH_DUAL_CHANNEL_TURNS = int(
-    getenv_with_fallback("SEARCH_DUAL_CHANNEL_TURNS", "RELACE_SEARCH_DUAL_CHANNEL_TURNS") or "3"
-)
 # Search parallel tool calls (default: true)
 SEARCH_PARALLEL_TOOL_CALLS = env_bool(
     "SEARCH_PARALLEL_TOOL_CALLS",
@@ -64,19 +58,6 @@ SEARCH_PARALLEL_TOOL_CALLS = env_bool(
     deprecated_name="RELACE_SEARCH_PARALLEL_TOOL_CALLS",
 )
 
-# Search harness type: "fast" (single-agent turn-loop) or "dual" (3+3+1 parallel channels)
-_harness_type_raw = (
-    getenv_with_fallback("SEARCH_HARNESS_TYPE", "RELACE_SEARCH_HARNESS_TYPE") or "dual"
-).lower()
-if _harness_type_raw not in ("fast", "dual"):
-    logger.warning("Invalid SEARCH_HARNESS_TYPE, using 'dual'")
-    warnings.warn(
-        f"Invalid SEARCH_HARNESS_TYPE={_harness_type_raw!r}, using 'dual'",
-        RuntimeWarning,
-        stacklevel=2,
-    )
-    _harness_type_raw = "dual"
-SEARCH_HARNESS_TYPE: str = _harness_type_raw
 
 # Relace Repos API (Infrastructure Endpoint for cloud sync/search)
 RELACE_API_ENDPOINT = os.getenv(

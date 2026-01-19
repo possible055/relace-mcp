@@ -1,5 +1,8 @@
 # pyright: reportUnusedFunction=false
 # Decorator-registered functions (@mcp.tool, @mcp.resource) are accessed by the framework
+import asyncio
+import inspect
+from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -10,11 +13,11 @@ from fastmcp.server.context import Context
 from ..clients import RelaceRepoClient, SearchLLMClient
 from ..clients.apply import ApplyLLMClient
 from ..config import RelaceConfig, resolve_base_dir
-from ..config.settings import RELACE_CLOUD_TOOLS, SEARCH_HARNESS_TYPE
+from ..config.settings import RELACE_CLOUD_TOOLS
 from .apply import apply_file_logic
 from .repo import cloud_info_logic, cloud_list_logic, cloud_search_logic, cloud_sync_logic
 from .repo.state import load_sync_state
-from .search import DualChannelHarness, FastAgenticSearchHarness
+from .search import FastAgenticSearchHarness
 
 __all__ = ["register_tools"]
 
@@ -22,6 +25,16 @@ __all__ = ["register_tools"]
 def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     """Register Relace tools to the FastMCP instance."""
     apply_backend = ApplyLLMClient(config)
+
+    async def _progress_heartbeat(ctx: Context, *, message: str) -> None:
+        while True:
+            try:
+                maybe = ctx.report_progress(progress=0, total=1.0, message=message)
+                if inspect.isawaitable(maybe):
+                    await maybe
+            except Exception:
+                return
+            await asyncio.sleep(5)
 
     @mcp.tool(
         annotations={
@@ -61,14 +74,25 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         # Resolve base_dir dynamically (aligns with other tools).
         # This allows relative paths when MCP_BASE_DIR is not set but MCP Roots are available,
         # and provides a consistent security boundary for absolute paths.
-        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-        return await apply_file_logic(
-            backend=apply_backend,
-            file_path=path,
-            edit_snippet=edit_snippet,
-            instruction=instruction or None,  # Convert empty string to None internally
-            base_dir=base_dir,
-        )
+        progress_task = None
+        if ctx is not None:
+            progress_task = asyncio.create_task(
+                _progress_heartbeat(ctx, message="fast_apply in progress")
+            )
+        try:
+            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+            return await apply_file_logic(
+                backend=apply_backend,
+                file_path=path,
+                edit_snippet=edit_snippet,
+                instruction=instruction or None,  # Convert empty string to None internally
+                base_dir=base_dir,
+            )
+        finally:
+            if progress_task is not None:
+                progress_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await progress_task
 
     # Fast Agentic Search
     search_client = SearchLLMClient(config)
@@ -95,23 +119,26 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         This is useful before using fast_apply to understand which files
         need to be modified and how they relate to each other.
         """
-        # Resolve base_dir dynamically from MCP Roots if not configured
-        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+        progress_task = asyncio.create_task(
+            _progress_heartbeat(ctx, message="fast_search in progress")
+        )
+        try:
+            # Resolve base_dir dynamically from MCP Roots if not configured
+            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
 
-        # Get cached LSP languages (auto-detects on first call per base_dir)
-        from ..lsp.languages import get_lsp_languages
+            # Get cached LSP languages (auto-detects on first call per base_dir)
+            from ..lsp.languages import get_lsp_languages
 
-        lsp_languages = get_lsp_languages(Path(base_dir))
+            lsp_languages = get_lsp_languages(Path(base_dir))
 
-        effective_config = replace(config, base_dir=base_dir)
-        # Select harness based on SEARCH_HARNESS_TYPE (fast=single-agent, dual=3+3+1 parallel)
-        if SEARCH_HARNESS_TYPE == "fast":
+            effective_config = replace(config, base_dir=base_dir)
             return await FastAgenticSearchHarness(
                 effective_config, search_client, lsp_languages=lsp_languages
             ).run_async(query=query)
-        return await DualChannelHarness(
-            effective_config, search_client, lsp_languages=lsp_languages
-        ).run_async(query=query)
+        finally:
+            progress_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await progress_task
 
     # Cloud Repos (Semantic Search & Sync) - only register if enabled
     if RELACE_CLOUD_TOOLS:
@@ -297,20 +324,31 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     "message": "Set MCP_BASE_DIR or use MCP Roots to enable cloud status",
                 }
 
-            repo_name = Path(base_dir).name
-            state = load_sync_state(repo_name)
+            from .repo.state import get_repo_identity
+
+            local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(base_dir)
+            if not local_repo_name or not cloud_repo_name:
+                return {
+                    "synced": False,
+                    "error": "invalid base_dir",
+                    "message": "Cannot derive repository identity from base_dir; ensure MCP_BASE_DIR or MCP Roots points to a project directory.",
+                }
+
+            state = load_sync_state(base_dir)
 
             if state is None:
                 return {
                     "synced": False,
-                    "repo_name": repo_name,
+                    "repo_name": local_repo_name,
+                    "cloud_repo_name": cloud_repo_name,
                     "message": "No sync state found. Run cloud_sync to upload codebase.",
                 }
 
             return {
                 "synced": True,
                 "repo_id": state.repo_id,
-                "repo_name": state.repo_name or repo_name,
+                "repo_name": state.repo_name or local_repo_name,
+                "cloud_repo_name": state.cloud_repo_name or cloud_repo_name,
                 "git_ref": (
                     f"{state.git_branch}@{state.git_head_sha[:8]}"
                     if state.git_branch and state.git_head_sha
@@ -319,5 +357,10 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     else ""
                 ),
                 "files_count": len(state.files),
+                "skipped_files_count": len(state.skipped_files),
+                "files_found": state.files_found,
+                "files_selected": state.files_selected,
+                "file_limit": state.file_limit,
+                "files_truncated": state.files_truncated,
                 "last_sync": state.last_sync,
             }

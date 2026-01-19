@@ -1,18 +1,15 @@
-import asyncio
 import logging
 import time
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from relace_mcp.clients import SearchLLMClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.lsp.languages import get_lsp_languages
-from relace_mcp.tools.search import DualChannelHarness, FastAgenticSearchHarness
+from relace_mcp.tools.search import FastAgenticSearchHarness
 
-from ..analysis.ast_spans import normalize_to_ast_spans
-from ..analysis.call_graph import expand_ground_truth
 from ..config import get_repos_dir
 from ..metrics import (
     compute_file_precision,
@@ -45,18 +42,10 @@ class BenchmarkRunner:
         *,
         verbose: bool = False,
         progress: bool = True,
-        beta: float = 0.5,
-        normalize_ast: bool = False,
-        soft_gt: bool = False,
-        harness_type: Literal["fast", "dual"] = "dual",
     ):
         self.config = config
         self.verbose = verbose
         self.progress = progress
-        self.beta = beta
-        self.normalize_ast = normalize_ast
-        self.soft_gt = soft_gt
-        self.harness_type = harness_type
         self.repos_dir = get_repos_dir()
         self.repos_dir.mkdir(parents=True, exist_ok=True)
 
@@ -172,16 +161,9 @@ class BenchmarkRunner:
 
         start_time = time.perf_counter()
         lsp_languages = get_lsp_languages(repo_path)
-        if self.harness_type == "dual":
-            result = asyncio.run(
-                DualChannelHarness(effective_config, client, lsp_languages=lsp_languages).run_async(
-                    case.query
-                )
-            )
-        else:
-            result = FastAgenticSearchHarness(
-                effective_config, client, lsp_languages=lsp_languages
-            ).run(case.query)
+        result = FastAgenticSearchHarness(
+            effective_config, client, lsp_languages=lsp_languages
+        ).run(case.query)
         latency_ms = (time.perf_counter() - start_time) * 1000
 
         returned_files_raw = result.get("files", {})
@@ -192,18 +174,7 @@ class BenchmarkRunner:
         returned_files_count = len(returned_files)
 
         context_ground_truth_files = case.ground_truth_context_files
-
-        # Optionally normalize ground truth to AST boundaries
-        if self.normalize_ast:
-            ground_truth_files = self._normalize_ground_truth(case, repo_path)
-        else:
-            ground_truth_files = case.ground_truth_files
-
-        # Optionally expand ground truth with called functions
-        if self.soft_gt:
-            soft_ranges = expand_ground_truth(repo_path, ground_truth_files)
-            ground_truth_files = self._merge_soft_gt(ground_truth_files, soft_ranges)
-
+        ground_truth_files = case.ground_truth_files
         ground_truth_files_count = len(ground_truth_files)
 
         file_recall = compute_file_recall(
@@ -271,50 +242,6 @@ class BenchmarkRunner:
             error=error,
             returned_files=returned_files,
         )
-
-    def _normalize_ground_truth(
-        self, case: DatasetCase, repo_path: Path
-    ) -> dict[str, list[tuple[int, int]]]:
-        """Normalize ground truth line ranges to AST node boundaries."""
-        normalized: dict[str, list[tuple[int, int]]] = {}
-        gt_files = case.ground_truth_files
-
-        for file_path, ranges in gt_files.items():
-            if not ranges:
-                continue
-
-            full_path = repo_path / file_path
-            if not full_path.exists() or not file_path.endswith(".py"):
-                # Not a Python file or doesn't exist, use original ranges
-                normalized[file_path] = ranges
-                continue
-
-            # Extract all lines from ranges for AST normalization
-            raw_lines: set[int] = set()
-            for start, end in ranges:
-                raw_lines.update(range(start, end + 1))
-
-            ast_ranges = normalize_to_ast_spans(full_path, raw_lines, context_padding=2)
-            if ast_ranges:
-                normalized[file_path] = ast_ranges
-            else:
-                normalized[file_path] = ranges
-
-        return normalized
-
-    def _merge_soft_gt(
-        self,
-        original: dict[str, list[tuple[int, int]]],
-        soft: dict[str, list[tuple[int, int]]],
-    ) -> dict[str, list[tuple[int, int]]]:
-        """Merge soft ground truth ranges into original ground truth."""
-        merged = dict(original)
-        for file_path, ranges in soft.items():
-            if file_path in merged:
-                merged[file_path] = merged[file_path] + ranges
-            else:
-                merged[file_path] = ranges
-        return merged
 
     def _compute_summary(
         self,

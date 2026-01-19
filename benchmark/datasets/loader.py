@@ -1,14 +1,9 @@
-"""Loader for benchmark datasets.
-
-Supports the unified DatasetCase format with hard_gt and soft_context.
-"""
-
 import json
 import random
 from collections import defaultdict
 from pathlib import Path
 
-from ..config import DEFAULT_MULOCBENCH_PATH, EXCLUDED_REPOS, get_benchmark_dir
+from ..config import DEFAULT_LOCBENCH_PATH, EXCLUDED_REPOS, get_benchmark_dir
 from ..schemas import ContextEntry, DatasetCase, GroundTruthEntry, SolvabilityInfo
 
 
@@ -60,7 +55,7 @@ def _stratified_sample(
 
 def load_dataset(
     *,
-    dataset_path: str = DEFAULT_MULOCBENCH_PATH,
+    dataset_path: str = DEFAULT_LOCBENCH_PATH,
     limit: int | None = None,
     shuffle: bool = True,
     seed: int = 0,
@@ -196,7 +191,3 @@ def load_dataset(
         cases = _stratified_sample(cases, limit, rng)
 
     return cases if limit is None else cases[:limit]
-
-
-# Backwards compatibility alias
-load_mulocbench = load_dataset

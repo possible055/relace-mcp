@@ -1,5 +1,4 @@
 import asyncio
-import importlib
 import logging
 import re
 import time
@@ -9,7 +8,7 @@ from typing import Any
 
 from ....clients import SearchLLMClient
 from ....config import RelaceConfig
-from ....config.settings import RELACE_PROVIDER
+from ....config.settings import RELACE_PROVIDER, SEARCH_MAX_TURNS, SEARCH_TIMEOUT_SECONDS
 from .._impl import estimate_context_size
 from ..logging import (
     log_search_complete,
@@ -38,9 +37,6 @@ from .observed import ObservedFilesMixin
 from .tool_calls import ToolCallsMixin
 
 logger = logging.getLogger(__name__)
-
-_HARNESS_PACKAGE = __package__ or "relace_mcp.tools.search.harness"
-_harness_mod = importlib.import_module(_HARNESS_PACKAGE)
 
 
 class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCallsMixin):
@@ -132,7 +128,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         self._observed_files = {}
 
         try:
-            result = self._run_search_loop(query, trace_id)
+            result = self._run_search_loop(query, trace_id, start_time=start_time)
             total_ms = (time.perf_counter() - start_time) * 1000
             log_search_complete(
                 trace_id,
@@ -180,7 +176,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         self._observed_files = {}
 
         try:
-            result = await self._run_search_loop_async(query, trace_id)
+            result = await self._run_search_loop_async(query, trace_id, start_time=start_time)
             total_ms = (time.perf_counter() - start_time) * 1000
             log_search_complete(
                 trace_id,
@@ -203,25 +199,38 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 "error": str(exc),
             }
 
-    def _run_search_loop(self, query: str, trace_id: str) -> dict[str, Any]:
+    def _run_search_loop(self, query: str, trace_id: str, *, start_time: float) -> dict[str, Any]:
         """Internal method to execute the search loop."""
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self._system_prompt},
             {"role": "user", "content": self._user_prompt_template.format(query=query)},
         ]
 
-        for turn in range(_harness_mod.SEARCH_MAX_TURNS):
+        for turn in range(SEARCH_MAX_TURNS):
+            if (time.perf_counter() - start_time) > SEARCH_TIMEOUT_SECONDS:
+                merged_files = self._merge_observed_ranges()
+                return {
+                    "query": query,
+                    "explanation": (
+                        f"[PARTIAL] Search exceeded SEARCH_TIMEOUT_SECONDS={SEARCH_TIMEOUT_SECONDS}s. "
+                        f"Returning {len(merged_files)} observed files based on exploration."
+                    ),
+                    "files": merged_files,
+                    "turns_used": turn,
+                    "partial": True,
+                    "error": f"Search timed out after {SEARCH_TIMEOUT_SECONDS}s",
+                }
             logger.debug(
                 "[%s] Turn %d/%d",
                 trace_id,
                 turn + 1,
-                _harness_mod.SEARCH_MAX_TURNS,
+                SEARCH_MAX_TURNS,
             )
 
             # Inject unified turn hint (from turn 2 onwards)
             if turn > 0:
                 chars_for_hint = estimate_context_size(messages)
-                turn_hint = self._get_turn_hint(turn, _harness_mod.SEARCH_MAX_TURNS, chars_for_hint)
+                turn_hint = self._get_turn_hint(turn, SEARCH_MAX_TURNS, chars_for_hint)
                 messages.append({"role": "user", "content": turn_hint})
                 logger.debug(
                     "[%s] Injected turn hint at turn %d (chars: %d/%d)",
@@ -272,7 +281,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             log_search_turn(
                 trace_id,
                 turn + 1,
-                _harness_mod.SEARCH_MAX_TURNS,
+                SEARCH_MAX_TURNS,
                 ctx_size,
                 len(tool_calls),
                 llm_latency_ms=llm_latency_ms,
@@ -322,21 +331,23 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         logger.warning(
             "[%s] Search did not complete within %d turns, returning partial results",
             trace_id,
-            _harness_mod.SEARCH_MAX_TURNS,
+            SEARCH_MAX_TURNS,
         )
         merged_files = self._merge_observed_ranges()
         return {
             "query": query,
             "explanation": (
-                f"[PARTIAL] Search did not complete within {_harness_mod.SEARCH_MAX_TURNS} turns. "
+                f"[PARTIAL] Search did not complete within {SEARCH_MAX_TURNS} turns. "
                 f"Returning {len(merged_files)} observed files based on exploration."
             ),
             "files": merged_files,
-            "turns_used": _harness_mod.SEARCH_MAX_TURNS,
+            "turns_used": SEARCH_MAX_TURNS,
             "partial": True,
         }
 
-    async def _run_search_loop_async(self, query: str, trace_id: str) -> dict[str, Any]:
+    async def _run_search_loop_async(
+        self, query: str, trace_id: str, *, start_time: float
+    ) -> dict[str, Any]:
         """Internal method to execute the search loop asynchronously."""
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self._system_prompt},
@@ -346,20 +357,31 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         loop = asyncio.get_running_loop()
         # Use an explicit ThreadPoolExecutor for blocking tool execution.
         with ThreadPoolExecutor(max_workers=1) as executor:
-            for turn in range(_harness_mod.SEARCH_MAX_TURNS):
+            for turn in range(SEARCH_MAX_TURNS):
+                if (time.perf_counter() - start_time) > SEARCH_TIMEOUT_SECONDS:
+                    merged_files = self._merge_observed_ranges()
+                    return {
+                        "query": query,
+                        "explanation": (
+                            f"[PARTIAL] Search exceeded SEARCH_TIMEOUT_SECONDS={SEARCH_TIMEOUT_SECONDS}s. "
+                            f"Returning {len(merged_files)} observed files based on exploration."
+                        ),
+                        "files": merged_files,
+                        "turns_used": turn,
+                        "partial": True,
+                        "error": f"Search timed out after {SEARCH_TIMEOUT_SECONDS}s",
+                    }
                 logger.debug(
                     "[%s] Turn %d/%d",
                     trace_id,
                     turn + 1,
-                    _harness_mod.SEARCH_MAX_TURNS,
+                    SEARCH_MAX_TURNS,
                 )
 
                 # Inject unified turn hint (from turn 2 onwards)
                 if turn > 0:
                     chars_for_hint = estimate_context_size(messages)
-                    turn_hint = self._get_turn_hint(
-                        turn, _harness_mod.SEARCH_MAX_TURNS, chars_for_hint
-                    )
+                    turn_hint = self._get_turn_hint(turn, SEARCH_MAX_TURNS, chars_for_hint)
                     messages.append({"role": "user", "content": turn_hint})
                     logger.debug(
                         "[%s] Injected turn hint at turn %d (chars: %d/%d)",
@@ -410,7 +432,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 log_search_turn(
                     trace_id,
                     turn + 1,
-                    _harness_mod.SEARCH_MAX_TURNS,
+                    SEARCH_MAX_TURNS,
                     ctx_size,
                     len(tool_calls),
                     llm_latency_ms=llm_latency_ms,
@@ -464,16 +486,16 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         logger.warning(
             "[%s] Search did not complete within %d turns, returning partial results",
             trace_id,
-            _harness_mod.SEARCH_MAX_TURNS,
+            SEARCH_MAX_TURNS,
         )
         merged_files = self._merge_observed_ranges()
         return {
             "query": query,
             "explanation": (
-                f"[PARTIAL] Search did not complete within {_harness_mod.SEARCH_MAX_TURNS} turns. "
+                f"[PARTIAL] Search did not complete within {SEARCH_MAX_TURNS} turns. "
                 f"Returning {len(merged_files)} observed files based on exploration."
             ),
             "files": merged_files,
-            "turns_used": _harness_mod.SEARCH_MAX_TURNS,
+            "turns_used": SEARCH_MAX_TURNS,
             "partial": True,
         }
