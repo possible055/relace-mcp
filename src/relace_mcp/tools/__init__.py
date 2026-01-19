@@ -287,9 +287,11 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 score_threshold: Minimum relevance score for hints (0.0-1.0).
                 max_hints: Maximum number of hint files to use (default 8).
             """
-            progress_task = asyncio.create_task(
-                _progress_heartbeat(ctx, message="agentic_retrieval in progress")
-            )
+            progress_task = None
+            if ctx is not None:
+                progress_task = asyncio.create_task(
+                    _progress_heartbeat(ctx, message="agentic_retrieval in progress")
+                )
             try:
                 base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
                 return await agentic_retrieval_logic(
@@ -303,9 +305,10 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     max_hints=max_hints,
                 )
             finally:
-                progress_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await progress_task
+                if progress_task is not None:
+                    progress_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await progress_task
 
     # === MCP Resources ===
 
