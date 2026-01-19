@@ -15,10 +15,6 @@ select = ["E", "F", "I", "B", "UP"]
 ignore = [
     "E501",  # Line length check (handled by formatter)
 ]
-
-[lint.per-file-ignores]
-"**/test_*.py" = []
-
 unfixable = ["F841"]
 
 [format]
@@ -26,6 +22,3 @@ quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
-
-[lint.pydocstyle]
-convention = "google"
