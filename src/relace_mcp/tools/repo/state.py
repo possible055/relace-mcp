@@ -56,7 +56,7 @@ def _get_git_remote_origin_url(repo_root: Path) -> str:
             if url:
                 return url
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        logger.debug("Failed to get git remote origin url from %s", repo_root)
+        logger.debug("Failed to get git remote origin url")
     return ""
 
 
@@ -97,7 +97,7 @@ def is_git_dirty(base_dir: str) -> bool:
         if result.returncode == 0:
             return bool(result.stdout.strip())
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        logger.debug("Failed to get git dirty status from %s", repo_root)
+        logger.debug("Failed to get git dirty status")
     return False
 
 
@@ -362,6 +362,6 @@ def get_current_git_info(base_dir: str) -> tuple[str, str]:
             head_sha = result.stdout.strip()
 
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        logger.debug("Failed to get git info from %s", base_dir)
+        logger.debug("Failed to get git info")
 
     return branch, head_sha

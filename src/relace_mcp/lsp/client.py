@@ -829,7 +829,7 @@ class LSPClient:
                 self._pending_requests.pop(req_id, None)
             try:
                 self._send_notification("$/cancelRequest", {"id": req_id})
-            except Exception:
+            except Exception:  # nosec B110 - best-effort cancellation
                 pass
             raise LSPError(f"Request {method} timed out") from None
 
