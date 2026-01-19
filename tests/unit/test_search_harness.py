@@ -160,6 +160,7 @@ class TestFastAgenticSearchHarness:
     ) -> None:
         """Even if the model hallucinates tool calls, disabled tools must not execute."""
         # Ensure default tool allowlist is active (bash is opt-in).
+        monkeypatch.delenv("SEARCH_ENABLED_TOOLS", raising=False)
         monkeypatch.delenv("RELACE_SEARCH_ENABLED_TOOLS", raising=False)
 
         # If bash ever executes here, the handler would be called.
@@ -270,9 +271,13 @@ class TestFastAgenticSearchHarness:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Partial results should never contain invalid ranges like end=-1."""
-        import relace_mcp.tools.search.harness as harness_mod
+        import relace_mcp.tools.search.harness.core as harness_core
 
-        monkeypatch.setattr(harness_mod, "SEARCH_MAX_TURNS", 2)
+        monkeypatch.setattr(harness_core, "SEARCH_MAX_TURNS", 2)
+        # Enable find_symbol via env var since it's now opt-in
+        monkeypatch.setenv(
+            "SEARCH_ENABLED_TOOLS", "view_file,view_directory,grep_search,glob,find_symbol"
+        )
         (tmp_path / "test.py").write_text("line1\nline2\nline3\n")
 
         view_to_eof_call = {
@@ -349,7 +354,6 @@ class TestParallelToolCallsFix:
         self,
         mock_config: RelaceConfig,
         mock_client: MagicMock,
-        tmp_path: Path,
     ) -> None:
         """Malformed JSON in arguments should return error, not crash."""
         mock_client.chat.side_effect = [
@@ -387,7 +391,6 @@ class TestParallelToolCallsFix:
         self,
         mock_config: RelaceConfig,
         mock_client: MagicMock,
-        tmp_path: Path,
     ) -> None:
         """Valid JSON but non-dict arguments should return error, not crash."""
         mock_client.chat.side_effect = [
@@ -425,19 +428,20 @@ class TestParallelToolCallsFix:
 class TestToolSchemas:
     """Test tool schema definitions."""
 
-    def test_has_six_default_tools(self) -> None:
-        """Should have exactly 6 tools by default (bash is opt-in)."""
-        assert len(TOOL_SCHEMAS) == 6
+    def test_default_tools_exclude_bash(self) -> None:
+        """Default tool schemas should exclude bash (bash is opt-in)."""
+        names = {t["function"]["name"] for t in TOOL_SCHEMAS}
+        assert "bash" not in names
 
     def test_tool_names(self) -> None:
-        """Should have correct default tool names (no bash)."""
+        """Default tool schemas should include only basic exploration tools."""
         names = {t["function"]["name"] for t in TOOL_SCHEMAS}
+        # Default set: basic tools only (LSP tools require opt-in)
         assert names == {
             "view_file",
             "view_directory",
             "grep_search",
             "glob",
-            "find_symbol",
             "report_back",
         }
 
@@ -447,9 +451,7 @@ class TestToolSchemas:
 
         from relace_mcp.tools.search.schemas import get_tool_schemas
 
-        monkeypatch.setenv(
-            "RELACE_SEARCH_ENABLED_TOOLS", "view_file,view_directory,grep_search,glob,bash"
-        )
+        monkeypatch.setenv("SEARCH_ENABLED_TOOLS", "view_file,view_directory,grep_search,glob,bash")
         schemas = get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
         if shutil.which("bash") is None:
@@ -465,7 +467,7 @@ class TestToolSchemas:
         """Allowlist should restrict tools but always keep report_back."""
         from relace_mcp.tools.search.schemas import get_tool_schemas
 
-        monkeypatch.setenv("RELACE_SEARCH_ENABLED_TOOLS", "view_file,grep_search,glob")
+        monkeypatch.setenv("SEARCH_ENABLED_TOOLS", "view_file,grep_search,glob")
 
         schemas = get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
@@ -475,7 +477,7 @@ class TestToolSchemas:
         """lsp_query in allowlist should map to find_symbol for backward compatibility."""
         from relace_mcp.tools.search.schemas import get_tool_schemas
 
-        monkeypatch.setenv("RELACE_SEARCH_ENABLED_TOOLS", "view_file,lsp_query")
+        monkeypatch.setenv("SEARCH_ENABLED_TOOLS", "view_file,lsp_query")
 
         schemas = get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}

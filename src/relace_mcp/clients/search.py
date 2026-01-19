@@ -71,6 +71,7 @@ class SearchLLMClient:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
         trace_id: str = "unknown",
+        temperature: float | None = None,
     ) -> dict[str, Any]:
         if self._strip_tool_strict:
             tools = _strip_tool_strict(tools)
@@ -113,10 +114,11 @@ class SearchLLMClient:
         if include_parallel_tool_calls:
             extra_body["parallel_tool_calls"] = True
 
+        temp = temperature if temperature is not None else SEARCH_TEMPERATURE
         try:
             data, _latency_ms = self._chat_client.chat_completions(
                 messages=messages,
-                temperature=SEARCH_TEMPERATURE,
+                temperature=temp,
                 extra_body=extra_body,
                 trace_id=trace_id,
             )
@@ -130,6 +132,7 @@ class SearchLLMClient:
                     trace_id=trace_id,
                     include_relace_sampling=include_relace_sampling,
                     include_parallel_tool_calls=include_parallel_tool_calls,
+                    temperature=temp,
                 )
             except openai.APIError as retry_exc:
                 raise RuntimeError(
@@ -175,6 +178,7 @@ class SearchLLMClient:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
         trace_id: str = "unknown",
+        temperature: float | None = None,
     ) -> dict[str, Any]:
         if self._strip_tool_strict:
             tools = _strip_tool_strict(tools)
@@ -217,10 +221,11 @@ class SearchLLMClient:
         if include_parallel_tool_calls:
             extra_body["parallel_tool_calls"] = True
 
+        temp = temperature if temperature is not None else SEARCH_TEMPERATURE
         try:
             data, _latency_ms = await self._chat_client.chat_completions_async(
                 messages=messages,
-                temperature=SEARCH_TEMPERATURE,
+                temperature=temp,
                 extra_body=extra_body,
                 trace_id=trace_id,
             )
@@ -234,6 +239,7 @@ class SearchLLMClient:
                     trace_id=trace_id,
                     include_relace_sampling=include_relace_sampling,
                     include_parallel_tool_calls=include_parallel_tool_calls,
+                    temperature=temp,
                 )
             except openai.APIError as retry_exc:
                 raise RuntimeError(
@@ -283,6 +289,7 @@ class SearchLLMClient:
         trace_id: str,
         include_relace_sampling: bool,
         include_parallel_tool_calls: bool,
+        temperature: float,
     ) -> dict[str, Any] | None:
         had_strict = any(
             isinstance(t, dict)
@@ -312,7 +319,7 @@ class SearchLLMClient:
         )
         data, _latency_ms = self._chat_client.chat_completions(
             messages=messages,
-            temperature=SEARCH_TEMPERATURE,
+            temperature=temperature,
             extra_body=compat_body,
             trace_id=f"{trace_id}:compat",
         )
@@ -333,6 +340,7 @@ class SearchLLMClient:
         trace_id: str,
         include_relace_sampling: bool,
         include_parallel_tool_calls: bool,
+        temperature: float,
     ) -> dict[str, Any] | None:
         had_strict = any(
             isinstance(t, dict)
@@ -362,7 +370,7 @@ class SearchLLMClient:
         )
         data, _latency_ms = await self._chat_client.chat_completions_async(
             messages=messages,
-            temperature=SEARCH_TEMPERATURE,
+            temperature=temperature,
             extra_body=compat_body,
             trace_id=f"{trace_id}:compat",
         )

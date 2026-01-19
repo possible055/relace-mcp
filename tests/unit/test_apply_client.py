@@ -1,5 +1,3 @@
-"""Tests for ApplyLLMClient system prompt injection."""
-
 from unittest.mock import patch
 
 import pytest
@@ -22,7 +20,7 @@ class TestApplyClientSystemPrompt:
         with patch.dict(
             "os.environ",
             {
-                "RELACE_APPLY_PROVIDER": "openai",
+                "APPLY_PROVIDER": "openai",
                 "OPENAI_API_KEY": "sk-test",
             },
         ):
@@ -50,7 +48,7 @@ class TestApplyClientSystemPrompt:
         with patch.dict(
             "os.environ",
             {
-                "RELACE_APPLY_PROVIDER": "relace",
+                "APPLY_PROVIDER": "relace",
             },
             clear=False,
         ):
@@ -78,7 +76,8 @@ class TestApplyClientSystemPrompt:
             # Remove any provider override to test default behavior
             import os
 
-            orig_provider = os.environ.pop("RELACE_APPLY_PROVIDER", None)
+            orig_provider = os.environ.pop("APPLY_PROVIDER", None)
+            orig_legacy_provider = os.environ.pop("RELACE_APPLY_PROVIDER", None)
             try:
                 client = ApplyLLMClient(mock_config)
                 # Default api_compat should be 'relace'
@@ -95,14 +94,17 @@ class TestApplyClientSystemPrompt:
                 assert messages[0]["role"] == "user"
             finally:
                 if orig_provider is not None:
-                    os.environ["RELACE_APPLY_PROVIDER"] = orig_provider
+                    os.environ["APPLY_PROVIDER"] = orig_provider
+                if orig_legacy_provider is not None:
+                    os.environ["RELACE_APPLY_PROVIDER"] = orig_legacy_provider
 
     def test_user_message_format(self, mock_config: RelaceConfig) -> None:
         """User message should contain proper XML tags."""
         with patch.dict("os.environ", {}, clear=False):
             import os
 
-            orig_provider = os.environ.pop("RELACE_APPLY_PROVIDER", None)
+            orig_provider = os.environ.pop("APPLY_PROVIDER", None)
+            orig_legacy_provider = os.environ.pop("RELACE_APPLY_PROVIDER", None)
             try:
                 client = ApplyLLMClient(mock_config)
 
@@ -119,14 +121,17 @@ class TestApplyClientSystemPrompt:
                 assert "<update>updated</update>" in user_content
             finally:
                 if orig_provider is not None:
-                    os.environ["RELACE_APPLY_PROVIDER"] = orig_provider
+                    os.environ["APPLY_PROVIDER"] = orig_provider
+                if orig_legacy_provider is not None:
+                    os.environ["RELACE_APPLY_PROVIDER"] = orig_legacy_provider
 
     def test_user_message_without_instruction(self, mock_config: RelaceConfig) -> None:
         """User message should not include instruction tag when instruction is None."""
         with patch.dict("os.environ", {}, clear=False):
             import os
 
-            orig_provider = os.environ.pop("RELACE_APPLY_PROVIDER", None)
+            orig_provider = os.environ.pop("APPLY_PROVIDER", None)
+            orig_legacy_provider = os.environ.pop("RELACE_APPLY_PROVIDER", None)
             try:
                 client = ApplyLLMClient(mock_config)
 
@@ -143,4 +148,6 @@ class TestApplyClientSystemPrompt:
                 assert "<update>updated</update>" in user_content
             finally:
                 if orig_provider is not None:
-                    os.environ["RELACE_APPLY_PROVIDER"] = orig_provider
+                    os.environ["APPLY_PROVIDER"] = orig_provider
+                if orig_legacy_provider is not None:
+                    os.environ["RELACE_APPLY_PROVIDER"] = orig_legacy_provider

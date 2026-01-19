@@ -14,55 +14,84 @@ SEARCH_PROVIDER=relace          # or: openai, openrouter
 RELACE_API_KEY=your-key-here    # or: OPENAI_API_KEY, OPENROUTER_API_KEY
 ```
 
-**Dataset**: Download from [MULocBench](https://github.com/MULocBench/MULocBench) → place in `benchmark/data/mulocbench.jsonl`
+**Dataset**:
 
-## 2. Run Benchmark
+- **MULocBench**: Download from [MULocBench](https://github.com/MULocBench/MULocBench) → place in `benchmark/artifacts/data/raw/mulocbench_v1.jsonl`
+- **Loc-Bench (LocAgent)**: Build from Hugging Face via datasets-server (no LocAgent required):
+  ```bash
+  uv run python -m benchmark.cli.build_locbench \
+    --output artifacts/data/raw/locbench_v1.jsonl
+  ```
+
+## 2. Single Run
 
 ```bash
-# Basic run (5 cases, shuffled)
-uv run python -m benchmark.cli
+# Basic run
+uv run python -m benchmark.cli.run --dataset artifacts/data/processed/elite_50.jsonl --limit 20
 
-# More cases
-uv run python -m benchmark.cli --limit 20
+# Run on Loc-Bench (after build_locbench)
+uv run python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.jsonl --limit 20
 
-# Preview only (no search execution)
-uv run python -m benchmark.cli --dry-run
+# With parameter overrides
+uv run python -m benchmark.cli.run \
+  --dataset artifacts/data/processed/elite_50.jsonl \
+  --limit 64 --seed 0 --shuffle \
+  --search-max-turns 8 \
+  --search-temperature 0.2 \
+  --no-progress
 ```
+
+**Outputs**:
+- Results: `benchmark/artifacts/results/<name>.jsonl`
+- Report: `benchmark/artifacts/reports/<name>.report.json`
 
 **Key options**:
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--limit` | `5` | Number of cases |
+| `--limit` | all | Number of cases |
 | `--shuffle/--no-shuffle` | `--shuffle` | Randomize selection |
 | `--seed` | `0` | Random seed |
-| `--output` | `results/benchmark_results.json` | Output path |
-| `--progress/--no-progress` | `--progress` | Show progress bar |
+| `--search-max-turns` | env | Override `SEARCH_MAX_TURNS` |
+| `--search-temperature` | env | Override `SEARCH_TEMPERATURE` |
+| `--search-prompt-file` | env | Override `SEARCH_PROMPT_FILE` (YAML) |
+| `--progress/--no-progress` | `--progress` | Show progress |
 | `--verbose` | off | Detailed logging |
+| `--dry-run` | off | Preview only |
 
-<details>
-<summary>All options</summary>
+## 3. Grid Search (Hyperparameter Tuning)
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--dataset` | `data/mulocbench.jsonl` | Dataset path |
-| `--include-added-files` | off | Include newly added files |
-| `--require-functions` | on | Require function-level ground truth |
-
-</details>
-
-## 3. Analyze Results
+Run Cartesian product of `turns × temperature` combinations:
 
 ```bash
-# Default results file
-uv run python -m benchmark.analyze
-
-# Specific file
-uv run python -m benchmark.analyze path/to/results.json
+uv run python -m benchmark.cli.grid \
+  --dataset artifacts/data/processed/elite_50.jsonl \
+  --limit 64 --seed 0 --shuffle \
+  --turns 4 --turns 6 --turns 8 \
+  --temperatures 0 --temperatures 0.2 --temperatures 0.4 --temperatures 0.6
 ```
 
-Output includes: per-case table, metric distributions, worst-case identification.
+**Grid options**:
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--turns` | ✓ | Grid values for `SEARCH_MAX_TURNS` (repeatable) |
+| `--temperatures` | ✓ | Grid values for `SEARCH_TEMPERATURE` (repeatable) |
+| `--search-prompt-file` | | Override prompt file for all runs |
+| `--output` | | Output directory prefix |
+| `--dry-run` | | Print planned runs without executing |
 
-## 4. Interpret Metrics
+**Output**: Grid summary saved to `artifacts/reports/<grid_name>.grid.json`
+
+## 4. Analyze Results
+
+```bash
+# Analyze single run
+uv run python -m benchmark.cli.analyze path/to/run.report.json
+
+# Compare multiple runs
+uv run python -m benchmark.cli.analyze run1.report.json run2.report.json
+```
+
+## 5. Interpret Metrics
 
 | Metric | Formula |
 |--------|---------|
@@ -71,30 +100,33 @@ Output includes: per-case table, metric distributions, worst-case identification
 | Line Coverage | GT lines covered / Total GT lines |
 | Line Precision | Correct lines / Returned lines |
 | Line Prec (Matched) | Correct lines / Returned lines (matched files only) |
-| Line IoU (Matched) | Intersection / Union (matched files only) |
 | Function Hit Rate | Functions with overlap / Total functions |
 
-Results JSON structure: `metadata`, `total_cases`, `success_rate`, `avg_*`, `results[]`
+Each `*.report.json` includes metadata tracking: `temperature`, `max_turns`, `prompt_file` for reproducibility.
 
-## Troubleshooting
+## 6. Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
 | Missing API key | Set `RELACE_API_KEY` or provider-specific key |
 | Clone fails | Check network, ensure `git` installed |
-| Dataset not found | Place `mulocbench.jsonl` in `benchmark/data/` |
+| Dataset not found | Place dataset in `benchmark/artifacts/data/` |
 | Slow first run | Normal—repos cached after first download |
 
 ## Directory Structure
 
 ```
 benchmark/
-├── cli.py           # CLI entrypoint
-├── analyze.py       # Result analysis
+├── cli/
+│   ├── run.py       # Single run CLI
+│   ├── grid.py      # Grid search CLI
+│   └── analyze.py   # Result analysis
 ├── datasets/        # Dataset loaders
 ├── evaluation/      # Metrics implementation
-├── run/             # Execution pipeline
-├── data/            # Dataset files
-├── repos/           # Cached repositories
-└── results/         # Output JSON
+├── runner/          # Execution pipeline
+├── artifacts/
+│   ├── data/        # Dataset files
+│   ├── repos/       # Cached repositories
+│   ├── results/     # Run outputs (.jsonl)
+│   └── reports/     # Summary reports (.report.json, .grid.json)
 ```

@@ -2,7 +2,7 @@ import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from relace_mcp.tools.search.handlers.lsp import (
+from relace_mcp.tools.search._impl.lsp import (
     LSPQueryParams,
     _format_lsp_results,
     lsp_query_handler,
@@ -61,19 +61,20 @@ class TestFormatLSPResults:
         ]
         result = _format_lsp_results(results, "/base")
         assert "capped at 50 results" in result
-        assert "total: 100" in result
+        # Note: simplified message no longer includes total count
 
     def test_directory_boundary_matching(self) -> None:
-        """Regression test: base_dir must match at directory boundary.
+        """Test: paths outside base_dir are filtered out.
 
         e.g., /home/user/project should NOT match /home/user/project123
+        and such external paths should be filtered.
         """
         from relace_mcp.lsp import Location
 
         results = [Location(uri="file:///home/user/project123/file.py", line=0, character=0)]
         result = _format_lsp_results(results, "/home/user/project")
-        # Should NOT be transformed to /repo/... since project123 != project
-        assert result == "/home/user/project123/file.py:1:1"
+        # External paths are filtered out
+        assert result == "No results found (all results are outside repository)."
 
     def test_base_dir_with_trailing_slash(self) -> None:
         """base_dir with trailing slash should work correctly."""
@@ -160,14 +161,22 @@ class TestLSPQueryHandler:
 
         # Create symlink to actual directory
         symlink_dir = tmp_path / "symlink"
-        symlink_dir.symlink_to(actual_dir)
+        try:
+            symlink_dir.symlink_to(actual_dir)
+        except (OSError, NotImplementedError) as e:
+            import pytest
+
+            pytest.skip(f"symlink is not supported in this environment: {e!r}")
 
         mock_client = MagicMock()
         mock_client.definition.return_value = [
-            Location(uri=f"file://{actual_dir}/test.py", line=0, character=0)
+            Location(uri=(actual_dir / "test.py").as_uri(), line=0, character=0)
         ]
+        mock_session = MagicMock()
+        mock_session.__enter__.return_value = mock_client
+        mock_session.__exit__.return_value = False
         mock_manager = MagicMock()
-        mock_manager.get_client.return_value = mock_client
+        mock_manager.session.return_value = mock_session
         mock_manager_cls.get_instance.return_value = mock_manager
 
         params = LSPQueryParams(
@@ -193,10 +202,13 @@ class TestLSPQueryHandler:
 
         mock_client = MagicMock()
         mock_client.definition.return_value = [
-            Location(uri=f"file://{tmp_path}/test.py", line=0, character=4)
+            Location(uri=(tmp_path / "test.py").as_uri(), line=0, character=4)
         ]
+        mock_session = MagicMock()
+        mock_session.__enter__.return_value = mock_client
+        mock_session.__exit__.return_value = False
         mock_manager = MagicMock()
-        mock_manager.get_client.return_value = mock_client
+        mock_manager.session.return_value = mock_session
         mock_manager_cls.get_instance.return_value = mock_manager
 
         params = LSPQueryParams(
@@ -219,8 +231,11 @@ class TestLSPQueryHandler:
 
         mock_client = MagicMock()
         mock_client.definition.side_effect = LSPError("Request textDocument/definition timed out")
+        mock_session = MagicMock()
+        mock_session.__enter__.return_value = mock_client
+        mock_session.__exit__.return_value = False
         mock_manager = MagicMock()
-        mock_manager.get_client.return_value = mock_client
+        mock_manager.session.return_value = mock_session
         mock_manager_cls.get_instance.return_value = mock_manager
 
         params = LSPQueryParams(
@@ -243,11 +258,14 @@ class TestLSPQueryHandler:
 
         mock_client = MagicMock()
         mock_client.references.return_value = [
-            Location(uri=f"file://{tmp_path}/test.py", line=0, character=0),
-            Location(uri=f"file://{tmp_path}/test.py", line=1, character=6),
+            Location(uri=(tmp_path / "test.py").as_uri(), line=0, character=0),
+            Location(uri=(tmp_path / "test.py").as_uri(), line=1, character=6),
         ]
+        mock_session = MagicMock()
+        mock_session.__enter__.return_value = mock_client
+        mock_session.__exit__.return_value = False
         mock_manager = MagicMock()
-        mock_manager.get_client.return_value = mock_client
+        mock_manager.session.return_value = mock_session
         mock_manager_cls.get_instance.return_value = mock_manager
 
         params = LSPQueryParams(
@@ -317,3 +335,109 @@ class TestLSPClientManager:
 
         # Cleanup
         LSPClientManager._instance = None
+
+    @patch("relace_mcp.lsp.client.LSPClient")
+    def test_manager_lru_eviction(self, mock_client_cls: MagicMock, monkeypatch) -> None:
+        from relace_mcp.lsp import PYTHON_CONFIG, LSPClientManager
+
+        monkeypatch.setenv("SEARCH_LSP_MAX_CLIENTS", "2")
+        LSPClientManager._instance = None
+
+        c1 = MagicMock()
+        c2 = MagicMock()
+        c3 = MagicMock()
+        mock_client_cls.side_effect = [c1, c2, c3]
+
+        manager = LSPClientManager.get_instance()
+        manager.get_client(PYTHON_CONFIG, "/w1")
+        manager.get_client(PYTHON_CONFIG, "/w2")
+        # Refresh /w1 so /w2 becomes LRU.
+        manager.get_client(PYTHON_CONFIG, "/w1")
+        manager.get_client(PYTHON_CONFIG, "/w3")
+
+        c2.shutdown.assert_called_once()
+        c1.shutdown.assert_not_called()
+        c3.shutdown.assert_not_called()
+
+        # Cleanup
+        LSPClientManager._instance = None
+
+    @patch("relace_mcp.lsp.client.LSPClient")
+    def test_manager_soft_cap_does_not_evict_leased(
+        self, mock_client_cls: MagicMock, monkeypatch
+    ) -> None:
+        from relace_mcp.lsp import PYTHON_CONFIG, LSPClientManager
+
+        monkeypatch.setenv("SEARCH_LSP_MAX_CLIENTS", "1")
+        LSPClientManager._instance = None
+
+        c1 = MagicMock()
+        c2 = MagicMock()
+        mock_client_cls.side_effect = [c1, c2]
+
+        manager = LSPClientManager.get_instance()
+
+        with manager.session(PYTHON_CONFIG, "/w1"):
+            manager.get_client(PYTHON_CONFIG, "/w2")
+            assert "/w1" in manager._clients
+            assert "/w2" in manager._clients
+            c1.shutdown.assert_not_called()
+            c2.shutdown.assert_not_called()
+            assert len(manager._clients) == 2
+
+        assert len(manager._clients) == 1
+        assert "/w2" in manager._clients
+        c1.shutdown.assert_called_once()
+        c2.shutdown.assert_not_called()
+
+        # Cleanup
+        LSPClientManager._instance = None
+
+
+class TestLSPClientSync:
+    def test_sync_runs_before_open_file(self, tmp_path: Path) -> None:
+        """Ensures workspace sync cannot restart the server after didOpen."""
+        from relace_mcp.lsp import PYTHON_CONFIG
+        from relace_mcp.lsp.client import LSPClient
+
+        client = LSPClient(PYTHON_CONFIG, str(tmp_path))
+        client._initialized = True
+
+        calls: list[str] = []
+
+        def fake_sync() -> None:
+            calls.append("sync")
+
+        def fake_open_file(file_path: str) -> str:
+            calls.append("open")
+            return "file:///tmp/test.py"
+
+        def fake_close_file(uri: str) -> None:
+            calls.append("close")
+
+        def fake_send_request(method: str, params: dict, **kwargs):
+            calls.append(f"request:{method}")
+            return []
+
+        client._sync_workspace_changes_best_effort = fake_sync  # type: ignore[assignment]
+        client._open_file = fake_open_file  # type: ignore[assignment]
+        client._close_file = fake_close_file  # type: ignore[assignment]
+        client._send_request = fake_send_request  # type: ignore[assignment]
+
+        client.definition("test.py", 0, 0)
+        assert calls[:2] == ["sync", "open"]
+
+    def test_sync_does_not_skip_workspace_root_named_build(self, tmp_path: Path) -> None:
+        from relace_mcp.lsp import PYTHON_CONFIG
+        from relace_mcp.lsp.client import LSPClient
+
+        workspace_root = tmp_path / "build"
+        workspace_root.mkdir()
+        (workspace_root / "main.py").write_text("x = 1\n")
+
+        client = LSPClient(PYTHON_CONFIG, str(workspace_root))
+        client._initialized = True
+        client._fs_last_sync = -1_000_000.0
+
+        client._sync_workspace_changes()
+        assert "main.py" in client._fs_snapshot

@@ -58,6 +58,7 @@ SEARCH_PARALLEL_TOOL_CALLS = env_bool(
     deprecated_name="RELACE_SEARCH_PARALLEL_TOOL_CALLS",
 )
 
+
 # Relace Repos API (Infrastructure Endpoint for cloud sync/search)
 RELACE_API_ENDPOINT = os.getenv(
     "RELACE_API_ENDPOINT",
@@ -80,22 +81,15 @@ ENCODING_DETECTION_SAMPLE_LIMIT = 30
 
 
 # Semantic check (validates new/delete intent correctness, disabled by default)
-# Use APPLY_SEMANTIC_CHECK=1 to enable (APPLY_POST_CHECK still works for backward compat)
-_semantic_check_env = getenv_with_fallback("APPLY_SEMANTIC_CHECK", "APPLY_POST_CHECK")
-if not _semantic_check_env:
-    _semantic_check_env = os.getenv("RELACE_EXPERIMENTAL_POST_CHECK", "")
-APPLY_SEMANTIC_CHECK = _semantic_check_env.lower() in ("1", "true", "yes")
+APPLY_SEMANTIC_CHECK = env_bool(
+    "APPLY_SEMANTIC_CHECK", default=False, deprecated_name="APPLY_POST_CHECK"
+)
 
 # Local file logging (disabled by default)
-# Use MCP_LOGGING=1 to enable (RELACE_LOGGING still works for backward compat)
-_logging_env = getenv_with_fallback("MCP_LOGGING", "RELACE_LOGGING").lower()
-if not _logging_env:
-    _logging_env = os.getenv("RELACE_EXPERIMENTAL_LOGGING", "").lower()
-MCP_LOGGING = _logging_env in ("1", "true", "yes")
+MCP_LOGGING = env_bool("MCP_LOGGING", default=False, deprecated_name="RELACE_LOGGING")
 
 # Cloud tools (disabled by default)
-# Use RELACE_CLOUD_TOOLS=1 to enable cloud_sync, cloud_search, cloud_list, cloud_info, cloud_clear
-RELACE_CLOUD_TOOLS = os.getenv("RELACE_CLOUD_TOOLS", "").lower() in ("1", "true", "yes")
+RELACE_CLOUD_TOOLS = env_bool("RELACE_CLOUD_TOOLS", default=False)
 
 # Logging - Cross-platform state directory:
 # - Linux: ~/.local/state/relace

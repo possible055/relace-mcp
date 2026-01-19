@@ -183,7 +183,7 @@ class TestApplyLLMClientRetry:
 
         call_count = 0
 
-        async def mock_create(**kwargs):
+        async def mock_create(**_kwargs):
             nonlocal call_count
             call_count += 1
             raise openai.RateLimitError(
@@ -212,7 +212,7 @@ class TestApplyLLMClientRetry:
 
         call_count = 0
 
-        async def mock_create(**kwargs):
+        async def mock_create(**_kwargs):
             nonlocal call_count
             call_count += 1
             raise openai.InternalServerError(
