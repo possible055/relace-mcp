@@ -324,20 +324,31 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     "message": "Set MCP_BASE_DIR or use MCP Roots to enable cloud status",
                 }
 
-            repo_name = Path(base_dir).name
-            state = load_sync_state(repo_name)
+            from .repo.state import get_repo_identity
+
+            local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(base_dir)
+            if not local_repo_name or not cloud_repo_name:
+                return {
+                    "synced": False,
+                    "error": "invalid base_dir",
+                    "message": "Cannot derive repository identity from base_dir; ensure MCP_BASE_DIR or MCP Roots points to a project directory.",
+                }
+
+            state = load_sync_state(base_dir)
 
             if state is None:
                 return {
                     "synced": False,
-                    "repo_name": repo_name,
+                    "repo_name": local_repo_name,
+                    "cloud_repo_name": cloud_repo_name,
                     "message": "No sync state found. Run cloud_sync to upload codebase.",
                 }
 
             return {
                 "synced": True,
                 "repo_id": state.repo_id,
-                "repo_name": state.repo_name or repo_name,
+                "repo_name": state.repo_name or local_repo_name,
+                "cloud_repo_name": state.cloud_repo_name or cloud_repo_name,
                 "git_ref": (
                     f"{state.git_branch}@{state.git_head_sha[:8]}"
                     if state.git_branch and state.git_head_sha

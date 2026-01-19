@@ -579,6 +579,9 @@ class TestSyncState:
 
     def test_save_and_load_sync_state(self, tmp_path: Path) -> None:
         """Should save and load sync state."""
+        repo_dir = tmp_path / "test-project"
+        repo_dir.mkdir()
+
         # Override XDG state dir for test
         with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
             state = SyncState(
@@ -588,8 +591,8 @@ class TestSyncState:
                 files={"main.py": "sha256:abc"},
             )
 
-            save_sync_state("test-project", state)
-            loaded = load_sync_state("test-project")
+            save_sync_state(str(repo_dir), state)
+            loaded = load_sync_state(str(repo_dir))
 
         assert loaded is not None
         assert loaded.repo_id == "test-id"
@@ -598,7 +601,7 @@ class TestSyncState:
     def test_load_sync_state_missing(self, tmp_path: Path) -> None:
         """Should return None for missing state."""
         with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
-            loaded = load_sync_state("nonexistent-project")
+            loaded = load_sync_state(str(tmp_path / "nonexistent-project"))
 
         assert loaded is None
 
@@ -677,29 +680,34 @@ class TestSyncStateMigration:
 
 
 class TestSyncStateCollisionDetection:
-    """Test repo_name collision detection in sync state."""
+    """Test state isolation and collision handling."""
 
-    def test_load_rejects_mismatched_repo_name(self, tmp_path: Path) -> None:
-        """Should return None when stored repo_name doesn't match requested name."""
+    def test_state_is_isolated_by_project(self, tmp_path: Path) -> None:
+        """Projects with colliding sanitized names should not share sync state."""
+        repo_a = tmp_path / "my.project"
+        repo_b = tmp_path / "my_project"
+        repo_a.mkdir()
+        repo_b.mkdir()
+
         with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
-            # Save state for 'my.project'
-            state = SyncState(
-                repo_id="project-a-id",
-                repo_head="abc",
-                last_sync="",
-                repo_name="my.project",
-                files={},
-            )
-            save_sync_state("my.project", state)
+            state_a = SyncState(repo_id="project-a-id", repo_head="abc", last_sync="", files={})
+            state_b = SyncState(repo_id="project-b-id", repo_head="def", last_sync="", files={})
+            save_sync_state(str(repo_a), state_a)
+            save_sync_state(str(repo_b), state_b)
 
-            # Try to load with colliding name 'my_project' (maps to same file)
-            loaded = load_sync_state("my_project")
+            loaded_a = load_sync_state(str(repo_a))
+            loaded_b = load_sync_state(str(repo_b))
 
-        # Should reject because repo_name doesn't match
-        assert loaded is None
+        assert loaded_a is not None
+        assert loaded_a.repo_id == "project-a-id"
+        assert loaded_b is not None
+        assert loaded_b.repo_id == "project-b-id"
 
     def test_load_accepts_matching_repo_name(self, tmp_path: Path) -> None:
         """Should accept state when repo_name matches."""
+        repo_dir = tmp_path / "my-project"
+        repo_dir.mkdir()
+
         with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
             state = SyncState(
                 repo_id="project-id",
@@ -708,9 +716,9 @@ class TestSyncStateCollisionDetection:
                 repo_name="my-project",
                 files={},
             )
-            save_sync_state("my-project", state)
+            save_sync_state(str(repo_dir), state)
 
-            loaded = load_sync_state("my-project")
+            loaded = load_sync_state(str(repo_dir))
 
         assert loaded is not None
         assert loaded.repo_id == "project-id"
@@ -720,10 +728,15 @@ class TestSyncStateCollisionDetection:
         """Should accept old state files without repo_name for backward compat."""
         import json
 
+        from relace_mcp.tools.repo import state as state_module
+
+        repo_dir = tmp_path / "my_project"
+        repo_dir.mkdir()
+
         with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
-            # Manually create old-format state file without repo_name
-            state_file = tmp_path / "my_project.json"
-            tmp_path.mkdir(parents=True, exist_ok=True)
+            repo_name, _cloud_repo_name, fingerprint = state_module.get_repo_identity(str(repo_dir))
+            safe_name = state_module._sanitize_repo_name(repo_name)
+            state_file = tmp_path / f"{safe_name}__{fingerprint}.json"
             state_file.write_text(
                 json.dumps(
                     {
@@ -736,7 +749,7 @@ class TestSyncStateCollisionDetection:
                 )
             )
 
-            loaded = load_sync_state("my_project")
+            loaded = load_sync_state(str(repo_dir))
 
         # Should accept (backward compat)
         assert loaded is not None
@@ -745,6 +758,9 @@ class TestSyncStateCollisionDetection:
 
     def test_save_sets_repo_name_automatically(self, tmp_path: Path) -> None:
         """Should automatically set repo_name when saving."""
+        repo_dir = tmp_path / "my-project"
+        repo_dir.mkdir()
+
         with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
             state = SyncState(
                 repo_id="test-id",
@@ -755,13 +771,13 @@ class TestSyncStateCollisionDetection:
             # repo_name is initially empty
             assert state.repo_name == ""
 
-            save_sync_state("my-project", state)
+            save_sync_state(str(repo_dir), state)
 
             # After save, state should have repo_name set
             assert state.repo_name == "my-project"
 
             # And the loaded state should also have it
-            loaded = load_sync_state("my-project")
+            loaded = load_sync_state(str(repo_dir))
             assert loaded is not None
             assert loaded.repo_name == "my-project"
 

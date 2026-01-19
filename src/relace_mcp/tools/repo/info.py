@@ -1,10 +1,9 @@
 import logging
 import uuid
-from pathlib import Path
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
-from .state import get_current_git_info, load_sync_state
+from .state import get_current_git_info, get_repo_identity, load_sync_state
 
 logger = logging.getLogger(__name__)
 
@@ -31,15 +30,26 @@ def cloud_info_logic(
         - error: Error message if failed (optional)
     """
     trace_id = str(uuid.uuid4())[:8]
-    repo_name = Path(base_dir).name
-    logger.info("[%s] Getting cloud info for '%s'", trace_id, repo_name)
+    local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(base_dir)
+    logger.info("[%s] Getting cloud info for '%s'", trace_id, local_repo_name)
 
     try:
+        if not local_repo_name or not cloud_repo_name:
+            return {
+                "repo_name": local_repo_name or None,
+                "cloud_repo_name": None,
+                "local": None,
+                "synced": None,
+                "cloud": None,
+                "status": None,
+                "error": "Invalid base_dir: cannot derive repository name.",
+            }
+
         # Get current git info
         current_branch, current_head = get_current_git_info(base_dir)
 
         # Load local sync state
-        sync_state = load_sync_state(repo_name)
+        sync_state = load_sync_state(base_dir)
 
         # Build local info
         local_info = {
@@ -58,25 +68,54 @@ def cloud_info_logic(
                 "last_sync": sync_state.last_sync,
                 "tracked_files": len(sync_state.files),
                 "skipped_files": len(sync_state.skipped_files),
+                "cloud_repo_name": sync_state.cloud_repo_name or cloud_repo_name,
             }
 
         # Try to find cloud repo in list
         cloud_info = None
+        warnings: list[str] = []
         try:
             repos = client.list_repos(trace_id=trace_id)
-            for repo in repos:
-                metadata = repo.get("metadata") or {}
-                name = metadata.get("name") or repo.get("name")
-                if name == repo_name:
+            if sync_state and sync_state.repo_id:
+                target_id = sync_state.repo_id
+                for repo in repos:
+                    rid = repo.get("repo_id") or repo.get("id")
+                    if rid == target_id:
+                        cloud_info = {
+                            "repo_id": rid,
+                            "name": (repo.get("metadata") or {}).get("name") or repo.get("name"),
+                            "auto_index": repo.get("auto_index"),
+                            "created_at": repo.get("created_at"),
+                            "updated_at": repo.get("updated_at"),
+                        }
+                        break
+                if cloud_info is None:
+                    warnings.append(
+                        f"Synced repo_id '{target_id}' not found in cloud list; repo may be deleted or inaccessible."
+                    )
+            else:
+                matches = []
+                for repo in repos:
+                    metadata = repo.get("metadata") or {}
+                    name = metadata.get("name") or repo.get("name")
+                    if name == cloud_repo_name:
+                        matches.append(repo)
+                if len(matches) == 1:
+                    repo = matches[0]
                     cloud_info = {
                         "repo_id": repo.get("repo_id") or repo.get("id"),
+                        "name": (repo.get("metadata") or {}).get("name") or repo.get("name"),
                         "auto_index": repo.get("auto_index"),
                         "created_at": repo.get("created_at"),
                         "updated_at": repo.get("updated_at"),
                     }
-                    break
+                elif len(matches) > 1:
+                    warnings.append(
+                        f"Multiple cloud repos found with name '{cloud_repo_name}'; cannot pick unambiguously."
+                    )
         except Exception as exc:
             logger.warning("[%s] Failed to fetch cloud repos: %s", trace_id, exc)
+            warnings.append(f"Failed to fetch cloud repo list: {exc}")
 
         # Determine status
         ref_changed = False
@@ -112,17 +151,20 @@ def cloud_info_logic(
         )
 
         return {
-            "repo_name": repo_name,
+            "repo_name": local_repo_name,
+            "cloud_repo_name": cloud_repo_name,
             "local": local_info,
             "synced": synced_info,
             "cloud": cloud_info,
             "status": status_info,
+            "warnings": warnings,
         }
 
     except Exception as exc:
         logger.error("[%s] Cloud info failed: %s", trace_id, exc)
         return {
-            "repo_name": repo_name,
+            "repo_name": local_repo_name,
+            "cloud_repo_name": cloud_repo_name,
             "local": None,
             "synced": None,
             "cloud": None,

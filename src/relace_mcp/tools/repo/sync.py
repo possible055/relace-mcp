@@ -13,6 +13,7 @@ from .state import (
     SyncState,
     compute_file_hash,
     get_current_git_info,
+    get_repo_identity,
     load_sync_state,
     save_sync_state,
 )
@@ -384,17 +385,43 @@ def cloud_sync_logic(
     current_branch, current_head = get_current_git_info(base_dir)
     ref_changed = False
     deletes_suppressed = 0
-    repo_name = Path(base_dir).name
+    local_repo_name, cloud_repo_name, project_fingerprint = get_repo_identity(base_dir)
+    if not local_repo_name or not cloud_repo_name:
+        return {
+            "repo_id": None,
+            "repo_name": local_repo_name or None,
+            "cloud_repo_name": None,
+            "repo_head": None,
+            "is_incremental": False,
+            "files_created": 0,
+            "files_updated": 0,
+            "files_deleted": 0,
+            "files_unchanged": 0,
+            "files_skipped": 0,
+            "total_files": 0,
+            "local_git_branch": current_branch,
+            "local_git_head": current_head[:8] if current_head else "",
+            "ref_changed": False,
+            "sync_mode": "error",
+            "deletes_suppressed": 0,
+            "error": "Invalid base_dir: cannot derive repository name.",
+        }
 
     try:
         # Ensure repo exists
-        repo_id = client.ensure_repo(repo_name, trace_id=trace_id)
-        logger.info("[%s] Using repo '%s' (id=%s)", trace_id, repo_name, repo_id)
+        repo_id = client.ensure_repo(cloud_repo_name, trace_id=trace_id)
+        logger.info(
+            "[%s] Using cloud repo '%s' (id=%s) for local '%s'",
+            trace_id,
+            cloud_repo_name,
+            repo_id,
+            local_repo_name,
+        )
 
         # Load cached sync state (unless force)
         cached_state: SyncState | None = None
         if not force:
-            cached_state = load_sync_state(repo_name)
+            cached_state = load_sync_state(base_dir)
             if cached_state and cached_state.repo_id != repo_id:
                 # Repo ID mismatch, force full sync
                 logger.warning(
@@ -551,16 +578,20 @@ def cloud_sync_logic(
             repo_id=repo_id,
             repo_head=repo_head,
             last_sync="",  # Will be set by save_sync_state
+            repo_name=local_repo_name,
+            cloud_repo_name=cloud_repo_name,
+            project_fingerprint=project_fingerprint,
             git_branch=current_branch,
             git_head_sha=current_head,
             files=new_hashes,
             skipped_files=new_skipped,
         )
-        save_sync_state(repo_name, new_state)
+        state_saved = save_sync_state(base_dir, new_state)
 
         return {
             "repo_id": repo_id,
-            "repo_name": repo_name,
+            "repo_name": local_repo_name,
+            "cloud_repo_name": cloud_repo_name,
             "repo_head": repo_head,
             "is_incremental": is_incremental,
             "files_created": files_created,
@@ -575,13 +606,15 @@ def cloud_sync_logic(
             "ref_changed": ref_changed,
             "sync_mode": sync_mode,
             "deletes_suppressed": deletes_suppressed,
+            "state_saved": state_saved,
         }
 
     except Exception as exc:
         logger.error("[%s] Cloud sync failed: %s", trace_id, exc)
         return {
             "repo_id": None,
-            "repo_name": repo_name,
+            "repo_name": local_repo_name,
+            "cloud_repo_name": cloud_repo_name,
             "repo_head": None,
             "is_incremental": False,
             "files_created": 0,

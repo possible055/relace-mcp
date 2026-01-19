@@ -42,6 +42,15 @@ def mock_repo_client(_mock_config: RelaceConfig) -> MagicMock:
     return client
 
 
+@pytest.fixture(autouse=True)
+def _patch_repo_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep cloud_repo_name == local repo dir name for unit tests."""
+    monkeypatch.setattr(
+        "relace_mcp.tools.repo.info.get_repo_identity",
+        lambda base_dir: (Path(base_dir).resolve().name, Path(base_dir).resolve().name, "fp"),
+    )
+
+
 class TestCloudListLogic:
     """Test cloud_list_logic function."""
 
