@@ -271,9 +271,13 @@ class TestFastAgenticSearchHarness:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Partial results should never contain invalid ranges like end=-1."""
-        import relace_mcp.tools.search.harness as harness_mod
+        import relace_mcp.tools.search.harness.core as harness_core
 
-        monkeypatch.setattr(harness_mod, "SEARCH_MAX_TURNS", 2)
+        monkeypatch.setattr(harness_core, "SEARCH_MAX_TURNS", 2)
+        # Enable find_symbol via env var since it's now opt-in
+        monkeypatch.setenv(
+            "SEARCH_ENABLED_TOOLS", "view_file,view_directory,grep_search,glob,find_symbol"
+        )
         (tmp_path / "test.py").write_text("line1\nline2\nline3\n")
 
         view_to_eof_call = {
@@ -430,20 +434,16 @@ class TestToolSchemas:
         assert "bash" not in names
 
     def test_tool_names(self) -> None:
-        """Default tool schemas should include the expected core tools."""
+        """Default tool schemas should include only basic exploration tools."""
         names = {t["function"]["name"] for t in TOOL_SCHEMAS}
-        assert {
+        # Default set: basic tools only (LSP tools require opt-in)
+        assert names == {
             "view_file",
             "view_directory",
             "grep_search",
             "glob",
-            "find_symbol",
-            "search_symbol",
-            "get_type",
-            "list_symbols",
-            "call_graph",
             "report_back",
-        }.issubset(names)
+        }
 
     def test_bash_tool_opt_in(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """bash should be available when explicitly enabled."""

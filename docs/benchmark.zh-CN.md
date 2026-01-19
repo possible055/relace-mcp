@@ -36,17 +36,14 @@ uv run python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.json
 uv run python -m benchmark.cli.run \
   --dataset artifacts/data/processed/elite_50.jsonl \
   --limit 64 --seed 0 --shuffle \
-  --harness fast \
   --search-max-turns 8 \
   --search-temperature 0.2 \
   --no-progress
-
-# Dual harness 额外控制
-uv run python -m benchmark.cli.run \
-  --harness dual \
-  --dual-channel-turns 4 \
-  --merger-temperature 0.1
 ```
+
+**输出**:
+- Results: `benchmark/artifacts/results/<name>.jsonl`
+- Report: `benchmark/artifacts/reports/<name>.report.json`
 
 **常用参数**:
 | 参数 | 默认值 | 说明 |
@@ -54,11 +51,8 @@ uv run python -m benchmark.cli.run \
 | `--limit` | 全部 | Case 数量 |
 | `--shuffle/--no-shuffle` | `--shuffle` | 随机选择 |
 | `--seed` | `0` | 随机种子 |
-| `--harness` | `dual` | Harness 类型 (`fast` 或 `dual`) |
 | `--search-max-turns` | env | 覆盖 `SEARCH_MAX_TURNS` |
 | `--search-temperature` | env | 覆盖 `SEARCH_TEMPERATURE` |
-| `--dual-channel-turns` | env | 覆盖 `SEARCH_DUAL_CHANNEL_TURNS` (仅 dual) |
-| `--merger-temperature` | env | 覆盖 `MERGER_TEMPERATURE` (仅 dual) |
 | `--search-prompt-file` | env | 覆盖 `SEARCH_PROMPT_FILE` (YAML) |
 | `--progress/--no-progress` | `--progress` | 显示进度 |
 | `--verbose` | 关闭 | 详细日志 |
@@ -72,17 +66,8 @@ uv run python -m benchmark.cli.run \
 uv run python -m benchmark.cli.grid \
   --dataset artifacts/data/processed/elite_50.jsonl \
   --limit 64 --seed 0 --shuffle \
-  --harness fast \
   --turns 4 --turns 6 --turns 8 \
   --temperatures 0 --temperatures 0.2 --temperatures 0.4 --temperatures 0.6
-
-# Dual harness 额外维度
-uv run python -m benchmark.cli.grid \
-  --harness dual \
-  --turns 4 --turns 8 \
-  --temperatures 0 --temperatures 0.3 \
-  --dual-channel-turns 2 --dual-channel-turns 4 \
-  --merger-temperatures 0 --merger-temperatures 0.1
 ```
 
 **网格参数**:
@@ -90,8 +75,6 @@ uv run python -m benchmark.cli.grid \
 |------|------|------|
 | `--turns` | ✓ | `SEARCH_MAX_TURNS` 网格值 (可重复) |
 | `--temperatures` | ✓ | `SEARCH_TEMPERATURE` 网格值 (可重复) |
-| `--dual-channel-turns` | | `SEARCH_DUAL_CHANNEL_TURNS` 网格值 (可重复) |
-| `--merger-temperatures` | | `MERGER_TEMPERATURE` 网格值 (可重复) |
 | `--search-prompt-file` | | 覆盖所有 run 的提示文件 |
 | `--output` | | 输出目录前缀 |
 | `--dry-run` | | 仅打印计划的 run，不执行 |
@@ -119,7 +102,7 @@ uv run python -m benchmark.cli.analyze run1.report.json run2.report.json
 | Line Prec(M) | 仅统计匹配文件：正确行 / 返回行总数 |
 | Function Hit Rate | 有重叠的函数 / 函数总数 |
 
-每个 `*.report.json` 包含 metadata 追踪: `temperature`、`max_turns`、`dual_channel_turns`、`prompt_file` 以确保可复现性。
+每个 `*.report.json` 包含 metadata 追踪: `temperature`、`max_turns`、`prompt_file` 以确保可复现性。
 
 ## 6. 故障排除
 
@@ -145,5 +128,5 @@ benchmark/
 │   ├── data/        # 数据集文件
 │   ├── repos/       # 缓存仓库
 │   ├── results/     # 运行输出 (.jsonl)
-│   └── reports/     # 汇总报告 (.json)
+│   └── reports/     # 汇总报告 (.report.json, .grid.json)
 ```

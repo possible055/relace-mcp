@@ -1,14 +1,23 @@
 import atexit
 import concurrent.futures
+import copy
+import fnmatch
+import json
 import logging
 import os
 import shutil
+import signal
 import subprocess  # nosec B404 - required for LSP server communication
 import sys
 import threading
+import time
+import tomllib
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from relace_mcp.config.compat import getenv_with_fallback
 from relace_mcp.lsp.languages.base import LanguageServerConfig
 from relace_mcp.lsp.protocol import MessageBuffer, encode_message
 from relace_mcp.lsp.types import (
@@ -33,6 +42,209 @@ SHUTDOWN_TIMEOUT = 5.0
 
 _READ_CHUNK_SIZE = 8192
 
+_FS_SYNC_MIN_INTERVAL_SECONDS = 5.0
+_FS_SYNC_BUDGET_SECONDS = 1.0
+_FS_SYNC_MAX_FILES = 20000
+_FS_SYNC_MAX_EVENTS = 2000
+
+_CONFIG_FILE_NAMES = ("pyrightconfig.json", "pyproject.toml")
+
+_DEFAULT_IGNORED_DIR_NAMES = frozenset(
+    {
+        ".git",
+        ".hg",
+        ".svn",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".tox",
+        ".venv",
+        ".direnv",
+        "__pycache__",
+        "build",
+        "dist",
+        "node_modules",
+        "site-packages",
+        "target",
+        "venv",
+    }
+)
+
+
+def _deep_update_dict(target: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            _deep_update_dict(target[key], value)
+        else:
+            target[key] = value
+    return target
+
+
+def _parse_nonnegative_int_env_with_fallback(new_name: str, old_name: str, default: int) -> int:
+    raw = getenv_with_fallback(new_name, old_name).strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    if value < 0:
+        return default
+    return value
+
+
+def _normalize_str_list(raw: Any) -> list[str] | None:
+    if not isinstance(raw, list):
+        return None
+
+    values: list[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            return None
+        stripped = item.strip()
+        if stripped:
+            values.append(stripped)
+    return values
+
+
+def _read_pyrightconfig(workspace: Path) -> dict[str, Any]:
+    path = workspace / "pyrightconfig.json"
+    if not path.is_file():
+        return {}
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.debug("Failed to read pyrightconfig.json: %s", e)
+        return {}
+
+    if not isinstance(data, dict):
+        return {}
+
+    analysis: dict[str, Any] = {}
+    for key in ("include", "exclude", "ignore"):
+        values = _normalize_str_list(data.get(key))
+        if values is not None:
+            analysis[key] = values
+
+    if not analysis:
+        return {}
+    return {"basedpyright": {"analysis": analysis}}
+
+
+def _read_pyproject(workspace: Path) -> dict[str, Any]:
+    path = workspace / "pyproject.toml"
+    if not path.is_file():
+        return {}
+
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.debug("Failed to read pyproject.toml: %s", e)
+        return {}
+
+    if not isinstance(data, dict):
+        return {}
+
+    tool = data.get("tool")
+    if not isinstance(tool, dict):
+        return {}
+
+    section = tool.get("basedpyright")
+    if not isinstance(section, dict):
+        section = tool.get("pyright")
+    if not isinstance(section, dict):
+        return {}
+
+    analysis: dict[str, Any] = {}
+    for key in ("include", "exclude", "ignore"):
+        values = _normalize_str_list(section.get(key))
+        if values is not None:
+            analysis[key] = values
+
+    if not analysis:
+        return {}
+    return {"basedpyright": {"analysis": analysis}}
+
+
+def _load_project_workspace_settings(workspace: Path) -> dict[str, Any]:
+    settings: dict[str, Any] = {}
+    _deep_update_dict(settings, _read_pyproject(workspace))
+    _deep_update_dict(settings, _read_pyrightconfig(workspace))
+    return settings
+
+
+def _normalize_glob_pattern(raw: str) -> str:
+    pattern = raw.strip().replace("\\", "/")
+    while pattern.startswith("./"):
+        pattern = pattern[2:]
+    pattern = pattern.lstrip("/")
+    return pattern
+
+
+def _expand_glob_patterns(raw_patterns: list[str]) -> list[str]:
+    patterns: list[str] = []
+    seen: set[str] = set()
+    for raw in raw_patterns:
+        base = _normalize_glob_pattern(raw)
+        if not base:
+            continue
+
+        candidate = base
+        while True:
+            if candidate and candidate not in seen:
+                seen.add(candidate)
+                patterns.append(candidate)
+
+            if "/**/" in candidate:
+                candidate = candidate.replace("/**/", "/", 1)
+                continue
+
+            if candidate.endswith("/**"):
+                candidate = candidate[:-3]
+                continue
+
+            break
+    return patterns
+
+
+def _iter_parent_paths(rel_path: str) -> list[str]:
+    parents: list[str] = []
+    parts = rel_path.split("/")
+    for i in range(len(parts) - 1, 0, -1):
+        parents.append("/".join(parts[:i]))
+    return parents
+
+
+def _matches_any_pattern(rel_path: str, patterns: list[str]) -> bool:
+    if not patterns:
+        return False
+
+    if any(fnmatch.fnmatchcase(rel_path, pattern) for pattern in patterns):
+        return True
+
+    parents = _iter_parent_paths(rel_path)
+    for parent in parents:
+        if any(fnmatch.fnmatchcase(parent, pattern) for pattern in patterns):
+            return True
+
+    return False
+
+
+def _extract_glob_prefix(raw: str) -> str:
+    pattern = _normalize_glob_pattern(raw)
+    if not pattern:
+        return ""
+
+    parts = [p for p in pattern.split("/") if p and p != "."]
+    prefix_parts: list[str] = []
+    for part in parts:
+        if any(ch in part for ch in ("*", "?", "[")):
+            break
+        prefix_parts.append(part)
+
+    return "/".join(prefix_parts)
+
 
 class LSPClient:
     """LSP client that communicates with a language server via stdio.
@@ -52,6 +264,7 @@ class LSPClient:
         self._workspace = workspace
         self._lock = threading.RLock()
         self._request_lock = threading.RLock()
+        self._send_lock = threading.Lock()
         self._stop_event = threading.Event()
 
         if timeout_seconds is None:
@@ -72,7 +285,233 @@ class LSPClient:
         self._pending_requests: dict[int, concurrent.futures.Future[Any]] = {}
         self._initialized = False
 
-        atexit.register(self._cleanup)
+        self._workspace_settings = self._build_workspace_settings()
+
+        self._fs_snapshot: dict[str, tuple[int, int]] = {}
+        self._fs_snapshot_initialized = False
+        self._fs_last_sync = 0.0
+
+        self._atexit_cleanup_handler = self._cleanup
+        atexit.register(self._atexit_cleanup_handler)
+
+    def _build_workspace_settings(self) -> dict[str, Any]:
+        settings = copy.deepcopy(self._config.workspace_config)
+        project_settings = _load_project_workspace_settings(Path(self._workspace))
+        _deep_update_dict(settings, project_settings)
+        return settings
+
+    def _get_analysis_patterns(self) -> tuple[list[str], list[str], list[str]]:
+        basedpyright = self._workspace_settings.get("basedpyright")
+        if not isinstance(basedpyright, dict):
+            return ([], [], [])
+
+        analysis = basedpyright.get("analysis")
+        if not isinstance(analysis, dict):
+            return ([], [], [])
+
+        include = analysis.get("include")
+        exclude = analysis.get("exclude")
+        ignore = analysis.get("ignore")
+
+        include_patterns = include if isinstance(include, list) else []
+        exclude_patterns = exclude if isinstance(exclude, list) else []
+        ignore_patterns = ignore if isinstance(ignore, list) else []
+        return (
+            [p for p in include_patterns if isinstance(p, str)],
+            [p for p in exclude_patterns if isinstance(p, str)],
+            [p for p in ignore_patterns if isinstance(p, str)],
+        )
+
+    def _restart_language_server(self, reason: str) -> None:
+        logger.info("Restarting language server")
+        self._fs_snapshot.clear()
+        self._fs_snapshot_initialized = False
+        self._fs_last_sync = 0.0
+        self._workspace_settings = self._build_workspace_settings()
+        self.shutdown()
+        self.start()
+
+    def _sync_workspace_changes(self) -> None:
+        if not self._initialized:
+            return
+
+        now = time.monotonic()
+        if now - self._fs_last_sync < _FS_SYNC_MIN_INTERVAL_SECONDS:
+            return
+        self._fs_last_sync = now
+
+        workspace_root = Path(self._workspace)
+        include_raw, exclude_raw, _ = self._get_analysis_patterns()
+        include_patterns = _expand_glob_patterns(include_raw)
+        exclude_patterns = _expand_glob_patterns(exclude_raw)
+
+        scan_roots: list[Path] = []
+        if include_raw:
+            root_candidates: set[Path] = set()
+            for raw in include_raw:
+                prefix = _extract_glob_prefix(raw)
+                if not prefix:
+                    continue
+                candidate = workspace_root / prefix
+                if candidate.is_dir():
+                    root_candidates.add(candidate)
+                elif candidate.is_file() and candidate.parent.is_dir():
+                    root_candidates.add(candidate.parent)
+            scan_roots = sorted(root_candidates) if root_candidates else [workspace_root]
+        else:
+            scan_roots = [workspace_root]
+
+        start = time.monotonic()
+        scanned_files = 0
+        truncated = False
+
+        def should_consider(rel_path: str) -> bool:
+            if include_patterns and not _matches_any_pattern(rel_path, include_patterns):
+                return False
+            if _matches_any_pattern(rel_path, exclude_patterns):
+                return False
+            return True
+
+        def should_skip_dir(rel_dir: str, dir_name: str) -> bool:
+            if rel_dir not in ("", ".") and dir_name in _DEFAULT_IGNORED_DIR_NAMES:
+                return True
+            if _matches_any_pattern(rel_dir, exclude_patterns):
+                return True
+            return False
+
+        current_snapshot: dict[str, tuple[int, int]] = {}
+
+        def record_path(path: Path) -> None:
+            nonlocal scanned_files, truncated
+            if path.is_symlink():
+                return
+            try:
+                rel_path = path.relative_to(workspace_root).as_posix()
+            except ValueError:
+                return
+            try:
+                st = path.stat()
+            except OSError:
+                return
+            if rel_path not in _CONFIG_FILE_NAMES and not should_consider(rel_path):
+                return
+            current_snapshot[rel_path] = (st.st_mtime_ns, st.st_size)
+            scanned_files += 1
+            if scanned_files >= _FS_SYNC_MAX_FILES:
+                truncated = True
+
+        for cfg in _CONFIG_FILE_NAMES:
+            record_path(workspace_root / cfg)
+
+        pending_dirs: list[Path] = list(reversed(scan_roots))
+        while pending_dirs and not truncated:
+            if time.monotonic() - start > _FS_SYNC_BUDGET_SECONDS:
+                truncated = True
+                break
+
+            current_dir = pending_dirs.pop()
+            try:
+                rel_dir = current_dir.relative_to(workspace_root).as_posix()
+            except ValueError:
+                continue
+
+            if rel_dir and should_skip_dir(rel_dir, current_dir.name):
+                continue
+
+            try:
+                with os.scandir(current_dir) as it:
+                    for entry in it:
+                        if time.monotonic() - start > _FS_SYNC_BUDGET_SECONDS:
+                            truncated = True
+                            break
+                        if scanned_files >= _FS_SYNC_MAX_FILES:
+                            truncated = True
+                            break
+                        if entry.is_symlink():
+                            continue
+
+                        try:
+                            if entry.is_dir(follow_symlinks=False):
+                                child_dir = Path(entry.path)
+                                try:
+                                    child_rel = child_dir.relative_to(workspace_root).as_posix()
+                                except ValueError:
+                                    continue
+                                if should_skip_dir(child_rel, entry.name):
+                                    continue
+                                pending_dirs.append(child_dir)
+                                continue
+
+                            if not entry.is_file(follow_symlinks=False):
+                                continue
+                        except OSError:
+                            continue
+
+                        name = entry.name
+                        if not (name.endswith(".py") or name.endswith(".pyi")):
+                            continue
+
+                        record_path(Path(entry.path))
+            except OSError:
+                continue
+
+        if not self._fs_snapshot_initialized:
+            self._fs_snapshot = current_snapshot
+            self._fs_snapshot_initialized = True
+            return
+
+        changes: list[tuple[int, str]] = []
+        config_changed = False
+
+        for rel_path, meta in current_snapshot.items():
+            prev = self._fs_snapshot.get(rel_path)
+            if prev is None:
+                changes.append((1, rel_path))
+            elif prev != meta:
+                changes.append((2, rel_path))
+            if rel_path in _CONFIG_FILE_NAMES:
+                config_changed = config_changed or prev != meta
+
+        if truncated:
+            for cfg in _CONFIG_FILE_NAMES:
+                if cfg in self._fs_snapshot and cfg not in current_snapshot:
+                    changes.append((3, cfg))
+                    config_changed = True
+
+        if not truncated:
+            for rel_path in self._fs_snapshot:
+                if rel_path not in current_snapshot:
+                    changes.append((3, rel_path))
+                    if rel_path in _CONFIG_FILE_NAMES:
+                        config_changed = True
+            self._fs_snapshot = current_snapshot
+        else:
+            self._fs_snapshot.update(current_snapshot)
+
+        if config_changed:
+            self._restart_language_server("Workspace configuration changed")
+            return
+
+        if not changes:
+            return
+
+        if len(changes) > _FS_SYNC_MAX_EVENTS:
+            self._restart_language_server(f"Too many file changes ({len(changes)})")
+            return
+
+        payload = []
+        for change_type, rel_path in changes:
+            abs_path = (workspace_root / rel_path).absolute()
+            payload.append({"uri": abs_path.as_uri(), "type": change_type})
+
+        if payload:
+            self._send_notification("workspace/didChangeWatchedFiles", {"changes": payload})
+
+    def _sync_workspace_changes_best_effort(self) -> None:
+        try:
+            self._sync_workspace_changes()
+        except Exception as e:
+            logger.debug("Workspace file sync failed: %s", e)
 
     def _resolve_command(self, command: list[str]) -> list[str]:
         """Resolve the language server executable path.
@@ -136,8 +575,10 @@ class LSPClient:
             import psutil
         except ImportError:
             # Fallback: just kill the main process
-            if self._process:
-                self._process.kill()
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except Exception:  # nosec B110 - best-effort cleanup
+                pass
             return
 
         try:
@@ -157,6 +598,11 @@ class LSPClient:
 
     def _cleanup(self) -> None:
         """Cleanup resources (best-effort)."""
+        try:
+            atexit.unregister(self._atexit_cleanup_handler)
+        except Exception:  # nosec B110 - best-effort cleanup
+            pass
+
         with self._lock:
             self._stop_event.set()
             self._initialized = False
@@ -242,6 +688,10 @@ class LSPClient:
 
     def _handle_message(self, msg: dict[str, Any]) -> None:
         """Handle an incoming message from the language server."""
+        if "id" in msg and "method" in msg:
+            self._handle_server_request(msg["id"], msg.get("method"), msg.get("params"))
+            return
+
         if "id" in msg and "method" not in msg:
             req_id = msg["id"]
             with self._lock:
@@ -264,6 +714,71 @@ class LSPClient:
                 params = msg.get("params", {})
                 logger.debug("LSP: %s", params.get("message", ""))
 
+    def _send_response(self, req_id: Any, result: Any) -> None:
+        self._send_message({"jsonrpc": "2.0", "id": req_id, "result": result})
+
+    def _send_error_response(self, req_id: Any, code: int, message: str) -> None:
+        self._send_message(
+            {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
+        )
+
+    def _get_settings_section(self, section: Any) -> Any:
+        if not section or not isinstance(section, str):
+            return self._workspace_settings
+
+        current: Any = self._workspace_settings
+        for part in section.split("."):
+            if not isinstance(current, dict):
+                return None
+            current = current.get(part)
+        return current
+
+    def _handle_server_request(self, req_id: Any, method: Any, params: Any) -> None:
+        if not isinstance(method, str):
+            try:
+                self._send_error_response(req_id, -32601, "Invalid request")
+            except Exception:
+                return
+            return
+
+        try:
+            if method in (
+                "client/registerCapability",
+                "client/unregisterCapability",
+                "window/workDoneProgress/create",
+            ):
+                self._send_response(req_id, None)
+                return
+
+            if method == "workspace/workspaceFolders":
+                workspace_uri = Path(self._workspace).as_uri()
+                self._send_response(
+                    req_id, [{"uri": workspace_uri, "name": Path(self._workspace).name}]
+                )
+                return
+
+            if method == "workspace/configuration":
+                items = []
+                if isinstance(params, dict):
+                    items = params.get("items", [])
+
+                results: list[Any] = []
+                if isinstance(items, list):
+                    for item in items:
+                        section = item.get("section") if isinstance(item, dict) else None
+                        results.append(self._get_settings_section(section))
+
+                self._send_response(req_id, results)
+                return
+
+            self._send_error_response(req_id, -32601, f"Method not found: {method}")
+        except Exception:
+            logger.debug("Failed to handle server request")
+            try:
+                self._send_error_response(req_id, -32603, "Internal error")
+            except Exception:
+                return
+
     def _send_message(self, content: dict[str, Any]) -> None:
         """Send a message to the language server."""
         process = self._process
@@ -272,8 +787,9 @@ class LSPClient:
 
         data = encode_message(content)
         try:
-            process.stdin.write(data)
-            process.stdin.flush()
+            with self._send_lock:
+                process.stdin.write(data)
+                process.stdin.flush()
         except BrokenPipeError as e:
             raise LSPError(f"Language server stdin closed: {e}") from e
 
@@ -311,6 +827,10 @@ class LSPClient:
         except TimeoutError:
             with self._lock:
                 self._pending_requests.pop(req_id, None)
+            try:
+                self._send_notification("$/cancelRequest", {"id": req_id})
+            except Exception:  # nosec B110 - best-effort cancellation
+                pass
             raise LSPError(f"Request {method} timed out") from None
 
     def _send_notification(self, method: str, params: dict[str, Any]) -> None:
@@ -382,6 +902,9 @@ class LSPClient:
                     # uses this flag to decide whether it should wait for a
                     # client-side settings update after `initialized`.
                     "workspaceFolders": False,
+                    # basedpyright falls back to a server-side file watcher if the
+                    # client doesn't support dynamicRegistration for watched files.
+                    "didChangeWatchedFiles": {"dynamicRegistration": True},
                 },
             },
             "workspaceFolders": [{"uri": workspace_uri, "name": Path(self._workspace).name}],
@@ -393,11 +916,10 @@ class LSPClient:
         self._send_request("initialize", params, timeout=self._startup_timeout)
         self._send_notification("initialized", {})
         # basedpyright resolves workspace initialization after a settings update.
-        # We don't support workspace/configuration requests, so push settings via
-        # didChangeConfiguration to unblock language services.
+        # Push settings via didChangeConfiguration to unblock language services.
         self._send_notification(
             "workspace/didChangeConfiguration",
-            {"settings": self._config.workspace_config},
+            {"settings": self._workspace_settings},
         )
 
     def _open_file(self, file_path: str) -> str:
@@ -453,6 +975,7 @@ class LSPClient:
                 if not self._initialized:
                     raise LSPError("Language server not initialized")
 
+            self._sync_workspace_changes_best_effort()
             uri = self._open_file(file_path)
             try:
                 result = self._send_request(
@@ -475,6 +998,7 @@ class LSPClient:
                 if not self._initialized:
                     raise LSPError("Language server not initialized")
 
+            self._sync_workspace_changes_best_effort()
             uri = self._open_file(file_path)
             try:
                 result = self._send_request(
@@ -529,6 +1053,7 @@ class LSPClient:
                 if not self._initialized:
                     raise LSPError("Language server not initialized")
 
+            self._sync_workspace_changes_best_effort()
             result = self._send_request("workspace/symbol", {"query": query})
             return self._parse_symbol_info(result)
 
@@ -572,6 +1097,7 @@ class LSPClient:
                 if not self._initialized:
                     raise LSPError("Language server not initialized")
 
+            self._sync_workspace_changes_best_effort()
             uri = self._open_file(file_path)
             try:
                 result = self._send_request(
@@ -624,6 +1150,7 @@ class LSPClient:
                 if not self._initialized:
                     raise LSPError("Language server not initialized")
 
+            self._sync_workspace_changes_best_effort()
             uri = self._open_file(file_path)
             try:
                 result = self._send_request(
@@ -688,6 +1215,7 @@ class LSPClient:
                 if not self._initialized:
                     raise LSPError("Language server not initialized")
 
+            self._sync_workspace_changes_best_effort()
             uri = self._open_file(file_path)
             try:
                 # Step 1: Prepare call hierarchy
@@ -804,6 +1332,10 @@ class LSPClientManager:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._clients: dict[str, LSPClient] = {}  # workspace -> client
+        self._lease_counts: dict[str, int] = {}  # workspace -> active sessions
+        self._max_clients = _parse_nonnegative_int_env_with_fallback(
+            "SEARCH_LSP_MAX_CLIENTS", "RELACE_LSP_MAX_CLIENTS", 2
+        )
         atexit.register(self._cleanup_all)
 
     @classmethod
@@ -824,6 +1356,110 @@ class LSPClientManager:
                 except Exception:  # nosec B110 - best-effort cleanup
                     pass
             self._clients.clear()
+            self._lease_counts.clear()
+
+    def _pop_oldest_idle_client_locked(self) -> tuple[str, LSPClient] | None:
+        for workspace in list(self._clients.keys()):
+            if self._lease_counts.get(workspace, 0) != 0:
+                continue
+            client = self._clients.pop(workspace)
+            self._lease_counts.pop(workspace, None)
+            return (workspace, client)
+        return None
+
+    def _get_or_create_client_locked(
+        self,
+        config: LanguageServerConfig,
+        workspace: str,
+        *,
+        timeout_seconds: float | None,
+        lease: bool,
+    ) -> tuple[LSPClient, list[tuple[str, LSPClient]]]:
+        existing = self._clients.get(workspace)
+        if existing is not None:
+            self._clients.pop(workspace, None)
+            self._clients[workspace] = existing
+            if lease:
+                self._lease_counts[workspace] = self._lease_counts.get(workspace, 0) + 1
+            else:
+                self._lease_counts.setdefault(workspace, 0)
+            return (existing, [])
+
+        evicted: list[tuple[str, LSPClient]] = []
+        if self._max_clients > 0:
+            while len(self._clients) >= self._max_clients:
+                popped = self._pop_oldest_idle_client_locked()
+                if popped is None:
+                    break
+                evicted.append(popped)
+
+        client = LSPClient(config, workspace, timeout_seconds=timeout_seconds)
+        try:
+            client.start()
+        except Exception:
+            for ws, c in evicted:
+                self._clients[ws] = c
+                self._lease_counts.setdefault(ws, 0)
+            raise
+
+        self._clients[workspace] = client
+        self._lease_counts[workspace] = 1 if lease else 0
+        return (client, evicted)
+
+    @contextmanager
+    def session(
+        self,
+        config: LanguageServerConfig,
+        workspace: str,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> "Generator[LSPClient, None, None]":
+        """Acquire a leased LSP client for a workspace.
+
+        A leased client is protected from LRU eviction while the session is
+        active. The manager uses a soft cap: if all existing clients are leased,
+        it may temporarily exceed SEARCH_LSP_MAX_CLIENTS until sessions are
+        released and idle clients can be evicted.
+
+        Args:
+            config: Language server configuration.
+            workspace: Workspace root path.
+            timeout_seconds: Optional override for startup/request/shutdown timeouts.
+        """
+        clients_to_shutdown: list[LSPClient] = []
+        with self._lock:
+            client, evicted = self._get_or_create_client_locked(
+                config,
+                workspace,
+                timeout_seconds=timeout_seconds,
+                lease=True,
+            )
+            clients_to_shutdown = [c for _, c in evicted]
+
+        for old_client in clients_to_shutdown:
+            try:
+                old_client.shutdown()
+            except Exception:  # nosec B110 - best-effort cleanup
+                pass
+
+        try:
+            yield client
+        finally:
+            clients_to_shutdown = []
+            with self._lock:
+                self._lease_counts[workspace] = max(0, self._lease_counts.get(workspace, 0) - 1)
+                if self._max_clients > 0:
+                    while len(self._clients) > self._max_clients:
+                        popped = self._pop_oldest_idle_client_locked()
+                        if popped is None:
+                            break
+                        clients_to_shutdown.append(popped[1])
+
+            for old_client in clients_to_shutdown:
+                try:
+                    old_client.shutdown()
+                except Exception:  # nosec B110 - best-effort cleanup
+                    pass
 
     def get_client(
         self,
@@ -833,9 +1469,23 @@ class LSPClientManager:
         timeout_seconds: float | None = None,
     ) -> LSPClient:
         """Get or create a client for the given workspace."""
+        clients_to_shutdown: list[LSPClient] = []
+        client_to_return: LSPClient
+
         with self._lock:
-            if workspace not in self._clients:
-                client = LSPClient(config, workspace, timeout_seconds=timeout_seconds)
-                client.start()
-                self._clients[workspace] = client
-            return self._clients[workspace]
+            client, evicted = self._get_or_create_client_locked(
+                config,
+                workspace,
+                timeout_seconds=timeout_seconds,
+                lease=False,
+            )
+            client_to_return = client
+            clients_to_shutdown = [c for _, c in evicted]
+
+        for old_client in clients_to_shutdown:
+            try:
+                old_client.shutdown()
+            except Exception:  # nosec B110 - best-effort cleanup
+                pass
+
+        return client_to_return

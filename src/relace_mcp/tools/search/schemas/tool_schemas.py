@@ -217,7 +217,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "- List directory trees (tree, ls -la)\n"
                 "- Check file types and encodings (file, head, tail, wc)\n"
                 "- Run static analysis tools (read-only)\n"
-                "- Inspect git history (git log, git show, git diff)\n\n"
+                "- Inspect git history (git log)\n\n"
                 "Restrictions:\n"
                 "- Commands run in the repository root (/repo)\n"
                 "- Timeout: 30 seconds\n"
@@ -434,14 +434,15 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
 
     Args:
         lsp_languages: Set of available LSP language IDs for the current project.
-            If None, find_symbol is included by default (legacy behavior).
-            If empty frozenset, find_symbol is hidden.
+            If None, uses default tool set (LSP tools require explicit opt-in via SEARCH_ENABLED_TOOLS).
+            If empty frozenset, LSP tools are hidden.
 
     Environment variables:
         - SEARCH_ENABLED_TOOLS: Comma/space-separated allowlist, e.g.
-          "view_file,view_directory,grep_search,glob,bash". `report_back` is always enabled.
-          If not set, all tools except `bash` are enabled by default (bash requires explicit
-          opt-in for security reasons).
+          "view_file,view_directory,grep_search,glob,find_symbol". `report_back` is always enabled.
+          If not set, only basic tools (view_file, view_directory, grep_search, glob) are enabled.
+          LSP tools (find_symbol, search_symbol, get_type, list_symbols, call_graph) require
+          explicit opt-in. bash also requires explicit opt-in for security reasons.
         - SEARCH_TOOL_STRICT: Set to 0/false to omit the non-standard `strict` field from tool schemas.
 
     Deprecated (still supported with warning):
@@ -458,19 +459,15 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
             enabled.discard("lsp_query")
             enabled.add("find_symbol")
     else:
-        # Default tools exclude `bash` for security (opt-in only via env var)
-        # bash requires Unix shell and poses higher security risk
-        # find_symbol and search_symbol are enabled by default for semantic Python code queries
+        # Default: basic exploration tools only
+        # LSP tools (find_symbol, search_symbol, get_type, list_symbols, call_graph)
+        # require explicit opt-in via SEARCH_ENABLED_TOOLS
+        # bash requires opt-in for security (Unix shell, higher risk)
         enabled = {
             "view_file",
             "view_directory",
             "grep_search",
             "glob",
-            "find_symbol",
-            "search_symbol",
-            "get_type",
-            "list_symbols",
-            "call_graph",
             "report_back",
         }
 

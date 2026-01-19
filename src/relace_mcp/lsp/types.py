@@ -38,8 +38,16 @@ class Location:
 
         return path
 
-    def to_grep_format(self, base_dir: str) -> str:
-        """Format as grep-like output: path:line:col"""
+    def to_grep_format(self, base_dir: str, *, filter_external: bool = True) -> str | None:
+        """Format as grep-like output: path:line:col
+
+        Args:
+            base_dir: Repository root directory.
+            filter_external: If True, return None for paths outside base_dir.
+
+        Returns:
+            Formatted string, or None if path is external and filter_external=True.
+        """
         path = self._uri_to_path().replace("\\", "/")
         # Convert to repo-relative path
         base_dir_norm = base_dir.replace("\\", "/")
@@ -53,6 +61,8 @@ class Location:
 
         if path_cmp.startswith(base_prefix_cmp):
             path = "/repo/" + path[len(base_prefix) :]
+        elif filter_external:
+            return None  # External path (stdlib, site-packages, etc.)
         # Line and column are 1-indexed in output (standard grep format)
         return f"{path}:{self.line + 1}:{self.character + 1}"
 
@@ -109,11 +119,15 @@ class SymbolInfo:
     def kind_name(self) -> str:
         return SYMBOL_KIND_MAP.get(self.kind, "unknown")
 
-    def to_grep_format(self, base_dir: str) -> str:
-        """Format as grep-like output: [kind] path:line:col name"""
-        # Reuse Location's path handling
+    def to_grep_format(self, base_dir: str, *, filter_external: bool = True) -> str | None:
+        """Format as grep-like output: [kind] path:line:col name
+
+        Returns None if path is external and filter_external=True.
+        """
         loc = Location(uri=self.uri, line=self.line, character=self.character)
-        base = loc.to_grep_format(base_dir)
+        base = loc.to_grep_format(base_dir, filter_external=filter_external)
+        if base is None:
+            return None
         kind_str = self.kind_name
         container = f" ({self.container_name})" if self.container_name else ""
         return f"[{kind_str}] {base} {self.name}{container}"
@@ -173,12 +187,17 @@ class CallHierarchyItem:
     def kind_name(self) -> str:
         return SYMBOL_KIND_MAP.get(self.kind, "unknown")
 
-    def to_display_str(self, base_dir: str) -> str:
-        """Format for display."""
+    def to_display_str(self, base_dir: str, *, filter_external: bool = True) -> str | None:
+        """Format for display.
+
+        Returns None if path is external and filter_external=True.
+        """
         loc = Location(
             uri=self.uri, line=self.selection_start_line, character=self.selection_start_char
         )
-        path_str = loc.to_grep_format(base_dir)
+        path_str = loc.to_grep_format(base_dir, filter_external=filter_external)
+        if path_str is None:
+            return None
         return f"[{self.kind_name}] {path_str} {self.name}"
 
 
@@ -189,6 +208,9 @@ class CallInfo:
     item: CallHierarchyItem
     from_ranges: list[tuple[int, int]]  # list of (line, char) - 0-indexed
 
-    def to_display_str(self, base_dir: str) -> str:
-        """Format for display."""
-        return self.item.to_display_str(base_dir)
+    def to_display_str(self, base_dir: str, *, filter_external: bool = True) -> str | None:
+        """Format for display.
+
+        Returns None if path is external and filter_external=True.
+        """
+        return self.item.to_display_str(base_dir, filter_external=filter_external)

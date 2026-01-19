@@ -15,7 +15,8 @@ class TestLocation:
     def test_to_grep_format_outside_base_dir(self) -> None:
         loc = Location(uri="file:///other/path/file.py", line=0, character=0)
         result = loc.to_grep_format("/home/user/project")
-        assert result == "/other/path/file.py:1:1"
+        # External paths are filtered out (return None)
+        assert result is None
 
     def test_to_grep_format_trailing_slash(self) -> None:
         loc = Location(uri="file:///home/user/project/lib.py", line=5, character=3)
@@ -35,7 +36,8 @@ class TestLocation:
     def test_to_grep_format_windows_outside_base_dir(self) -> None:
         loc = Location(uri="file:///C:/Other/file.py", line=0, character=0)
         result = loc.to_grep_format("C:/Users/me/project")
-        assert result == "C:/Other/file.py:1:1"
+        # External paths are filtered out (return None)
+        assert result is None
 
 
 class TestLSPError:

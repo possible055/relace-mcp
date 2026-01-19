@@ -274,6 +274,21 @@ class TestRelaceRepoClientEnsureRepo:
 
         assert repo_id == "existing-repo-id"
 
+    def test_ensure_repo_raises_on_duplicate_names(self, repo_client: RelaceRepoClient) -> None:
+        """Should raise when multiple repos share the same name."""
+        with patch.object(
+            repo_client,
+            "list_repos",
+            return_value=[
+                {"repo_id": "id-1", "metadata": {"name": "dup-repo"}},
+                {"repo_id": "id-2", "metadata": {"name": "dup-repo"}},
+            ],
+        ):
+            with pytest.raises(RuntimeError) as exc_info:
+                repo_client.ensure_repo("dup-repo")
+
+        assert "Multiple repos found" in str(exc_info.value)
+
     def test_ensure_repo_creates_new(self, repo_client: RelaceRepoClient) -> None:
         """Should create new repo if not found."""
         list_response = MagicMock()

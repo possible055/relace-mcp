@@ -7,7 +7,7 @@ from typing import Any
 import click
 
 from ..analysis.function_scope import extract_function_scopes
-from ..config import DEFAULT_FILTERED_PATH, get_benchmark_dir, get_repos_dir
+from ..config import DEFAULT_LOCBENCH_PATH, get_benchmark_dir, get_repos_dir
 from ..datasets import DatasetCase, load_dataset
 from ..runner.git import ensure_repo
 
@@ -217,7 +217,7 @@ def validate_case(case: DatasetCase, repos_dir: Path, verbose: bool) -> Validati
 @click.option(
     "--input",
     "input_path",
-    default=DEFAULT_FILTERED_PATH,
+    default=DEFAULT_LOCBENCH_PATH,
     show_default=True,
     help="Filtered dataset path",
 )
