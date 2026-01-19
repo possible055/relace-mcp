@@ -177,6 +177,17 @@ relogs
 
 For detailed usage, see [docs/dashboard.md](docs/dashboard.md).
 
+## Benchmark
+
+Evaluate `fast_search` performance using standard code localization datasets.
+
+```bash
+pip install relace-mcp[benchmark]
+uv run python -m benchmark.cli.run --dataset artifacts/data/processed/elite_50.jsonl --limit 20
+```
+
+For detailed instructions, see [docs/benchmark.md](docs/benchmark.md).
+
 ## Platform Support
 
 | Platform | Status | Notes |
