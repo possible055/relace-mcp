@@ -2,10 +2,13 @@ import logging
 import uuid
 from typing import Any
 
-import httpx
-
-from ...clients.exceptions import RelaceAPIError
 from ...clients.repo import RelaceRepoClient
+from .errors import build_cloud_error_details
+from .logging import (
+    log_cloud_clear_complete,
+    log_cloud_clear_error,
+    log_cloud_clear_start,
+)
 from .state import clear_sync_state, get_repo_identity, load_sync_state
 
 logger = logging.getLogger(__name__)
@@ -30,20 +33,33 @@ def cloud_clear_logic(
     logger.info("[%s] Starting cloud clear from %s", trace_id, base_dir)
 
     if not confirm:
-        return {
+        result = {
+            "trace_id": trace_id,
             "status": "cancelled",
             "message": "Operation cancelled. Access to this tool requires 'confirm=True' to proceed with irreversible deletion.",
             "repo_id": None,
         }
+        log_cloud_clear_start(trace_id, None, None, confirm=False)
+        log_cloud_clear_complete(trace_id, result)
+        return result
+
+    local_repo_name: str | None = None
+    cloud_repo_name: str | None = None
 
     try:
         local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(base_dir)
         if not local_repo_name or not cloud_repo_name:
-            return {
+            result = {
+                "trace_id": trace_id,
                 "status": "error",
                 "message": "Invalid base_dir: cannot derive repository name from root, current directory, or empty path.",
                 "repo_id": None,
             }
+            log_cloud_clear_start(trace_id, None, None, confirm=True)
+            log_cloud_clear_error(trace_id, None, None, result)
+            return result
+
+        log_cloud_clear_start(trace_id, local_repo_name, cloud_repo_name, confirm=True)
 
         # 1. Try to get repo_id from local sync state (safest)
         repo_id = None
@@ -74,12 +90,15 @@ def cloud_clear_logic(
                     trace_id,
                     cloud_repo_name,
                 )
-                return {
+                result = {
+                    "trace_id": trace_id,
                     "status": "error",
                     "message": f"Multiple repositories found with name '{cloud_repo_name}'. Cannot safely delete unambiguously.",
                     "repo_name": local_repo_name,
                     "cloud_repo_name": cloud_repo_name,
                 }
+                log_cloud_clear_complete(trace_id, result)
+                return result
 
             if matching_repos:
                 r = matching_repos[0]
@@ -89,63 +108,51 @@ def cloud_clear_logic(
             logger.info("[%s] No repository found for '%s'", trace_id, cloud_repo_name)
             # Even if repo not found remotely, ensure local state is clean
             clear_sync_state(base_dir)
-            return {
+            result = {
+                "trace_id": trace_id,
                 "status": "not_found",
                 "message": f"Repository '{cloud_repo_name}' not found on cloud.",
                 "repo_name": local_repo_name,
                 "cloud_repo_name": cloud_repo_name,
             }
+            log_cloud_clear_complete(trace_id, result)
+            return result
 
         # 3. specific deletion
         logger.info("[%s] Deleting repo '%s' (%s)...", trace_id, cloud_repo_name, repo_id)
         if client.delete_repo(repo_id, trace_id=trace_id):
             # 4. Clear local state only after successful remote deletion
             clear_sync_state(base_dir)
-            return {
+            result = {
+                "trace_id": trace_id,
                 "status": "deleted",
                 "message": f"Repository '{cloud_repo_name}' ({repo_id}) and local sync state deleted successfully.",
                 "repo_name": local_repo_name,
                 "cloud_repo_name": cloud_repo_name,
                 "repo_id": repo_id,
             }
+            log_cloud_clear_complete(trace_id, result)
+            return result
         else:
-            return {
+            result = {
+                "trace_id": trace_id,
                 "status": "error",
                 "message": f"Failed to delete repository '{cloud_repo_name}' ({repo_id}).",
                 "repo_name": local_repo_name,
                 "cloud_repo_name": cloud_repo_name,
                 "repo_id": repo_id,
             }
+            log_cloud_clear_complete(trace_id, result)
+            return result
 
     except Exception as exc:
         logger.error("[%s] Cloud clear failed: %s", trace_id, exc)
-        error_details: dict[str, Any] = {}
-        cause = exc.__cause__
-        if isinstance(cause, RelaceAPIError):
-            error_details = {
-                "status_code": cause.status_code,
-                "error_code": cause.code,
-                "retryable": cause.retryable,
-            }
-            if cause.status_code in {401, 403}:
-                error_details["recommended_action"] = "Check RELACE_API_KEY and retry."
-            elif cause.status_code == 429:
-                error_details["recommended_action"] = "Rate limited. Retry later."
-        elif isinstance(cause, httpx.TimeoutException):
-            error_details = {
-                "error_code": "timeout",
-                "retryable": True,
-                "recommended_action": "Check network connectivity and retry.",
-            }
-        elif isinstance(cause, httpx.RequestError):
-            error_details = {
-                "error_code": "network_error",
-                "retryable": True,
-                "recommended_action": "Check network connectivity, DNS/proxy, and RELACE_API_ENDPOINT.",
-            }
-        return {
+        result = {
+            "trace_id": trace_id,
             "status": "error",
             "message": f"Operation failed: {str(exc)}",
             "error": str(exc),
-            **error_details,
+            **build_cloud_error_details(exc),
         }
+        log_cloud_clear_error(trace_id, local_repo_name, cloud_repo_name, result)
+        return result

@@ -2,10 +2,9 @@ import logging
 import uuid
 from typing import Any
 
-import httpx
-
-from ...clients.exceptions import RelaceAPIError
 from ...clients.repo import RelaceRepoClient
+from .errors import build_cloud_error_details
+from .logging import log_cloud_info_complete, log_cloud_info_error, log_cloud_info_start
 from .state import get_current_git_info, get_repo_identity, is_git_dirty, load_sync_state
 
 logger = logging.getLogger(__name__)
@@ -38,7 +37,8 @@ def cloud_info_logic(
 
     try:
         if not local_repo_name or not cloud_repo_name:
-            return {
+            result = {
+                "trace_id": trace_id,
                 "repo_name": local_repo_name or None,
                 "cloud_repo_name": None,
                 "local": None,
@@ -47,6 +47,10 @@ def cloud_info_logic(
                 "status": None,
                 "error": "Invalid base_dir: cannot derive repository name.",
             }
+            log_cloud_info_error(trace_id, local_repo_name or None, None, result)
+            return result
+
+        log_cloud_info_start(trace_id, local_repo_name, cloud_repo_name)
 
         # Get current git info
         current_branch, current_head = get_current_git_info(base_dir)
@@ -176,7 +180,8 @@ def cloud_info_logic(
             ref_changed,
         )
 
-        return {
+        result_payload = {
+            "trace_id": trace_id,
             "repo_name": local_repo_name,
             "cloud_repo_name": cloud_repo_name,
             "local": local_info,
@@ -185,34 +190,13 @@ def cloud_info_logic(
             "status": status_info,
             "warnings": warnings,
         }
+        log_cloud_info_complete(trace_id, result_payload)
+        return result_payload
 
     except Exception as exc:
         logger.error("[%s] Cloud info failed: %s", trace_id, exc)
-        error_details: dict[str, Any] = {}
-        cause = exc.__cause__
-        if isinstance(cause, RelaceAPIError):
-            error_details = {
-                "status_code": cause.status_code,
-                "error_code": cause.code,
-                "retryable": cause.retryable,
-            }
-            if cause.status_code in {401, 403}:
-                error_details["recommended_action"] = "Check RELACE_API_KEY and retry."
-            elif cause.status_code == 429:
-                error_details["recommended_action"] = "Rate limited. Retry later."
-        elif isinstance(cause, httpx.TimeoutException):
-            error_details = {
-                "error_code": "timeout",
-                "retryable": True,
-                "recommended_action": "Check network connectivity and retry.",
-            }
-        elif isinstance(cause, httpx.RequestError):
-            error_details = {
-                "error_code": "network_error",
-                "retryable": True,
-                "recommended_action": "Check network connectivity, DNS/proxy, and RELACE_API_ENDPOINT.",
-            }
-        return {
+        result = {
+            "trace_id": trace_id,
             "repo_name": local_repo_name,
             "cloud_repo_name": cloud_repo_name,
             "local": None,
@@ -220,5 +204,7 @@ def cloud_info_logic(
             "cloud": None,
             "status": None,
             "error": str(exc),
-            **error_details,
+            **build_cloud_error_details(exc),
         }
+        log_cloud_info_error(trace_id, local_repo_name or None, cloud_repo_name or None, result)
+        return result

@@ -79,6 +79,8 @@ class TestCloudSearchLogic:
         assert result["repo_id"] == "test-repo-id"
         assert result["hash"] == mock_sync_state.git_head_sha
         assert result["result_count"] == 2
+        assert isinstance(result.get("trace_id"), str)
+        assert len(result["trace_id"]) == 8
 
     def test_search_passes_parameters(
         self, mock_repo_client: MagicMock, mock_sync_state: SyncState
@@ -145,6 +147,8 @@ class TestCloudSearchLogic:
         assert result["results"] == []
         assert result["repo_id"] is None
         assert "Run cloud_sync first" in result["error"]
+        assert isinstance(result.get("trace_id"), str)
+        assert len(result["trace_id"]) == 8
         mock_repo_client.retrieve.assert_not_called()
 
     def test_search_handles_api_error(self, mock_repo_client: MagicMock) -> None:
@@ -162,6 +166,8 @@ class TestCloudSearchLogic:
         assert result["results"] == []
         assert result["repo_id"] is None
         assert result["hash"] == ""
+        assert isinstance(result.get("trace_id"), str)
+        assert len(result["trace_id"]) == 8
 
     def test_search_includes_network_error_details(self, mock_repo_client: MagicMock) -> None:
         """Should include actionable details for network errors."""
@@ -182,6 +188,8 @@ class TestCloudSearchLogic:
         assert result["error_code"] == "network_error"
         assert result["retryable"] is True
         assert "RELACE_API_ENDPOINT" in result["recommended_action"]
+        assert isinstance(result.get("trace_id"), str)
+        assert len(result["trace_id"]) == 8
 
     def test_search_truncates_long_query_in_logs(self, mock_repo_client: MagicMock) -> None:
         """Should handle very long queries without issues."""

@@ -2,10 +2,9 @@ import logging
 import uuid
 from typing import Any
 
-import httpx
-
-from ...clients.exceptions import RelaceAPIError
 from ...clients.repo import RelaceRepoClient
+from .errors import build_cloud_error_details
+from .logging import log_cloud_list_complete, log_cloud_list_error, log_cloud_list_start
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +28,7 @@ def cloud_list_logic(client: RelaceRepoClient) -> dict[str, Any]:
     logger.info("[%s] Listing cloud repositories", trace_id)
 
     try:
+        log_cloud_list_start(trace_id)
         repos = client.list_repos(trace_id=trace_id)
 
         # Extract relevant fields from each repo
@@ -52,42 +52,24 @@ def cloud_list_logic(client: RelaceRepoClient) -> dict[str, Any]:
 
         logger.info("[%s] Found %d repositories", trace_id, len(repo_summaries))
 
-        return {
+        result = {
+            "trace_id": trace_id,
             "count": len(repo_summaries),
             "repos": repo_summaries,
             "has_more": has_more,
         }
+        log_cloud_list_complete(trace_id, result)
+        return result
 
     except Exception as exc:
         logger.error("[%s] Cloud list failed: %s", trace_id, exc)
-        error_details: dict[str, Any] = {}
-        cause = exc.__cause__
-        if isinstance(cause, RelaceAPIError):
-            error_details = {
-                "status_code": cause.status_code,
-                "error_code": cause.code,
-                "retryable": cause.retryable,
-            }
-            if cause.status_code in {401, 403}:
-                error_details["recommended_action"] = "Check RELACE_API_KEY and retry."
-            elif cause.status_code == 429:
-                error_details["recommended_action"] = "Rate limited. Retry later."
-        elif isinstance(cause, httpx.TimeoutException):
-            error_details = {
-                "error_code": "timeout",
-                "retryable": True,
-                "recommended_action": "Check network connectivity and retry.",
-            }
-        elif isinstance(cause, httpx.RequestError):
-            error_details = {
-                "error_code": "network_error",
-                "retryable": True,
-                "recommended_action": "Check network connectivity, DNS/proxy, and RELACE_API_ENDPOINT.",
-            }
-        return {
+        result = {
+            "trace_id": trace_id,
             "count": 0,
             "repos": [],
             "has_more": False,
             "error": str(exc),
-            **error_details,
+            **build_cloud_error_details(exc),
         }
+        log_cloud_list_error(trace_id, result)
+        return result

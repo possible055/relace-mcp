@@ -349,3 +349,37 @@ class TestLSPClientManager:
 
         # Cleanup
         LSPClientManager._instance = None
+
+
+class TestLSPClientSync:
+    def test_sync_runs_before_open_file(self, tmp_path: Path) -> None:
+        """Ensures workspace sync cannot restart the server after didOpen."""
+        from relace_mcp.lsp import PYTHON_CONFIG
+        from relace_mcp.lsp.client import LSPClient
+
+        client = LSPClient(PYTHON_CONFIG, str(tmp_path))
+        client._initialized = True
+
+        calls: list[str] = []
+
+        def fake_sync() -> None:
+            calls.append("sync")
+
+        def fake_open_file(file_path: str) -> str:
+            calls.append("open")
+            return "file:///tmp/test.py"
+
+        def fake_close_file(uri: str) -> None:
+            calls.append("close")
+
+        def fake_send_request(method: str, params: dict, **kwargs):
+            calls.append(f"request:{method}")
+            return []
+
+        client._sync_workspace_changes_best_effort = fake_sync  # type: ignore[assignment]
+        client._open_file = fake_open_file  # type: ignore[assignment]
+        client._close_file = fake_close_file  # type: ignore[assignment]
+        client._send_request = fake_send_request  # type: ignore[assignment]
+
+        client.definition("test.py", 0, 0)
+        assert calls[:2] == ["sync", "open"]

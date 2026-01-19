@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import shutil
+import signal
 import subprocess  # nosec B404 - required for LSP server communication
 import sys
 import threading
@@ -288,7 +289,8 @@ class LSPClient:
         self._fs_snapshot_initialized = False
         self._fs_last_sync = 0.0
 
-        atexit.register(self._cleanup)
+        self._atexit_cleanup_handler = self._cleanup
+        atexit.register(self._atexit_cleanup_handler)
 
     def _build_workspace_settings(self) -> dict[str, Any]:
         settings = copy.deepcopy(self._config.workspace_config)
@@ -503,6 +505,12 @@ class LSPClient:
         if payload:
             self._send_notification("workspace/didChangeWatchedFiles", {"changes": payload})
 
+    def _sync_workspace_changes_best_effort(self) -> None:
+        try:
+            self._sync_workspace_changes()
+        except Exception as e:
+            logger.debug("Workspace file sync failed: %s", e)
+
     def _resolve_command(self, command: list[str]) -> list[str]:
         """Resolve the language server executable path.
 
@@ -565,8 +573,10 @@ class LSPClient:
             import psutil
         except ImportError:
             # Fallback: just kill the main process
-            if self._process:
-                self._process.kill()
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except Exception:  # nosec B110 - best-effort cleanup
+                pass
             return
 
         try:
@@ -586,6 +596,11 @@ class LSPClient:
 
     def _cleanup(self) -> None:
         """Cleanup resources (best-effort)."""
+        try:
+            atexit.unregister(self._atexit_cleanup_handler)
+        except Exception:  # nosec B110 - best-effort cleanup
+            pass
+
         with self._lock:
             self._stop_event.set()
             self._initialized = False
@@ -782,12 +797,6 @@ class LSPClient:
         """Send a request and wait for response."""
         effective_timeout = self._request_timeout if timeout is None else timeout
 
-        if self._initialized and method != "shutdown":
-            try:
-                self._sync_workspace_changes()
-            except Exception as e:
-                logger.debug("Workspace file sync failed: %s", e)
-
         with self._lock:
             if not self._process:
                 raise LSPError("Language server not running")
@@ -964,6 +973,7 @@ class LSPClient:
                 if not self._initialized:
                     raise LSPError("Language server not initialized")
 
+            self._sync_workspace_changes_best_effort()
             uri = self._open_file(file_path)
             try:
                 result = self._send_request(
@@ -986,6 +996,7 @@ class LSPClient:
                 if not self._initialized:
                     raise LSPError("Language server not initialized")
 
+            self._sync_workspace_changes_best_effort()
             uri = self._open_file(file_path)
             try:
                 result = self._send_request(
@@ -1040,6 +1051,7 @@ class LSPClient:
                 if not self._initialized:
                     raise LSPError("Language server not initialized")
 
+            self._sync_workspace_changes_best_effort()
             result = self._send_request("workspace/symbol", {"query": query})
             return self._parse_symbol_info(result)
 
@@ -1083,6 +1095,7 @@ class LSPClient:
                 if not self._initialized:
                     raise LSPError("Language server not initialized")
 
+            self._sync_workspace_changes_best_effort()
             uri = self._open_file(file_path)
             try:
                 result = self._send_request(
@@ -1135,6 +1148,7 @@ class LSPClient:
                 if not self._initialized:
                     raise LSPError("Language server not initialized")
 
+            self._sync_workspace_changes_best_effort()
             uri = self._open_file(file_path)
             try:
                 result = self._send_request(
@@ -1199,6 +1213,7 @@ class LSPClient:
                 if not self._initialized:
                     raise LSPError("Language server not initialized")
 
+            self._sync_workspace_changes_best_effort()
             uri = self._open_file(file_path)
             try:
                 # Step 1: Prepare call hierarchy

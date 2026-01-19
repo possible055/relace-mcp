@@ -6,12 +6,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-import httpx
-
-from ...clients.exceptions import RelaceAPIError
 from ...clients.repo import RelaceRepoClient
 from ...config.settings import REPO_SYNC_MAX_FILES
 from ...tools.apply.file_io import decode_text_best_effort, get_project_encoding
+from .errors import build_cloud_error_details
+from .logging import log_cloud_sync_complete, log_cloud_sync_error, log_cloud_sync_start
 from .state import (
     SyncState,
     compute_file_hash,
@@ -401,7 +400,8 @@ def cloud_sync_logic(
     deletes_suppressed = 0
     local_repo_name, cloud_repo_name, project_fingerprint = get_repo_identity(base_dir)
     if not local_repo_name or not cloud_repo_name:
-        return {
+        result = {
+            "trace_id": trace_id,
             "repo_id": None,
             "repo_name": local_repo_name or None,
             "cloud_repo_name": None,
@@ -420,6 +420,18 @@ def cloud_sync_logic(
             "deletes_suppressed": 0,
             "error": "Invalid base_dir: cannot derive repository name.",
         }
+        log_cloud_sync_error(trace_id, local_repo_name or None, None, result)
+        return result
+
+    log_cloud_sync_start(
+        trace_id,
+        original_base_dir,
+        base_dir,
+        local_repo_name,
+        cloud_repo_name,
+        force,
+        mirror,
+    )
 
     try:
         # Ensure repo exists
@@ -632,7 +644,8 @@ def cloud_sync_logic(
                 "Failed to save local sync state; next cloud_search may fail until re-sync."
             )
 
-        return {
+        result_payload = {
+            "trace_id": trace_id,
             "repo_id": repo_id,
             "repo_name": local_repo_name,
             "cloud_repo_name": cloud_repo_name,
@@ -657,38 +670,13 @@ def cloud_sync_logic(
             "state_saved": state_saved,
             "warnings": warnings,
         }
+        log_cloud_sync_complete(trace_id, result_payload)
+        return result_payload
 
     except Exception as exc:
         logger.error("[%s] Cloud sync failed: %s", trace_id, exc)
-        error_details: dict[str, Any] = {}
-        cause = exc.__cause__
-        if isinstance(cause, RelaceAPIError):
-            error_details = {
-                "status_code": cause.status_code,
-                "error_code": cause.code,
-                "retryable": cause.retryable,
-            }
-            if cause.status_code in {401, 403}:
-                error_details["recommended_action"] = "Check RELACE_API_KEY and retry."
-            elif cause.status_code == 404:
-                error_details["recommended_action"] = (
-                    "Cloud repo not found. Run cloud_sync() again to create/upload."
-                )
-            elif cause.status_code == 429:
-                error_details["recommended_action"] = "Rate limited. Retry later."
-        elif isinstance(cause, httpx.TimeoutException):
-            error_details = {
-                "error_code": "timeout",
-                "retryable": True,
-                "recommended_action": "Check network connectivity and retry.",
-            }
-        elif isinstance(cause, httpx.RequestError):
-            error_details = {
-                "error_code": "network_error",
-                "retryable": True,
-                "recommended_action": "Check network connectivity, DNS/proxy, and RELACE_API_ENDPOINT.",
-            }
-        return {
+        result = {
+            "trace_id": trace_id,
             "repo_id": None,
             "repo_name": local_repo_name,
             "cloud_repo_name": cloud_repo_name,
@@ -706,5 +694,7 @@ def cloud_sync_logic(
             "sync_mode": "error",
             "deletes_suppressed": 0,
             "error": str(exc),
-            **error_details,
+            **build_cloud_error_details(exc),
         }
+        log_cloud_sync_error(trace_id, local_repo_name, cloud_repo_name, result)
+        return result

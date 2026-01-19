@@ -425,6 +425,8 @@ class TestCloudSyncLogic:
         assert result["files_created"] == 2
         assert result["files_updated"] == 0
         assert result["is_incremental"] is False  # No cache = full sync
+        assert isinstance(result.get("trace_id"), str)
+        assert len(result["trace_id"]) == 8
         mock_repo_client.update_repo.assert_called_once()
 
     def test_sync_incremental_with_cache(self, tmp_path: Path, mock_repo_client: MagicMock) -> None:
@@ -501,6 +503,8 @@ class TestCloudSyncLogic:
         assert result["repo_id"] is None
         assert "error" in result
         assert "API error" in result["error"]
+        assert isinstance(result.get("trace_id"), str)
+        assert len(result["trace_id"]) == 8
 
     def test_sync_includes_network_error_details(
         self, tmp_path: Path, mock_repo_client: MagicMock
@@ -522,6 +526,8 @@ class TestCloudSyncLogic:
         assert result["error_code"] == "network_error"
         assert result["retryable"] is True
         assert "RELACE_API_ENDPOINT" in result["recommended_action"]
+        assert isinstance(result.get("trace_id"), str)
+        assert len(result["trace_id"]) == 8
 
     def test_sync_does_not_require_config_base_dir(self, tmp_path: Path) -> None:
         """Should work when RelaceConfig.base_dir is None (dynamic base_dir resolution)."""

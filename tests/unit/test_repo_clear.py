@@ -20,6 +20,8 @@ def test_cloud_clear_requires_confirm(tmp_path: Path) -> None:
     result = cloud_clear_logic(mock_repo_client, str(tmp_path), confirm=False)
 
     assert result["status"] == "cancelled"
+    assert isinstance(result.get("trace_id"), str)
+    assert len(result["trace_id"]) == 8
     mock_repo_client.delete_repo.assert_not_called()
 
 
@@ -38,6 +40,8 @@ def test_cloud_clear_uses_sync_state(tmp_path: Path) -> None:
 
                 assert result["status"] == "deleted"
                 assert result["repo_id"] == "state-repo-id"
+                assert isinstance(result.get("trace_id"), str)
+                assert len(result["trace_id"]) == 8
                 mock_repo_client.delete_repo.assert_called_with("state-repo-id", trace_id=ANY)
                 mock_clear_state.assert_called_with(str(tmp_path))
 
