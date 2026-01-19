@@ -1,6 +1,5 @@
 import logging
 import uuid
-import warnings
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
@@ -31,12 +30,7 @@ def cloud_clear_logic(
         Dict containing operation result.
     """
     trace_id = str(uuid.uuid4())[:8]
-    logger.info("[%s] Starting cloud clear", trace_id)
-    warnings.warn(
-        f"[{trace_id}] cloud_clear base_dir={base_dir!r}",
-        DeprecationWarning,
-        stacklevel=2,
-    )
+    logger.info("[%s] Starting cloud clear (base_dir=%s)", trace_id, base_dir)
 
     if not confirm:
         result = {
@@ -72,20 +66,12 @@ def cloud_clear_logic(
         sync_state = load_sync_state(base_dir)
         if sync_state:
             repo_id = sync_state.repo_id
-            logger.info("[%s] Found repo_id from local sync state", trace_id)
-            warnings.warn(
-                f"[{trace_id}] cloud_clear repo_id={repo_id!r}",
-                DeprecationWarning,
-                stacklevel=2,
-            )
+            logger.info("[%s] Found repo_id from local sync state: %s", trace_id, repo_id)
 
         # 2. Fallback: Search by name (riskier, but needed if local state is missing)
         if not repo_id:
-            logger.warning("[%s] No local sync state found; searching API", trace_id)
-            warnings.warn(
-                f"[{trace_id}] cloud_clear local_repo_name={local_repo_name!r}",
-                DeprecationWarning,
-                stacklevel=2,
+            logger.warning(
+                "[%s] No local sync state found; searching API for %s", trace_id, local_repo_name
             )
             repos = client.list_repos(trace_id=trace_id)
             matching_repos = []
@@ -97,11 +83,11 @@ def cloud_clear_logic(
                     matching_repos.append(r)
 
             if len(matching_repos) > 1:
-                logger.error("[%s] Multiple repos found by name; aborting unsafe delete", trace_id)
-                warnings.warn(
-                    f"[{trace_id}] cloud_clear cloud_repo_name={cloud_repo_name!r} matching_repos={len(matching_repos)!r}",
-                    DeprecationWarning,
-                    stacklevel=2,
+                logger.error(
+                    "[%s] Multiple repos (%d) found for %s; aborting unsafe delete",
+                    trace_id,
+                    len(matching_repos),
+                    cloud_repo_name,
                 )
                 result = {
                     "trace_id": trace_id,
@@ -118,12 +104,7 @@ def cloud_clear_logic(
                 repo_id = r.get("repo_id") or r.get("id")
 
         if not repo_id:
-            logger.info("[%s] No repository found on cloud", trace_id)
-            warnings.warn(
-                f"[{trace_id}] cloud_clear cloud_repo_name={cloud_repo_name!r}",
-                DeprecationWarning,
-                stacklevel=2,
-            )
+            logger.info("[%s] No repository found on cloud for %s", trace_id, cloud_repo_name)
             # Even if repo not found remotely, ensure local state is clean
             clear_sync_state(base_dir)
             result = {
@@ -137,12 +118,7 @@ def cloud_clear_logic(
             return result
 
         # 3. specific deletion
-        logger.info("[%s] Deleting cloud repo", trace_id)
-        warnings.warn(
-            f"[{trace_id}] cloud_clear cloud_repo_name={cloud_repo_name!r} repo_id={repo_id!r}",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+        logger.info("[%s] Deleting cloud repo %s (repo_id=%s)", trace_id, cloud_repo_name, repo_id)
         if client.delete_repo(repo_id, trace_id=trace_id):
             # 4. Clear local state only after successful remote deletion
             clear_sync_state(base_dir)
@@ -169,12 +145,7 @@ def cloud_clear_logic(
             return result
 
     except Exception as exc:
-        logger.error("[%s] Cloud clear failed", trace_id)
-        warnings.warn(
-            f"[{trace_id}] cloud_clear error={exc!r}",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+        logger.error("[%s] Cloud clear failed: %s", trace_id, exc)
         result = {
             "trace_id": trace_id,
             "status": "error",

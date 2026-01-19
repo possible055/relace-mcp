@@ -1,6 +1,5 @@
 import logging
 import uuid
-import warnings
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
@@ -39,19 +38,9 @@ def cloud_search_logic(
     """
     trace_id = str(uuid.uuid4())[:8]
     query_preview = query[:100] if len(query) <= 100 else query[:97] + "..."
-    logger.info("[%s] Starting cloud semantic search", trace_id)
-    warnings.warn(
-        f"[{trace_id}] cloud_search query_preview={query_preview!r}",
-        DeprecationWarning,
-        stacklevel=2,
-    )
+    logger.info("[%s] Starting cloud semantic search (query=%s)", trace_id, query_preview)
     if branch:
-        logger.info("[%s] Searching branch", trace_id)
-        warnings.warn(
-            f"[{trace_id}] cloud_search branch={branch!r}",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+        logger.info("[%s] Searching branch: %s", trace_id, branch)
 
     local_repo_name: str | None = None
     cloud_repo_name: str | None = None

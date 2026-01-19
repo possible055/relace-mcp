@@ -2,7 +2,6 @@ import logging
 import os
 import subprocess  # nosec B404 - used safely with hardcoded commands only
 import uuid
-import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -377,12 +376,7 @@ def cloud_sync_logic(
         - error: Error message if failed (optional)
     """
     trace_id = str(uuid.uuid4())[:8]
-    logger.info("[%s] Starting cloud sync", trace_id)
-    warnings.warn(
-        f"[{trace_id}] cloud_sync base_dir={base_dir!r} force={force!r} mirror={mirror!r}",
-        DeprecationWarning,
-        stacklevel=2,
-    )
+    logger.info("[%s] Starting cloud sync (force=%s, mirror=%s)", trace_id, force, mirror)
 
     original_base_dir = base_dir
     base_dir = get_repo_root(base_dir)
@@ -434,12 +428,7 @@ def cloud_sync_logic(
     try:
         # Ensure repo exists
         repo_id = client.ensure_repo(cloud_repo_name, trace_id=trace_id)
-        logger.info("[%s] Using cloud repo for local repo", trace_id)
-        warnings.warn(
-            f"[{trace_id}] cloud_sync cloud_repo_name={cloud_repo_name!r} repo_id={repo_id!r} local_repo_name={local_repo_name!r}",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+        logger.info("[%s] Using cloud repo %s (repo_id=%s)", trace_id, cloud_repo_name, repo_id)
 
         # Load cached sync state (unless force)
         cached_state: SyncState | None = None
