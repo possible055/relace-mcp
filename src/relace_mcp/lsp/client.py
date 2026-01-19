@@ -6,7 +6,6 @@ import json
 import logging
 import os
 import shutil
-import signal
 import subprocess  # nosec B404 - required for LSP server communication
 import sys
 import threading
@@ -16,6 +15,8 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+import psutil
 
 from relace_mcp.config.compat import getenv_with_fallback
 from relace_mcp.lsp.languages.base import LanguageServerConfig
@@ -46,8 +47,6 @@ _FS_SYNC_MIN_INTERVAL_SECONDS = 5.0
 _FS_SYNC_BUDGET_SECONDS = 1.0
 _FS_SYNC_MAX_FILES = 20000
 _FS_SYNC_MAX_EVENTS = 2000
-
-_CONFIG_FILE_NAMES = ("pyrightconfig.json", "pyproject.toml")
 
 _DEFAULT_IGNORED_DIR_NAMES = frozenset(
     {
@@ -296,8 +295,9 @@ class LSPClient:
 
     def _build_workspace_settings(self) -> dict[str, Any]:
         settings = copy.deepcopy(self._config.workspace_config)
-        project_settings = _load_project_workspace_settings(Path(self._workspace))
-        _deep_update_dict(settings, project_settings)
+        if self._config.language_id == "python":
+            project_settings = _load_project_workspace_settings(Path(self._workspace))
+            _deep_update_dict(settings, project_settings)
         return settings
 
     def _get_analysis_patterns(self) -> tuple[list[str], list[str], list[str]]:
@@ -344,6 +344,8 @@ class LSPClient:
         include_raw, exclude_raw, _ = self._get_analysis_patterns()
         include_patterns = _expand_glob_patterns(include_raw)
         exclude_patterns = _expand_glob_patterns(exclude_raw)
+        config_files = self._config.config_files
+        config_files_set = frozenset(config_files)
 
         scan_roots: list[Path] = []
         if include_raw:
@@ -393,14 +395,14 @@ class LSPClient:
                 st = path.stat()
             except OSError:
                 return
-            if rel_path not in _CONFIG_FILE_NAMES and not should_consider(rel_path):
+            if rel_path not in config_files_set and not should_consider(rel_path):
                 return
             current_snapshot[rel_path] = (st.st_mtime_ns, st.st_size)
             scanned_files += 1
             if scanned_files >= _FS_SYNC_MAX_FILES:
                 truncated = True
 
-        for cfg in _CONFIG_FILE_NAMES:
+        for cfg in config_files:
             record_path(workspace_root / cfg)
 
         pending_dirs: list[Path] = list(reversed(scan_roots))
@@ -448,7 +450,7 @@ class LSPClient:
                             continue
 
                         name = entry.name
-                        if not (name.endswith(".py") or name.endswith(".pyi")):
+                        if not name.endswith(self._config.file_extensions):
                             continue
 
                         record_path(Path(entry.path))
@@ -469,11 +471,11 @@ class LSPClient:
                 changes.append((1, rel_path))
             elif prev != meta:
                 changes.append((2, rel_path))
-            if rel_path in _CONFIG_FILE_NAMES:
+            if rel_path in config_files_set:
                 config_changed = config_changed or prev != meta
 
         if truncated:
-            for cfg in _CONFIG_FILE_NAMES:
+            for cfg in config_files:
                 if cfg in self._fs_snapshot and cfg not in current_snapshot:
                     changes.append((3, cfg))
                     config_changed = True
@@ -482,7 +484,7 @@ class LSPClient:
             for rel_path in self._fs_snapshot:
                 if rel_path not in current_snapshot:
                     changes.append((3, rel_path))
-                    if rel_path in _CONFIG_FILE_NAMES:
+                    if rel_path in config_files_set:
                         config_changed = True
             self._fs_snapshot = current_snapshot
         else:
@@ -527,12 +529,18 @@ class LSPClient:
         if not executable:
             raise LSPError("Language server executable is empty")
 
+        install_hint = self._config.install_hint.strip()
+
         # If already a path (absolute or contains a separator), validate it.
         if any(sep in executable for sep in (os.sep, "/", "\\")):
             path = Path(executable)
             if path.exists():
                 return [str(path), *command[1:]]
-            raise LSPError(f"Language server not found: {executable}")
+            if install_hint:
+                raise LSPError(
+                    f"Language server '{executable}' not found. Install with: {install_hint}"
+                )
+            raise LSPError(f"Language server '{executable}' not found")
 
         resolved = shutil.which(executable)
         if resolved:
@@ -564,23 +572,18 @@ class LSPClient:
             if candidate.exists():
                 return [str(candidate), *command[1:]]
 
+        if install_hint:
+            raise LSPError(
+                f"Language server '{executable}' not found. Install with: {install_hint}"
+            )
+
         raise LSPError(
-            f"Language server not found: {executable}. Ensure it is installed and on PATH "
+            f"Language server '{executable}' not found. Ensure it is installed and on PATH "
             f"(or located in one of: {', '.join(str(p) for p in candidates)})."
         )
 
     def _kill_process_tree(self, pid: int) -> None:
         """Kill process and all children."""
-        try:
-            import psutil
-        except ImportError:
-            # Fallback: just kill the main process
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except Exception:  # nosec B110 - best-effort cleanup
-                pass
-            return
-
         try:
             parent = psutil.Process(pid)
         except psutil.Error:
@@ -863,7 +866,13 @@ class LSPClient:
                         cwd=self._workspace,
                     )
                 except FileNotFoundError:
-                    raise LSPError(f"Language server not found: {command[0]}") from None
+                    executable = command[0] if command else ""
+                    install_hint = self._config.install_hint.strip()
+                    if install_hint:
+                        raise LSPError(
+                            f"Language server '{executable}' not found. Install with: {install_hint}"
+                        ) from None
+                    raise LSPError(f"Language server '{executable}' not found") from None
 
                 self._stdout_thread = threading.Thread(target=self._read_stdout, daemon=True)
                 self._stderr_thread = threading.Thread(target=self._drain_stderr, daemon=True)
@@ -956,7 +965,7 @@ class LSPClient:
             {
                 "textDocument": {
                     "uri": uri,
-                    "languageId": self._config.language_id,
+                    "languageId": self._config.get_language_id(file_path),
                     "version": 1,
                     "text": content,
                 }
@@ -1331,8 +1340,10 @@ class LSPClientManager:
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
-        self._clients: dict[str, LSPClient] = {}  # workspace -> client
-        self._lease_counts: dict[str, int] = {}  # workspace -> active sessions
+        self._clients: dict[tuple[str, str], LSPClient] = {}  # (workspace, language_id) -> client
+        self._lease_counts: dict[
+            tuple[str, str], int
+        ] = {}  # (workspace, language_id) -> active sessions
         self._max_clients = _parse_nonnegative_int_env_with_fallback(
             "SEARCH_LSP_MAX_CLIENTS", "RELACE_LSP_MAX_CLIENTS", 2
         )
@@ -1358,13 +1369,13 @@ class LSPClientManager:
             self._clients.clear()
             self._lease_counts.clear()
 
-    def _pop_oldest_idle_client_locked(self) -> tuple[str, LSPClient] | None:
-        for workspace in list(self._clients.keys()):
-            if self._lease_counts.get(workspace, 0) != 0:
+    def _pop_oldest_idle_client_locked(self) -> tuple[tuple[str, str], LSPClient] | None:
+        for key in list(self._clients.keys()):
+            if self._lease_counts.get(key, 0) != 0:
                 continue
-            client = self._clients.pop(workspace)
-            self._lease_counts.pop(workspace, None)
-            return (workspace, client)
+            client = self._clients.pop(key)
+            self._lease_counts.pop(key, None)
+            return (key, client)
         return None
 
     def _get_or_create_client_locked(
@@ -1374,18 +1385,19 @@ class LSPClientManager:
         *,
         timeout_seconds: float | None,
         lease: bool,
-    ) -> tuple[LSPClient, list[tuple[str, LSPClient]]]:
-        existing = self._clients.get(workspace)
+    ) -> tuple[LSPClient, list[tuple[tuple[str, str], LSPClient]]]:
+        key = (workspace, config.language_id)
+        existing = self._clients.get(key)
         if existing is not None:
-            self._clients.pop(workspace, None)
-            self._clients[workspace] = existing
+            self._clients.pop(key, None)
+            self._clients[key] = existing
             if lease:
-                self._lease_counts[workspace] = self._lease_counts.get(workspace, 0) + 1
+                self._lease_counts[key] = self._lease_counts.get(key, 0) + 1
             else:
-                self._lease_counts.setdefault(workspace, 0)
+                self._lease_counts.setdefault(key, 0)
             return (existing, [])
 
-        evicted: list[tuple[str, LSPClient]] = []
+        evicted: list[tuple[tuple[str, str], LSPClient]] = []
         if self._max_clients > 0:
             while len(self._clients) >= self._max_clients:
                 popped = self._pop_oldest_idle_client_locked()
@@ -1397,13 +1409,13 @@ class LSPClientManager:
         try:
             client.start()
         except Exception:
-            for ws, c in evicted:
-                self._clients[ws] = c
-                self._lease_counts.setdefault(ws, 0)
+            for evicted_key, c in evicted:
+                self._clients[evicted_key] = c
+                self._lease_counts.setdefault(evicted_key, 0)
             raise
 
-        self._clients[workspace] = client
-        self._lease_counts[workspace] = 1 if lease else 0
+        self._clients[key] = client
+        self._lease_counts[key] = 1 if lease else 0
         return (client, evicted)
 
     @contextmanager
@@ -1427,6 +1439,7 @@ class LSPClientManager:
             timeout_seconds: Optional override for startup/request/shutdown timeouts.
         """
         clients_to_shutdown: list[LSPClient] = []
+        key = (workspace, config.language_id)
         with self._lock:
             client, evicted = self._get_or_create_client_locked(
                 config,
@@ -1447,7 +1460,7 @@ class LSPClientManager:
         finally:
             clients_to_shutdown = []
             with self._lock:
-                self._lease_counts[workspace] = max(0, self._lease_counts.get(workspace, 0) - 1)
+                self._lease_counts[key] = max(0, self._lease_counts.get(key, 0) - 1)
                 if self._max_clients > 0:
                     while len(self._clients) > self._max_clients:
                         popped = self._pop_oldest_idle_client_locked()

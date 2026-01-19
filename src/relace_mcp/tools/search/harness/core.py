@@ -52,12 +52,14 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         client: SearchLLMClient,
         *,
         lsp_languages: frozenset[str] | None = None,
+        user_prompt_override: str | None = None,
     ) -> None:
         self._config = config
         self._client = client
         self._observed_files: dict[str, list[list[int]]] = {}
         self._view_line_re = re.compile(r"^(\d+)\s")
         self._lsp_languages = lsp_languages if lsp_languages is not None else frozenset()
+        self._user_prompt_override = user_prompt_override
 
         # Select base prompts based on API compatibility mode
         if client.api_compat == RELACE_PROVIDER:
@@ -201,9 +203,14 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
 
     def _run_search_loop(self, query: str, trace_id: str, *, start_time: float) -> dict[str, Any]:
         """Internal method to execute the search loop."""
+        user_content = (
+            self._user_prompt_override
+            if self._user_prompt_override
+            else self._user_prompt_template.format(query=query)
+        )
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self._system_prompt},
-            {"role": "user", "content": self._user_prompt_template.format(query=query)},
+            {"role": "user", "content": user_content},
         ]
 
         for turn in range(SEARCH_MAX_TURNS):
@@ -349,9 +356,14 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         self, query: str, trace_id: str, *, start_time: float
     ) -> dict[str, Any]:
         """Internal method to execute the search loop asynchronously."""
+        user_content = (
+            self._user_prompt_override
+            if self._user_prompt_override
+            else self._user_prompt_template.format(query=query)
+        )
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self._system_prompt},
-            {"role": "user", "content": self._user_prompt_template.format(query=query)},
+            {"role": "user", "content": user_content},
         ]
 
         loop = asyncio.get_running_loop()

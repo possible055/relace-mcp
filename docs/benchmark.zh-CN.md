@@ -81,7 +81,37 @@ uv run python -m benchmark.cli.grid \
 
 **输出**: 网格摘要保存至 `artifacts/reports/<grid_name>.grid.json`
 
-## 4. 分析结果
+## 4. 数据集验证
+
+在运行 benchmark 前验证数据集的正确性:
+
+```bash
+# 验证默认数据集
+uv run python -m benchmark.cli.validate
+
+# 验证指定数据集
+uv run python -m benchmark.cli.validate --input artifacts/data/raw/locbench_v1.jsonl
+
+# 输出报告到文件
+uv run python -m benchmark.cli.validate --output validation.json --verbose
+```
+
+**验证项目**:
+- `hard_gt` / `soft_context` 文件是否存在
+- 行号范围是否有效
+- 函数名是否与 AST 解析结果匹配
+- `target_ranges` 是否在 context range 内
+- solvability evidence 是否出现在 query 中
+
+**参数**:
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--input` | `locbench_v1.jsonl` | 数据集路径 |
+| `--output` | stdout | 报告输出路径 |
+| `--limit` | 全部 | 验证数量 |
+| `-v/--verbose` | 关闭 | 详细输出 |
+
+## 5. 分析结果
 
 ```bash
 # 分析单次运行
@@ -91,7 +121,7 @@ uv run python -m benchmark.cli.analyze path/to/run.report.json
 uv run python -m benchmark.cli.analyze run1.report.json run2.report.json
 ```
 
-## 5. 指标说明
+## 6. 指标说明
 
 | 指标 | 计算方式 |
 |------|----------|
@@ -104,7 +134,7 @@ uv run python -m benchmark.cli.analyze run1.report.json run2.report.json
 
 每个 `*.report.json` 包含 metadata 追踪: `temperature`、`max_turns`、`prompt_file` 以确保可复现性。
 
-## 6. 故障排除
+## 7. 故障排除
 
 | 问题 | 解决方案 |
 |------|----------|
@@ -113,20 +143,32 @@ uv run python -m benchmark.cli.analyze run1.report.json run2.report.json
 | 找不到数据集 | 将数据集放入 `benchmark/artifacts/data/` |
 | 首次运行慢 | 正常—仓库首次下载后会缓存 |
 
+## 8. 运行单元测试
+
+```bash
+uv run pytest benchmark/tests -v
+```
+
 ## 目录结构
 
 ```
 benchmark/
 ├── cli/
-│   ├── run.py       # 单次运行 CLI
-│   ├── grid.py      # 网格搜索 CLI
-│   └── analyze.py   # 结果分析
-├── datasets/        # 数据集加载器
-├── evaluation/      # 指标实现
-├── runner/          # 执行流程
-├── artifacts/
-│   ├── data/        # 数据集文件
-│   ├── repos/       # 缓存仓库
-│   ├── results/     # 运行输出 (.jsonl)
-│   └── reports/     # 汇总报告 (.report.json, .grid.json)
+│   ├── run.py           # 单次运行 CLI
+│   ├── grid.py          # 网格搜索 CLI
+│   ├── analyze.py       # 结果分析
+│   ├── validate.py      # 数据集验证
+│   └── build_locbench.py  # Loc-Bench 构建
+├── analysis/            # 分析工具 (function scope 等)
+├── datasets/            # 数据集加载器
+├── metrics/             # 指标实现
+├── runner/              # 执行流程
+├── tests/               # 单元测试
+├── config.py            # 配置常量
+├── schemas.py           # 数据结构定义
+└── artifacts/           # (运行时生成，不在版控中)
+    ├── data/            # 数据集文件
+    ├── repos/           # 缓存仓库
+    ├── results/         # 运行输出 (.jsonl)
+    └── reports/         # 汇总报告 (.report.json, .grid.json)
 ```

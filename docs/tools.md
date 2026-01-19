@@ -144,3 +144,41 @@ If `confirm=false`, returns `status="cancelled"` and does nothing.
   "repo_id": "uuid"
 }
 ```
+
+---
+
+## `agentic_retrieval`
+
+Two-stage semantic + agentic code retrieval. Combines cloud semantic search with local agentic exploration for precise results.
+
+### Behavior
+
+1. **Stage 1**: Runs `cloud_search` to get semantically relevant candidate files
+2. **Stage 2**: Uses candidates as hints to guide agentic exploration (grep, view, etc.)
+
+Falls back to pure agentic search if cloud is unavailable.
+
+### Parameters
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `query` | ✅ | — | Natural language query describing what to find |
+| `branch` | ❌ | `""` | Branch to search (empty uses API default) |
+| `score_threshold` | ❌ | `0.3` | Minimum relevance score for hints (0.0-1.0) |
+| `max_hints` | ❌ | `8` | Maximum number of hint files to use |
+
+### Example Response
+
+```json
+{
+  "query": "How is user authentication handled?",
+  "explanation": "Auth logic is in src/auth/...",
+  "files": {
+    "/home/user/project/src/auth/login.py": [[10, 80]]
+  },
+  "turns_used": 3,
+  "partial": false,
+  "trace_id": "a1b2c3d4",
+  "cloud_hints_used": 5
+}
+```

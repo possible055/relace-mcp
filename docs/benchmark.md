@@ -81,7 +81,37 @@ uv run python -m benchmark.cli.grid \
 
 **Output**: Grid summary saved to `artifacts/reports/<grid_name>.grid.json`
 
-## 4. Analyze Results
+## 4. Dataset Validation
+
+Validate dataset correctness before running benchmarks:
+
+```bash
+# Validate default dataset
+uv run python -m benchmark.cli.validate
+
+# Validate specific dataset
+uv run python -m benchmark.cli.validate --input artifacts/data/raw/locbench_v1.jsonl
+
+# Output report to file
+uv run python -m benchmark.cli.validate --output validation.json --verbose
+```
+
+**Validation checks**:
+- `hard_gt` / `soft_context` files exist
+- Line ranges are valid
+- Function names match AST parsing
+- `target_ranges` fall within context range
+- Solvability evidence appears in query
+
+**Options**:
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--input` | `locbench_v1.jsonl` | Dataset path |
+| `--output` | stdout | Report output path |
+| `--limit` | all | Number to validate |
+| `-v/--verbose` | off | Detailed output |
+
+## 5. Analyze Results
 
 ```bash
 # Analyze single run
@@ -91,7 +121,7 @@ uv run python -m benchmark.cli.analyze path/to/run.report.json
 uv run python -m benchmark.cli.analyze run1.report.json run2.report.json
 ```
 
-## 5. Interpret Metrics
+## 6. Interpret Metrics
 
 | Metric | Formula |
 |--------|---------|
@@ -104,7 +134,7 @@ uv run python -m benchmark.cli.analyze run1.report.json run2.report.json
 
 Each `*.report.json` includes metadata tracking: `temperature`, `max_turns`, `prompt_file` for reproducibility.
 
-## 6. Troubleshooting
+## 7. Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
@@ -113,20 +143,32 @@ Each `*.report.json` includes metadata tracking: `temperature`, `max_turns`, `pr
 | Dataset not found | Place dataset in `benchmark/artifacts/data/` |
 | Slow first run | Normal—repos cached after first download |
 
+## 8. Running Unit Tests
+
+```bash
+uv run pytest benchmark/tests -v
+```
+
 ## Directory Structure
 
 ```
 benchmark/
 ├── cli/
-│   ├── run.py       # Single run CLI
-│   ├── grid.py      # Grid search CLI
-│   └── analyze.py   # Result analysis
-├── datasets/        # Dataset loaders
-├── evaluation/      # Metrics implementation
-├── runner/          # Execution pipeline
-├── artifacts/
-│   ├── data/        # Dataset files
-│   ├── repos/       # Cached repositories
-│   ├── results/     # Run outputs (.jsonl)
-│   └── reports/     # Summary reports (.report.json, .grid.json)
+│   ├── run.py           # Single run CLI
+│   ├── grid.py          # Grid search CLI
+│   ├── analyze.py       # Result analysis
+│   ├── validate.py      # Dataset validation
+│   └── build_locbench.py  # Loc-Bench builder
+├── analysis/            # Analysis tools (function scope, etc.)
+├── datasets/            # Dataset loaders
+├── metrics/             # Metrics implementation
+├── runner/              # Execution pipeline
+├── tests/               # Unit tests
+├── config.py            # Configuration constants
+├── schemas.py           # Data structure definitions
+└── artifacts/           # (runtime generated, not in version control)
+    ├── data/            # Dataset files
+    ├── repos/           # Cached repositories
+    ├── results/         # Run outputs (.jsonl)
+    └── reports/         # Summary reports (.report.json, .grid.json)
 ```

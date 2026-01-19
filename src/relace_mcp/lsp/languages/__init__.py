@@ -1,11 +1,17 @@
 from pathlib import Path
 
 from relace_mcp.lsp.languages.base import LanguageServerConfig
+from relace_mcp.lsp.languages.go import GO_CONFIG
 from relace_mcp.lsp.languages.python import PYTHON_CONFIG
+from relace_mcp.lsp.languages.rust import RUST_CONFIG
+from relace_mcp.lsp.languages.typescript import TYPESCRIPT_CONFIG
 
 # Registry of supported language configurations
 LANGUAGE_CONFIGS: dict[str, LanguageServerConfig] = {
     "python": PYTHON_CONFIG,
+    "typescript": TYPESCRIPT_CONFIG,
+    "go": GO_CONFIG,
+    "rust": RUST_CONFIG,
 }
 
 # Cache for detected LSP languages per base_dir

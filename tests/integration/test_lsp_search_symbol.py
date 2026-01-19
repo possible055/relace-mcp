@@ -67,6 +67,8 @@ class TestSearchSymbolHandler:
 
     @patch("relace_mcp.lsp.LSPClientManager")
     def test_basic_search(self, mock_manager_cls: MagicMock, tmp_path) -> None:
+        (tmp_path / "test.py").write_text("class TestClass: pass\n")
+
         mock_client = MagicMock()
         mock_client.workspace_symbols.return_value = [
             SymbolInfo(
@@ -93,6 +95,8 @@ class TestSearchSymbolHandler:
 
     @patch("relace_mcp.lsp.LSPClientManager")
     def test_no_results(self, mock_manager_cls: MagicMock, tmp_path) -> None:
+        (tmp_path / "test.py").write_text("x = 1\n")
+
         mock_client = MagicMock()
         mock_client.workspace_symbols.return_value = []
         mock_session = MagicMock()

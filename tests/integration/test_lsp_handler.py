@@ -105,9 +105,24 @@ class TestLSPQueryHandler:
         assert "Error" in result
         assert "not found" in result
 
-    def test_non_python_file_returns_error(self, tmp_path: Path) -> None:
+    @patch("relace_mcp.lsp.LSPClientManager")
+    def test_js_file_uses_typescript_config(
+        self, mock_manager_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        from relace_mcp.lsp import Location
+
         js_file = tmp_path / "test.js"
         js_file.write_text("const x = 1;")
+
+        mock_client = MagicMock()
+        mock_client.definition.return_value = [Location(uri=js_file.as_uri(), line=0, character=0)]
+        mock_session = MagicMock()
+        mock_session.__enter__.return_value = mock_client
+        mock_session.__exit__.return_value = False
+        mock_manager = MagicMock()
+        mock_manager.session.return_value = mock_session
+        mock_manager_cls.get_instance.return_value = mock_manager
+
         params = LSPQueryParams(
             action="definition",
             file="/repo/test.js",
@@ -115,8 +130,12 @@ class TestLSPQueryHandler:
             column=1,
         )
         result = lsp_query_handler(params, str(tmp_path))
-        assert "Error" in result
-        assert "Python files" in result
+
+        called_config = mock_manager.session.call_args[0][0]
+        assert called_config.language_id == "typescript"
+        mock_client.definition.assert_called_once()
+        assert "Error" not in result
+        assert "test.js:1:1" in result
 
     def test_negative_line_returns_error(self, tmp_path: Path) -> None:
         py_file = tmp_path / "test.py"
@@ -379,14 +398,14 @@ class TestLSPClientManager:
 
         with manager.session(PYTHON_CONFIG, "/w1"):
             manager.get_client(PYTHON_CONFIG, "/w2")
-            assert "/w1" in manager._clients
-            assert "/w2" in manager._clients
+            assert ("/w1", "python") in manager._clients
+            assert ("/w2", "python") in manager._clients
             c1.shutdown.assert_not_called()
             c2.shutdown.assert_not_called()
             assert len(manager._clients) == 2
 
         assert len(manager._clients) == 1
-        assert "/w2" in manager._clients
+        assert ("/w2", "python") in manager._clients
         c1.shutdown.assert_called_once()
         c2.shutdown.assert_not_called()
 
