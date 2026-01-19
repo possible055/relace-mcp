@@ -136,7 +136,7 @@ class TestRelaceRepoClientListRepos:
         """Should stop at 100 pages safety limit to prevent infinite loops."""
         call_count = 0
 
-        def mock_paginated_response(*args, **kwargs):
+        def mock_paginated_response(*_args, **kwargs):
             nonlocal call_count
             page_start = kwargs.get("params", {}).get("page_start", 0)
             call_count += 1
@@ -274,6 +274,21 @@ class TestRelaceRepoClientEnsureRepo:
 
         assert repo_id == "existing-repo-id"
 
+    def test_ensure_repo_raises_on_duplicate_names(self, repo_client: RelaceRepoClient) -> None:
+        """Should raise when multiple repos share the same name."""
+        with patch.object(
+            repo_client,
+            "list_repos",
+            return_value=[
+                {"repo_id": "id-1", "metadata": {"name": "dup-repo"}},
+                {"repo_id": "id-2", "metadata": {"name": "dup-repo"}},
+            ],
+        ):
+            with pytest.raises(RuntimeError) as exc_info:
+                repo_client.ensure_repo("dup-repo")
+
+        assert "Multiple repos found" in str(exc_info.value)
+
     def test_ensure_repo_creates_new(self, repo_client: RelaceRepoClient) -> None:
         """Should create new repo if not found."""
         list_response = MagicMock()
@@ -356,7 +371,7 @@ class TestRelaceRepoClientRetry:
         """Should retry on rate limit (429) error."""
         call_count = 0
 
-        def mock_request(*args, **kwargs):
+        def mock_request(*_args, **_kwargs):
             nonlocal call_count
             call_count += 1
             if call_count < 3:
@@ -419,7 +434,7 @@ class TestRelaceRepoClientDeleteRepo:
             retryable=False,
         )
 
-        def raise_not_found(*args, **kwargs):
+        def raise_not_found(*_args, **_kwargs):
             raise RuntimeError("Repos API error (not_found): Repo not found") from api_error
 
         with patch.object(repo_client, "_request_with_retry", side_effect=raise_not_found):
@@ -438,7 +453,7 @@ class TestRelaceRepoClientDeleteRepo:
             retryable=False,
         )
 
-        def raise_forbidden(*args, **kwargs):
+        def raise_forbidden(*_args, **_kwargs):
             raise RuntimeError("Repos API error (forbidden): Forbidden") from api_error
 
         with patch.object(repo_client, "_request_with_retry", side_effect=raise_forbidden):

@@ -7,7 +7,7 @@ from typing import Any
 import click
 
 from ..analysis.function_scope import extract_function_scopes
-from ..config import DEFAULT_FILTERED_PATH, get_benchmark_dir, get_repos_dir
+from ..config import DEFAULT_LOCBENCH_PATH, get_benchmark_dir, get_repos_dir
 from ..datasets import DatasetCase, load_dataset
 from ..runner.git import ensure_repo
 
@@ -141,6 +141,7 @@ def validate_case(case: DatasetCase, repos_dir: Path, verbose: bool) -> Validati
         path = gt.path
         func_name = gt.function
         range_data = gt.range
+        target_ranges = gt.target_ranges
 
         # File exists
         err = _validate_file_exists(repo_path, path)
@@ -161,6 +162,19 @@ def validate_case(case: DatasetCase, repos_dir: Path, verbose: bool) -> Validati
                 )
                 if err:
                     errors.append(f"[hard_gt] {err}")
+
+        if not target_ranges:
+            warnings.append(f"[hard_gt] {path}: Missing target_ranges")
+        else:
+            for start, end in target_ranges:
+                err = _validate_line_range(repo_path, path, start, end)
+                if err:
+                    errors.append(f"[hard_gt] [target_ranges] {err}")
+                if start < range_data[0] or end > range_data[1]:
+                    errors.append(
+                        f"[hard_gt] [target_ranges] {path}: "
+                        f"Target range [{start}, {end}] not within context range {list(range_data)}"
+                    )
 
     # Validate soft_context
     for ctx in case.soft_context:
@@ -203,7 +217,7 @@ def validate_case(case: DatasetCase, repos_dir: Path, verbose: bool) -> Validati
 @click.option(
     "--input",
     "input_path",
-    default=DEFAULT_FILTERED_PATH,
+    default=DEFAULT_LOCBENCH_PATH,
     show_default=True,
     help="Filtered dataset path",
 )

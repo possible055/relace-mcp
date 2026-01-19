@@ -2,6 +2,7 @@ import logging
 import os
 import subprocess  # nosec B404 - used safely with hardcoded commands only
 import uuid
+import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -9,10 +10,14 @@ from typing import Any
 from ...clients.repo import RelaceRepoClient
 from ...config.settings import REPO_SYNC_MAX_FILES
 from ...tools.apply.file_io import decode_text_best_effort, get_project_encoding
+from .errors import build_cloud_error_details
+from .logging import log_cloud_sync_complete, log_cloud_sync_error, log_cloud_sync_start
 from .state import (
     SyncState,
     compute_file_hash,
     get_current_git_info,
+    get_repo_identity,
+    get_repo_root,
     load_sync_state,
     save_sync_state,
 )
@@ -372,29 +377,74 @@ def cloud_sync_logic(
         - error: Error message if failed (optional)
     """
     trace_id = str(uuid.uuid4())[:8]
-    logger.info(
-        "[%s] Starting cloud sync from %s (force=%s, mirror=%s)",
-        trace_id,
-        base_dir,
-        force,
-        mirror,
+    logger.info("[%s] Starting cloud sync", trace_id)
+    warnings.warn(
+        f"[{trace_id}] cloud_sync base_dir={base_dir!r} force={force!r} mirror={mirror!r}",
+        DeprecationWarning,
+        stacklevel=2,
     )
+
+    original_base_dir = base_dir
+    base_dir = get_repo_root(base_dir)
+    if base_dir != original_base_dir:
+        logger.info(
+            "[%s] Normalized base_dir to git root",
+            trace_id,
+        )
 
     # Get current git info
     current_branch, current_head = get_current_git_info(base_dir)
     ref_changed = False
     deletes_suppressed = 0
-    repo_name = Path(base_dir).name
+    local_repo_name, cloud_repo_name, project_fingerprint = get_repo_identity(base_dir)
+    if not local_repo_name or not cloud_repo_name:
+        result = {
+            "trace_id": trace_id,
+            "repo_id": None,
+            "repo_name": local_repo_name or None,
+            "cloud_repo_name": None,
+            "repo_head": None,
+            "is_incremental": False,
+            "files_created": 0,
+            "files_updated": 0,
+            "files_deleted": 0,
+            "files_unchanged": 0,
+            "files_skipped": 0,
+            "total_files": 0,
+            "local_git_branch": current_branch,
+            "local_git_head": current_head[:8] if current_head else "",
+            "ref_changed": False,
+            "sync_mode": "error",
+            "deletes_suppressed": 0,
+            "error": "Invalid base_dir: cannot derive repository name.",
+        }
+        log_cloud_sync_error(trace_id, local_repo_name or None, None, result)
+        return result
+
+    log_cloud_sync_start(
+        trace_id,
+        original_base_dir,
+        base_dir,
+        local_repo_name,
+        cloud_repo_name,
+        force,
+        mirror,
+    )
 
     try:
         # Ensure repo exists
-        repo_id = client.ensure_repo(repo_name, trace_id=trace_id)
-        logger.info("[%s] Using repo '%s' (id=%s)", trace_id, repo_name, repo_id)
+        repo_id = client.ensure_repo(cloud_repo_name, trace_id=trace_id)
+        logger.info("[%s] Using cloud repo for local repo", trace_id)
+        warnings.warn(
+            f"[{trace_id}] cloud_sync cloud_repo_name={cloud_repo_name!r} repo_id={repo_id!r} local_repo_name={local_repo_name!r}",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
         # Load cached sync state (unless force)
         cached_state: SyncState | None = None
         if not force:
-            cached_state = load_sync_state(repo_name)
+            cached_state = load_sync_state(base_dir)
             if cached_state and cached_state.repo_id != repo_id:
                 # Repo ID mismatch, force full sync
                 logger.warning(
@@ -446,6 +496,10 @@ def cloud_sync_logic(
 
         logger.info("[%s] Found %d files to process", trace_id, len(files))
 
+        files.sort()
+        files_found = len(files)
+        files_truncated = 0
+
         # Limit file count
         if len(files) > REPO_SYNC_MAX_FILES:
             logger.warning(
@@ -454,7 +508,9 @@ def cloud_sync_logic(
                 len(files),
                 REPO_SYNC_MAX_FILES,
             )
+            files_truncated = len(files) - REPO_SYNC_MAX_FILES
             files = files[:REPO_SYNC_MAX_FILES]
+        files_selected = len(files)
 
         # Compute file hashes
         logger.info("[%s] Computing file hashes...", trace_id)
@@ -522,7 +578,7 @@ def cloud_sync_logic(
             # Always call API even with empty list to ensure cloud repo is cleared
             # and we get a valid repo_head for consistent sync state
             result = client.update_repo_files(repo_id, file_contents, trace_id=trace_id)
-            repo_head = result.get("repo_head", "")
+            repo_head = str(result.get("repo_head", ""))
             if not file_contents:
                 logger.warning(
                     "[%s] Mirror sync with empty file list - cloud repo cleared",
@@ -536,7 +592,7 @@ def cloud_sync_logic(
         elif operations:
             logger.info("[%s] Applying %d operations via update API...", trace_id, len(operations))
             result = client.update_repo(repo_id, operations, trace_id=trace_id)
-            repo_head = result.get("repo_head", "")
+            repo_head = str(result.get("repo_head", ""))
             logger.info(
                 "[%s] Update completed, new head=%s",
                 trace_id,
@@ -551,16 +607,47 @@ def cloud_sync_logic(
             repo_id=repo_id,
             repo_head=repo_head,
             last_sync="",  # Will be set by save_sync_state
+            repo_name=local_repo_name,
+            cloud_repo_name=cloud_repo_name,
+            project_fingerprint=project_fingerprint,
             git_branch=current_branch,
             git_head_sha=current_head,
             files=new_hashes,
             skipped_files=new_skipped,
+            files_found=files_found,
+            files_selected=files_selected,
+            file_limit=REPO_SYNC_MAX_FILES,
+            files_truncated=files_truncated,
         )
-        save_sync_state(repo_name, new_state)
+        state_saved = save_sync_state(base_dir, new_state)
 
-        return {
+        warnings_list: list[str] = []
+        if base_dir != original_base_dir:
+            warnings_list.append(
+                f"Normalized base_dir to git root: {original_base_dir} -> {base_dir}."
+            )
+        if files_truncated:
+            warnings_list.append(
+                f"File count {files_found} exceeded limit {REPO_SYNC_MAX_FILES}; synced first {files_selected} files only."
+            )
+        if files_skipped:
+            warnings_list.append(
+                f"Skipped {files_skipped} files (binary/oversize/unreadable); cloud search may miss those files."
+            )
+        if deletes_suppressed:
+            warnings_list.append(
+                f"Suppressed {deletes_suppressed} delete operations (safe_full); cloud repo may contain stale files."
+            )
+        if not state_saved:
+            warnings_list.append(
+                "Failed to save local sync state; next cloud_search may fail until re-sync."
+            )
+
+        result_payload = {
+            "trace_id": trace_id,
             "repo_id": repo_id,
-            "repo_name": repo_name,
+            "repo_name": local_repo_name,
+            "cloud_repo_name": cloud_repo_name,
             "repo_head": repo_head,
             "is_incremental": is_incremental,
             "files_created": files_created,
@@ -569,19 +656,29 @@ def cloud_sync_logic(
             "files_unchanged": files_unchanged,
             "files_skipped": files_skipped,
             "total_files": len(new_hashes),
+            "files_found": files_found,
+            "files_selected": files_selected,
+            "file_limit": REPO_SYNC_MAX_FILES,
+            "files_truncated": files_truncated,
             # Debug fields
             "local_git_branch": current_branch,
             "local_git_head": current_head[:8] if current_head else "",
             "ref_changed": ref_changed,
             "sync_mode": sync_mode,
             "deletes_suppressed": deletes_suppressed,
+            "state_saved": state_saved,
+            "warnings": warnings_list,
         }
+        log_cloud_sync_complete(trace_id, result_payload)
+        return result_payload
 
     except Exception as exc:
         logger.error("[%s] Cloud sync failed: %s", trace_id, exc)
-        return {
+        result = {
+            "trace_id": trace_id,
             "repo_id": None,
-            "repo_name": repo_name,
+            "repo_name": local_repo_name,
+            "cloud_repo_name": cloud_repo_name,
             "repo_head": None,
             "is_incremental": False,
             "files_created": 0,
@@ -596,4 +693,7 @@ def cloud_sync_logic(
             "sync_mode": "error",
             "deletes_suppressed": 0,
             "error": str(exc),
+            **build_cloud_error_details(exc),
         }
+        log_cloud_sync_error(trace_id, local_repo_name, cloud_repo_name, result)
+        return result

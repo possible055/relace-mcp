@@ -1,14 +1,9 @@
-"""Loader for benchmark datasets.
-
-Supports the unified DatasetCase format with hard_gt and soft_context.
-"""
-
 import json
 import random
 from collections import defaultdict
 from pathlib import Path
 
-from ..config import DEFAULT_MULOCBENCH_PATH, EXCLUDED_REPOS, get_benchmark_dir
+from ..config import DEFAULT_LOCBENCH_PATH, EXCLUDED_REPOS, get_benchmark_dir
 from ..schemas import ContextEntry, DatasetCase, GroundTruthEntry, SolvabilityInfo
 
 
@@ -60,7 +55,7 @@ def _stratified_sample(
 
 def load_dataset(
     *,
-    dataset_path: str = DEFAULT_MULOCBENCH_PATH,
+    dataset_path: str = DEFAULT_LOCBENCH_PATH,
     limit: int | None = None,
     shuffle: bool = True,
     seed: int = 0,
@@ -125,11 +120,26 @@ def load_dataset(
                 range_data = gt.get("range", [])
                 if not path_str or len(range_data) < 2:
                     continue
+                target_ranges_data = gt.get("target_ranges", [])
+                target_ranges: list[tuple[int, int]] = []
+                if isinstance(target_ranges_data, list):
+                    for r in target_ranges_data:
+                        if (
+                            isinstance(r, (list, tuple))
+                            and len(r) >= 2
+                            and isinstance(r[0], int)
+                            and isinstance(r[1], int)
+                        ):
+                            start, end = r[0], r[1]
+                            if start <= 0 or end < start:
+                                continue
+                            target_ranges.append((start, end))
                 hard_gt.append(
                     GroundTruthEntry(
                         path=path_str,
                         function=gt.get("function", ""),
                         range=(range_data[0], range_data[1]),
+                        target_ranges=target_ranges,
                         class_name=gt.get("class"),
                         signature=gt.get("signature"),
                     )
@@ -181,7 +191,3 @@ def load_dataset(
         cases = _stratified_sample(cases, limit, rng)
 
     return cases if limit is None else cases[:limit]
-
-
-# Backwards compatibility alias
-load_mulocbench = load_dataset

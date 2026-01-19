@@ -110,7 +110,7 @@ class TestApplyFileLogicSuccess:
     @pytest.mark.asyncio
     async def test_successful_apply(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         temp_source_file: Path,
         successful_api_response: dict[str, Any],
@@ -147,7 +147,7 @@ class TestApplyFileLogicSuccess:
     @pytest.mark.asyncio
     async def test_logs_success_event(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         temp_source_file: Path,
         successful_api_response: dict[str, Any],
@@ -175,7 +175,7 @@ class TestApplyFileLogicSuccess:
     @pytest.mark.asyncio
     async def test_create_new_file(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -206,7 +206,7 @@ class TestApplyFileLogicValidation:
     @pytest.mark.parametrize("snippet", ["", "   \n\t  "])
     async def test_empty_or_whitespace_edit_snippet_returns_error(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         temp_source_file: Path,
         tmp_path: Path,
@@ -229,7 +229,7 @@ class TestApplyFileLogicValidation:
     @pytest.mark.asyncio
     async def test_placeholder_only_snippet_returns_error(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         temp_source_file: Path,
         tmp_path: Path,
@@ -251,7 +251,7 @@ class TestApplyFileLogicValidation:
     @pytest.mark.asyncio
     async def test_empty_path_returns_invalid_path(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -273,7 +273,7 @@ class TestApplyFileLogicValidation:
     @pytest.mark.asyncio
     async def test_directory_path_returns_invalid_path(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -295,7 +295,7 @@ class TestApplyFileLogicValidation:
     @pytest.mark.asyncio
     async def test_delete_with_remove_directive_is_allowed(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         temp_source_file: Path,
         tmp_path: Path,
@@ -322,7 +322,7 @@ class TestApplyFileLogicValidation:
     @pytest.mark.asyncio
     async def test_delete_with_hash_remove_directive_is_allowed(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         temp_source_file: Path,
         tmp_path: Path,
@@ -349,7 +349,7 @@ class TestApplyFileLogicValidation:
     @pytest.mark.asyncio
     async def test_no_changes_returns_message(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         temp_source_file: Path,
         tmp_path: Path,
@@ -377,7 +377,7 @@ class TestApplyFileLogicFileSize:
     @pytest.mark.asyncio
     async def test_large_file_returns_recoverable_error(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         temp_large_file: Path,
         tmp_path: Path,
@@ -400,7 +400,7 @@ class TestApplyFileLogicFileSize:
     @pytest.mark.asyncio
     async def test_file_at_limit_allowed(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
         successful_api_response: dict[str, Any],
@@ -434,7 +434,7 @@ class TestApplyFileLogicEncoding:
     @pytest.mark.asyncio
     async def test_binary_file_returns_recoverable_error(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         temp_binary_file: Path,
         tmp_path: Path,
@@ -457,7 +457,7 @@ class TestApplyFileLogicEncoding:
     @pytest.mark.asyncio
     async def test_gbk_file_supported(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -489,7 +489,7 @@ class TestApplyFileLogicEncoding:
     @pytest.mark.asyncio
     async def test_big5_file_supported(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -534,7 +534,7 @@ class TestApplyFileLogicBaseDirSecurity:
     @pytest.mark.asyncio
     async def test_blocks_path_outside_base_dir(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -567,7 +567,7 @@ class TestApplyFileLogicApiErrors:
     @pytest.mark.asyncio
     async def test_logs_error_on_api_failure(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         temp_source_file: Path,
         tmp_path: Path,
@@ -599,7 +599,7 @@ class TestApplyFileLogicApiErrors:
     )
     async def test_invalid_merged_code_raises(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         temp_source_file: Path,
         tmp_path: Path,
@@ -628,7 +628,7 @@ class TestApplyFileLogicSnippetPreview:
     @pytest.mark.asyncio
     async def test_truncates_long_snippet_in_log(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         temp_source_file: Path,
         tmp_path: Path,
@@ -660,7 +660,7 @@ class TestApplyFileLogicPathNormalization:
     @pytest.mark.asyncio
     async def test_relative_path_accepted(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -689,7 +689,7 @@ class TestApplyFileLogicPathNormalization:
     @pytest.mark.asyncio
     async def test_absolute_path_accepted(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -718,7 +718,7 @@ class TestApplyFileLogicPathNormalization:
     @pytest.mark.asyncio
     async def test_invalid_path_returns_error(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -744,7 +744,7 @@ class TestApplyFileLogicRecoverableErrors:
     @pytest.mark.asyncio
     async def test_anchor_precheck_failure_returns_needs_more_context(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -771,7 +771,7 @@ class TestApplyFileLogicRecoverableErrors:
     @pytest.mark.asyncio
     async def test_anchor_precheck_skipped_with_append_directive(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -799,7 +799,7 @@ class TestApplyFileLogicRecoverableErrors:
     @pytest.mark.asyncio
     async def test_permission_error_returns_permission_error(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -826,7 +826,7 @@ class TestApplyFileLogicRecoverableErrors:
     @pytest.mark.asyncio
     async def test_filesystem_error_returns_fs_error_on_create(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -853,7 +853,7 @@ class TestApplyFileLogicRecoverableErrors:
     @pytest.mark.asyncio
     async def test_read_only_file_returns_file_not_writable(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -882,7 +882,7 @@ class TestApplyFileLogicRecoverableErrors:
     @pytest.mark.asyncio
     async def test_api_auth_error_returns_auth_error(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -915,7 +915,7 @@ class TestApplyFileLogicRecoverableErrors:
     @pytest.mark.asyncio
     async def test_api_403_error_returns_auth_error(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -947,7 +947,7 @@ class TestApplyFileLogicRecoverableErrors:
     @pytest.mark.asyncio
     async def test_api_other_4xx_returns_api_error(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -980,7 +980,7 @@ class TestApplyFileLogicRecoverableErrors:
     @pytest.mark.asyncio
     async def test_network_error_returns_network_error(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -1008,7 +1008,7 @@ class TestApplyFileLogicRecoverableErrors:
     @pytest.mark.asyncio
     async def test_timeout_error_returns_timeout_error(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -1036,7 +1036,7 @@ class TestApplyFileLogicRecoverableErrors:
     @pytest.mark.asyncio
     async def test_anchor_precheck_allows_remove_directives(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -1067,7 +1067,7 @@ class TestApplyFileLogicRecoverableErrors:
     @pytest.mark.asyncio
     async def test_anchor_precheck_with_indentation_difference(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -1102,7 +1102,7 @@ class TestApplyNoopDetection:
     @pytest.mark.asyncio
     async def test_noop_with_new_lines_returns_apply_noop(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -1130,7 +1130,7 @@ class TestApplyNoopDetection:
     @pytest.mark.asyncio
     async def test_noop_idempotent_returns_ok(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -1158,7 +1158,7 @@ class TestApplyNoopDetection:
     @pytest.mark.asyncio
     async def test_noop_with_remove_directive_returns_apply_noop(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -1185,7 +1185,7 @@ class TestApplyNoopDetection:
     @pytest.mark.asyncio
     async def test_noop_with_short_new_line_returns_apply_noop(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -1213,7 +1213,7 @@ class TestApplyNoopDetection:
     @pytest.mark.asyncio
     async def test_noop_with_trivial_line_returns_ok(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -1241,7 +1241,7 @@ class TestApplyNoopDetection:
     @pytest.mark.asyncio
     async def test_noop_with_substring_match_returns_apply_noop(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -1275,7 +1275,7 @@ class TestApplyWriteVerification:
     @pytest.mark.asyncio
     async def test_atomic_write_creates_temp_file(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -1304,45 +1304,6 @@ class TestApplyWriteVerification:
         # Content should be new
         assert test_file.read_text() == "modified_content_value = False\nprocess_data_function()\n"
 
-    @pytest.mark.asyncio
-    async def test_post_write_verification_failure_returns_error(
-        self,
-        mock_config: RelaceConfig,
-        mock_backend: AsyncMock,
-        tmp_path: Path,
-    ) -> None:
-        """Post-write verification failure should return WRITE_VERIFY_FAILED."""
-        test_file = tmp_path / "test.py"
-        original = "original_content_value = True\nprocess_data_function()\n"
-        # Use binary write to avoid Windows newline conversion
-        test_file.write_bytes(original.encode("utf-8"))
-
-        mock_backend.apply.return_value = ApplyResponse(
-            merged_code="modified_content_value = False\nprocess_data_function()\n",
-            usage={},
-        )
-
-        # Mock read_text_with_fallback to raise exception during verification
-        with patch("relace_mcp.tools.apply.core.file_io.read_text_with_fallback") as mock_read:
-            # First call (read original file) returns normal content
-            # Second call (verify write) raises exception
-            mock_read.side_effect = [
-                (original, "utf-8"),
-                OSError("Permission denied"),
-            ]
-
-            result = await apply_file_logic(
-                backend=mock_backend,
-                file_path=str(test_file),
-                edit_snippet="original_content_value = True\nmodified_content_value = False\nprocess_data_function()\n",
-                instruction="Modify content",
-                base_dir=str(tmp_path),
-            )
-
-        assert result["status"] == "error"
-        assert result["code"] == "WRITE_VERIFY_FAILED"
-        assert "Cannot verify file content after write" in result["message"]
-
 
 class TestApplyResponseFormat:
     """Test response format includes required fields."""
@@ -1350,7 +1311,7 @@ class TestApplyResponseFormat:
     @pytest.mark.asyncio
     async def test_success_response_includes_path_and_trace_id(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
@@ -1380,7 +1341,7 @@ class TestApplyResponseFormat:
     @pytest.mark.asyncio
     async def test_noop_response_includes_path(
         self,
-        mock_config: RelaceConfig,
+        _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:

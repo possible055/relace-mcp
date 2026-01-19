@@ -6,6 +6,7 @@ import signal
 import subprocess  # nosec B404
 import threading
 import time
+import types
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
@@ -39,7 +40,7 @@ def _timeout_context(seconds: int) -> "AbstractContextManager[None]":
     def timeout_impl() -> Iterator[None]:
         if is_main_thread and hasattr(signal, "SIGALRM"):
             # Main thread on Unix: use signal.alarm
-            def handler(signum: int, frame: object) -> None:
+            def handler(_signum: int, _frame: types.FrameType | None) -> None:
                 raise TimeoutError(f"Operation timed out after {seconds}s")
 
             old_handler = signal.signal(signal.SIGALRM, handler)
