@@ -170,7 +170,7 @@ class TestLSPQueryHandler:
 
         mock_client = MagicMock()
         mock_client.definition.return_value = [
-            Location(uri=f"file://{actual_dir}/test.py", line=0, character=0)
+            Location(uri=(actual_dir / "test.py").as_uri(), line=0, character=0)
         ]
         mock_session = MagicMock()
         mock_session.__enter__.return_value = mock_client
@@ -202,7 +202,7 @@ class TestLSPQueryHandler:
 
         mock_client = MagicMock()
         mock_client.definition.return_value = [
-            Location(uri=f"file://{tmp_path}/test.py", line=0, character=4)
+            Location(uri=(tmp_path / "test.py").as_uri(), line=0, character=4)
         ]
         mock_session = MagicMock()
         mock_session.__enter__.return_value = mock_client
@@ -258,8 +258,8 @@ class TestLSPQueryHandler:
 
         mock_client = MagicMock()
         mock_client.references.return_value = [
-            Location(uri=f"file://{tmp_path}/test.py", line=0, character=0),
-            Location(uri=f"file://{tmp_path}/test.py", line=1, character=6),
+            Location(uri=(tmp_path / "test.py").as_uri(), line=0, character=0),
+            Location(uri=(tmp_path / "test.py").as_uri(), line=1, character=6),
         ]
         mock_session = MagicMock()
         mock_session.__enter__.return_value = mock_client

@@ -72,7 +72,7 @@ class TestSearchSymbolHandler:
             SymbolInfo(
                 name="TestClass",
                 kind=5,
-                uri=f"file://{tmp_path}/test.py",
+                uri=(tmp_path / "test.py").as_uri(),
                 line=10,
                 character=6,
             )

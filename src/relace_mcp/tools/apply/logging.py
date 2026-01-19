@@ -58,7 +58,7 @@ def log_event(event: dict[str, Any]) -> None:
 
         with _LOG_LOCK:
             if settings.LOG_PATH.is_dir():
-                logger.warning("Log path is a directory, skipping log write: %s", settings.LOG_PATH)
+                logger.warning("Log path is a directory, skipping log write")
                 return
             settings.LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 

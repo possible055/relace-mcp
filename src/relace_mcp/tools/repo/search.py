@@ -48,7 +48,7 @@ def cloud_search_logic(
     try:
         local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(base_dir)
         if not local_repo_name or not cloud_repo_name:
-            result = {
+            error_result: dict[str, Any] = {
                 "trace_id": trace_id,
                 "query": query,
                 "branch": branch,
@@ -57,8 +57,8 @@ def cloud_search_logic(
                 "hash": "",
                 "error": "Invalid base_dir: cannot derive repository name.",
             }
-            log_cloud_search_error(trace_id, None, None, result)
-            return result
+            log_cloud_search_error(trace_id, None, None, error_result)
+            return error_result
 
         log_cloud_search_start(
             trace_id,
@@ -76,15 +76,10 @@ def cloud_search_logic(
         if cached_state and cached_state.repo_id:
             repo_id = cached_state.repo_id
             git_head = cached_state.git_head_sha or ""
-            logger.info(
-                "[%s] Using cached repo_id=%s, git_head=%s",
-                trace_id,
-                repo_id[:8],
-                git_head[:8] if git_head else "none",
-            )
+            logger.info("[%s] Using cached repo state", trace_id)
         else:
-            logger.warning("[%s] No sync state found for '%s'", trace_id, local_repo_name)
-            result = {
+            logger.warning("[%s] No sync state found for repository", trace_id)
+            no_sync_result: dict[str, Any] = {
                 "trace_id": trace_id,
                 "query": query,
                 "branch": branch,
@@ -95,8 +90,8 @@ def cloud_search_logic(
                 "cloud_repo_name": cloud_repo_name,
                 "error": f"No sync state found for '{local_repo_name}'. Run cloud_sync first.",
             }
-            log_cloud_search_error(trace_id, local_repo_name, cloud_repo_name, result)
-            return result
+            log_cloud_search_error(trace_id, local_repo_name, cloud_repo_name, no_sync_result)
+            return no_sync_result
 
         warnings: list[str] = []
         current_branch, current_head = get_current_git_info(base_dir)
@@ -137,7 +132,8 @@ def cloud_search_logic(
         )
 
         # Format results
-        results = result.get("results", [])
+        raw_results = result.get("results")
+        results: list[Any] = raw_results if isinstance(raw_results, list) else []
         logger.info(
             "[%s] Cloud search completed, found %d results",
             trace_id,
@@ -161,7 +157,7 @@ def cloud_search_logic(
 
     except Exception as exc:
         logger.error("[%s] Cloud search failed: %s", trace_id, exc)
-        result = {
+        exc_result: dict[str, Any] = {
             "trace_id": trace_id,
             "query": query,
             "branch": branch,
@@ -172,7 +168,7 @@ def cloud_search_logic(
             **build_cloud_error_details(exc),
         }
         if local_repo_name and cloud_repo_name:
-            result["repo_name"] = local_repo_name
-            result["cloud_repo_name"] = cloud_repo_name
-        log_cloud_search_error(trace_id, local_repo_name, cloud_repo_name, result)
-        return result
+            exc_result["repo_name"] = local_repo_name
+            exc_result["cloud_repo_name"] = cloud_repo_name
+        log_cloud_search_error(trace_id, local_repo_name, cloud_repo_name, exc_result)
+        return exc_result

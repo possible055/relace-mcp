@@ -434,8 +434,8 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
 
     Args:
         lsp_languages: Set of available LSP language IDs for the current project.
-            If None, find_symbol is included by default (legacy behavior).
-            If empty frozenset, find_symbol is hidden.
+            If None, uses default tool set (LSP tools require explicit opt-in via SEARCH_ENABLED_TOOLS).
+            If empty frozenset, LSP tools are hidden.
 
     Environment variables:
         - SEARCH_ENABLED_TOOLS: Comma/space-separated allowlist, e.g.

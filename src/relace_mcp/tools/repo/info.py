@@ -33,7 +33,7 @@ def cloud_info_logic(
     """
     trace_id = str(uuid.uuid4())[:8]
     local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(base_dir)
-    logger.info("[%s] Getting cloud info for '%s'", trace_id, local_repo_name)
+    logger.info("[%s] Getting cloud info for repository", trace_id)
 
     try:
         if not local_repo_name or not cloud_repo_name:

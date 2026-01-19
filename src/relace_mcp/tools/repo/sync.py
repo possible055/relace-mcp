@@ -388,10 +388,8 @@ def cloud_sync_logic(
     base_dir = get_repo_root(base_dir)
     if base_dir != original_base_dir:
         logger.info(
-            "[%s] Normalized base_dir to git root: %s -> %s",
+            "[%s] Normalized base_dir to git root",
             trace_id,
-            original_base_dir,
-            base_dir,
         )
 
     # Get current git info
@@ -581,7 +579,7 @@ def cloud_sync_logic(
             # Always call API even with empty list to ensure cloud repo is cleared
             # and we get a valid repo_head for consistent sync state
             result = client.update_repo_files(repo_id, file_contents, trace_id=trace_id)
-            repo_head = result.get("repo_head", "")
+            repo_head = str(result.get("repo_head", ""))
             if not file_contents:
                 logger.warning(
                     "[%s] Mirror sync with empty file list - cloud repo cleared",
@@ -595,7 +593,7 @@ def cloud_sync_logic(
         elif operations:
             logger.info("[%s] Applying %d operations via update API...", trace_id, len(operations))
             result = client.update_repo(repo_id, operations, trace_id=trace_id)
-            repo_head = result.get("repo_head", "")
+            repo_head = str(result.get("repo_head", ""))
             logger.info(
                 "[%s] Update completed, new head=%s",
                 trace_id,

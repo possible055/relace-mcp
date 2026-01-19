@@ -410,8 +410,17 @@ def _check_git_dangerous_flags(tokens: list[str], base_cmd: str) -> tuple[bool, 
         return False, ""
 
     for token in tokens[1:]:
+        # Exact match for long flags and standalone short flags
         if token in _GIT_BLOCKED_FLAGS:
             return True, f"Blocked git flag: {token}"
+        # Handle combined short options (e.g., -pS, -Sp decompose to -p -S)
+        # Only single-dash tokens that aren't long flags
+        if token.startswith("-") and not token.startswith("--") and len(token) > 2:
+            for blocked in _GIT_BLOCKED_FLAGS:
+                # Only check single-char short flags (e.g., "-p")
+                if blocked.startswith("-") and not blocked.startswith("--") and len(blocked) == 2:
+                    if blocked[1] in token[1:]:
+                        return True, f"Blocked git flag: {blocked} (in combined option {token})"
 
     return False, ""
 

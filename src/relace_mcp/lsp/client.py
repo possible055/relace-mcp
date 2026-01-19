@@ -12,6 +12,7 @@ import sys
 import threading
 import time
 import tomllib
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -322,7 +323,7 @@ class LSPClient:
         )
 
     def _restart_language_server(self, reason: str) -> None:
-        logger.info("Restarting language server: %s", reason)
+        logger.info("Restarting language server")
         self._fs_snapshot.clear()
         self._fs_snapshot_initialized = False
         self._fs_last_sync = 0.0
@@ -771,8 +772,8 @@ class LSPClient:
                 return
 
             self._send_error_response(req_id, -32601, f"Method not found: {method}")
-        except Exception as e:
-            logger.debug("Failed to handle server request %s: %s", method, e)
+        except Exception:
+            logger.debug("Failed to handle server request")
             try:
                 self._send_error_response(req_id, -32603, "Internal error")
             except Exception:
@@ -1412,7 +1413,7 @@ class LSPClientManager:
         workspace: str,
         *,
         timeout_seconds: float | None = None,
-    ):
+    ) -> "Generator[LSPClient, None, None]":
         """Acquire a leased LSP client for a workspace.
 
         A leased client is protected from LRU eviction while the session is

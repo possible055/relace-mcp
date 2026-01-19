@@ -37,8 +37,8 @@ def _get_git_root(base_dir: str) -> Path:
             top = result.stdout.strip()
             if top:
                 return Path(top).resolve()
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
-        logger.debug("Failed to get git root from %s: %s", base_dir, exc)
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        logger.debug("Failed to get git root")
     return base_path
 
 
@@ -55,8 +55,8 @@ def _get_git_remote_origin_url(repo_root: Path) -> str:
             url = result.stdout.strip()
             if url:
                 return url
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
-        logger.debug("Failed to get git remote origin url from %s: %s", repo_root, exc)
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        logger.debug("Failed to get git remote origin url from %s", repo_root)
     return ""
 
 
@@ -96,8 +96,8 @@ def is_git_dirty(base_dir: str) -> bool:
         )
         if result.returncode == 0:
             return bool(result.stdout.strip())
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
-        logger.debug("Failed to get git dirty status from %s: %s", repo_root, exc)
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        logger.debug("Failed to get git dirty status from %s", repo_root)
     return False
 
 
@@ -361,7 +361,7 @@ def get_current_git_info(base_dir: str) -> tuple[str, str]:
         if result.returncode == 0:
             head_sha = result.stdout.strip()
 
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
-        logger.debug("Failed to get git info from %s: %s", base_dir, exc)
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        logger.debug("Failed to get git info from %s", base_dir)
 
     return branch, head_sha
