@@ -289,17 +289,27 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
 
 
 def _format_lsp_results(results: "list[Location]", base_dir: str) -> str:
-    """Format LSP results into grep-like output."""
+    """Format LSP results into grep-like output, filtering external paths.
+
+    Filter-first-then-cap: filters external paths before applying result limit
+    to ensure repo-internal results aren't excluded.
+    """
     if not results:
         return "No results found."
 
     lines = []
-    for r in results[:MAX_LSP_RESULTS]:
+    for r in results:
         line_str = r.to_grep_format(base_dir)
-        lines.append(line_str)
+        if line_str is not None:
+            lines.append(line_str)
+            if len(lines) >= MAX_LSP_RESULTS:
+                break
 
-    if len(results) > MAX_LSP_RESULTS:
-        lines.append(f"... capped at {MAX_LSP_RESULTS} results (total: {len(results)})")
+    if not lines:
+        return "No results found (all results are outside repository)."
+
+    if len(lines) >= MAX_LSP_RESULTS:
+        lines.append(f"... capped at {MAX_LSP_RESULTS} results")
 
     return "\n".join(lines)
 
@@ -327,11 +337,18 @@ def search_symbol_handler(params: SearchSymbolParams, base_dir: str) -> str:
             return "No symbols found."
 
         lines = []
-        for r in results[:MAX_LSP_RESULTS]:
-            lines.append(r.to_grep_format(resolved_base_dir))
+        for r in results:
+            formatted = r.to_grep_format(resolved_base_dir)
+            if formatted is not None:
+                lines.append(formatted)
+                if len(lines) >= MAX_LSP_RESULTS:
+                    break
 
-        if len(results) > MAX_LSP_RESULTS:
-            lines.append(f"... capped at {MAX_LSP_RESULTS} results (total: {len(results)})")
+        if not lines:
+            return "No symbols found (all results are outside repository)."
+
+        if len(lines) >= MAX_LSP_RESULTS:
+            lines.append(f"... capped at {MAX_LSP_RESULTS} results")
 
         return "\n".join(lines)
 
@@ -452,11 +469,21 @@ def call_graph_handler(params: CallGraphParams, base_dir: str) -> str:
         lines = []
         header = "Called by:" if params.direction == "incoming" else "Calls:"
         lines.append(header)
-        for r in results[:MAX_LSP_RESULTS]:
-            lines.append("  " + r.to_display_str(resolved_base_dir))
+        result_count = 0
+        for r in results:
+            display_str = r.to_display_str(resolved_base_dir)
+            if display_str is not None:
+                lines.append("  " + display_str)
+                result_count += 1
+                if result_count >= MAX_LSP_RESULTS:
+                    break
 
-        if len(results) > MAX_LSP_RESULTS:
-            lines.append(f"  ... capped at {MAX_LSP_RESULTS} results (total: {len(results)})")
+        if len(lines) == 1:  # Only header, no results after filtering
+            direction_desc = "callers" if params.direction == "incoming" else "callees"
+            return f"No {direction_desc} found within repository."
+
+        if result_count >= MAX_LSP_RESULTS:
+            lines.append(f"  ... capped at {MAX_LSP_RESULTS} results")
 
         return "\n".join(lines)
 

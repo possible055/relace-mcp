@@ -61,19 +61,20 @@ class TestFormatLSPResults:
         ]
         result = _format_lsp_results(results, "/base")
         assert "capped at 50 results" in result
-        assert "total: 100" in result
+        # Note: simplified message no longer includes total count
 
     def test_directory_boundary_matching(self) -> None:
-        """Regression test: base_dir must match at directory boundary.
+        """Test: paths outside base_dir are filtered out.
 
         e.g., /home/user/project should NOT match /home/user/project123
+        and such external paths should be filtered.
         """
         from relace_mcp.lsp import Location
 
         results = [Location(uri="file:///home/user/project123/file.py", line=0, character=0)]
         result = _format_lsp_results(results, "/home/user/project")
-        # Should NOT be transformed to /repo/... since project123 != project
-        assert result == "/home/user/project123/file.py:1:1"
+        # External paths are filtered out
+        assert result == "No results found (all results are outside repository)."
 
     def test_base_dir_with_trailing_slash(self) -> None:
         """base_dir with trailing slash should work correctly."""
