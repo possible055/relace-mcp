@@ -3,9 +3,85 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
+from pathspec import GitIgnoreSpec
+
 from ....utils import validate_file_path
 from .constants import MAX_GLOB_DEPTH, MAX_GLOB_MATCHES
 from .paths import map_repo_path
+
+_GLOB_IGNORED_DIR_NAMES = frozenset(
+    {
+        "__pycache__",
+        "build",
+        "dist",
+        "node_modules",
+        "site-packages",
+        "target",
+        "venv",
+    }
+)
+
+
+@lru_cache(maxsize=256)
+def _load_gitignore_spec(gitignore_path: str) -> GitIgnoreSpec | None:
+    """Load and cache a .gitignore file as a GitIgnoreSpec."""
+    path = Path(gitignore_path)
+    if not path.is_file():
+        return None
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        return GitIgnoreSpec.from_lines(lines)
+    except Exception:
+        return None
+
+
+def _collect_gitignore_specs(current_dir: Path, base_dir: Path) -> list[tuple[Path, GitIgnoreSpec]]:
+    """Collect all .gitignore specs from base_dir down to current_dir."""
+    specs: list[tuple[Path, GitIgnoreSpec]] = []
+    try:
+        rel_parts = current_dir.relative_to(base_dir).parts
+    except ValueError:
+        return specs
+
+    check_dir = base_dir
+    gitignore = check_dir / ".gitignore"
+    spec = _load_gitignore_spec(str(gitignore))
+    if spec:
+        specs.append((check_dir, spec))
+
+    for part in rel_parts:
+        check_dir = check_dir / part
+        gitignore = check_dir / ".gitignore"
+        spec = _load_gitignore_spec(str(gitignore))
+        if spec:
+            specs.append((check_dir, spec))
+
+    return specs
+
+
+def _is_ignored(
+    rel_path: str,
+    is_dir: bool,
+    specs: list[tuple[Path, GitIgnoreSpec]],
+    base_dir: Path,
+) -> bool:
+    """Check if a path is ignored by any gitignore spec."""
+    if not specs:
+        return False
+
+    full_path = base_dir / rel_path
+
+    for spec_dir, spec in specs:
+        try:
+            spec_rel = full_path.relative_to(spec_dir).as_posix()
+            if is_dir:
+                spec_rel += "/"
+        except ValueError:
+            continue
+        if spec.match_file(spec_rel):
+            return True
+
+    return False
 
 
 def _normalize_glob_pattern(pattern: str) -> tuple[str, bool] | tuple[None, bool]:
@@ -106,16 +182,44 @@ def glob_handler(
 
         matches: list[str] = []
         stop = False
+        base_path = Path(base_dir)
 
         for root, dirs, files in os.walk(resolved, followlinks=False):
-            rel_root = Path(root).relative_to(resolved)
+            root_path = Path(root)
+            rel_root = root_path.relative_to(resolved)
             if len(rel_root.parts) >= MAX_GLOB_DEPTH:
                 dirs.clear()
                 continue
 
+            # Avoid huge dependency dirs and caches.
+            dirs[:] = [d for d in dirs if d not in _GLOB_IGNORED_DIR_NAMES]
+
             if not include_hidden:
                 dirs[:] = [d for d in dirs if not d.startswith(".")]
                 files = [f for f in files if not f.startswith(".")]
+
+            # Apply gitignore rules to prune directories
+            gitignore_specs = _collect_gitignore_specs(root_path, base_path)
+            if gitignore_specs:
+                try:
+                    root_rel = root_path.relative_to(base_path).as_posix()
+                except ValueError:
+                    root_rel = ""
+
+                pruned_dirs = []
+                for d in dirs:
+                    dir_rel = f"{root_rel}/{d}" if root_rel else d
+                    if not _is_ignored(dir_rel, True, gitignore_specs, base_path):
+                        pruned_dirs.append(d)
+                dirs[:] = pruned_dirs
+
+                # Also filter files by gitignore
+                pruned_files = []
+                for f in files:
+                    file_rel = f"{root_rel}/{f}" if root_rel else f
+                    if not _is_ignored(file_rel, False, gitignore_specs, base_path):
+                        pruned_files.append(f)
+                files = pruned_files
 
             dirs.sort()
             files.sort()

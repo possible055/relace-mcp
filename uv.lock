@@ -1847,7 +1847,7 @@ wheels = [
 
 [[package]]
 name = "relace-mcp"
-version = "0.2.4.dev1"
+version = "0.2.4.dev2"
 source = { editable = "." }
 dependencies = [
     { name = "basedpyright" },
@@ -1855,6 +1855,7 @@ dependencies = [
     { name = "fastmcp" },
     { name = "httpx" },
     { name = "openai" },
+    { name = "pathspec" },
     { name = "platformdirs" },
     { name = "psutil" },
     { name = "python-dotenv" },
@@ -1899,6 +1900,7 @@ requires-dist = [
     { name = "interrogate", marker = "extra == 'dev'", specifier = ">=1.7.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.19.1" },
     { name = "openai", specifier = ">=1.0.0" },
+    { name = "pathspec", specifier = ">=0.12.0" },
     { name = "platformdirs", specifier = ">=4.0.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.5.1" },
     { name = "psutil", specifier = ">=5.9.0" },

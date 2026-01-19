@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from relace_mcp.lsp.languages.base import LanguageServerConfig
@@ -17,6 +18,28 @@ LANGUAGE_CONFIGS: dict[str, LanguageServerConfig] = {
 # Cache for detected LSP languages per base_dir
 _lsp_cache: dict[Path, frozenset[str]] = {}
 
+# Directories ignored during language detection (performance + symlink safety).
+_DETECTION_IGNORED_DIR_NAMES = frozenset(
+    {
+        ".git",
+        ".hg",
+        ".svn",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".tox",
+        ".venv",
+        ".direnv",
+        "__pycache__",
+        "build",
+        "dist",
+        "node_modules",
+        "site-packages",
+        "target",
+        "venv",
+    }
+)
+
 
 def get_config_for_file(path: str) -> LanguageServerConfig | None:
     """Get the language configuration for a file path."""
@@ -32,15 +55,34 @@ def get_lsp_languages(base_dir: Path) -> frozenset[str]:
     if resolved in _lsp_cache:
         return _lsp_cache[resolved]
 
-    available: set[str] = set()
+    if not resolved.is_dir():
+        languages = frozenset()
+        _lsp_cache[resolved] = languages
+        return languages
+
+    # Build a suffix -> language_id map for quick matching.
+    ext_to_langs: dict[str, set[str]] = {}
     for lang_id, config in LANGUAGE_CONFIGS.items():
         for ext in config.file_extensions:
-            try:
-                next(resolved.rglob(f"*{ext}"))
-                available.add(lang_id)
+            ext_to_langs.setdefault(ext.lower(), set()).add(lang_id)
+
+    available: set[str] = set()
+    wanted = set(LANGUAGE_CONFIGS.keys())
+
+    for _root, dirs, files in os.walk(resolved, followlinks=False):
+        # Avoid huge dependency dirs and caches.
+        dirs[:] = [d for d in dirs if d not in _DETECTION_IGNORED_DIR_NAMES]
+
+        for name in files:
+            lower = name.lower()
+            for ext, langs in ext_to_langs.items():
+                if lower.endswith(ext):
+                    available.update(langs)
+            if available >= wanted:
                 break
-            except StopIteration:
-                continue
+
+        if available >= wanted:
+            break
 
     languages = frozenset(available)
     _lsp_cache[resolved] = languages

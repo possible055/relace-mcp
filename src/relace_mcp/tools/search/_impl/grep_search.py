@@ -17,6 +17,18 @@ from .constants import GREP_TIMEOUT_SECONDS, MAX_GREP_DEPTH, MAX_GREP_MATCHES
 
 logger = logging.getLogger(__name__)
 
+_GREP_IGNORED_DIR_NAMES = frozenset(
+    {
+        "__pycache__",
+        "build",
+        "dist",
+        "node_modules",
+        "site-packages",
+        "target",
+        "venv",
+    }
+)
+
 
 def _timeout_context(seconds: int) -> "AbstractContextManager[None]":
     """Simple timeout context manager.
@@ -122,7 +134,7 @@ def _filter_visible_dirs(dirs: list[str]) -> list[str]:
     Returns:
         Visible directory list.
     """
-    return [d for d in dirs if not d.startswith(".")]
+    return [d for d in dirs if not d.startswith(".") and d not in _GREP_IGNORED_DIR_NAMES]
 
 
 def _is_searchable_file(

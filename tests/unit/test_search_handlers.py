@@ -400,6 +400,58 @@ class TestGlobHandler:
         result = glob_handler("../*.py", "/repo", False, 200, str(tmp_path))
         assert "Error" in result
 
+    def test_respects_gitignore_file(self, tmp_path: Path) -> None:
+        """Should exclude files matching .gitignore patterns."""
+        (tmp_path / ".gitignore").write_text("ignored_dir/\n")
+        (tmp_path / "ignored_dir").mkdir()
+        (tmp_path / "ignored_dir" / "file.py").write_text("ignored")
+        (tmp_path / "visible.py").write_text("visible")
+
+        result = glob_handler("*.py", "/repo", False, 200, str(tmp_path))
+        assert "visible.py" in result
+        assert "ignored_dir" not in result
+
+    def test_gitignore_prunes_directory(self, tmp_path: Path) -> None:
+        """Should prune ignored directories from traversal."""
+        (tmp_path / ".gitignore").write_text("big_dir/\n")
+        big_dir = tmp_path / "big_dir"
+        big_dir.mkdir()
+        for i in range(10):
+            (big_dir / f"file{i}.py").write_text(f"file{i}")
+        (tmp_path / "root.py").write_text("root")
+
+        result = glob_handler("**/*.py", "/repo", False, 200, str(tmp_path))
+        assert "root.py" in result
+        assert "big_dir" not in result
+
+    def test_nested_gitignore_rules(self, tmp_path: Path) -> None:
+        """Should respect nested .gitignore files."""
+        (tmp_path / ".gitignore").write_text("*.log\n")
+        (tmp_path / "root.log").write_text("ignored")
+        (tmp_path / "root.py").write_text("visible")
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        (subdir / "nested.log").write_text("also ignored")
+        (subdir / "nested.py").write_text("visible")
+
+        result = glob_handler("*", "/repo", False, 200, str(tmp_path))
+        assert "root.py" in result
+        assert "root.log" not in result
+        assert "subdir/" in result or "subdir" in result
+
+        result2 = glob_handler("**/*.log", "/repo", False, 200, str(tmp_path))
+        assert "No matches" in result2
+
+    def test_glob_without_gitignore_still_works(self, tmp_path: Path) -> None:
+        """Should work normally when no .gitignore exists."""
+        (tmp_path / "file.py").write_text("content")
+        (tmp_path / "sub").mkdir()
+        (tmp_path / "sub" / "nested.py").write_text("nested")
+
+        result = glob_handler("*.py", "/repo", False, 200, str(tmp_path))
+        assert "file.py" in result
+        assert "sub/nested.py" in result
+
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash is not available on this platform")
 class TestBashHandler:
@@ -494,6 +546,12 @@ class TestBashHandler:
     def test_blocks_backtick_substitution(self, tmp_path: Path) -> None:
         """Should block backtick command substitution."""
         result = bash_handler("echo `whoami`", str(tmp_path))
+        assert "Error" in result
+        assert "blocked" in result.lower()
+
+    def test_blocks_shell_variable_expansion(self, tmp_path: Path) -> None:
+        """Should block shell variable expansion ($...) to prevent sandbox escape."""
+        result = bash_handler('echo "$HOME"', str(tmp_path))
         assert "Error" in result
         assert "blocked" in result.lower()
 

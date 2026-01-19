@@ -397,6 +397,22 @@ class TestSandboxEscapeBypassBlocking:
         assert blocked
         assert "pre" in reason.lower()
 
+    def test_blocks_shell_variable_expansion(self) -> None:
+        """Shell variable expansion can synthesize absolute paths; must be blocked."""
+        blocked, reason = _is_blocked_command("echo $HOME", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "$" in reason or "variable" in reason.lower()
+
+    def test_blocks_shell_parameter_expansion_escape(self) -> None:
+        """Parameter expansion like ${HOME%/*} can escape base_dir without '../' tokens."""
+        blocked, _ = _is_blocked_command("cat ${HOME%/*}/etc/passwd", DEFAULT_BASE_DIR)
+        assert blocked
+
+    def test_allows_dollar_in_single_quotes(self) -> None:
+        """A $ inside single quotes is literal in bash and should not be blocked."""
+        blocked, _ = _is_blocked_command("grep 'foo$' file.txt", DEFAULT_BASE_DIR)
+        assert not blocked
+
     def test_blocks_awk_system(self) -> None:
         """awk system() can execute arbitrary commands; must be blocked."""
         blocked, reason = _is_blocked_command(
