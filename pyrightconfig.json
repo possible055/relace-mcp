@@ -21,8 +21,7 @@
     "venvPath": ".",
     "venv": ".venv",
     "extraPaths": [
-        "src",
-        "."
+        "src"
     ],
     "typeCheckingMode": "standard",
     "pythonVersion": "3.11",
