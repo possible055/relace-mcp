@@ -63,6 +63,8 @@
 
 ## `cloud_sync`
 
+> **注意：** 所有 `cloud_*` 工具的响应都会包含 `trace_id`。失败时响应还可能包含 `status_code`、`error_code`、`retryable`、`recommended_action`。
+
 将本地代码库同步到 Relace Cloud 以进行语义搜索。将 `MCP_BASE_DIR` 中的源文件上传到 Relace Repos。
 
 ### 参数
@@ -77,7 +79,7 @@
 - 遵循 `.gitignore` 模式（可用时使用 `git ls-files`）
 - 支持 60+ 种常见源代码文件类型（`.py`、`.js`、`.ts`、`.java` 等）
 - 跳过大于 1MB 的文件和常见非源代码目录（`node_modules`、`__pycache__` 等）
-- 同步状态存储在 `~/.local/state/relace/sync/`
+- 同步状态存储在平台 state 目录中（例如 Linux 为 `~/.local/state/relace/sync/`），按 repo 名称 + fingerprint 进行区分
 
 > 高级同步模式（增量、安全完整、镜像）请参见 [advanced.zh-CN.md](advanced.zh-CN.md#同步模式)。
 
@@ -122,6 +124,8 @@
 
 删除云端仓库和本地同步状态。在切换项目或重大重构后重置时使用。
 
+若 `confirm=false`，会返回 `status="cancelled"` 且不会执行删除。
+
 ### 参数
 
 | 参数 | 必需 | 默认值 | 描述 |
@@ -132,8 +136,11 @@
 
 ```json
 {
-  "deleted": true,
-  "repo_id": "uuid",
-  "state_cleared": true
+  "trace_id": "a1b2c3d4",
+  "status": "deleted",
+  "message": "Repository 'example' (uuid) and local sync state deleted successfully.",
+  "repo_name": "example",
+  "cloud_repo_name": "example__fingerprint",
+  "repo_id": "uuid"
 }
 ```

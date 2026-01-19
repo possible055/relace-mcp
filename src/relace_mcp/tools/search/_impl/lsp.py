@@ -1,5 +1,6 @@
 import logging
 import re
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -103,14 +104,14 @@ def _validate_python_path(file: str, base_dir: str) -> _ValidatedPath | str:
         return f"Error: Invalid path: {e}"
 
 
-def _get_lsp_client(base_dir: str) -> "tuple[LSPClient, str, type] | str":
-    """Get LSP client with lazy import.
+def _get_lsp_client(base_dir: str) -> "tuple[AbstractContextManager[LSPClient], str, type] | str":
+    """Get LSP client session with lazy import.
 
     Args:
         base_dir: Base directory for the LSP workspace.
 
     Returns:
-        Tuple of (client, resolved_base_dir, LSPError_class) on success,
+        Tuple of (session, resolved_base_dir, LSPError_class) on success,
         or error message string on failure.
     """
     try:
@@ -120,10 +121,12 @@ def _get_lsp_client(base_dir: str) -> "tuple[LSPClient, str, type] | str":
 
     resolved_base_dir = str(Path(base_dir).resolve())
     manager = LSPClientManager.get_instance()
-    client = manager.get_client(
-        PYTHON_CONFIG, resolved_base_dir, timeout_seconds=LSP_TIMEOUT_SECONDS
+    session = manager.session(
+        PYTHON_CONFIG,
+        resolved_base_dir,
+        timeout_seconds=LSP_TIMEOUT_SECONDS,
     )
-    return (client, resolved_base_dir, LSPError)
+    return (session, resolved_base_dir, LSPError)
 
 
 def _handle_lsp_error(exc: Exception, operation: str) -> str:
@@ -245,44 +248,45 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
     client_result = _get_lsp_client(base_dir)
     if isinstance(client_result, str):
         return client_result
-    client, resolved_base_dir, _ = client_result
+    session, resolved_base_dir, _ = client_result
 
     try:
+        with session as client:
 
-        def do_query(line: int, column: int) -> "list[Location]":
-            if params.action == "definition":
-                return client.definition(path_result.rel_path, line, column)
-            return client.references(path_result.rel_path, line, column)
+            def do_query(line: int, column: int) -> "list[Location]":
+                if params.action == "definition":
+                    return client.definition(path_result.rel_path, line, column)
+                return client.references(path_result.rel_path, line, column)
 
-        # Try the requested position first
-        results = do_query(line_0, column_0)
+            # Try the requested position first
+            results = do_query(line_0, column_0)
 
-        # Fallback: if no results, try finding symbols on the line
-        # This handles cases where column points to keywords (def, class) instead of symbol names
-        if not results:
-            try:
-                with open(path_result.abs_path, encoding="utf-8", errors="replace") as f:
-                    lines = f.readlines()
-                    if 0 <= line_0 < len(lines):
-                        line_content = lines[line_0]
-                        symbol_columns = _find_symbol_columns(line_content)
-                        # Skip the originally requested column
-                        for col in symbol_columns:
-                            if col == column_0:
-                                continue
-                            results = do_query(line_0, col)
-                            if results:
-                                logger.debug(
-                                    "Column fallback succeeded: line=%d, col=%d -> %d",
-                                    line_0,
-                                    column_0,
-                                    col,
-                                )
-                                break
-            except Exception as e:
-                logger.debug("Column fallback failed: %s", e)
+            # Fallback: if no results, try finding symbols on the line
+            # This handles cases where column points to keywords (def, class) instead of symbol names
+            if not results:
+                try:
+                    with open(path_result.abs_path, encoding="utf-8", errors="replace") as f:
+                        lines = f.readlines()
+                        if 0 <= line_0 < len(lines):
+                            line_content = lines[line_0]
+                            symbol_columns = _find_symbol_columns(line_content)
+                            # Skip the originally requested column
+                            for col in symbol_columns:
+                                if col == column_0:
+                                    continue
+                                results = do_query(line_0, col)
+                                if results:
+                                    logger.debug(
+                                        "Column fallback succeeded: line=%d, col=%d -> %d",
+                                        line_0,
+                                        column_0,
+                                        col,
+                                    )
+                                    break
+                except Exception as e:
+                    logger.debug("Column fallback failed: %s", e)
 
-        return _format_lsp_results(results, resolved_base_dir)
+            return _format_lsp_results(results, resolved_base_dir)
 
     except Exception as exc:
         return _handle_lsp_error(exc, "query")
@@ -330,29 +334,30 @@ def search_symbol_handler(params: SearchSymbolParams, base_dir: str) -> str:
     client_result = _get_lsp_client(base_dir)
     if isinstance(client_result, str):
         return client_result
-    client, resolved_base_dir, _ = client_result
+    session, resolved_base_dir, _ = client_result
 
     try:
-        results = client.workspace_symbols(query)
+        with session as client:
+            results = client.workspace_symbols(query)
 
-        if not results:
-            return "No symbols found."
+            if not results:
+                return "No symbols found."
 
-        lines = []
-        for r in results:
-            formatted = r.to_grep_format(resolved_base_dir)
-            if formatted is not None:
-                lines.append(formatted)
-                if len(lines) >= MAX_LSP_RESULTS:
-                    break
+            lines = []
+            for r in results:
+                formatted = r.to_grep_format(resolved_base_dir)
+                if formatted is not None:
+                    lines.append(formatted)
+                    if len(lines) >= MAX_LSP_RESULTS:
+                        break
 
-        if not lines:
-            return "No symbols found (all results are outside repository)."
+            if not lines:
+                return "No symbols found (all results are outside repository)."
 
-        if len(lines) >= MAX_LSP_RESULTS:
-            lines.append(f"... capped at {MAX_LSP_RESULTS} results")
+            if len(lines) >= MAX_LSP_RESULTS:
+                lines.append(f"... capped at {MAX_LSP_RESULTS} results")
 
-        return "\n".join(lines)
+            return "\n".join(lines)
 
     except Exception as exc:
         return _handle_lsp_error(exc, "symbol search")
@@ -374,19 +379,20 @@ def list_symbols_handler(params: ListSymbolsParams, base_dir: str) -> str:
     client_result = _get_lsp_client(base_dir)
     if isinstance(client_result, str):
         return client_result
-    client, _, _ = client_result
+    session, _, _ = client_result
 
     try:
-        results = client.document_symbols(path_result.rel_path)
+        with session as client:
+            results = client.document_symbols(path_result.rel_path)
 
-        if not results:
-            return "No symbols found in file."
+            if not results:
+                return "No symbols found in file."
 
-        lines = []
-        for sym in results:
-            lines.append(sym.to_outline_str())
+            lines = []
+            for sym in results:
+                lines.append(sym.to_outline_str())
 
-        return "\n".join(lines)
+            return "\n".join(lines)
 
     except Exception as exc:
         return _handle_lsp_error(exc, "document symbols")
@@ -416,15 +422,16 @@ def get_type_handler(params: GetTypeParams, base_dir: str) -> str:
     client_result = _get_lsp_client(base_dir)
     if isinstance(client_result, str):
         return client_result
-    client, _, _ = client_result
+    session, _, _ = client_result
 
     try:
-        result = client.hover(path_result.rel_path, line_0, column_0)
+        with session as client:
+            result = client.hover(path_result.rel_path, line_0, column_0)
 
-        if not result:
-            return "No type information available."
+            if not result:
+                return "No type information available."
 
-        return result.to_display_str()
+            return result.to_display_str()
 
     except Exception as exc:
         return _handle_lsp_error(exc, "hover")
@@ -459,35 +466,41 @@ def call_graph_handler(params: CallGraphParams, base_dir: str) -> str:
     client_result = _get_lsp_client(base_dir)
     if isinstance(client_result, str):
         return client_result
-    client, resolved_base_dir, _ = client_result
+    session, resolved_base_dir, _ = client_result
 
     try:
-        results = client.call_hierarchy(path_result.rel_path, line_0, column_0, params.direction)
+        with session as client:
+            results = client.call_hierarchy(
+                path_result.rel_path,
+                line_0,
+                column_0,
+                params.direction,
+            )
 
-        if not results:
-            direction_desc = "callers" if params.direction == "incoming" else "callees"
-            return f"No {direction_desc} found. Ensure cursor is on a function/method name."
+            if not results:
+                direction_desc = "callers" if params.direction == "incoming" else "callees"
+                return f"No {direction_desc} found. Ensure cursor is on a function/method name."
 
-        lines = []
-        header = "Called by:" if params.direction == "incoming" else "Calls:"
-        lines.append(header)
-        result_count = 0
-        for r in results:
-            display_str = r.to_display_str(resolved_base_dir)
-            if display_str is not None:
-                lines.append("  " + display_str)
-                result_count += 1
-                if result_count >= MAX_LSP_RESULTS:
-                    break
+            lines = []
+            header = "Called by:" if params.direction == "incoming" else "Calls:"
+            lines.append(header)
+            result_count = 0
+            for r in results:
+                display_str = r.to_display_str(resolved_base_dir)
+                if display_str is not None:
+                    lines.append("  " + display_str)
+                    result_count += 1
+                    if result_count >= MAX_LSP_RESULTS:
+                        break
 
-        if len(lines) == 1:  # Only header, no results after filtering
-            direction_desc = "callers" if params.direction == "incoming" else "callees"
-            return f"No {direction_desc} found within repository."
+            if len(lines) == 1:  # Only header, no results after filtering
+                direction_desc = "callers" if params.direction == "incoming" else "callees"
+                return f"No {direction_desc} found within repository."
 
-        if result_count >= MAX_LSP_RESULTS:
-            lines.append(f"  ... capped at {MAX_LSP_RESULTS} results")
+            if result_count >= MAX_LSP_RESULTS:
+                lines.append(f"  ... capped at {MAX_LSP_RESULTS} results")
 
-        return "\n".join(lines)
+            return "\n".join(lines)
 
     except Exception as exc:
         return _handle_lsp_error(exc, "call hierarchy")

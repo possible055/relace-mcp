@@ -77,8 +77,11 @@ class TestSearchSymbolHandler:
                 character=6,
             )
         ]
+        mock_session = MagicMock()
+        mock_session.__enter__.return_value = mock_client
+        mock_session.__exit__.return_value = False
         mock_manager = MagicMock()
-        mock_manager.get_client.return_value = mock_client
+        mock_manager.session.return_value = mock_session
         mock_manager_cls.get_instance.return_value = mock_manager
 
         params = SearchSymbolParams(query="TestClass")
@@ -92,8 +95,11 @@ class TestSearchSymbolHandler:
     def test_no_results(self, mock_manager_cls: MagicMock, tmp_path) -> None:
         mock_client = MagicMock()
         mock_client.workspace_symbols.return_value = []
+        mock_session = MagicMock()
+        mock_session.__enter__.return_value = mock_client
+        mock_session.__exit__.return_value = False
         mock_manager = MagicMock()
-        mock_manager.get_client.return_value = mock_client
+        mock_manager.session.return_value = mock_session
         mock_manager_cls.get_instance.return_value = mock_manager
 
         params = SearchSymbolParams(query="NonExistent")

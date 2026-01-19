@@ -35,7 +35,7 @@ MCP server providing AI-powered code editing and intelligent codebase exploratio
 
 **Prerequisites:** [uv](https://docs.astral.sh/uv/), [git](https://git-scm.com/), [ripgrep](https://github.com/BurntSushi/ripgrep) (recommended)
 
-Get your API key from [Relace Dashboard](https://app.relace.ai/settings/billing), then add to your MCP client:
+Using Relace (default) or `RELACE_CLOUD_TOOLS=1`: get your API key from [Relace Dashboard](https://app.relace.ai/settings/billing), then add to your MCP client:
 
 <details>
 <summary><strong>Cursor</strong></summary>
@@ -139,11 +139,13 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `RELACE_API_KEY` | ✅ | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
+| `RELACE_API_KEY` | ✅* | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
 | `RELACE_CLOUD_TOOLS` | ❌ | Set to `1` to enable cloud tools |
 | `MCP_BASE_DIR` | ❌ | Project root (auto-detected via MCP Roots → Git → CWD) |
 | `MCP_LOGGING` | ❌ | Set to `1` to enable file logging |
 | `MCP_DOTENV_PATH` | ❌ | Path to `.env` file for centralized config |
+
+`*` Optional if **both**: (1) `APPLY_PROVIDER` and `SEARCH_PROVIDER` are non-Relace providers, and (2) `RELACE_CLOUD_TOOLS=false`.
 
 For `.env` usage, encoding settings, custom LLM providers, and more, see [docs/advanced.md](docs/advanced.md).
 

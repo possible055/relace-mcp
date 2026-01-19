@@ -12,6 +12,7 @@ import sys
 import threading
 import time
 import tomllib
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -371,7 +372,7 @@ class LSPClient:
             return True
 
         def should_skip_dir(rel_dir: str, dir_name: str) -> bool:
-            if dir_name in _DEFAULT_IGNORED_DIR_NAMES:
+            if rel_dir not in ("", ".") and dir_name in _DEFAULT_IGNORED_DIR_NAMES:
                 return True
             if _matches_any_pattern(rel_dir, exclude_patterns):
                 return True
@@ -1330,6 +1331,7 @@ class LSPClientManager:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._clients: dict[str, LSPClient] = {}  # workspace -> client
+        self._lease_counts: dict[str, int] = {}  # workspace -> active sessions
         self._max_clients = _parse_nonnegative_int_env_with_fallback(
             "SEARCH_LSP_MAX_CLIENTS", "RELACE_LSP_MAX_CLIENTS", 2
         )
@@ -1353,6 +1355,110 @@ class LSPClientManager:
                 except Exception:  # nosec B110 - best-effort cleanup
                     pass
             self._clients.clear()
+            self._lease_counts.clear()
+
+    def _pop_oldest_idle_client_locked(self) -> tuple[str, LSPClient] | None:
+        for workspace in list(self._clients.keys()):
+            if self._lease_counts.get(workspace, 0) != 0:
+                continue
+            client = self._clients.pop(workspace)
+            self._lease_counts.pop(workspace, None)
+            return (workspace, client)
+        return None
+
+    def _get_or_create_client_locked(
+        self,
+        config: LanguageServerConfig,
+        workspace: str,
+        *,
+        timeout_seconds: float | None,
+        lease: bool,
+    ) -> tuple[LSPClient, list[tuple[str, LSPClient]]]:
+        existing = self._clients.get(workspace)
+        if existing is not None:
+            self._clients.pop(workspace, None)
+            self._clients[workspace] = existing
+            if lease:
+                self._lease_counts[workspace] = self._lease_counts.get(workspace, 0) + 1
+            else:
+                self._lease_counts.setdefault(workspace, 0)
+            return (existing, [])
+
+        evicted: list[tuple[str, LSPClient]] = []
+        if self._max_clients > 0:
+            while len(self._clients) >= self._max_clients:
+                popped = self._pop_oldest_idle_client_locked()
+                if popped is None:
+                    break
+                evicted.append(popped)
+
+        client = LSPClient(config, workspace, timeout_seconds=timeout_seconds)
+        try:
+            client.start()
+        except Exception:
+            for ws, c in evicted:
+                self._clients[ws] = c
+                self._lease_counts.setdefault(ws, 0)
+            raise
+
+        self._clients[workspace] = client
+        self._lease_counts[workspace] = 1 if lease else 0
+        return (client, evicted)
+
+    @contextmanager
+    def session(
+        self,
+        config: LanguageServerConfig,
+        workspace: str,
+        *,
+        timeout_seconds: float | None = None,
+    ):
+        """Acquire a leased LSP client for a workspace.
+
+        A leased client is protected from LRU eviction while the session is
+        active. The manager uses a soft cap: if all existing clients are leased,
+        it may temporarily exceed SEARCH_LSP_MAX_CLIENTS until sessions are
+        released and idle clients can be evicted.
+
+        Args:
+            config: Language server configuration.
+            workspace: Workspace root path.
+            timeout_seconds: Optional override for startup/request/shutdown timeouts.
+        """
+        clients_to_shutdown: list[LSPClient] = []
+        with self._lock:
+            client, evicted = self._get_or_create_client_locked(
+                config,
+                workspace,
+                timeout_seconds=timeout_seconds,
+                lease=True,
+            )
+            clients_to_shutdown = [c for _, c in evicted]
+
+        for old_client in clients_to_shutdown:
+            try:
+                old_client.shutdown()
+            except Exception:  # nosec B110 - best-effort cleanup
+                pass
+
+        try:
+            yield client
+        finally:
+            clients_to_shutdown = []
+            with self._lock:
+                self._lease_counts[workspace] = max(0, self._lease_counts.get(workspace, 0) - 1)
+                if self._max_clients > 0:
+                    while len(self._clients) > self._max_clients:
+                        popped = self._pop_oldest_idle_client_locked()
+                        if popped is None:
+                            break
+                        clients_to_shutdown.append(popped[1])
+
+            for old_client in clients_to_shutdown:
+                try:
+                    old_client.shutdown()
+                except Exception:  # nosec B110 - best-effort cleanup
+                    pass
 
     def get_client(
         self,
@@ -1366,27 +1472,12 @@ class LSPClientManager:
         client_to_return: LSPClient
 
         with self._lock:
-            existing = self._clients.get(workspace)
-            if existing is not None:
-                self._clients.pop(workspace, None)
-                self._clients[workspace] = existing
-                return existing
-
-            evicted: list[tuple[str, LSPClient]] = []
-            if self._max_clients > 0:
-                while len(self._clients) >= self._max_clients:
-                    oldest_workspace = next(iter(self._clients))
-                    evicted.append((oldest_workspace, self._clients.pop(oldest_workspace)))
-
-            client = LSPClient(config, workspace, timeout_seconds=timeout_seconds)
-            try:
-                client.start()
-            except Exception:
-                for ws, c in evicted:
-                    self._clients[ws] = c
-                raise
-
-            self._clients[workspace] = client
+            client, evicted = self._get_or_create_client_locked(
+                config,
+                workspace,
+                timeout_seconds=timeout_seconds,
+                lease=False,
+            )
             client_to_return = client
             clients_to_shutdown = [c for _, c in evicted]
 

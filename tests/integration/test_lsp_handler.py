@@ -172,8 +172,11 @@ class TestLSPQueryHandler:
         mock_client.definition.return_value = [
             Location(uri=f"file://{actual_dir}/test.py", line=0, character=0)
         ]
+        mock_session = MagicMock()
+        mock_session.__enter__.return_value = mock_client
+        mock_session.__exit__.return_value = False
         mock_manager = MagicMock()
-        mock_manager.get_client.return_value = mock_client
+        mock_manager.session.return_value = mock_session
         mock_manager_cls.get_instance.return_value = mock_manager
 
         params = LSPQueryParams(
@@ -201,8 +204,11 @@ class TestLSPQueryHandler:
         mock_client.definition.return_value = [
             Location(uri=f"file://{tmp_path}/test.py", line=0, character=4)
         ]
+        mock_session = MagicMock()
+        mock_session.__enter__.return_value = mock_client
+        mock_session.__exit__.return_value = False
         mock_manager = MagicMock()
-        mock_manager.get_client.return_value = mock_client
+        mock_manager.session.return_value = mock_session
         mock_manager_cls.get_instance.return_value = mock_manager
 
         params = LSPQueryParams(
@@ -225,8 +231,11 @@ class TestLSPQueryHandler:
 
         mock_client = MagicMock()
         mock_client.definition.side_effect = LSPError("Request textDocument/definition timed out")
+        mock_session = MagicMock()
+        mock_session.__enter__.return_value = mock_client
+        mock_session.__exit__.return_value = False
         mock_manager = MagicMock()
-        mock_manager.get_client.return_value = mock_client
+        mock_manager.session.return_value = mock_session
         mock_manager_cls.get_instance.return_value = mock_manager
 
         params = LSPQueryParams(
@@ -252,8 +261,11 @@ class TestLSPQueryHandler:
             Location(uri=f"file://{tmp_path}/test.py", line=0, character=0),
             Location(uri=f"file://{tmp_path}/test.py", line=1, character=6),
         ]
+        mock_session = MagicMock()
+        mock_session.__enter__.return_value = mock_client
+        mock_session.__exit__.return_value = False
         mock_manager = MagicMock()
-        mock_manager.get_client.return_value = mock_client
+        mock_manager.session.return_value = mock_session
         mock_manager_cls.get_instance.return_value = mock_manager
 
         params = LSPQueryParams(
@@ -350,6 +362,37 @@ class TestLSPClientManager:
         # Cleanup
         LSPClientManager._instance = None
 
+    @patch("relace_mcp.lsp.client.LSPClient")
+    def test_manager_soft_cap_does_not_evict_leased(
+        self, mock_client_cls: MagicMock, monkeypatch
+    ) -> None:
+        from relace_mcp.lsp import PYTHON_CONFIG, LSPClientManager
+
+        monkeypatch.setenv("SEARCH_LSP_MAX_CLIENTS", "1")
+        LSPClientManager._instance = None
+
+        c1 = MagicMock()
+        c2 = MagicMock()
+        mock_client_cls.side_effect = [c1, c2]
+
+        manager = LSPClientManager.get_instance()
+
+        with manager.session(PYTHON_CONFIG, "/w1"):
+            manager.get_client(PYTHON_CONFIG, "/w2")
+            assert "/w1" in manager._clients
+            assert "/w2" in manager._clients
+            c1.shutdown.assert_not_called()
+            c2.shutdown.assert_not_called()
+            assert len(manager._clients) == 2
+
+        assert len(manager._clients) == 1
+        assert "/w2" in manager._clients
+        c1.shutdown.assert_called_once()
+        c2.shutdown.assert_not_called()
+
+        # Cleanup
+        LSPClientManager._instance = None
+
 
 class TestLSPClientSync:
     def test_sync_runs_before_open_file(self, tmp_path: Path) -> None:
@@ -383,3 +426,18 @@ class TestLSPClientSync:
 
         client.definition("test.py", 0, 0)
         assert calls[:2] == ["sync", "open"]
+
+    def test_sync_does_not_skip_workspace_root_named_build(self, tmp_path: Path) -> None:
+        from relace_mcp.lsp import PYTHON_CONFIG
+        from relace_mcp.lsp.client import LSPClient
+
+        workspace_root = tmp_path / "build"
+        workspace_root.mkdir()
+        (workspace_root / "main.py").write_text("x = 1\n")
+
+        client = LSPClient(PYTHON_CONFIG, str(workspace_root))
+        client._initialized = True
+        client._fs_last_sync = -1_000_000.0
+
+        client._sync_workspace_changes()
+        assert "main.py" in client._fs_snapshot

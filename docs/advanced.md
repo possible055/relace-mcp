@@ -60,7 +60,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `SEARCH_TIMEOUT_SECONDS` | `120` | Request timeout (also used as `fast_search` wall-clock budget; returns `partial=true` on timeout) |
 | `SEARCH_TEMPERATURE` | `1.0` | LLM sampling temperature (0.0-2.0) |
 | `SEARCH_MAX_TURNS` | `6` | Maximum agent loop turns |
-| `SEARCH_ENABLED_TOOLS` | (all except `bash`) | Tool allowlist (comma/space-separated). If unset, all tools except `bash` are enabled by default. |
+| `SEARCH_ENABLED_TOOLS` | (basic only) | Tool allowlist (comma/space-separated). If unset, only basic tools (`view_file`, `view_directory`, `grep_search`, `glob`) are enabled (plus `report_back`). LSP tools (`find_symbol`, `search_symbol`, `get_type`, `list_symbols`, `call_graph`) and `bash` require explicit opt-in. |
 | `SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls |
 | `SEARCH_TOOL_STRICT` | `1` | Include `strict` field in tool schemas |
 | `SEARCH_LSP_TIMEOUT_SECONDS` | `15.0` | LSP startup/request timeout |
@@ -178,6 +178,26 @@ Logs are written in JSON Lines (JSONL) format:
 | `search_complete` | Search completed |
 | `search_error` | Search failed |
 
+### Cloud Event Types
+
+| Event Kind | Description |
+|------------|-------------|
+| `cloud_sync_start` | Cloud sync started |
+| `cloud_sync_complete` | Cloud sync completed |
+| `cloud_sync_error` | Cloud sync failed |
+| `cloud_search_start` | Cloud search started |
+| `cloud_search_complete` | Cloud search completed |
+| `cloud_search_error` | Cloud search failed |
+| `cloud_info_start` | Cloud info started |
+| `cloud_info_complete` | Cloud info completed |
+| `cloud_info_error` | Cloud info failed |
+| `cloud_list_start` | Cloud list started |
+| `cloud_list_complete` | Cloud list completed |
+| `cloud_list_error` | Cloud list failed |
+| `cloud_clear_start` | Cloud clear started |
+| `cloud_clear_complete` | Cloud clear completed |
+| `cloud_clear_error` | Cloud clear failed |
+
 ### Log Rotation
 
 - Rotates automatically at **10 MB**
@@ -211,6 +231,8 @@ export SEARCH_MODEL=gpt-4o
 3. `RELACE_API_KEY` (only for `relace` provider)
 
 ### LSP Tool
+
+LSP tools (`find_symbol`, `search_symbol`, `get_type`, `list_symbols`, `call_graph`) are disabled by default; opt-in via `SEARCH_ENABLED_TOOLS`.
 
 The `find_symbol` tool uses Language Server Protocol for Python semantic queries:
 - `definition`: Jump to symbol definition

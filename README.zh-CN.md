@@ -35,7 +35,7 @@
 
 **前置需求：** [uv](https://docs.astral.sh/uv/)、[git](https://git-scm.com/)、[ripgrep](https://github.com/BurntSushi/ripgrep)（推荐）
 
-从 [Relace Dashboard](https://app.relace.ai/settings/billing) 获取 API 密钥，然后添加到你的 MCP 客户端：
+使用 Relace（默认）或 `RELACE_CLOUD_TOOLS=1`：从 [Relace Dashboard](https://app.relace.ai/settings/billing) 获取 API 密钥，然后添加到你的 MCP 客户端：
 
 <details>
 <summary><strong>Cursor</strong></summary>
@@ -139,11 +139,13 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 
 | 变量 | 必需 | 说明 |
 |------|------|------|
-| `RELACE_API_KEY` | ✅ | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥 |
+| `RELACE_API_KEY` | ✅* | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥 |
 | `MCP_BASE_DIR` | ❌ | 项目根目录（自动检测：MCP Roots → Git → CWD） |
 | `MCP_DOTENV_PATH` | ❌ | `.env` 文件路径，用于集中配置 |
 | `RELACE_CLOUD_TOOLS` | ❌ | 设为 `1` 启用云端工具 |
 | `MCP_LOGGING` | ❌ | 设为 `1` 启用文件日志 |
+
+`*` 仅当**同时满足**：(1) `APPLY_PROVIDER` 与 `SEARCH_PROVIDER` 均为非 Relace 提供商，且 (2) `RELACE_CLOUD_TOOLS=false` 时可省略。
 
 `.env` 使用方法、编码设置、自定义 LLM 等进阶设置，请参见 [docs/advanced.zh-CN.md](docs/advanced.zh-CN.md)。
 
