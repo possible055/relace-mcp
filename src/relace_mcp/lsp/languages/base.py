@@ -30,6 +30,17 @@ class LanguageServerConfig:
     workspace_config: dict[str, Any] = field(default_factory=dict)
     """Workspace configuration settings."""
 
+    extension_language_map: dict[str, str] = field(default_factory=dict)
+    """Optional mapping from file extension to languageId for multi-extension servers."""
+
     def matches_file(self, path: str) -> bool:
         """Check if this config handles the given file path."""
         return any(path.endswith(ext) for ext in self.file_extensions)
+
+    def get_language_id(self, path: str) -> str:
+        """Get the languageId for a file based on its extension."""
+        if self.extension_language_map:
+            for ext, lang_id in self.extension_language_map.items():
+                if path.endswith(ext):
+                    return lang_id
+        return self.language_id

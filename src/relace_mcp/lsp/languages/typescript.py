@@ -8,4 +8,12 @@ TYPESCRIPT_CONFIG = LanguageServerConfig(
     install_hint="npm i -g typescript-language-server typescript",
     initialization_options={},
     workspace_config={},
+    extension_language_map={
+        ".ts": "typescript",
+        ".tsx": "typescriptreact",
+        ".js": "javascript",
+        ".jsx": "javascriptreact",
+        ".mjs": "javascript",
+        ".cjs": "javascript",
+    },
 )

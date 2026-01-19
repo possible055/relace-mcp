@@ -965,7 +965,7 @@ class LSPClient:
             {
                 "textDocument": {
                     "uri": uri,
-                    "languageId": self._config.language_id,
+                    "languageId": self._config.get_language_id(file_path),
                     "version": 1,
                     "text": content,
                 }
