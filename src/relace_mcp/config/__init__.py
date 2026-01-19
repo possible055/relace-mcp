@@ -90,6 +90,17 @@ _APPLY_PROMPTS = _load_prompt_file(
 # Apply prompt constant (only injected for non-Relace endpoints)
 APPLY_SYSTEM_PROMPT: str = _APPLY_PROMPTS["apply_system_prompt"].strip()
 
+# Load retrieval_relace.yaml (Agentic Retrieval - Relace native)
+# Override with RETRIEVAL_PROMPT_FILE if set
+_RETRIEVAL_PROMPTS_PATH = _LLM_PROMPTS_DIR / "retrieval_relace.yaml"
+_RETRIEVAL_PROMPTS = _load_prompt_file(_RETRIEVAL_PROMPTS_PATH, "RETRIEVAL_PROMPT_FILE")
+
+# Retrieval prompt constants (for agentic_retrieval tool)
+RETRIEVAL_SYSTEM_PROMPT: str = _RETRIEVAL_PROMPTS["system_prompt"].strip()
+RETRIEVAL_USER_PROMPT_TEMPLATE: str = _RETRIEVAL_PROMPTS["user_prompt_template"].strip()
+RETRIEVAL_TURN_HINT_TEMPLATE: str = _RETRIEVAL_PROMPTS["turn_hint_template"].strip()
+RETRIEVAL_TURN_INSTRUCTIONS: dict[str, str] = _RETRIEVAL_PROMPTS["turn_instructions"]
+
 # Public API exports only
 # Internal constants should be imported directly from config.settings
 __all__ = [
@@ -110,4 +121,9 @@ __all__ = [
     "SEARCH_TURN_INSTRUCTIONS_OPENAI",
     # Apply prompt
     "APPLY_SYSTEM_PROMPT",
+    # Retrieval prompts (for agentic_retrieval tool)
+    "RETRIEVAL_SYSTEM_PROMPT",
+    "RETRIEVAL_USER_PROMPT_TEMPLATE",
+    "RETRIEVAL_TURN_HINT_TEMPLATE",
+    "RETRIEVAL_TURN_INSTRUCTIONS",
 ]

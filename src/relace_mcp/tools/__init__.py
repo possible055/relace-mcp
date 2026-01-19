@@ -15,7 +15,13 @@ from ..clients.apply import ApplyLLMClient
 from ..config import RelaceConfig, resolve_base_dir
 from ..config.settings import RELACE_CLOUD_TOOLS
 from .apply import apply_file_logic
-from .repo import cloud_info_logic, cloud_list_logic, cloud_search_logic, cloud_sync_logic
+from .repo import (
+    agentic_retrieval_logic,
+    cloud_info_logic,
+    cloud_list_logic,
+    cloud_search_logic,
+    cloud_sync_logic,
+)
 from .repo.state import load_sync_state
 from .search import FastAgenticSearchHarness
 
@@ -250,6 +256,57 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
             return cloud_info_logic(repo_client, base_dir)
 
+        @mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,  # Uses cloud API
+            }
+        )
+        async def agentic_retrieval(
+            query: str,
+            branch: str = "",
+            score_threshold: float = 0.3,
+            max_hints: int = 8,
+            ctx: Context | None = None,
+        ) -> dict[str, Any]:
+            """Two-stage semantic + agentic code retrieval.
+
+            Stage 1: Cloud semantic retrieval for candidate files
+            Stage 2: Agentic exploration guided by semantic hints
+
+            Use when you need both semantic understanding AND precise
+            line-level code locations. Requires prior cloud_sync.
+
+            Falls back to pure agentic search if cloud is unavailable.
+
+            Args:
+                query: Natural language query describing what to find.
+                branch: Branch to search (empty uses default).
+                score_threshold: Minimum relevance score for hints (0.0-1.0).
+                max_hints: Maximum number of hint files to use (default 8).
+            """
+            progress_task = asyncio.create_task(
+                _progress_heartbeat(ctx, message="agentic_retrieval in progress")
+            )
+            try:
+                base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+                return await agentic_retrieval_logic(
+                    repo_client,
+                    search_client,
+                    config,
+                    base_dir,
+                    query,
+                    branch=branch,
+                    score_threshold=score_threshold,
+                    max_hints=max_hints,
+                )
+            finally:
+                progress_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await progress_task
+
     # === MCP Resources ===
 
     @mcp.resource("relace://tools_list", mime_type="application/json")
@@ -300,6 +357,12 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                         "id": "cloud_info",
                         "name": "Cloud Info",
                         "description": "Get sync status for current repository",
+                        "enabled": True,
+                    },
+                    {
+                        "id": "agentic_retrieval",
+                        "name": "Agentic Retrieval",
+                        "description": "Two-stage semantic + agentic code retrieval",
                         "enabled": True,
                     },
                 ]
