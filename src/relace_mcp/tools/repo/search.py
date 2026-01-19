@@ -1,5 +1,6 @@
 import logging
 import uuid
+import warnings
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
@@ -38,9 +39,19 @@ def cloud_search_logic(
     """
     trace_id = str(uuid.uuid4())[:8]
     query_preview = query[:100] if len(query) <= 100 else query[:97] + "..."
-    logger.info("[%s] Starting cloud semantic search: %s", trace_id, query_preview)
+    logger.info("[%s] Starting cloud semantic search", trace_id)
+    warnings.warn(
+        f"[{trace_id}] cloud_search query_preview={query_preview!r}",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if branch:
-        logger.info("[%s] Searching branch: %s", trace_id, branch)
+        logger.info("[%s] Searching branch", trace_id)
+        warnings.warn(
+            f"[{trace_id}] cloud_search branch={branch!r}",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     local_repo_name: str | None = None
     cloud_repo_name: str | None = None
@@ -93,28 +104,28 @@ def cloud_search_logic(
             log_cloud_search_error(trace_id, local_repo_name, cloud_repo_name, no_sync_result)
             return no_sync_result
 
-        warnings: list[str] = []
+        warnings_list: list[str] = []
         current_branch, current_head = get_current_git_info(base_dir)
         if current_head and git_head and current_head != git_head:
-            warnings.append(
+            warnings_list.append(
                 f"Local git HEAD ({current_head[:8]}) differs from last synced HEAD ({git_head[:8]}). "
                 "Results reflect the last synced revision; run cloud_sync to update."
             )
         if not git_head:
-            warnings.append(
+            warnings_list.append(
                 "Sync state is missing git_head_sha; search is not pinned to a specific commit."
             )
         if is_git_dirty(base_dir):
-            warnings.append(
+            warnings_list.append(
                 "Local git working tree has uncommitted changes; results reflect the last synced revision."
             )
         if cached_state.files_truncated:
-            warnings.append(
+            warnings_list.append(
                 f"Last sync was limited to {cached_state.files_selected}/{cached_state.files_found} files "
                 f"(REPO_SYNC_MAX_FILES={cached_state.file_limit}); results may be incomplete."
             )
         if cached_state.skipped_files:
-            warnings.append(
+            warnings_list.append(
                 f"Last sync skipped {len(cached_state.skipped_files)} files (binary/oversize/unreadable); "
                 "results may miss those files."
             )
@@ -126,7 +137,7 @@ def cloud_search_logic(
         hash_to_send = git_head if use_cached_hash else ""
 
         if branch and not use_cached_hash:
-            warnings.append(
+            warnings_list.append(
                 f"Searching branch '{branch}' without commit pinning (differs from synced branch "
                 f"'{cached_state.git_branch}'). Results reflect the latest indexed state of '{branch}'."
             )
@@ -162,7 +173,7 @@ def cloud_search_logic(
             "result_count": len(results),
             "repo_name": local_repo_name,
             "cloud_repo_name": cached_state.cloud_repo_name or cloud_repo_name,
-            "warnings": warnings,
+            "warnings": warnings_list,
         }
         log_cloud_search_complete(trace_id, result_payload)
         return result_payload

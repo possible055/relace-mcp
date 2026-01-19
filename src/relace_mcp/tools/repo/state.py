@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 import subprocess  # nosec B404 - used safely with hardcoded commands only
+import warnings
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -203,7 +204,12 @@ def load_sync_state(base_dir: str) -> SyncState | None:
     """
     repo_name, cloud_repo_name, fingerprint = get_repo_identity(base_dir)
     if not repo_name:
-        logger.debug("No sync state: invalid repo name for base_dir=%s", base_dir)
+        logger.debug("No sync state: invalid repo name for base_dir")
+        warnings.warn(
+            f"No sync state: invalid repo name for base_dir={base_dir!r}",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return None
 
     state_path = _get_state_path(repo_name, fingerprint)

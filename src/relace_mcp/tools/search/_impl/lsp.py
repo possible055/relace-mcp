@@ -83,6 +83,10 @@ def _validate_python_path(file: str, base_dir: str) -> _ValidatedPath | str:
         _ValidatedPath on success, or error message string on failure.
     """
     try:
+        if Path(file).is_absolute() and not (
+            file == "/repo" or file == "/repo/" or file.startswith("/repo/")
+        ):
+            return f"Error: Absolute paths not allowed: {file}"
         fs_path = map_path_no_resolve(file, base_dir)
         if fs_path.is_symlink():
             return f"Error: Symlinks not allowed: {file}"
