@@ -18,6 +18,12 @@ class LanguageServerConfig:
     command: list[str]
     """Command to start the language server (e.g., ["basedpyright-langserver", "--stdio"])."""
 
+    config_files: tuple[str, ...] = ()
+    """Config files that should trigger a server restart when changed."""
+
+    install_hint: str = ""
+    """Install instructions for the language server executable."""
+
     initialization_options: dict[str, Any] = field(default_factory=dict)
     """Additional options to send during initialization."""
 

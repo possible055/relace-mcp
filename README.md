@@ -155,6 +155,17 @@ Core tools (`fast_apply`, `fast_search`) are always available. Cloud tools requi
 
 For detailed parameters, see [docs/tools.md](docs/tools.md).
 
+## Language Support
+
+LSP tools use external language servers installed on your system.
+
+| Language | Language Server | Install Command |
+|----------|-----------------|-----------------|
+| Python | basedpyright | (bundled) |
+| TypeScript/JS | typescript-language-server | `npm i -g typescript-language-server typescript` |
+| Go | gopls | `go install golang.org/x/tools/gopls@latest` |
+| Rust | rust-analyzer | `rustup component add rust-analyzer` |
+
 ## Dashboard
 
 Real-time terminal UI for monitoring operations.
