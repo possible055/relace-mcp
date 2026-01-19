@@ -163,6 +163,26 @@ class TestCloudSearchLogic:
         assert result["repo_id"] is None
         assert result["hash"] == ""
 
+    def test_search_includes_network_error_details(self, mock_repo_client: MagicMock) -> None:
+        """Should include actionable details for network errors."""
+        import httpx
+
+        exc = RuntimeError("Repos API network error: network down")
+        exc.__cause__ = httpx.RequestError("network down")
+        mock_repo_client.retrieve.side_effect = exc
+
+        result = cloud_search_logic(
+            mock_repo_client,
+            base_dir="/tmp/project",
+            query="some query",
+        )
+
+        assert result["repo_id"] is None
+        assert result["results"] == []
+        assert result["error_code"] == "network_error"
+        assert result["retryable"] is True
+        assert "RELACE_API_ENDPOINT" in result["recommended_action"]
+
     def test_search_truncates_long_query_in_logs(self, mock_repo_client: MagicMock) -> None:
         """Should handle very long queries without issues."""
         long_query = "a" * 500  # Very long query

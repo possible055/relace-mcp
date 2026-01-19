@@ -357,5 +357,10 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     else ""
                 ),
                 "files_count": len(state.files),
+                "skipped_files_count": len(state.skipped_files),
+                "files_found": state.files_found,
+                "files_selected": state.files_selected,
+                "file_limit": state.file_limit,
+                "files_truncated": state.files_truncated,
                 "last_sync": state.last_sync,
             }

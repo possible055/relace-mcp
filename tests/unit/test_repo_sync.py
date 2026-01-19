@@ -502,6 +502,27 @@ class TestCloudSyncLogic:
         assert "error" in result
         assert "API error" in result["error"]
 
+    def test_sync_includes_network_error_details(
+        self, tmp_path: Path, mock_repo_client: MagicMock
+    ) -> None:
+        """Should include actionable details for network errors."""
+        import httpx
+
+        (tmp_path / "main.py").write_text("print('hello')")
+
+        exc = RuntimeError("Repos API network error: network down")
+        exc.__cause__ = httpx.RequestError("network down")
+        mock_repo_client.update_repo.side_effect = exc
+
+        with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
+            with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=None):
+                result = cloud_sync_logic(mock_repo_client, str(tmp_path))
+
+        assert result["repo_id"] is None
+        assert result["error_code"] == "network_error"
+        assert result["retryable"] is True
+        assert "RELACE_API_ENDPOINT" in result["recommended_action"]
+
     def test_sync_does_not_require_config_base_dir(self, tmp_path: Path) -> None:
         """Should work when RelaceConfig.base_dir is None (dynamic base_dir resolution)."""
         client = RelaceRepoClient(RelaceConfig(api_key="rlc-test-api-key", base_dir=None))
@@ -526,6 +547,41 @@ class TestCloudSyncLogic:
 
         # Should only process 5 files
         assert result["total_files"] == 5
+
+    def test_sync_normalizes_subdir_base_dir_to_git_root(
+        self, tmp_path: Path, mock_repo_client: MagicMock
+    ) -> None:
+        """Should avoid incorrect deletes when base_dir is a git subdirectory."""
+        import subprocess
+
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+
+        # Create files at repo root and in a subdir
+        (tmp_path / "root.py").write_text("print('root')\n")
+        subdir = tmp_path / "sub"
+        subdir.mkdir()
+        (subdir / "inner.py").write_text("print('inner')\n")
+
+        file_list = ["root.py", "sub/inner.py"]
+        hashes = _compute_file_hashes(str(tmp_path), file_list)
+
+        cached = SyncState(
+            repo_id="test-repo-id",
+            repo_head="abc123",
+            last_sync="",
+            files=hashes.copy(),
+        )
+
+        with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=file_list):
+            with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=cached):
+                with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+                    result = cloud_sync_logic(mock_repo_client, str(subdir))
+
+        assert result["files_deleted"] == 0
+        assert result["files_updated"] == 0
+        assert result["files_created"] == 0
+        assert result["files_unchanged"] == 2
+        mock_repo_client.update_repo.assert_not_called()
 
 
 class TestSyncState:

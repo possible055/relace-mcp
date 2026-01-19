@@ -80,6 +80,27 @@ def get_repo_identity(base_dir: str) -> tuple[str, str, str]:
     return local_repo_name, cloud_repo_name, fingerprint
 
 
+def get_repo_root(base_dir: str) -> str:
+    return str(_get_git_root(base_dir))
+
+
+def is_git_dirty(base_dir: str) -> bool:
+    repo_root = _get_git_root(base_dir)
+    try:
+        result = subprocess.run(  # nosec B603 B607 - hardcoded command
+            ["git", "status", "--porcelain"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return bool(result.stdout.strip())
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
+        logger.debug("Failed to get git dirty status from %s: %s", repo_root, exc)
+    return False
+
+
 @dataclass
 class SyncState:
     """Represents the sync state for a repository."""
@@ -94,6 +115,10 @@ class SyncState:
     git_head_sha: str = ""  # Git HEAD commit SHA at sync time
     files: dict[str, str] = field(default_factory=dict)
     skipped_files: set[str] = field(default_factory=set)  # Paths of binary/oversize files
+    files_found: int = 0  # Count before applying REPO_SYNC_MAX_FILES limit
+    files_selected: int = 0  # Count after applying limit
+    file_limit: int = 0  # REPO_SYNC_MAX_FILES used during last sync
+    files_truncated: int = 0  # files_found - files_selected when truncated
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -108,6 +133,10 @@ class SyncState:
             "git_head_sha": self.git_head_sha,
             "files": self.files,
             "skipped_files": list(self.skipped_files),
+            "files_found": self.files_found,
+            "files_selected": self.files_selected,
+            "file_limit": self.file_limit,
+            "files_truncated": self.files_truncated,
         }
 
     @classmethod
@@ -128,6 +157,10 @@ class SyncState:
             git_head_sha=data.get("git_head_sha", ""),
             files=data.get("files", {}),
             skipped_files=set(data.get("skipped_files", [])),
+            files_found=data.get("files_found", 0),
+            files_selected=data.get("files_selected", 0),
+            file_limit=data.get("file_limit", 0),
+            files_truncated=data.get("files_truncated", 0),
         )
 
 

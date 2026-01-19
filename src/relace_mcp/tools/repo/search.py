@@ -2,8 +2,11 @@ import logging
 import uuid
 from typing import Any
 
+import httpx
+
+from ...clients.exceptions import RelaceAPIError
 from ...clients.repo import RelaceRepoClient
-from .state import get_current_git_info, get_repo_identity, load_sync_state
+from .state import get_current_git_info, get_repo_identity, is_git_dirty, load_sync_state
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +89,20 @@ def cloud_search_logic(
             warnings.append(
                 "Sync state is missing git_head_sha; search is not pinned to a specific commit."
             )
+        if is_git_dirty(base_dir):
+            warnings.append(
+                "Local git working tree has uncommitted changes; results reflect the last synced revision."
+            )
+        if cached_state.files_truncated:
+            warnings.append(
+                f"Last sync was limited to {cached_state.files_selected}/{cached_state.files_found} files "
+                f"(REPO_SYNC_MAX_FILES={cached_state.file_limit}); results may be incomplete."
+            )
+        if cached_state.skipped_files:
+            warnings.append(
+                f"Last sync skipped {len(cached_state.skipped_files)} files (binary/oversize/unreadable); "
+                "results may miss those files."
+            )
 
         # Execute semantic retrieval with commit hash
         result = client.retrieve(
@@ -121,6 +138,34 @@ def cloud_search_logic(
 
     except Exception as exc:
         logger.error("[%s] Cloud search failed: %s", trace_id, exc)
+        error_details: dict[str, Any] = {}
+        cause = exc.__cause__
+        if isinstance(cause, RelaceAPIError):
+            error_details = {
+                "status_code": cause.status_code,
+                "error_code": cause.code,
+                "retryable": cause.retryable,
+            }
+            if cause.status_code in {401, 403}:
+                error_details["recommended_action"] = "Check RELACE_API_KEY and retry."
+            elif cause.status_code == 404:
+                error_details["recommended_action"] = (
+                    "Cloud repo not found. Run cloud_sync() to recreate/upload."
+                )
+            elif cause.status_code == 429:
+                error_details["recommended_action"] = "Rate limited. Retry later."
+        elif isinstance(cause, httpx.TimeoutException):
+            error_details = {
+                "error_code": "timeout",
+                "retryable": True,
+                "recommended_action": "Check network connectivity and retry.",
+            }
+        elif isinstance(cause, httpx.RequestError):
+            error_details = {
+                "error_code": "network_error",
+                "retryable": True,
+                "recommended_action": "Check network connectivity, DNS/proxy, and RELACE_API_ENDPOINT.",
+            }
         return {
             "query": query,
             "branch": branch,
@@ -128,4 +173,5 @@ def cloud_search_logic(
             "results": [],
             "repo_id": None,
             "error": str(exc),
+            **error_details,
         }

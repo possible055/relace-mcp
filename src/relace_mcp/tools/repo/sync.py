@@ -6,6 +6,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
+import httpx
+
+from ...clients.exceptions import RelaceAPIError
 from ...clients.repo import RelaceRepoClient
 from ...config.settings import REPO_SYNC_MAX_FILES
 from ...tools.apply.file_io import decode_text_best_effort, get_project_encoding
@@ -14,6 +17,7 @@ from .state import (
     compute_file_hash,
     get_current_git_info,
     get_repo_identity,
+    get_repo_root,
     load_sync_state,
     save_sync_state,
 )
@@ -381,6 +385,16 @@ def cloud_sync_logic(
         mirror,
     )
 
+    original_base_dir = base_dir
+    base_dir = get_repo_root(base_dir)
+    if base_dir != original_base_dir:
+        logger.info(
+            "[%s] Normalized base_dir to git root: %s -> %s",
+            trace_id,
+            original_base_dir,
+            base_dir,
+        )
+
     # Get current git info
     current_branch, current_head = get_current_git_info(base_dir)
     ref_changed = False
@@ -473,6 +487,10 @@ def cloud_sync_logic(
 
         logger.info("[%s] Found %d files to process", trace_id, len(files))
 
+        files.sort()
+        files_found = len(files)
+        files_truncated = 0
+
         # Limit file count
         if len(files) > REPO_SYNC_MAX_FILES:
             logger.warning(
@@ -481,7 +499,9 @@ def cloud_sync_logic(
                 len(files),
                 REPO_SYNC_MAX_FILES,
             )
+            files_truncated = len(files) - REPO_SYNC_MAX_FILES
             files = files[:REPO_SYNC_MAX_FILES]
+        files_selected = len(files)
 
         # Compute file hashes
         logger.info("[%s] Computing file hashes...", trace_id)
@@ -585,8 +605,32 @@ def cloud_sync_logic(
             git_head_sha=current_head,
             files=new_hashes,
             skipped_files=new_skipped,
+            files_found=files_found,
+            files_selected=files_selected,
+            file_limit=REPO_SYNC_MAX_FILES,
+            files_truncated=files_truncated,
         )
         state_saved = save_sync_state(base_dir, new_state)
+
+        warnings: list[str] = []
+        if base_dir != original_base_dir:
+            warnings.append(f"Normalized base_dir to git root: {original_base_dir} -> {base_dir}.")
+        if files_truncated:
+            warnings.append(
+                f"File count {files_found} exceeded limit {REPO_SYNC_MAX_FILES}; synced first {files_selected} files only."
+            )
+        if files_skipped:
+            warnings.append(
+                f"Skipped {files_skipped} files (binary/oversize/unreadable); cloud search may miss those files."
+            )
+        if deletes_suppressed:
+            warnings.append(
+                f"Suppressed {deletes_suppressed} delete operations (safe_full); cloud repo may contain stale files."
+            )
+        if not state_saved:
+            warnings.append(
+                "Failed to save local sync state; next cloud_search may fail until re-sync."
+            )
 
         return {
             "repo_id": repo_id,
@@ -600,6 +644,10 @@ def cloud_sync_logic(
             "files_unchanged": files_unchanged,
             "files_skipped": files_skipped,
             "total_files": len(new_hashes),
+            "files_found": files_found,
+            "files_selected": files_selected,
+            "file_limit": REPO_SYNC_MAX_FILES,
+            "files_truncated": files_truncated,
             # Debug fields
             "local_git_branch": current_branch,
             "local_git_head": current_head[:8] if current_head else "",
@@ -607,10 +655,39 @@ def cloud_sync_logic(
             "sync_mode": sync_mode,
             "deletes_suppressed": deletes_suppressed,
             "state_saved": state_saved,
+            "warnings": warnings,
         }
 
     except Exception as exc:
         logger.error("[%s] Cloud sync failed: %s", trace_id, exc)
+        error_details: dict[str, Any] = {}
+        cause = exc.__cause__
+        if isinstance(cause, RelaceAPIError):
+            error_details = {
+                "status_code": cause.status_code,
+                "error_code": cause.code,
+                "retryable": cause.retryable,
+            }
+            if cause.status_code in {401, 403}:
+                error_details["recommended_action"] = "Check RELACE_API_KEY and retry."
+            elif cause.status_code == 404:
+                error_details["recommended_action"] = (
+                    "Cloud repo not found. Run cloud_sync() again to create/upload."
+                )
+            elif cause.status_code == 429:
+                error_details["recommended_action"] = "Rate limited. Retry later."
+        elif isinstance(cause, httpx.TimeoutException):
+            error_details = {
+                "error_code": "timeout",
+                "retryable": True,
+                "recommended_action": "Check network connectivity and retry.",
+            }
+        elif isinstance(cause, httpx.RequestError):
+            error_details = {
+                "error_code": "network_error",
+                "retryable": True,
+                "recommended_action": "Check network connectivity, DNS/proxy, and RELACE_API_ENDPOINT.",
+            }
         return {
             "repo_id": None,
             "repo_name": local_repo_name,
@@ -629,4 +706,5 @@ def cloud_sync_logic(
             "sync_mode": "error",
             "deletes_suppressed": 0,
             "error": str(exc),
+            **error_details,
         }

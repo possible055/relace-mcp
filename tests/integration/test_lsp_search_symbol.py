@@ -59,6 +59,12 @@ class TestSearchSymbolHandler:
         result = search_symbol_handler(params, "/tmp")
         assert "Error" in result
 
+    def test_short_query_returns_error(self) -> None:
+        params = SearchSymbolParams(query="x")
+        result = search_symbol_handler(params, "/tmp")
+        assert "Error" in result
+        assert "too short" in result
+
     @patch("relace_mcp.lsp.LSPClientManager")
     def test_basic_search(self, mock_manager_cls: MagicMock, tmp_path) -> None:
         mock_client = MagicMock()

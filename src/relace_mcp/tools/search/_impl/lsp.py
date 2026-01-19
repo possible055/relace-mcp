@@ -324,6 +324,8 @@ def search_symbol_handler(params: SearchSymbolParams, base_dir: str) -> str:
         return "Error: query cannot be empty."
 
     query = params.query.strip()
+    if len(query) < 2:
+        return "Error: query too short (min 2 characters)."
 
     client_result = _get_lsp_client(base_dir)
     if isinstance(client_result, str):

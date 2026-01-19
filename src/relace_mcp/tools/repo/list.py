@@ -2,6 +2,9 @@ import logging
 import uuid
 from typing import Any
 
+import httpx
+
+from ...clients.exceptions import RelaceAPIError
 from ...clients.repo import RelaceRepoClient
 
 logger = logging.getLogger(__name__)
@@ -57,9 +60,34 @@ def cloud_list_logic(client: RelaceRepoClient) -> dict[str, Any]:
 
     except Exception as exc:
         logger.error("[%s] Cloud list failed: %s", trace_id, exc)
+        error_details: dict[str, Any] = {}
+        cause = exc.__cause__
+        if isinstance(cause, RelaceAPIError):
+            error_details = {
+                "status_code": cause.status_code,
+                "error_code": cause.code,
+                "retryable": cause.retryable,
+            }
+            if cause.status_code in {401, 403}:
+                error_details["recommended_action"] = "Check RELACE_API_KEY and retry."
+            elif cause.status_code == 429:
+                error_details["recommended_action"] = "Rate limited. Retry later."
+        elif isinstance(cause, httpx.TimeoutException):
+            error_details = {
+                "error_code": "timeout",
+                "retryable": True,
+                "recommended_action": "Check network connectivity and retry.",
+            }
+        elif isinstance(cause, httpx.RequestError):
+            error_details = {
+                "error_code": "network_error",
+                "retryable": True,
+                "recommended_action": "Check network connectivity, DNS/proxy, and RELACE_API_ENDPOINT.",
+            }
         return {
             "count": 0,
             "repos": [],
             "has_more": False,
             "error": str(exc),
+            **error_details,
         }

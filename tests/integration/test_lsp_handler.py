@@ -323,3 +323,29 @@ class TestLSPClientManager:
 
         # Cleanup
         LSPClientManager._instance = None
+
+    @patch("relace_mcp.lsp.client.LSPClient")
+    def test_manager_lru_eviction(self, mock_client_cls: MagicMock, monkeypatch) -> None:
+        from relace_mcp.lsp import PYTHON_CONFIG, LSPClientManager
+
+        monkeypatch.setenv("SEARCH_LSP_MAX_CLIENTS", "2")
+        LSPClientManager._instance = None
+
+        c1 = MagicMock()
+        c2 = MagicMock()
+        c3 = MagicMock()
+        mock_client_cls.side_effect = [c1, c2, c3]
+
+        manager = LSPClientManager.get_instance()
+        manager.get_client(PYTHON_CONFIG, "/w1")
+        manager.get_client(PYTHON_CONFIG, "/w2")
+        # Refresh /w1 so /w2 becomes LRU.
+        manager.get_client(PYTHON_CONFIG, "/w1")
+        manager.get_client(PYTHON_CONFIG, "/w3")
+
+        c2.shutdown.assert_called_once()
+        c1.shutdown.assert_not_called()
+        c3.shutdown.assert_not_called()
+
+        # Cleanup
+        LSPClientManager._instance = None

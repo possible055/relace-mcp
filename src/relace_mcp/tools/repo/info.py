@@ -2,8 +2,11 @@ import logging
 import uuid
 from typing import Any
 
+import httpx
+
+from ...clients.exceptions import RelaceAPIError
 from ...clients.repo import RelaceRepoClient
-from .state import get_current_git_info, get_repo_identity, load_sync_state
+from .state import get_current_git_info, get_repo_identity, is_git_dirty, load_sync_state
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +50,7 @@ def cloud_info_logic(
 
         # Get current git info
         current_branch, current_head = get_current_git_info(base_dir)
+        git_dirty = is_git_dirty(base_dir)
 
         # Load local sync state
         sync_state = load_sync_state(base_dir)
@@ -55,6 +59,7 @@ def cloud_info_logic(
         local_info = {
             "git_branch": current_branch,
             "git_head": current_head[:8] if current_head else "",
+            "git_dirty": git_dirty,
         }
 
         # Build synced info from local state
@@ -69,6 +74,10 @@ def cloud_info_logic(
                 "tracked_files": len(sync_state.files),
                 "skipped_files": len(sync_state.skipped_files),
                 "cloud_repo_name": sync_state.cloud_repo_name or cloud_repo_name,
+                "files_found": sync_state.files_found,
+                "files_selected": sync_state.files_selected,
+                "file_limit": sync_state.file_limit,
+                "files_truncated": sync_state.files_truncated,
             }
 
         # Try to find cloud repo in list
@@ -132,6 +141,9 @@ def cloud_info_logic(
                     "Run cloud_sync() for safe sync, or "
                     "cloud_sync(force=True, mirror=True) to fully align with current branch."
                 )
+            elif git_dirty:
+                needs_sync = True
+                recommended_action = "Local working tree is dirty. Run cloud_sync() if you want cloud_search to reflect uncommitted changes."
         elif not sync_state:
             needs_sync = True
             recommended_action = "No sync state found. Run cloud_sync() to upload codebase."
@@ -141,6 +153,20 @@ def cloud_info_logic(
             "needs_sync": needs_sync,
             "recommended_action": recommended_action,
         }
+
+        if sync_state:
+            if sync_state.files_truncated:
+                warnings.append(
+                    f"Last sync was limited to {sync_state.files_selected}/{sync_state.files_found} files "
+                    f"(REPO_SYNC_MAX_FILES={sync_state.file_limit}); cloud search may be incomplete."
+                )
+            if sync_state.skipped_files:
+                warnings.append(
+                    f"Last sync skipped {len(sync_state.skipped_files)} files (binary/oversize/unreadable); "
+                    "cloud search may miss those files."
+                )
+            if git_dirty:
+                warnings.append("Local git working tree has uncommitted changes.")
 
         logger.info(
             "[%s] Info retrieved: synced=%s, cloud=%s, ref_changed=%s",
@@ -162,6 +188,30 @@ def cloud_info_logic(
 
     except Exception as exc:
         logger.error("[%s] Cloud info failed: %s", trace_id, exc)
+        error_details: dict[str, Any] = {}
+        cause = exc.__cause__
+        if isinstance(cause, RelaceAPIError):
+            error_details = {
+                "status_code": cause.status_code,
+                "error_code": cause.code,
+                "retryable": cause.retryable,
+            }
+            if cause.status_code in {401, 403}:
+                error_details["recommended_action"] = "Check RELACE_API_KEY and retry."
+            elif cause.status_code == 429:
+                error_details["recommended_action"] = "Rate limited. Retry later."
+        elif isinstance(cause, httpx.TimeoutException):
+            error_details = {
+                "error_code": "timeout",
+                "retryable": True,
+                "recommended_action": "Check network connectivity and retry.",
+            }
+        elif isinstance(cause, httpx.RequestError):
+            error_details = {
+                "error_code": "network_error",
+                "retryable": True,
+                "recommended_action": "Check network connectivity, DNS/proxy, and RELACE_API_ENDPOINT.",
+            }
         return {
             "repo_name": local_repo_name,
             "cloud_repo_name": cloud_repo_name,
@@ -170,4 +220,5 @@ def cloud_info_logic(
             "cloud": None,
             "status": None,
             "error": str(exc),
+            **error_details,
         }
