@@ -13,21 +13,10 @@ from pathlib import Path
 
 from ....tools.apply.file_io import get_project_encoding, read_text_best_effort
 from ..schemas import GrepSearchParams
-from .constants import GREP_TIMEOUT_SECONDS, MAX_GREP_DEPTH, MAX_GREP_MATCHES
+from .constants import COMMON_IGNORED_DIRS, GREP_TIMEOUT_SECONDS, MAX_GREP_DEPTH, MAX_GREP_MATCHES
+from .gitignore import collect_gitignore_specs, is_ignored
 
 logger = logging.getLogger(__name__)
-
-_GREP_IGNORED_DIR_NAMES = frozenset(
-    {
-        "__pycache__",
-        "build",
-        "dist",
-        "node_modules",
-        "site-packages",
-        "target",
-        "venv",
-    }
-)
 
 
 def _timeout_context(seconds: int) -> "AbstractContextManager[None]":
@@ -134,7 +123,7 @@ def _filter_visible_dirs(dirs: list[str]) -> list[str]:
     Returns:
         Visible directory list.
     """
-    return [d for d in dirs if not d.startswith(".") and d not in _GREP_IGNORED_DIR_NAMES]
+    return [d for d in dirs if not d.startswith(".") and d not in COMMON_IGNORED_DIRS]
 
 
 def _is_searchable_file(
@@ -171,17 +160,33 @@ def _iter_searchable_files(
         (filepath, rel_path) tuple.
     """
     for root, dirs, files in os.walk(base_path):
-        if _exceeds_max_depth(Path(root), base_path, MAX_GREP_DEPTH):
+        root_path = Path(root)
+        if _exceeds_max_depth(root_path, base_path, MAX_GREP_DEPTH):
             dirs.clear()
             continue
 
         dirs[:] = _filter_visible_dirs(dirs)
 
+        # Apply gitignore rules to prune directories and files
+        gitignore_specs = collect_gitignore_specs(root_path, base_path)
+        if gitignore_specs:
+            try:
+                root_rel = root_path.relative_to(base_path).as_posix()
+            except ValueError:
+                root_rel = ""
+
+            pruned_dirs = []
+            for d in dirs:
+                dir_rel = f"{root_rel}/{d}" if root_rel else d
+                if not is_ignored(dir_rel, True, gitignore_specs, base_path):
+                    pruned_dirs.append(d)
+            dirs[:] = pruned_dirs
+
         for filename in files:
             if not _is_searchable_file(filename, include_pattern, exclude_pattern):
                 continue
 
-            filepath = Path(root) / filename
+            filepath = root_path / filename
             # Match ripgrep's default behavior: do not follow file symlinks. This prevents
             # path escapes (e.g., a symlink inside base_dir pointing to /etc/passwd).
             if filepath.is_symlink():
@@ -190,6 +195,12 @@ def _iter_searchable_files(
                 rel_path = filepath.relative_to(base_path)
             except ValueError:
                 continue
+
+            # Check gitignore for files
+            if gitignore_specs:
+                file_rel = f"{root_rel}/{filename}" if root_rel else filename
+                if is_ignored(file_rel, False, gitignore_specs, base_path):
+                    continue
 
             yield filepath, rel_path
 

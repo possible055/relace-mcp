@@ -3,34 +3,23 @@ from pathlib import Path
 
 from ....utils import validate_file_path
 from .constants import MAX_DIR_ITEMS
+from .gitignore import collect_gitignore_specs, is_ignored
 from .paths import map_repo_path
 
 
 def _strip_dot_prefix(path_str: str) -> str:
-    """Remove './' prefix from path.
-
-    Args:
-        path_str: Path string.
-
-    Returns:
-        Path string with prefix removed.
-    """
+    """Remove './' prefix from path."""
     return path_str[2:] if path_str.startswith("./") else path_str
 
 
 def _collect_entries(
     current_abs: Path,
     include_hidden: bool,
+    gitignore_specs: list | None,
+    base_dir: Path,
+    current_rel: Path,
 ) -> tuple[list[tuple[str, Path]], list[tuple[str, Path]]]:
-    """Collect files and subdirectories in directory.
-
-    Args:
-        current_abs: Current directory absolute path.
-        include_hidden: Whether to include hidden files.
-
-    Returns:
-        (files_list, dirs_list) tuple, each list contains (name, Path) tuples.
-    """
+    """Collect files and subdirectories in directory."""
     try:
         entries = list(current_abs.iterdir())
     except PermissionError:
@@ -39,10 +28,22 @@ def _collect_entries(
     dirs_list: list[tuple[str, Path]] = []
     files_list: list[tuple[str, Path]] = []
 
+    # Compute relative path for gitignore matching
+    rel_prefix = current_rel.as_posix()
+    if rel_prefix == ".":
+        rel_prefix = ""
+
     for entry in entries:
         name = entry.name
         if not include_hidden and name.startswith("."):
             continue
+
+        # Check gitignore rules
+        if gitignore_specs:
+            entry_rel = f"{rel_prefix}/{name}" if rel_prefix else name
+            is_dir = entry.is_dir() and not entry.is_symlink()
+            if is_ignored(entry_rel, is_dir, gitignore_specs, base_dir):
+                continue
 
         # Never follow symlinks (prevents traversal outside base_dir and cycles).
         if entry.is_symlink():
@@ -58,23 +59,22 @@ def _collect_entries(
     return files_list, dirs_list
 
 
-def _collect_directory_items(resolved: Path, include_hidden: bool) -> tuple[list[str], bool]:
-    """BFS collect directory items.
-
-    Args:
-        resolved: Directory absolute path.
-        include_hidden: Whether to include hidden files.
-
-    Returns:
-        (items, truncated) tuple, items is item list, truncated indicates if output was truncated.
-    """
+def _collect_directory_items(
+    resolved: Path, include_hidden: bool, base_dir: Path
+) -> tuple[list[str], bool]:
+    """BFS collect directory items."""
     items: list[str] = []
     queue: deque[tuple[Path, Path]] = deque()
     queue.append((resolved, Path(".")))
 
     while queue and len(items) < MAX_DIR_ITEMS:
         current_abs, current_rel = queue.popleft()
-        files_list, dirs_list = _collect_entries(current_abs, include_hidden)
+
+        # Update gitignore specs for nested directories
+        nested_specs = collect_gitignore_specs(current_abs, base_dir)
+        files_list, dirs_list = _collect_entries(
+            current_abs, include_hidden, nested_specs, base_dir, current_rel
+        )
 
         # List current level files first
         for name, _ in files_list:
@@ -106,7 +106,8 @@ def view_directory_handler(path: str, include_hidden: bool, base_dir: str) -> st
         if not resolved.is_dir():
             return f"Error: Not a directory: {path}"
 
-        items, truncated = _collect_directory_items(resolved, include_hidden)
+        base_path = Path(base_dir)
+        items, truncated = _collect_directory_items(resolved, include_hidden, base_path)
 
         result = "\n".join(items)
         if truncated:

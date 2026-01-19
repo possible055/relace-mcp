@@ -211,6 +211,19 @@ class TestViewDirectoryHandler:
         assert "link" in result
         assert "secret.txt" not in result
 
+    def test_respects_gitignore_file(self, tmp_path: Path) -> None:
+        """Should exclude files and directories matching .gitignore patterns."""
+        (tmp_path / ".gitignore").write_text("ignored_dir/\nignored.txt\n")
+        (tmp_path / "ignored_dir").mkdir()
+        (tmp_path / "ignored_dir" / "file.py").write_text("ignored")
+        (tmp_path / "ignored.txt").write_text("ignored")
+        (tmp_path / "visible.txt").write_text("visible")
+
+        result = view_directory_handler("/repo", False, str(tmp_path))
+        assert "visible.txt" in result
+        assert "ignored_dir" not in result
+        assert "ignored.txt" not in result
+
 
 class TestGrepSearchHandler:
     """Test grep_search tool handler."""
@@ -349,6 +362,44 @@ class TestGrepSearchHandler:
         )
         result = grep_search_handler(params)
         assert "No matches" in result
+
+    def test_python_fallback_respects_gitignore(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Python fallback should respect .gitignore patterns."""
+        (tmp_path / ".gitignore").write_text("ignored_dir/\n")
+        ignored_dir = tmp_path / "ignored_dir"
+        ignored_dir.mkdir()
+        (ignored_dir / "secret.py").write_text("HIDDEN_PATTERN\n")
+        (tmp_path / "visible.py").write_text("VISIBLE_PATTERN\n")
+
+        # Force ripgrep path to fail so handler uses Python fallback.
+        import relace_mcp.tools.search._impl.grep_search as grep_mod
+
+        def _raise(*_args: object, **_kwargs: object) -> object:
+            raise FileNotFoundError("rg unavailable")
+
+        monkeypatch.setattr(grep_mod.subprocess, "run", _raise)
+
+        params = GrepSearchParams(
+            query="HIDDEN_PATTERN",
+            case_sensitive=True,
+            include_pattern=None,
+            exclude_pattern=None,
+            base_dir=str(tmp_path),
+        )
+        result = grep_search_handler(params)
+        assert "No matches" in result
+
+        params2 = GrepSearchParams(
+            query="VISIBLE_PATTERN",
+            case_sensitive=True,
+            include_pattern=None,
+            exclude_pattern=None,
+            base_dir=str(tmp_path),
+        )
+        result2 = grep_search_handler(params2)
+        assert "visible.py" in result2
 
 
 class TestGlobHandler:
