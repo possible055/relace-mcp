@@ -10,7 +10,7 @@ from relace_mcp.utils import map_path_no_resolve
 from .constants import LSP_TIMEOUT_SECONDS, MAX_LSP_RESULTS
 
 if TYPE_CHECKING:
-    from relace_mcp.lsp import Location, LSPClient
+    from relace_mcp.lsp import LanguageServerConfig, Location, LSPClient
 
 logger = logging.getLogger(__name__)
 
@@ -70,10 +70,11 @@ class _ValidatedPath:
     rel_path: str  # Relative path for LSP client
     abs_path: Path  # Absolute path for file operations
     resolved_base_dir: str  # Resolved base directory
+    config: "LanguageServerConfig"  # Selected language configuration
 
 
-def _validate_python_path(file: str, base_dir: str) -> _ValidatedPath | str:
-    """Validate and resolve a Python file path for LSP operations.
+def _validate_lsp_path(file: str, base_dir: str) -> _ValidatedPath | str:
+    """Validate and resolve a file path for LSP operations.
 
     Args:
         file: Input file path (may be /repo/... format).
@@ -91,27 +92,38 @@ def _validate_python_path(file: str, base_dir: str) -> _ValidatedPath | str:
         if fs_path.is_symlink():
             return f"Error: Symlinks not allowed: {file}"
         abs_path = fs_path.resolve()
-        resolved_base_dir = str(Path(base_dir).resolve())
+        base_dir_path = Path(base_dir).resolve()
+        resolved_base_dir = str(base_dir_path)
 
         try:
-            rel_path = str(abs_path.relative_to(resolved_base_dir))
+            rel_path = str(abs_path.relative_to(base_dir_path))
         except ValueError:
             return f"Error: Invalid path: {file}"
 
         if not abs_path.exists():
             return f"Error: File not found: {file}"
-        if abs_path.suffix not in (".py", ".pyi"):
-            return f"Error: Only Python files supported, got: {abs_path.suffix}"
 
-        return _ValidatedPath(rel_path, abs_path, resolved_base_dir)
+        try:
+            from relace_mcp.lsp import get_config_for_file
+        except ImportError as e:
+            return f"Error: LSP dependencies not available: {e}"
+
+        config = get_config_for_file(str(abs_path))
+        if config is None:
+            return f"Error: Unsupported file type: {abs_path.suffix}"
+
+        return _ValidatedPath(rel_path, abs_path, resolved_base_dir, config)
     except (OSError, RuntimeError, ValueError) as e:
         return f"Error: Invalid path: {e}"
 
 
-def _get_lsp_client(base_dir: str) -> "tuple[AbstractContextManager[LSPClient], str, type] | str":
+def _get_lsp_client(
+    config: "LanguageServerConfig", base_dir: str
+) -> "tuple[AbstractContextManager[LSPClient], str, type] | str":
     """Get LSP client session with lazy import.
 
     Args:
+        config: Language server configuration.
         base_dir: Base directory for the LSP workspace.
 
     Returns:
@@ -119,14 +131,14 @@ def _get_lsp_client(base_dir: str) -> "tuple[AbstractContextManager[LSPClient], 
         or error message string on failure.
     """
     try:
-        from relace_mcp.lsp import PYTHON_CONFIG, LSPClientManager, LSPError
+        from relace_mcp.lsp import LSPClientManager, LSPError
     except ImportError as e:
-        return f"Error: LSP dependencies not available: {e}. Run: pip install basedpyright"
+        return f"Error: LSP dependencies not available: {e}"
 
     resolved_base_dir = str(Path(base_dir).resolve())
     manager = LSPClientManager.get_instance()
     session = manager.session(
-        PYTHON_CONFIG,
+        config,
         resolved_base_dir,
         timeout_seconds=LSP_TIMEOUT_SECONDS,
     )
@@ -148,8 +160,6 @@ def _handle_lsp_error(exc: Exception, operation: str) -> str:
         from relace_mcp.lsp import LSPError
 
         if isinstance(exc, LSPError):
-            if "not found" in str(exc).lower():
-                return "Error: basedpyright-langserver not found. Run: pip install basedpyright"
             return f"Error: {exc}"
     except ImportError:
         pass
@@ -205,18 +215,20 @@ class CallGraphParams:
     direction: str  # "incoming" | "outgoing"
 
 
-def _find_symbol_columns(line_content: str) -> list[int]:
+def _find_symbol_columns(line_content: str, keywords: frozenset[str] | None = None) -> list[int]:
     """Find column positions of potential symbols in a line (skipping keywords)."""
+    if keywords is None:
+        keywords = frozenset()
     columns = []
     for match in _IDENTIFIER_PATTERN.finditer(line_content):
         identifier = match.group(1)
-        if identifier not in _PYTHON_KEYWORDS:
+        if identifier not in keywords:
             columns.append(match.start())
     return columns
 
 
 def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
-    """LSP query handler using basedpyright.
+    """LSP query handler using language server inferred from file type.
 
     Thread-safe through LSPClientManager's internal locking.
     First call incurs startup delay, subsequent calls are fast.
@@ -245,11 +257,11 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
     line_0 = params.line - 1
     column_0 = params.column - 1
 
-    path_result = _validate_python_path(params.file, base_dir)
+    path_result = _validate_lsp_path(params.file, base_dir)
     if isinstance(path_result, str):
         return path_result
 
-    client_result = _get_lsp_client(base_dir)
+    client_result = _get_lsp_client(path_result.config, base_dir)
     if isinstance(client_result, str):
         return client_result
     session, resolved_base_dir, _ = client_result
@@ -273,7 +285,12 @@ def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
                         lines = f.readlines()
                         if 0 <= line_0 < len(lines):
                             line_content = lines[line_0]
-                            symbol_columns = _find_symbol_columns(line_content)
+                            keywords = (
+                                _PYTHON_KEYWORDS
+                                if path_result.config.language_id == "python"
+                                else frozenset()
+                            )
+                            symbol_columns = _find_symbol_columns(line_content, keywords)
                             # Skip the originally requested column
                             for col in symbol_columns:
                                 if col == column_0:
@@ -335,36 +352,61 @@ def search_symbol_handler(params: SearchSymbolParams, base_dir: str) -> str:
     if len(query) < 2:
         return "Error: query too short (min 2 characters)."
 
-    client_result = _get_lsp_client(base_dir)
-    if isinstance(client_result, str):
-        return client_result
-    session, resolved_base_dir, _ = client_result
-
     try:
-        with session as client:
-            results = client.workspace_symbols(query)
+        from relace_mcp.lsp import LANGUAGE_CONFIGS, LSPClientManager, get_lsp_languages
+    except ImportError as e:
+        return f"Error: LSP dependencies not available: {e}"
 
-            if not results:
-                return "No symbols found."
+    resolved_base_dir = str(Path(base_dir).resolve())
+    languages = get_lsp_languages(Path(resolved_base_dir))
+    if not languages:
+        return "No supported LSP languages found in workspace."
 
-            lines = []
-            for r in results:
-                formatted = r.to_grep_format(resolved_base_dir)
-                if formatted is not None:
-                    lines.append(formatted)
-                    if len(lines) >= MAX_LSP_RESULTS:
-                        break
+    manager = LSPClientManager.get_instance()
 
-            if not lines:
-                return "No symbols found (all results are outside repository)."
+    lines: list[str] = []
+    any_success = False
+    any_results = False
+    errors: list[Exception] = []
 
+    for lang_id in sorted(languages):
+        config = LANGUAGE_CONFIGS.get(lang_id)
+        if config is None:
+            continue
+        try:
+            with manager.session(
+                config, resolved_base_dir, timeout_seconds=LSP_TIMEOUT_SECONDS
+            ) as client:
+                results = client.workspace_symbols(query)
+            any_success = True
+        except Exception as exc:
+            errors.append(exc)
+            continue
+
+        if results:
+            any_results = True
+
+        for r in results:
+            formatted = r.to_grep_format(resolved_base_dir)
+            if formatted is None:
+                continue
+            lines.append(formatted)
             if len(lines) >= MAX_LSP_RESULTS:
-                lines.append(f"... capped at {MAX_LSP_RESULTS} results")
+                break
+        if len(lines) >= MAX_LSP_RESULTS:
+            break
 
-            return "\n".join(lines)
+    if not lines:
+        if not any_success and errors:
+            return _handle_lsp_error(errors[0], "symbol search")
+        if any_results:
+            return "No symbols found (all results are outside repository)."
+        return "No symbols found."
 
-    except Exception as exc:
-        return _handle_lsp_error(exc, "symbol search")
+    if len(lines) >= MAX_LSP_RESULTS:
+        lines.append(f"... capped at {MAX_LSP_RESULTS} results")
+
+    return "\n".join(lines)
 
 
 def list_symbols_handler(params: ListSymbolsParams, base_dir: str) -> str:
@@ -376,11 +418,11 @@ def list_symbols_handler(params: ListSymbolsParams, base_dir: str) -> str:
     if not params.file or not params.file.strip():
         return "Error: file path cannot be empty."
 
-    path_result = _validate_python_path(params.file, base_dir)
+    path_result = _validate_lsp_path(params.file, base_dir)
     if isinstance(path_result, str):
         return path_result
 
-    client_result = _get_lsp_client(base_dir)
+    client_result = _get_lsp_client(path_result.config, base_dir)
     if isinstance(client_result, str):
         return client_result
     session, _, _ = client_result
@@ -419,11 +461,11 @@ def get_type_handler(params: GetTypeParams, base_dir: str) -> str:
     line_0 = params.line - 1
     column_0 = params.column - 1
 
-    path_result = _validate_python_path(params.file, base_dir)
+    path_result = _validate_lsp_path(params.file, base_dir)
     if isinstance(path_result, str):
         return path_result
 
-    client_result = _get_lsp_client(base_dir)
+    client_result = _get_lsp_client(path_result.config, base_dir)
     if isinstance(client_result, str):
         return client_result
     session, _, _ = client_result
@@ -463,11 +505,11 @@ def call_graph_handler(params: CallGraphParams, base_dir: str) -> str:
     line_0 = params.line - 1
     column_0 = params.column - 1
 
-    path_result = _validate_python_path(params.file, base_dir)
+    path_result = _validate_lsp_path(params.file, base_dir)
     if isinstance(path_result, str):
         return path_result
 
-    client_result = _get_lsp_client(base_dir)
+    client_result = _get_lsp_client(path_result.config, base_dir)
     if isinstance(client_result, str):
         return client_result
     session, resolved_base_dir, _ = client_result

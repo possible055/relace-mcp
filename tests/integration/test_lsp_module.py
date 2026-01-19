@@ -179,7 +179,7 @@ class TestGetConfigForFile:
         assert config.language_id == "python"
 
     def test_unsupported_file(self) -> None:
-        config = get_config_for_file("test.js")
+        config = get_config_for_file("test.txt")
         assert config is None
 
     def test_path_with_directory(self) -> None:

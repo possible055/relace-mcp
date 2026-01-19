@@ -246,10 +246,15 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "find_symbol",
             "strict": True,
             "description": (
-                "Find where a Python symbol is defined or find all its usages.\n\n"
-                "Use AFTER viewing a file when you know the symbol's exact position.\n"
-                "Actions: 'definition' (go to source), 'references' (find all usages).\n\n"
-                "line/column are 1-indexed, matching view_file output directly.\n"
+                "Navigate to a symbol's definition or find all references to it.\n\n"
+                "Actions:\n"
+                "- 'definition': Jump to where the symbol is defined (imports, classes, functions)\n"
+                "- 'references': Find every location where the symbol is used\n\n"
+                "When to use:\n"
+                "- Tracing where a function/class comes from\n"
+                "- Understanding how widely a symbol is used before refactoring\n"
+                "- Following import chains across files\n\n"
+                "Position format: line/column are 1-indexed, matching view_file output.\n"
                 "First call has 2-5s startup delay."
             ),
             "parameters": {
@@ -259,19 +264,19 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "action": {
                         "type": "string",
                         "enum": ["definition", "references"],
-                        "description": "The LSP action to perform.",
+                        "description": "'definition' to jump to source, 'references' to find all usages.",
                     },
                     "file": {
                         "type": "string",
-                        "description": "Path to the Python file, e.g. `/repo/src/main.py`.",
+                        "description": "Absolute path to the source file containing the symbol.",
                     },
                     "line": {
                         "type": "integer",
-                        "description": "Line number (1-indexed, same as view_file output).",
+                        "description": "Line number (1-indexed) where the symbol appears.",
                     },
                     "column": {
                         "type": "integer",
-                        "description": "Column number (1-indexed) where the symbol starts.",
+                        "description": "Column number (1-indexed) where the symbol name starts.",
                     },
                 },
                 "additionalProperties": False,
@@ -284,9 +289,17 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "search_symbol",
             "strict": True,
             "description": (
-                "Search for symbol definitions by name across the workspace using LSP.\n\n"
-                "Returns symbol locations matching the query. Only searches DEFINITIONS,\n"
-                "not string literals or comments. Supports partial name matching.\n\n"
+                "Search for symbol definitions by name across the entire workspace.\n\n"
+                "What it finds:\n"
+                "- Function and method definitions\n"
+                "- Class definitions\n"
+                "- Variable and constant declarations\n\n"
+                "What it ignores: string literals, comments, usages (only definitions).\n\n"
+                "When to use:\n"
+                "- Finding where a class/function is defined without knowing the file\n"
+                "- Exploring codebase structure by searching partial names\n"
+                "- Faster than grep when you only need definitions\n\n"
+                "Returns: List of matching symbols with file paths and line numbers.\n"
                 "First call has 2-5s startup delay."
             ),
             "parameters": {
@@ -295,7 +308,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Symbol name or prefix to search (e.g., 'DatabaseConn', 'handle').",
+                        "description": "Symbol name or prefix to search (e.g., 'Config', 'handle_request').",
                     },
                 },
                 "additionalProperties": False,
@@ -308,8 +321,16 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "get_type",
             "strict": True,
             "description": (
-                "Get type information for a symbol at a position using LSP hover.\n\n"
-                "line/column are 1-indexed, matching view_file output directly.\n"
+                "Get type information and documentation for a symbol at a position.\n\n"
+                "Returns:\n"
+                "- Inferred or declared type signature\n"
+                "- Docstring if available\n"
+                "- Function parameters and return type\n\n"
+                "When to use:\n"
+                "- Understanding what type a variable holds\n"
+                "- Checking function signatures without navigating to definition\n"
+                "- Reading docstrings inline\n\n"
+                "Position format: line/column are 1-indexed, matching view_file output.\n"
                 "First call has 2-5s startup delay."
             ),
             "parameters": {
@@ -318,15 +339,15 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "file": {
                         "type": "string",
-                        "description": "Path to the Python file, e.g. `/repo/src/main.py`.",
+                        "description": "Absolute path to the source file.",
                     },
                     "line": {
                         "type": "integer",
-                        "description": "Line number (1-indexed, same as view_file output).",
+                        "description": "Line number (1-indexed) where the symbol appears.",
                     },
                     "column": {
                         "type": "integer",
-                        "description": "Column number (1-indexed) where the symbol starts.",
+                        "description": "Column number (1-indexed) where the symbol name starts.",
                     },
                 },
                 "additionalProperties": False,
@@ -339,9 +360,17 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "list_symbols",
             "strict": True,
             "description": (
-                "List all symbols defined in a Python file (classes, functions, variables).\n\n"
-                "Returns a hierarchical outline showing symbol names, kinds, and line ranges.\n"
-                "Faster than grep for getting file structure.\n\n"
+                "Get a structured outline of all symbols defined in a file.\n\n"
+                "Returns hierarchical list of:\n"
+                "- Classes (with nested methods and attributes)\n"
+                "- Functions\n"
+                "- Top-level variables and constants\n"
+                "Each symbol includes: name, kind, and line range.\n\n"
+                "When to use:\n"
+                "- Getting file structure overview before diving into code\n"
+                "- Finding specific function/class locations quickly\n"
+                "- Understanding module organization\n\n"
+                "Faster than grep for structural exploration.\n"
                 "First call has 2-5s startup delay."
             ),
             "parameters": {
@@ -350,7 +379,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "file": {
                         "type": "string",
-                        "description": "Path to the Python file, e.g. `/repo/src/main.py`.",
+                        "description": "Absolute path to the source file to analyze.",
                     },
                 },
                 "additionalProperties": False,
@@ -363,10 +392,15 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "call_graph",
             "strict": True,
             "description": (
-                "Get call hierarchy for a function/method using LSP.\n\n"
-                "direction='incoming': who calls this function\n"
-                "direction='outgoing': what functions this calls\n\n"
-                "line/column are 1-indexed, matching view_file output.\n"
+                "Trace function call relationships in either direction.\n\n"
+                "Directions:\n"
+                "- 'incoming': Who calls this function? (callers)\n"
+                "- 'outgoing': What does this function call? (callees)\n\n"
+                "When to use:\n"
+                "- Understanding impact before modifying a function\n"
+                "- Tracing execution flow through the codebase\n"
+                "- Finding entry points that lead to a function\n\n"
+                "Position format: line/column are 1-indexed, pointing to the function name.\n"
                 "First call has 2-5s startup delay."
             ),
             "parameters": {
@@ -375,11 +409,11 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "file": {
                         "type": "string",
-                        "description": "Path to the Python file, e.g. `/repo/src/main.py`.",
+                        "description": "Absolute path to the source file containing the function.",
                     },
                     "line": {
                         "type": "integer",
-                        "description": "Line number (1-indexed, same as view_file output).",
+                        "description": "Line number (1-indexed) of the function definition or call.",
                     },
                     "column": {
                         "type": "integer",

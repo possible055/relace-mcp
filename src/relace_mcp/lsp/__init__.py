@@ -3,7 +3,9 @@ from relace_mcp.lsp.languages import (
     LANGUAGE_CONFIGS,
     PYTHON_CONFIG,
     LanguageServerConfig,
+    clear_lsp_cache,
     get_config_for_file,
+    get_lsp_languages,
 )
 from relace_mcp.lsp.types import (
     CallHierarchyItem,
@@ -24,6 +26,8 @@ __all__ = [
     "LANGUAGE_CONFIGS",
     "PYTHON_CONFIG",
     "get_config_for_file",
+    "get_lsp_languages",
+    "clear_lsp_cache",
     # Types
     "CallHierarchyItem",
     "CallInfo",
