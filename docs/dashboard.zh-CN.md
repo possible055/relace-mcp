@@ -2,6 +2,8 @@
 
 实时终端日志查看器，用于监控 `fast_apply` 和 `fast_search` 操作。
 
+当 `MCP_LOGGING=1` 时，Cloud 工具事件（`cloud_*`）也会出现在 **All** 与 **Errors** 视图中。
+
 ## 安装
 
 Dashboard 需要 `textual` 库，包含在 `tools` 可选依赖中：
@@ -36,11 +38,11 @@ Dashboard 提供五个不同的视图，可通过顶部的标签栏切换：
 
 | 标签页 | 说明 | 快捷键 |
 |--------|------|--------|
-| **All** | 所有 `apply` 和 `search` 操作的事件 | 默认视图 |
+| **All** | 所有日志事件（包含 `apply`、`search` 与 `cloud_*`） | 默认视图 |
 | **Apply** | 仅文件创建和编辑事件 (`create_success`, `apply_success`, `apply_error`) | - |
 | **Search** | 树形结构显示搜索会话、轮次和工具调用 | - |
 | **Insights** | 工具使用统计与可视化柱状图 | - |
-| **Errors** | 仅错误事件 (`apply_error`, `search_error`) | - |
+| **Errors** | 所有错误事件（`*_error`，包含 `cloud_*_error`） | - |
 
 ### 2. 导航快捷键
 
@@ -157,6 +159,28 @@ Turn 2 [████████████████████████
 | `tool_call` | 搜索期间执行的工具 | `fast_search` |
 | `search_complete` | 搜索会话完成 | `fast_search` |
 | `search_error` | 搜索会话失败 | `fast_search` |
+
+### Cloud 事件
+
+Cloud 操作会记录结构化事件：
+
+| 类型 | 说明 | 来源 |
+|------|------|------|
+| `cloud_sync_start` | Cloud 同步开始 | `cloud_sync` |
+| `cloud_sync_complete` | Cloud 同步完成 | `cloud_sync` |
+| `cloud_sync_error` | Cloud 同步失败 | `cloud_sync` |
+| `cloud_search_start` | Cloud 搜索开始 | `cloud_search` |
+| `cloud_search_complete` | Cloud 搜索完成 | `cloud_search` |
+| `cloud_search_error` | Cloud 搜索失败 | `cloud_search` |
+| `cloud_info_start` | Cloud 信息查询开始 | `cloud_info` |
+| `cloud_info_complete` | Cloud 信息查询完成 | `cloud_info` |
+| `cloud_info_error` | Cloud 信息查询失败 | `cloud_info` |
+| `cloud_list_start` | Cloud 列表开始 | `cloud_list` |
+| `cloud_list_complete` | Cloud 列表完成 | `cloud_list` |
+| `cloud_list_error` | Cloud 列表失败 | `cloud_list` |
+| `cloud_clear_start` | Cloud 清理开始 | `cloud_clear` |
+| `cloud_clear_complete` | Cloud 清理完成 | `cloud_clear` |
+| `cloud_clear_error` | Cloud 清理失败 | `cloud_clear` |
 
 ## 常见问题
 

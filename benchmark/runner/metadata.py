@@ -1,4 +1,5 @@
 import hashlib
+import os
 import platform
 import subprocess  # nosec B404
 import sys
@@ -8,14 +9,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit, urlunsplit
 
-from relace_mcp.clients import SearchLLMClient
-from relace_mcp.config import RelaceConfig
 from relace_mcp.config import settings as relace_settings
-from relace_mcp.config.settings import RELACE_PROVIDER
-from relace_mcp.tools.search.schemas.tool_schemas import get_tool_schemas
 
 if TYPE_CHECKING:
     from benchmark.schemas import DatasetCase
+    from relace_mcp.config import RelaceConfig
 
 
 def sanitize_endpoint_url(url: str) -> str:
@@ -51,7 +49,7 @@ def _sha256_file(path: Path) -> str:
 
 def build_run_metadata(
     *,
-    config: RelaceConfig,
+    config: "RelaceConfig",
     repos_dir: Path,
     cases: list["DatasetCase"],
     run_config: dict[str, Any] | None,
@@ -60,43 +58,22 @@ def build_run_metadata(
     duration_ms: float,
 ) -> dict[str, Any]:
     """Build reproducibility metadata for this benchmark run (no secrets)."""
-    # NOTE: Intentionally avoid recording any API keys.
     config_meta: dict[str, Any] = {
         "base_dir": config.base_dir,
         "default_encoding": config.default_encoding,
     }
 
-    search_client = SearchLLMClient(config)
-    provider_config = search_client._provider_config
-
-    tool_schemas = get_tool_schemas(frozenset())
-    tool_names: list[str] = []
-    tool_has_strict = False
-    for schema in tool_schemas:
-        func = schema.get("function")
-        if not isinstance(func, dict):
-            continue
-        name = func.get("name")
-        if isinstance(name, str) and name:
-            tool_names.append(name)
-        if "strict" in func:
-            tool_has_strict = True
-    tool_names = sorted(set(tool_names))
-
-    request_params: dict[str, Any] = {
-        "temperature": relace_settings.SEARCH_TEMPERATURE,
-        "top_p": 0.95,
-        "top_k": 100 if provider_config.api_compat == RELACE_PROVIDER else None,
-        "repetition_penalty": (1.0 if provider_config.api_compat == RELACE_PROVIDER else None),
-    }
+    # Get provider info from environment/settings (avoid private attribute access)
+    provider = os.getenv("SEARCH_PROVIDER", "relace").strip().lower()
+    model = os.getenv("SEARCH_MODEL", os.getenv("RELACE_SEARCH_MODEL", "")).strip()
+    base_url = os.getenv("SEARCH_BASE_URL", os.getenv("RELACE_SEARCH_BASE_URL", "")).strip()
+    prompt_file = os.getenv("SEARCH_PROMPT_FILE", "").strip() or None
 
     case_list = [
         {
             "id": c.id,
             "repo": c.repo,
             "base_commit": c.base_commit,
-            "issue_url": c.issue_url,
-            "pr_url": c.pr_url,
         }
         for c in cases
     ]
@@ -133,19 +110,9 @@ def build_run_metadata(
             dataset_file = Path(dataset_path).expanduser()
             if dataset_file.is_file():
                 dataset_info["dataset_path"] = str(dataset_file)
-                dataset_info["dataset_bytes"] = dataset_file.stat().st_size
                 dataset_info["dataset_sha256"] = _sha256_file(dataset_file)
         except Exception:
             pass
-
-    parallel_tool_calls_requested = bool(relace_settings.SEARCH_PARALLEL_TOOL_CALLS)
-    parallel_tool_calls_effective = parallel_tool_calls_requested
-    if (
-        provider_config.api_compat != RELACE_PROVIDER
-        and parallel_tool_calls_effective
-        and tool_has_strict
-    ):
-        parallel_tool_calls_effective = False
 
     return {
         "run": {
@@ -157,17 +124,13 @@ def build_run_metadata(
         "config": config_meta,
         "dataset": dataset_info,
         "search": {
-            "provider": provider_config.provider,
-            "api_compat": provider_config.api_compat,
-            "base_url": sanitize_endpoint_url(provider_config.base_url),
-            "model": provider_config.model,
+            "provider": provider,
+            "model": model,
+            "base_url": sanitize_endpoint_url(base_url) if base_url else None,
             "timeout_seconds": relace_settings.SEARCH_TIMEOUT_SECONDS,
             "max_turns": relace_settings.SEARCH_MAX_TURNS,
-            "tools": tool_names,
-            "tool_strict": tool_has_strict,
-            "parallel_tool_calls_requested": parallel_tool_calls_requested,
-            "parallel_tool_calls_effective": parallel_tool_calls_effective,
-            **request_params,
+            "temperature": relace_settings.SEARCH_TEMPERATURE,
+            "prompt_file": prompt_file,
         },
         "environment": {
             "python": sys.version,

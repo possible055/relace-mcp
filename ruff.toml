@@ -7,11 +7,7 @@ exclude = [
     ".ruff_cache",
     "__pypackages__",
     "dist",
-    "benchmark/repos",
-    "benchmark/cache",
-    "benchmark/data",
-    "benchmark/reports",
-    "benchmark/results",
+    "benchmark/artifacts",
 ]
 
 [lint]

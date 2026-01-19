@@ -2,19 +2,20 @@ from pathlib import Path
 
 # Directory paths
 BENCHMARK_DIR = Path(__file__).resolve().parent
-DATA_DIR = BENCHMARK_DIR / "data"
-CACHE_DIR = BENCHMARK_DIR / "cache"
-REPOS_DIR = BENCHMARK_DIR / "repos"
-RESULTS_DIR = BENCHMARK_DIR / "results"
+ARTIFACTS_DIR = BENCHMARK_DIR / "artifacts"
+
+DATA_DIR = ARTIFACTS_DIR / "data"
+CACHE_DIR = ARTIFACTS_DIR / "cache"
+REPOS_DIR = ARTIFACTS_DIR / "repos"
+RESULTS_DIR = ARTIFACTS_DIR / "results"
+REPORTS_DIR = ARTIFACTS_DIR / "reports"
 
 # Subdirectory structure
 RAW_DATA_DIR = DATA_DIR / "raw"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
-REPORTS_DIR = BENCHMARK_DIR / "reports"
 
-# Default dataset paths (updated for new structure)
-DEFAULT_MULOCBENCH_PATH = "data/raw/mulocbench_v1.jsonl"
-DEFAULT_FILTERED_PATH = "data/processed/filtered.jsonl"
+# Default dataset path
+DEFAULT_LOCBENCH_PATH = str(RAW_DATA_DIR / "locbench_v1.jsonl")
 
 # Large repos (>=100MB) excluded by default to avoid slow cloning
 EXCLUDED_REPOS: frozenset[str] = frozenset(

@@ -1,12 +1,3 @@
-"""Blacklist of functions that should be excluded from Soft Context.
-
-These are typically:
-- Python builtins (print, len, str, etc.)
-- Standard library utilities
-- Common patterns that appear everywhere (__init__, __str__, etc.)
-- Logging and debug functions
-"""
-
 # Python builtins
 BUILTINS = frozenset(
     {

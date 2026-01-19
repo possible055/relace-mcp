@@ -108,54 +108,6 @@ def compute_line_coverage(
     return covered_lines / total_gt_lines if total_gt_lines else 0.0
 
 
-def compute_line_precision(
-    returned_files: dict[str, list[list[int]]],
-    ground_truth: dict[str, list[tuple[int, int]]],
-    *,
-    repo_root: Path | None = None,
-) -> float:
-    """Compute what fraction of returned lines are in ground truth.
-
-    Line Precision = Σ(Returned_lines ∩ GT_lines) / Σ(Returned_lines)
-
-    Counts all returned lines across all returned files; files not in ground truth
-    contribute 0 to the intersection (i.e., they reduce precision).
-
-    Args:
-        returned_files: Files returned by fast_search (path -> [[start, end], ...]).
-        ground_truth: Ground truth files from dataset annotations (path -> [(start, end), ...]).
-        repo_root: Repository root for normalizing absolute paths.
-
-    Returns:
-        Precision score between 0.0 and 1.0.
-    """
-    if not returned_files:
-        return 0.0
-
-    normalized_returned = normalize_returned_files(returned_files, repo_root=repo_root)
-    normalized_gt = normalize_ground_truth_files(ground_truth, repo_root=repo_root)
-    gt_to_ret, _, _ = match_paths(set(normalized_gt), set(normalized_returned))
-
-    # Build reverse mapping: ret_path -> gt_path
-    ret_to_gt = {v: k for k, v in gt_to_ret.items()}
-
-    total_returned_lines = 0
-    correct_lines = 0
-
-    for ret_path, ret_ranges in normalized_returned.items():
-        merged_ret = normalize_line_ranges(ret_ranges)
-        total_returned_lines += sum(end - start + 1 for start, end in merged_ret)
-
-        gt_path = ret_to_gt.get(ret_path)
-        if not gt_path:
-            continue
-
-        merged_gt = merge_ranges(normalized_gt.get(gt_path, []))
-        correct_lines += intersection_length(merged_ret, merged_gt)
-
-    return correct_lines / total_returned_lines if total_returned_lines else 0.0
-
-
 def compute_line_precision_matched(
     returned_files: dict[str, list[list[int]]],
     ground_truth: dict[str, list[tuple[int, int]]],
@@ -202,44 +154,6 @@ def compute_line_precision_matched(
         correct_lines += intersection_length(merged_ret, merged_gt)
 
     return correct_lines / total_matched_lines if total_matched_lines else 0.0
-
-
-def compute_line_iou_matched(
-    returned_files: dict[str, list[list[int]]],
-    ground_truth: dict[str, list[tuple[int, int]]],
-    *,
-    repo_root: Path | None = None,
-) -> float:
-    """Compute line IoU across matched files only.
-
-    IoU = Σ(Intersection) / Σ(Union), where Union = GT + Returned - Intersection.
-    This ignores unmatched files (file precision/recall covers that separately).
-    """
-    if not returned_files or not ground_truth:
-        return 0.0
-
-    normalized_returned = normalize_returned_files(returned_files, repo_root=repo_root)
-    normalized_gt = normalize_ground_truth_files(ground_truth, repo_root=repo_root)
-    gt_to_ret, _, _ = match_paths(set(normalized_gt), set(normalized_returned))
-
-    intersection = 0
-    union = 0
-
-    for gt_path, gt_ranges in normalized_gt.items():
-        ret_path = gt_to_ret.get(gt_path)
-        if not ret_path:
-            continue
-
-        merged_gt = merge_ranges(gt_ranges)
-        merged_ret = normalize_line_ranges(normalized_returned.get(ret_path, []))
-
-        gt_len = sum(end - start + 1 for start, end in merged_gt)
-        ret_len = sum(end - start + 1 for start, end in merged_ret)
-        inter_len = intersection_length(merged_gt, merged_ret)
-        intersection += inter_len
-        union += gt_len + ret_len - inter_len
-
-    return intersection / union if union else 0.0
 
 
 def compute_function_hits(
@@ -293,69 +207,3 @@ def compute_function_hits(
             hits += 1
 
     return (hits, total)
-
-
-def compute_f_score(
-    precision: float,
-    recall: float,
-    beta: float = 1.0,
-) -> float:
-    """Compute Fβ score from precision and recall.
-
-    Fβ = (1 + β²) * (precision * recall) / (β² * precision + recall)
-
-    Args:
-        precision: Precision value between 0.0 and 1.0.
-        recall: Recall value between 0.0 and 1.0.
-        beta: Beta parameter. β < 1 emphasizes precision, β > 1 emphasizes recall.
-              Default β=1.0 is the harmonic mean (F1).
-
-    Returns:
-        Fβ score between 0.0 and 1.0.
-    """
-    if precision <= 0.0 or recall <= 0.0:
-        return 0.0
-    beta_sq = beta * beta
-    return (1 + beta_sq) * precision * recall / (beta_sq * precision + recall)
-
-
-def compute_joint_f_score(
-    returned_files: dict[str, list[list[int]]],
-    ground_truth: dict[str, list[tuple[int, int]]],
-    *,
-    beta: float = 1.0,
-    file_weight: float = 0.5,
-    repo_root: Path | None = None,
-) -> dict[str, float]:
-    """Compute combined file-level and line-level F-scores.
-
-    Args:
-        returned_files: Files returned by fast_search (path -> [[start, end], ...]).
-        ground_truth: Ground truth files from dataset annotations (path -> [(start, end), ...]).
-        beta: Beta parameter for F-score calculation.
-        file_weight: Weight for file F-score in joint score (0.0-1.0).
-        repo_root: Repository root for normalizing absolute paths.
-
-    Returns:
-        Dictionary with file_precision, file_recall, file_f, line_precision,
-        line_recall, line_f, and joint_f scores.
-    """
-    file_prec = compute_file_precision(returned_files, ground_truth, repo_root=repo_root)
-    file_rec = compute_file_recall(returned_files, ground_truth, repo_root=repo_root)
-    file_f = compute_f_score(file_prec, file_rec, beta=beta)
-
-    line_prec = compute_line_precision(returned_files, ground_truth, repo_root=repo_root)
-    line_rec = compute_line_coverage(returned_files, ground_truth, repo_root=repo_root)
-    line_f = compute_f_score(line_prec, line_rec, beta=beta)
-
-    joint_f = file_weight * file_f + (1 - file_weight) * line_f
-
-    return {
-        "file_precision": file_prec,
-        "file_recall": file_rec,
-        "file_f": file_f,
-        "line_precision": line_prec,
-        "line_recall": line_rec,
-        "line_f": line_f,
-        "joint_f": joint_f,
-    }

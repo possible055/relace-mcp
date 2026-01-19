@@ -1,29 +1,64 @@
+import logging
 import os
 import sys
+import warnings
 from pathlib import Path
 
 import click
 from dotenv import load_dotenv
 
-from relace_mcp.config import RelaceConfig
-from relace_mcp.config.compat import getenv_with_fallback
-from relace_mcp.config.settings import RELACE_DEFAULT_ENCODING
-
-from ..config import DEFAULT_FILTERED_PATH, EXCLUDED_REPOS, get_benchmark_dir, get_reports_dir
+from ..config import (
+    DEFAULT_LOCBENCH_PATH,
+    EXCLUDED_REPOS,
+    get_benchmark_dir,
+    get_reports_dir,
+    get_results_dir,
+)
 from ..datasets import load_dataset
-from ..runner.executor import BenchmarkRunner
 from ..schemas import generate_output_path
 
-# Internal constants
-_BETA = 0.5
+logger = logging.getLogger(__name__)
 
 
-def _load_benchmark_config() -> RelaceConfig:
+def _load_dotenv_from_env_path() -> None:
+    """Load .env file from MCP_DOTENV_PATH or default locations.
+
+    Priority:
+    1. MCP_DOTENV_PATH environment variable (explicit path)
+    2. RELACE_DOTENV_PATH environment variable (deprecated alias)
+    3. Default dotenv search (current directory and parents)
+    """
+    dotenv_path = os.getenv("MCP_DOTENV_PATH", "").strip()
+    if not dotenv_path:
+        legacy_path = os.getenv("RELACE_DOTENV_PATH", "").strip()
+        if legacy_path:
+            logger.warning("RELACE_DOTENV_PATH is deprecated; use MCP_DOTENV_PATH instead")
+            dotenv_path = legacy_path
+    if dotenv_path:
+        path = Path(dotenv_path).expanduser()
+        if path.exists():
+            load_dotenv(path)
+            logger.info("Loaded .env from MCP_DOTENV_PATH")
+        else:
+            logger.warning("MCP_DOTENV_PATH does not exist")
+            warnings.warn(
+                f"MCP_DOTENV_PATH does not exist: {dotenv_path}", RuntimeWarning, stacklevel=2
+            )
+            load_dotenv()  # Fallback to default
+    else:
+        load_dotenv()
+
+
+def _load_benchmark_config():
     """Load config for running search benchmarks.
 
     Note: RELACE_API_KEY is only required when SEARCH_PROVIDER=relace. For other
     providers, SearchLLMClient will use SEARCH_API_KEY / OPENAI_API_KEY / etc.
     """
+    from relace_mcp.config import RelaceConfig
+    from relace_mcp.config.compat import getenv_with_fallback
+    from relace_mcp.config.settings import RELACE_DEFAULT_ENCODING
+
     search_provider = getenv_with_fallback("SEARCH_PROVIDER", "RELACE_SEARCH_PROVIDER").strip()
     search_provider = (search_provider or "relace").lower()
 
@@ -41,7 +76,7 @@ def _load_benchmark_config() -> RelaceConfig:
 @click.option(
     "--dataset",
     "dataset_path",
-    default=DEFAULT_FILTERED_PATH,
+    default=DEFAULT_LOCBENCH_PATH,
     show_default=True,
     help="Dataset jsonl path (relative to benchmark/ if not absolute)",
 )
@@ -62,7 +97,10 @@ def _load_benchmark_config() -> RelaceConfig:
 @click.option(
     "--output",
     default=None,
-    help="Output file prefix (relative to benchmark/results/). Default: run_<timestamp>",
+    help=(
+        "Output file prefix (absolute or relative to benchmark/artifacts/results/). "
+        "Default: run_<dataset>_<timestamp>"
+    ),
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.option(
@@ -72,26 +110,56 @@ def _load_benchmark_config() -> RelaceConfig:
     help="Print per-case progress (recommended; benchmarks can take a long time)",
 )
 @click.option("--dry-run", is_flag=True, help="Only load data, don't run searches")
+@click.option(
+    "--search-max-turns",
+    default=None,
+    type=int,
+    help="Override SEARCH_MAX_TURNS for this run",
+)
+@click.option(
+    "--search-temperature",
+    default=None,
+    type=float,
+    help="Override SEARCH_TEMPERATURE for this run",
+)
+@click.option(
+    "--search-prompt-file",
+    default=None,
+    help="Override SEARCH_PROMPT_FILE for this run (YAML prompt file)",
+)
 def main(
     dataset_path: str,
     limit: int,
     shuffle: bool,
     seed: int,
-    output: str,
+    output: str | None,
     verbose: bool,
     progress: bool,
     dry_run: bool,
+    search_max_turns: int | None,
+    search_temperature: float | None,
+    search_prompt_file: str | None,
 ) -> None:
-    """Run MULocBench benchmark on fast_search.
+    """Run benchmark on fast_search.
 
     Large repos are automatically excluded via EXCLUDED_REPOS in config.
     """
-    load_dotenv()
+    _load_dotenv_from_env_path()
+
+    if search_prompt_file:
+        os.environ["SEARCH_PROMPT_FILE"] = search_prompt_file
+    if search_max_turns is not None:
+        os.environ["SEARCH_MAX_TURNS"] = str(search_max_turns)
+    if search_temperature is not None:
+        os.environ["SEARCH_TEMPERATURE"] = str(search_temperature)
+
+    from ..runner.executor import BenchmarkRunner
 
     benchmark_dir = get_benchmark_dir()
     resolved_dataset_path = (
         Path(dataset_path) if Path(dataset_path).is_absolute() else (benchmark_dir / dataset_path)
     )
+    dataset_id = resolved_dataset_path.stem
     click.echo("Loading dataset...")
     click.echo(f"  dataset: {resolved_dataset_path}")
     click.echo(f"  limit:   {limit if limit is not None else 'all'}")
@@ -139,48 +207,45 @@ def main(
         config,
         verbose=verbose,
         progress=progress,
-        beta=_BETA,
-        normalize_ast=False,
-        soft_gt=False,
     )
 
     click.echo("\nRunning benchmark...")
     summary = runner.run_benchmark(
         cases,
         run_config={
-            "dataset": "mulocbench",
+            "dataset": dataset_id,
             "dataset_path": str(resolved_dataset_path),
             "limit": limit,
             "shuffle": shuffle,
             "seed": seed,
-            "beta": _BETA,
         },
     )
 
     # Save results with standardized naming
     benchmark_dir = get_benchmark_dir()
-    results_dir = benchmark_dir / "results"
+    results_dir = get_results_dir()
     reports_dir = get_reports_dir()
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    # Extract dataset name from path for output naming
-    dataset_name = Path(dataset_path).stem
-
     if output:
-        if Path(output).is_absolute():
-            output_path = Path(output)
+        output_candidate = Path(output)
+        if output_candidate.is_absolute():
+            output_path = output_candidate
         else:
-            output_path = benchmark_dir / output
+            output_path = results_dir / output_candidate
     else:
-        output_path = generate_output_path(results_dir, "run", dataset_name)
-
-    # summary.save handles directory creation and dual-file extensions (.jsonl, .report.json)
-    summary.save(output_path)
+        output_path = generate_output_path(results_dir, "run", dataset_id)
 
     jsonl_path = (
         output_path if output_path.suffix == ".jsonl" else output_path.with_suffix(".jsonl")
     )
-    report_path = jsonl_path.with_suffix(".report.json")
+    report_path = (
+        (reports_dir / jsonl_path.relative_to(results_dir)).with_suffix(".report.json")
+        if jsonl_path.is_relative_to(results_dir)
+        else jsonl_path.with_suffix(".report.json")
+    )
+
+    summary.save(output_path, report_path=report_path)
 
     click.echo("\nResults saved to:")
     click.echo(f"  - {jsonl_path}")
@@ -197,8 +262,10 @@ def main(
     click.echo(f"Avg GT Files:      {s['avg_ground_truth_files']:.2f}")
     click.echo(f"Avg File Recall:   {s['avg_file_recall']:.1%}")
     click.echo(f"Avg File Precision:{s['avg_file_precision']:.1%}")
-    click.echo(f"Avg Line Coverage: {s['avg_line_coverage']:.1%}")
-    click.echo(f"Avg Line Prec(M):  {s['avg_line_precision_matched']:.1%}")
+    click.echo(f"Avg Target Line Cov:{s['avg_line_coverage']:.1%}")
+    click.echo(f"Avg Target Line Prec(M): {s['avg_line_precision_matched']:.1%}")
+    click.echo(f"Avg Context Line Cov:{s['avg_context_line_coverage']:.1%}")
+    click.echo(f"Avg Context Line Prec(M): {s['avg_context_line_precision_matched']:.1%}")
     click.echo(f"Func Cases:        {int(s['function_cases'])}/{summary.total_cases}")
     click.echo(f"Avg Func Hit Rate: {s['avg_function_hit_rate']:.1%}")
     click.echo(f"Avg Turns:         {s['avg_turns']:.2f}")

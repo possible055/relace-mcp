@@ -18,6 +18,11 @@ def mock_config(tmp_path: Path) -> RelaceConfig:
 
 
 @pytest.fixture
+def _mock_config(mock_config: RelaceConfig) -> RelaceConfig:
+    return mock_config
+
+
+@pytest.fixture
 def successful_api_response() -> dict[str, Any]:
     return {
         "choices": [

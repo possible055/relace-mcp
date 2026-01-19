@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from relace_mcp.tools.apply.file_io import set_project_encoding
-from relace_mcp.tools.search.handlers import (
+from relace_mcp.tools.search._impl import (
     MAX_TOOL_RESULT_CHARS,
     bash_handler,
     estimate_context_size,
@@ -202,7 +202,10 @@ class TestViewDirectoryHandler:
         outside = tmp_path.parent / f"outside_dir_{tmp_path.name}"
         outside.mkdir()
         (outside / "secret.txt").write_text("secret")
-        (tmp_path / "link").symlink_to(outside, target_is_directory=True)
+        try:
+            (tmp_path / "link").symlink_to(outside, target_is_directory=True)
+        except (OSError, NotImplementedError) as e:
+            pytest.skip(f"symlink is not supported in this environment: {e!r}")
 
         result = view_directory_handler("/repo", False, str(tmp_path))
         assert "link" in result
@@ -267,7 +270,7 @@ class TestGrepSearchHandler:
             set_project_encoding("big5")
 
             # Force ripgrep path to fail so handler uses Python fallback deterministically.
-            import relace_mcp.tools.search.handlers.grep_search as grep_mod
+            import relace_mcp.tools.search._impl.grep_search as grep_mod
 
             def _raise(*_args: object, **_kwargs: object) -> object:
                 raise FileNotFoundError("rg unavailable")
@@ -298,7 +301,7 @@ class TestGrepSearchHandler:
         try:
             set_project_encoding("gbk")
 
-            import relace_mcp.tools.search.handlers.grep_search as grep_mod
+            import relace_mcp.tools.search._impl.grep_search as grep_mod
 
             def _raise(*_args: object, **_kwargs: object) -> object:
                 raise FileNotFoundError("rg unavailable")
@@ -324,10 +327,13 @@ class TestGrepSearchHandler:
         """Python fallback should not follow file symlinks (prevents base_dir escape)."""
         outside = tmp_path.parent / f"outside_file_{tmp_path.name}.txt"
         outside.write_text("SECRET_PATTERN\n")
-        (tmp_path / "link.txt").symlink_to(outside)
+        try:
+            (tmp_path / "link.txt").symlink_to(outside)
+        except (OSError, NotImplementedError) as e:
+            pytest.skip(f"symlink is not supported in this environment: {e!r}")
 
         # Force ripgrep path to fail so handler uses Python fallback deterministically.
-        import relace_mcp.tools.search.handlers.grep_search as grep_mod
+        import relace_mcp.tools.search._impl.grep_search as grep_mod
 
         def _raise(*_args: object, **_kwargs: object) -> object:
             raise FileNotFoundError("rg unavailable")
@@ -427,7 +433,10 @@ class TestBashHandler:
         """Should block reading paths that escape base_dir via symlink."""
         outside = tmp_path.parent / f"outside_file_{tmp_path.name}.txt"
         outside.write_text("secret\n")
-        (tmp_path / "link.txt").symlink_to(outside)
+        try:
+            (tmp_path / "link.txt").symlink_to(outside)
+        except (OSError, NotImplementedError) as e:
+            pytest.skip(f"symlink is not supported in this environment: {e!r}")
 
         result = bash_handler("cat link.txt", str(tmp_path))
         assert "Error" in result

@@ -1,5 +1,6 @@
 """Tests for cloud_status MCP resource with MCP Roots resolution."""
 
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -24,7 +25,7 @@ class TestCloudStatusLogic:
         )
 
     @pytest.fixture(autouse=True)
-    def clear_roots_cache(self) -> None:
+    def clear_roots_cache(self) -> Iterator[None]:
         """Clear roots cache before and after each test."""
         from relace_mcp.config import base_dir as base_dir_module
 
@@ -84,24 +85,26 @@ class TestCloudStatusLogic:
     @pytest.mark.asyncio
     async def test_cloud_status_returns_not_synced_when_no_state(self, tmp_path: Path) -> None:
         """cloud_status should return not synced message when no sync state exists."""
-        from relace_mcp.tools.repo.state import load_sync_state
+        from relace_mcp.tools.repo.state import get_repo_identity, load_sync_state
 
         # Simulate cloud_status logic when state is None
-        repo_name = tmp_path.name
-        state = load_sync_state(repo_name)
+        local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(str(tmp_path))
+        state = load_sync_state(str(tmp_path))
 
         # No sync state should exist for random tmp_path
         assert state is None
 
         # This is what cloud_status returns in this case
+        message = "No sync state found. Run cloud_sync to upload codebase."
         result = {
             "synced": False,
-            "repo_name": repo_name,
-            "message": "No sync state found. Run cloud_sync to upload codebase.",
+            "repo_name": local_repo_name,
+            "cloud_repo_name": cloud_repo_name,
+            "message": message,
         }
 
         assert result["synced"] is False
-        assert "No sync state found" in result["message"]
+        assert "No sync state found" in message
 
     @pytest.mark.asyncio
     async def test_cloud_status_builds_correct_response(
@@ -109,11 +112,12 @@ class TestCloudStatusLogic:
     ) -> None:
         """Test cloud_status response building with sync state."""
         from relace_mcp.tools.repo import state as state_module
+        from relace_mcp.tools.repo.state import get_repo_identity
 
-        repo_name = tmp_path.name
+        local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(str(tmp_path))
 
         with patch.object(state_module, "load_sync_state", return_value=sample_sync_state):
-            state = state_module.load_sync_state(repo_name)
+            state = state_module.load_sync_state(str(tmp_path))
 
         assert state is not None
         assert state.repo_id == "test-repo-id"
@@ -122,7 +126,8 @@ class TestCloudStatusLogic:
         result = {
             "synced": True,
             "repo_id": state.repo_id,
-            "repo_name": state.repo_name or repo_name,
+            "repo_name": state.repo_name or local_repo_name,
+            "cloud_repo_name": state.cloud_repo_name or cloud_repo_name,
             "git_ref": (
                 f"{state.git_branch}@{state.git_head_sha[:8]}"
                 if state.git_branch and state.git_head_sha

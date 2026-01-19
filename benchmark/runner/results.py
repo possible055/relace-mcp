@@ -1,5 +1,5 @@
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +15,8 @@ class BenchmarkResult:
     file_precision: float
     line_coverage: float
     line_precision_matched: float
+    context_line_coverage: float
+    context_line_precision_matched: float
     function_hit_rate: float
     functions_hit: int
     functions_total: int
@@ -22,6 +24,7 @@ class BenchmarkResult:
     latency_ms: float
     partial: bool = False
     error: str | None = None
+    returned_files: dict[str, list[list[int]]] = field(default_factory=dict)
 
 
 @dataclass
@@ -40,8 +43,8 @@ class BenchmarkSummary:
         }
         return d
 
-    def save(self, output_path: Path) -> None:
-        """Save results to JSONL and summary to .report.json."""
+    def save(self, output_path: Path, report_path: Path | None = None) -> None:
+        """Save results to JSONL and summary to a report JSON file."""
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         jsonl_path = (
@@ -55,6 +58,7 @@ class BenchmarkSummary:
         summary_dict = self.to_dict()
         del summary_dict["results"]
 
-        report_path = jsonl_path.with_suffix(".report.json")
-        with report_path.open("w", encoding="utf-8") as f:
+        resolved_report_path = report_path or jsonl_path.with_suffix(".report.json")
+        resolved_report_path.parent.mkdir(parents=True, exist_ok=True)
+        with resolved_report_path.open("w", encoding="utf-8") as f:
             json.dump(summary_dict, f, indent=2, ensure_ascii=False)

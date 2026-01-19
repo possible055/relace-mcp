@@ -28,7 +28,7 @@ from relace_mcp.tools.repo.sync import (
 
 
 @pytest.fixture
-def mock_config(tmp_path: Path) -> RelaceConfig:
+def _mock_config(tmp_path: Path) -> RelaceConfig:
     return RelaceConfig(
         api_key="rlc-test-api-key",
         base_dir=str(tmp_path),
@@ -36,7 +36,7 @@ def mock_config(tmp_path: Path) -> RelaceConfig:
 
 
 @pytest.fixture
-def mock_repo_client(mock_config: RelaceConfig) -> MagicMock:
+def mock_repo_client(_mock_config: RelaceConfig) -> MagicMock:
     client = MagicMock(spec=RelaceRepoClient)
     client.ensure_repo.return_value = "test-repo-id"
     client.update_repo.return_value = {"repo_head": "abc123def456", "changed_files": []}
@@ -236,7 +236,7 @@ class TestComputeDiffOperations:
         (tmp_path / "main.py").write_text("print('hello')")
         hashes = _compute_file_hashes(str(tmp_path), ["main.py"])
 
-        operations, new_hashes, new_skipped = _compute_diff_operations(str(tmp_path), hashes, None)
+        operations, _, new_skipped = _compute_diff_operations(str(tmp_path), hashes, None)
 
         assert len(operations) == 1
         assert operations[0]["type"] == "write"
@@ -278,9 +278,7 @@ class TestComputeDiffOperations:
             files={"main.py": "sha256:different_hash"},
         )
 
-        operations, new_hashes, new_skipped = _compute_diff_operations(
-            str(tmp_path), hashes, cached
-        )
+        operations, _, new_skipped = _compute_diff_operations(str(tmp_path), hashes, cached)
 
         assert len(operations) == 1
         assert operations[0]["type"] == "write"
@@ -300,9 +298,7 @@ class TestComputeDiffOperations:
             files={"deleted.py": "sha256:some_hash"},
         )
 
-        operations, new_hashes, new_skipped = _compute_diff_operations(
-            str(tmp_path), hashes, cached
-        )
+        operations, _, new_skipped = _compute_diff_operations(str(tmp_path), hashes, cached)
 
         assert len(operations) == 1
         assert operations[0]["type"] == "delete"
@@ -325,9 +321,7 @@ class TestComputeDiffOperations:
             },
         )
 
-        operations, new_hashes, new_skipped = _compute_diff_operations(
-            str(tmp_path), hashes, cached
-        )
+        operations, _, new_skipped = _compute_diff_operations(str(tmp_path), hashes, cached)
 
         types = {op["type"] for op in operations}
         filenames = {op["filename"] for op in operations}
@@ -352,7 +346,7 @@ class TestComputeDiffOperations:
             files={"exists.py": "sha256:old_hash"},  # Was synced before
         )
 
-        operations, _, new_skipped = _compute_diff_operations(str(tmp_path), current_hashes, cached)
+        operations, _, _ = _compute_diff_operations(str(tmp_path), current_hashes, cached)
 
         # File exists, should not be deleted even if hash failed
         assert len(operations) == 0
@@ -369,7 +363,7 @@ class TestComputeDiffOperations:
             files={"truly_deleted.py": "sha256:old_hash"},
         )
 
-        operations, _, new_skipped = _compute_diff_operations(str(tmp_path), current_hashes, cached)
+        operations, _, _ = _compute_diff_operations(str(tmp_path), current_hashes, cached)
 
         # File does not exist, should be deleted
         assert len(operations) == 1
@@ -431,6 +425,8 @@ class TestCloudSyncLogic:
         assert result["files_created"] == 2
         assert result["files_updated"] == 0
         assert result["is_incremental"] is False  # No cache = full sync
+        assert isinstance(result.get("trace_id"), str)
+        assert len(result["trace_id"]) == 8
         mock_repo_client.update_repo.assert_called_once()
 
     def test_sync_incremental_with_cache(self, tmp_path: Path, mock_repo_client: MagicMock) -> None:
@@ -507,6 +503,31 @@ class TestCloudSyncLogic:
         assert result["repo_id"] is None
         assert "error" in result
         assert "API error" in result["error"]
+        assert isinstance(result.get("trace_id"), str)
+        assert len(result["trace_id"]) == 8
+
+    def test_sync_includes_network_error_details(
+        self, tmp_path: Path, mock_repo_client: MagicMock
+    ) -> None:
+        """Should include actionable details for network errors."""
+        import httpx
+
+        (tmp_path / "main.py").write_text("print('hello')")
+
+        exc = RuntimeError("Repos API network error: network down")
+        exc.__cause__ = httpx.RequestError("network down")
+        mock_repo_client.update_repo.side_effect = exc
+
+        with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
+            with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=None):
+                result = cloud_sync_logic(mock_repo_client, str(tmp_path))
+
+        assert result["repo_id"] is None
+        assert result["error_code"] == "network_error"
+        assert result["retryable"] is True
+        assert "RELACE_API_ENDPOINT" in result["recommended_action"]
+        assert isinstance(result.get("trace_id"), str)
+        assert len(result["trace_id"]) == 8
 
     def test_sync_does_not_require_config_base_dir(self, tmp_path: Path) -> None:
         """Should work when RelaceConfig.base_dir is None (dynamic base_dir resolution)."""
@@ -532,6 +553,41 @@ class TestCloudSyncLogic:
 
         # Should only process 5 files
         assert result["total_files"] == 5
+
+    def test_sync_normalizes_subdir_base_dir_to_git_root(
+        self, tmp_path: Path, mock_repo_client: MagicMock
+    ) -> None:
+        """Should avoid incorrect deletes when base_dir is a git subdirectory."""
+        import subprocess
+
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+
+        # Create files at repo root and in a subdir
+        (tmp_path / "root.py").write_text("print('root')\n")
+        subdir = tmp_path / "sub"
+        subdir.mkdir()
+        (subdir / "inner.py").write_text("print('inner')\n")
+
+        file_list = ["root.py", "sub/inner.py"]
+        hashes = _compute_file_hashes(str(tmp_path), file_list)
+
+        cached = SyncState(
+            repo_id="test-repo-id",
+            repo_head="abc123",
+            last_sync="",
+            files=hashes.copy(),
+        )
+
+        with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=file_list):
+            with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=cached):
+                with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+                    result = cloud_sync_logic(mock_repo_client, str(subdir))
+
+        assert result["files_deleted"] == 0
+        assert result["files_updated"] == 0
+        assert result["files_created"] == 0
+        assert result["files_unchanged"] == 2
+        mock_repo_client.update_repo.assert_not_called()
 
 
 class TestSyncState:
@@ -585,6 +641,9 @@ class TestSyncState:
 
     def test_save_and_load_sync_state(self, tmp_path: Path) -> None:
         """Should save and load sync state."""
+        repo_dir = tmp_path / "test-project"
+        repo_dir.mkdir()
+
         # Override XDG state dir for test
         with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
             state = SyncState(
@@ -594,8 +653,8 @@ class TestSyncState:
                 files={"main.py": "sha256:abc"},
             )
 
-            save_sync_state("test-project", state)
-            loaded = load_sync_state("test-project")
+            save_sync_state(str(repo_dir), state)
+            loaded = load_sync_state(str(repo_dir))
 
         assert loaded is not None
         assert loaded.repo_id == "test-id"
@@ -604,7 +663,7 @@ class TestSyncState:
     def test_load_sync_state_missing(self, tmp_path: Path) -> None:
         """Should return None for missing state."""
         with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
-            loaded = load_sync_state("nonexistent-project")
+            loaded = load_sync_state(str(tmp_path / "nonexistent-project"))
 
         assert loaded is None
 
@@ -683,29 +742,34 @@ class TestSyncStateMigration:
 
 
 class TestSyncStateCollisionDetection:
-    """Test repo_name collision detection in sync state."""
+    """Test state isolation and collision handling."""
 
-    def test_load_rejects_mismatched_repo_name(self, tmp_path: Path) -> None:
-        """Should return None when stored repo_name doesn't match requested name."""
+    def test_state_is_isolated_by_project(self, tmp_path: Path) -> None:
+        """Projects with colliding sanitized names should not share sync state."""
+        repo_a = tmp_path / "my.project"
+        repo_b = tmp_path / "my_project"
+        repo_a.mkdir()
+        repo_b.mkdir()
+
         with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
-            # Save state for 'my.project'
-            state = SyncState(
-                repo_id="project-a-id",
-                repo_head="abc",
-                last_sync="",
-                repo_name="my.project",
-                files={},
-            )
-            save_sync_state("my.project", state)
+            state_a = SyncState(repo_id="project-a-id", repo_head="abc", last_sync="", files={})
+            state_b = SyncState(repo_id="project-b-id", repo_head="def", last_sync="", files={})
+            save_sync_state(str(repo_a), state_a)
+            save_sync_state(str(repo_b), state_b)
 
-            # Try to load with colliding name 'my_project' (maps to same file)
-            loaded = load_sync_state("my_project")
+            loaded_a = load_sync_state(str(repo_a))
+            loaded_b = load_sync_state(str(repo_b))
 
-        # Should reject because repo_name doesn't match
-        assert loaded is None
+        assert loaded_a is not None
+        assert loaded_a.repo_id == "project-a-id"
+        assert loaded_b is not None
+        assert loaded_b.repo_id == "project-b-id"
 
     def test_load_accepts_matching_repo_name(self, tmp_path: Path) -> None:
         """Should accept state when repo_name matches."""
+        repo_dir = tmp_path / "my-project"
+        repo_dir.mkdir()
+
         with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
             state = SyncState(
                 repo_id="project-id",
@@ -714,9 +778,9 @@ class TestSyncStateCollisionDetection:
                 repo_name="my-project",
                 files={},
             )
-            save_sync_state("my-project", state)
+            save_sync_state(str(repo_dir), state)
 
-            loaded = load_sync_state("my-project")
+            loaded = load_sync_state(str(repo_dir))
 
         assert loaded is not None
         assert loaded.repo_id == "project-id"
@@ -726,10 +790,15 @@ class TestSyncStateCollisionDetection:
         """Should accept old state files without repo_name for backward compat."""
         import json
 
+        from relace_mcp.tools.repo import state as state_module
+
+        repo_dir = tmp_path / "my_project"
+        repo_dir.mkdir()
+
         with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
-            # Manually create old-format state file without repo_name
-            state_file = tmp_path / "my_project.json"
-            tmp_path.mkdir(parents=True, exist_ok=True)
+            repo_name, _cloud_repo_name, fingerprint = state_module.get_repo_identity(str(repo_dir))
+            safe_name = state_module._sanitize_repo_name(repo_name)
+            state_file = tmp_path / f"{safe_name}__{fingerprint}.json"
             state_file.write_text(
                 json.dumps(
                     {
@@ -742,7 +811,7 @@ class TestSyncStateCollisionDetection:
                 )
             )
 
-            loaded = load_sync_state("my_project")
+            loaded = load_sync_state(str(repo_dir))
 
         # Should accept (backward compat)
         assert loaded is not None
@@ -751,6 +820,9 @@ class TestSyncStateCollisionDetection:
 
     def test_save_sets_repo_name_automatically(self, tmp_path: Path) -> None:
         """Should automatically set repo_name when saving."""
+        repo_dir = tmp_path / "my-project"
+        repo_dir.mkdir()
+
         with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
             state = SyncState(
                 repo_id="test-id",
@@ -761,13 +833,13 @@ class TestSyncStateCollisionDetection:
             # repo_name is initially empty
             assert state.repo_name == ""
 
-            save_sync_state("my-project", state)
+            save_sync_state(str(repo_dir), state)
 
             # After save, state should have repo_name set
             assert state.repo_name == "my-project"
 
             # And the loaded state should also have it
-            loaded = load_sync_state("my-project")
+            loaded = load_sync_state(str(repo_dir))
             assert loaded is not None
             assert loaded.repo_name == "my-project"
 

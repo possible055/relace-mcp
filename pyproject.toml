@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "relace-mcp"
-version = "0.2.3"
+version = "0.2.4.dev1"
 description = "Unofficial Relace MCP Server - Fast code merging via Relace API"
 readme = "README.md"
 license = { text = "MIT" }
@@ -89,6 +89,14 @@ python_version = "3.11"
 [[tool.mypy.overrides]]
 module = ["psutil"]
 follow_untyped_imports = true
+
+[[tool.mypy.overrides]]
+module = ["textual.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["relace_mcp.dashboard.*"]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

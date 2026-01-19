@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
 
-from ..filters.blacklist import is_blacklisted
+from .blacklist import is_blacklisted
 from .treesitter import extract_signature, get_parser
 
 

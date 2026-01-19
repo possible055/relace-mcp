@@ -217,7 +217,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "- List directory trees (tree, ls -la)\n"
                 "- Check file types and encodings (file, head, tail, wc)\n"
                 "- Run static analysis tools (read-only)\n"
-                "- Inspect git history (git log, git show, git diff)\n\n"
+                "- Inspect git history (git log)\n\n"
                 "Restrictions:\n"
                 "- Commands run in the repository root (/repo)\n"
                 "- Timeout: 30 seconds\n"
@@ -278,6 +278,123 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_symbol",
+            "strict": True,
+            "description": (
+                "Search for symbol definitions by name across the workspace using LSP.\n\n"
+                "Returns symbol locations matching the query. Only searches DEFINITIONS,\n"
+                "not string literals or comments. Supports partial name matching.\n\n"
+                "First call has 2-5s startup delay."
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["query"],
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Symbol name or prefix to search (e.g., 'DatabaseConn', 'handle').",
+                    },
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_type",
+            "strict": True,
+            "description": (
+                "Get type information for a symbol at a position using LSP hover.\n\n"
+                "line/column are 1-indexed, matching view_file output directly.\n"
+                "First call has 2-5s startup delay."
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["file", "line", "column"],
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "description": "Path to the Python file, e.g. `/repo/src/main.py`.",
+                    },
+                    "line": {
+                        "type": "integer",
+                        "description": "Line number (1-indexed, same as view_file output).",
+                    },
+                    "column": {
+                        "type": "integer",
+                        "description": "Column number (1-indexed) where the symbol starts.",
+                    },
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_symbols",
+            "strict": True,
+            "description": (
+                "List all symbols defined in a Python file (classes, functions, variables).\n\n"
+                "Returns a hierarchical outline showing symbol names, kinds, and line ranges.\n"
+                "Faster than grep for getting file structure.\n\n"
+                "First call has 2-5s startup delay."
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "description": "Path to the Python file, e.g. `/repo/src/main.py`.",
+                    },
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "call_graph",
+            "strict": True,
+            "description": (
+                "Get call hierarchy for a function/method using LSP.\n\n"
+                "direction='incoming': who calls this function\n"
+                "direction='outgoing': what functions this calls\n\n"
+                "line/column are 1-indexed, matching view_file output.\n"
+                "First call has 2-5s startup delay."
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["file", "line", "column", "direction"],
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "description": "Path to the Python file, e.g. `/repo/src/main.py`.",
+                    },
+                    "line": {
+                        "type": "integer",
+                        "description": "Line number (1-indexed, same as view_file output).",
+                    },
+                    "column": {
+                        "type": "integer",
+                        "description": "Column number (1-indexed) where the function name starts.",
+                    },
+                    "direction": {
+                        "type": "string",
+                        "enum": ["incoming", "outgoing"],
+                        "description": "'incoming' for callers, 'outgoing' for callees.",
+                    },
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 
@@ -317,14 +434,15 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
 
     Args:
         lsp_languages: Set of available LSP language IDs for the current project.
-            If None, find_symbol is included by default (legacy behavior).
-            If empty frozenset, find_symbol is hidden.
+            If None, uses default tool set (LSP tools require explicit opt-in via SEARCH_ENABLED_TOOLS).
+            If empty frozenset, LSP tools are hidden.
 
     Environment variables:
         - SEARCH_ENABLED_TOOLS: Comma/space-separated allowlist, e.g.
-          "view_file,view_directory,grep_search,glob,bash". `report_back` is always enabled.
-          If not set, all tools except `bash` are enabled by default (bash requires explicit
-          opt-in for security reasons).
+          "view_file,view_directory,grep_search,glob,find_symbol". `report_back` is always enabled.
+          If not set, only basic tools (view_file, view_directory, grep_search, glob) are enabled.
+          LSP tools (find_symbol, search_symbol, get_type, list_symbols, call_graph) require
+          explicit opt-in. bash also requires explicit opt-in for security reasons.
         - SEARCH_TOOL_STRICT: Set to 0/false to omit the non-standard `strict` field from tool schemas.
 
     Deprecated (still supported with warning):
@@ -341,15 +459,15 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
             enabled.discard("lsp_query")
             enabled.add("find_symbol")
     else:
-        # Default tools exclude `bash` for security (opt-in only via env var)
-        # bash requires Unix shell and poses higher security risk
-        # find_symbol is enabled by default for semantic Python code queries
+        # Default: basic exploration tools only
+        # LSP tools (find_symbol, search_symbol, get_type, list_symbols, call_graph)
+        # require explicit opt-in via SEARCH_ENABLED_TOOLS
+        # bash requires opt-in for security (Unix shell, higher risk)
         enabled = {
             "view_file",
             "view_directory",
             "grep_search",
             "glob",
-            "find_symbol",
             "report_back",
         }
 
@@ -360,9 +478,13 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
     if "bash" in enabled and shutil.which("bash") is None:
         enabled.discard("bash")
 
-    # Hide find_symbol if no LSP languages are available for this project
+    # Hide LSP tools if no LSP languages are available for this project
     if lsp_languages is not None and not lsp_languages:
         enabled.discard("find_symbol")
+        enabled.discard("search_symbol")
+        enabled.discard("get_type")
+        enabled.discard("list_symbols")
+        enabled.discard("call_graph")
 
     selected = [
         schema for schema in _ALL_TOOL_SCHEMAS if schema.get("function", {}).get("name") in enabled

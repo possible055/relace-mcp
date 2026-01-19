@@ -265,16 +265,30 @@ class RelaceRepoClient:
 
         # Search existing repos
         repos = self.list_repos(trace_id=trace_id)
+        matching: list[dict[str, Any]] = []
         for repo in repos:
             metadata = repo.get("metadata")
             repo_name = metadata.get("name") if isinstance(metadata, dict) else repo.get("name")
             if repo_name != name:
                 continue
-
             repo_id = repo.get("repo_id") or repo.get("id") or ""
-            if not repo_id:
-                continue
+            if repo_id:
+                matching.append(repo)
 
+        if len(matching) > 1:
+            repo_ids = [
+                str(r.get("repo_id") or r.get("id"))
+                for r in matching
+                if r.get("repo_id") or r.get("id")
+            ]
+            raise RuntimeError(
+                f"Multiple repos found with name '{name}' ({len(matching)} matches: {', '.join(repo_ids)}). "
+                "Set RELACE_REPO_ID to disambiguate or delete the extras."
+            )
+
+        if len(matching) == 1:
+            repo = matching[0]
+            repo_id = repo.get("repo_id") or repo.get("id") or ""
             self._cached_repo_ids[name] = str(repo_id)
 
             if repo.get("auto_index") is False:
@@ -343,6 +357,7 @@ class RelaceRepoClient:
         repo_id: str,
         query: str,
         branch: str = "",
+        hash: str = "",
         score_threshold: float = 0.3,
         token_limit: int = 30000,
         include_content: bool = True,
@@ -354,6 +369,7 @@ class RelaceRepoClient:
             repo_id: Repository UUID.
             query: Natural language search query.
             branch: Branch to search (empty string uses API default branch).
+            hash: Specific commit SHA to search (empty string uses latest).
             score_threshold: Minimum relevance score (0.0-1.0).
             token_limit: Maximum tokens to return.
             include_content: Whether to include file content in results.
@@ -371,6 +387,8 @@ class RelaceRepoClient:
         }
         if branch:
             payload["branch"] = branch
+        if hash:
+            payload["hash"] = hash
         resp = self._request_with_retry(
             "POST",
             url,

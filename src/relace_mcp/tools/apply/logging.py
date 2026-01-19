@@ -1,5 +1,6 @@
 import json
 import logging
+import threading
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -11,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 # Log rotation: maximum number of old logs to keep
 MAX_ROTATED_LOGS = 5
+_LOG_LOCK = threading.Lock()
 
 
 def rotate_log_if_needed() -> None:
@@ -44,6 +46,7 @@ def log_event(event: dict[str, Any]) -> None:
     if not settings.MCP_LOGGING:
         return
 
+    event = dict(event)
     try:
         if "timestamp" not in event:
             event["timestamp"] = datetime.now(UTC).isoformat()
@@ -53,15 +56,16 @@ def log_event(event: dict[str, Any]) -> None:
             kind = str(event.get("kind", "")).lower()
             event["level"] = "error" if kind.endswith("error") else "info"
 
-        if settings.LOG_PATH.is_dir():
-            logger.warning("Log path is a directory, skipping log write: %s", settings.LOG_PATH)
-            return
-        settings.LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with _LOG_LOCK:
+            if settings.LOG_PATH.is_dir():
+                logger.warning("Log path is a directory, skipping log write")
+                return
+            settings.LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-        rotate_log_if_needed()
+            rotate_log_if_needed()
 
-        with open(settings.LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(event, ensure_ascii=False) + "\n")
+            with open(settings.LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(json.dumps(event, ensure_ascii=False) + "\n")
     except Exception as exc:
         logger.warning("Failed to write Relace log: %s", exc)
 

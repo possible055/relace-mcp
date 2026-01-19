@@ -4,7 +4,7 @@ import shutil
 import subprocess  # nosec B404
 
 from ....utils import resolve_repo_path
-from .bash_security import _is_blocked_command
+from .bash_security import is_blocked_command
 from .constants import BASH_MAX_OUTPUT_CHARS, BASH_TIMEOUT_SECONDS
 
 
@@ -91,7 +91,7 @@ def bash_handler(command: str, base_dir: str) -> str:
         Command output or error message.
     """
     # Step 1: Security check on ORIGINAL command (before path translation)
-    blocked, reason = _is_blocked_command(command, base_dir)
+    blocked, reason = is_blocked_command(command, base_dir)
 
     if blocked:
         return f"Error: Command blocked for security reasons. {reason}"
