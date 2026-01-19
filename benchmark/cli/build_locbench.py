@@ -112,6 +112,10 @@ def _extract_changed_lines_by_file(patch: str) -> dict[str, set[int]]:
             continue
 
         if line.startswith("+++ "):
+            if line.startswith("+++ b/"):
+                path = line[len("+++ b/") :].strip()
+                if path and path != "/dev/null":
+                    current_file = path
             continue
 
         m = _HUNK_RE.match(line)
