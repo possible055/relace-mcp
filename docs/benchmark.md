@@ -2,7 +2,7 @@
 
 > **Note**: This module is under active development. APIs and metrics may change.
 
-Evaluates `fast_search` performance using [MULocBench](https://github.com/MULocBench/MULocBench) dataset.
+Evaluates `fast_search` performance using the Loc-Bench dataset (derived from [LocAgent](https://github.com/IvanaXu/LocAgent)).
 
 ## 1. Setup
 
@@ -16,12 +16,11 @@ RELACE_API_KEY=your-key-here    # or: OPENAI_API_KEY, OPENROUTER_API_KEY
 
 **Dataset**:
 
-- **MULocBench**: Download from [MULocBench](https://github.com/MULocBench/MULocBench) → place in `benchmark/artifacts/data/raw/mulocbench_v1.jsonl`
-- **Loc-Bench (LocAgent)**: Build from Hugging Face via datasets-server (no LocAgent required):
-  ```bash
-  uv run python -m benchmark.cli.build_locbench \
-    --output artifacts/data/raw/locbench_v1.jsonl
-  ```
+Build the Loc-Bench dataset from Hugging Face via datasets-server (no LocAgent required):
+```bash
+uv run python -m benchmark.cli.build_locbench \
+  --output artifacts/data/raw/locbench_v1.jsonl
+```
 
 ## 2. Single Run
 

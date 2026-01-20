@@ -2,7 +2,7 @@
 
 > **注意**: 此模块正在开发中，API 和指标可能会变更。
 
-使用 [MULocBench](https://github.com/MULocBench/MULocBench) 数据集评估 `fast_search` 性能。
+使用 Loc-Bench 数据集（源自 [LocAgent](https://github.com/IvanaXu/LocAgent)）评估 `fast_search` 性能。
 
 ## 1. 准备
 
@@ -16,12 +16,11 @@ RELACE_API_KEY=your-key-here    # 或: OPENAI_API_KEY, OPENROUTER_API_KEY
 
 **数据集**:
 
-- **MULocBench**: 从 [MULocBench](https://github.com/MULocBench/MULocBench) 下载 → 放置于 `benchmark/artifacts/data/raw/mulocbench_v1.jsonl`
-- **Loc-Bench (LocAgent)**: 通过 Hugging Face datasets-server 构建（无需 LocAgent）:
-  ```bash
-  uv run python -m benchmark.cli.build_locbench \
-    --output artifacts/data/raw/locbench_v1.jsonl
-  ```
+通过 Hugging Face datasets-server 构建 Loc-Bench（无需 LocAgent）:
+```bash
+uv run python -m benchmark.cli.build_locbench \
+  --output artifacts/data/raw/locbench_v1.jsonl
+```
 
 ## 2. 单次运行
 
