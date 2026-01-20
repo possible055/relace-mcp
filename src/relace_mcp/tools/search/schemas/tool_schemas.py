@@ -16,7 +16,9 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "strict": True,
             "description": (
                 "Read file contents with line numbers.\n\n"
-                "Output format: '1 first line\\n2 second line\\n...'"
+                "Output: '1 first line\\n2 second line\\n...'\n"
+                "If file not found, returns error message.\n"
+                "Out-of-range lines are clamped to file bounds."
             ),
             "parameters": {
                 "type": "object",
@@ -46,7 +48,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "strict": True,
             "description": (
                 "List directory contents recursively.\n\n"
-                "Output: relative paths, directories end with '/'. Max 250 items."
+                "Output: relative paths (alphabetical), dirs end with '/'. Max 250 items.\n"
+                "Returns error if path is not a valid directory."
             ),
             "parameters": {
                 "type": "object",
@@ -111,7 +114,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "strict": True,
             "description": (
                 "Find files by glob pattern.\n\n"
-                "Examples: '**/*.py' (all Python), 'src/**/*.ts' (TS under src), 'pyproject.toml' (exact name)."
+                "Examples: '**/*.py' (all Python), 'src/**/*.ts' (TS under src).\n"
+                "Returns empty list if no matches."
             ),
             "parameters": {
                 "type": "object",
@@ -124,7 +128,10 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "path": {
                         "type": "string",
                         "default": "/repo",
-                        "description": "Directory to search, e.g., `/repo` or `/repo/src`.",
+                        "description": (
+                            "Base directory for search. '/repo' is substituted with actual repo root at runtime. "
+                            "Use absolute paths like '/repo/src' to scope search."
+                        ),
                     },
                     "include_hidden": {
                         "type": "boolean",
@@ -146,7 +153,10 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "report_back",
             "strict": True,
-            "description": "Report findings with file locations. Call this when exploration is complete.",
+            "description": (
+                "Report findings with file locations. MUST be called when exploration is complete.\n\n"
+                "Use this to terminate search and return results to the caller."
+            ),
             "parameters": {
                 "type": "object",
                 "required": ["explanation", "files"],
@@ -167,7 +177,12 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                             },
                         },
                         "description": (
-                            'Map of file path to line ranges. Example: {"/repo/main.py": [[10, 25], [100, 115]]}'
+                            "Map of absolute file path to line ranges (1-indexed, inclusive).\n"
+                            "Example:\n"
+                            "{\n"
+                            '  "/repo/main.py": [[10, 25], [100, 115]],\n'
+                            '  "/repo/utils.py": [[1, 50]]\n'
+                            "}"
                         ),
                     },
                 },
@@ -203,7 +218,12 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "find_symbol",
             "strict": True,
-            "description": "Go to symbol definition or find all references.",
+            "description": (
+                "Navigate to symbol definition or find all references using LSP.\n\n"
+                "Use 'definition' to jump to where a symbol is declared.\n"
+                "Use 'references' to find all usages of a symbol.\n"
+                "Returns empty if LSP server unavailable or symbol not found."
+            ),
             "parameters": {
                 "type": "object",
                 "required": ["action", "file", "line", "column"],
@@ -235,7 +255,11 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "search_symbol",
             "strict": True,
-            "description": "Search for symbol definitions by name across workspace. Finds functions, classes, variables.",
+            "description": (
+                "Search for symbol definitions by name across workspace.\n\n"
+                "Supports prefix matching. Returns functions, classes, variables.\n"
+                "Example: query='Config' matches 'ConfigManager', 'Configuration', etc."
+            ),
             "parameters": {
                 "type": "object",
                 "required": ["query"],
@@ -254,7 +278,11 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "get_type",
             "strict": True,
-            "description": "Get type info and docstring for a symbol at position.",
+            "description": (
+                "Get type info and docstring for a symbol at position.\n\n"
+                "Output: type signature and docstring (if available).\n"
+                "Returns empty if no type info found."
+            ),
             "parameters": {
                 "type": "object",
                 "required": ["file", "line", "column"],
@@ -281,7 +309,10 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "list_symbols",
             "strict": True,
-            "description": "Get outline of all symbols in a file (classes, functions, variables with line ranges).",
+            "description": (
+                "Get outline of all symbols in a file.\n\n"
+                "Returns: list of {name, kind, line_start, line_end} for classes, functions, variables."
+            ),
             "parameters": {
                 "type": "object",
                 "required": ["file"],
@@ -300,7 +331,12 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "call_graph",
             "strict": True,
-            "description": "Trace function call relationships.",
+            "description": (
+                "Trace function call relationships using LSP.\n\n"
+                "Use 'incoming' to find callers of a function (who calls this?).\n"
+                "Use 'outgoing' to find callees (what does this function call?).\n"
+                "Useful for understanding dependencies and impact analysis."
+            ),
             "parameters": {
                 "type": "object",
                 "required": ["file", "line", "column", "direction"],

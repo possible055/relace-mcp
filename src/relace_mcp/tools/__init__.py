@@ -65,6 +65,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 - `# ... existing code ...` (Python/shell)
             instruction: Optional hint when edit is ambiguous (e.g., "add after imports").
 
+        Returns: {status: "ok", path, diff} on success, {status: "error", message} on failure.
         On NEEDS_MORE_CONTEXT error: add 1-3 real lines before/after target.
         """
         # Resolve base_dir dynamically (aligns with other tools).
@@ -146,6 +147,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 mirror: With force=True, delete cloud files not in local (default: false).
 
             Run once per session before cloud_search. Incremental by default.
+            Returns: {status, files_uploaded, files_skipped} on success.
+            Fails if: not a git repo, no API key, network error.
             """
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
             return cloud_sync_logic(repo_client, base_dir, force=force, mirror=mirror)
@@ -158,9 +161,13 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         ) -> dict[str, Any]:
             """Semantic code search using AI embeddings. Requires cloud_sync first.
 
+            Use when: local fast_search insufficient, need semantic understanding.
+
             Args:
                 query: Natural language search query.
                 branch: Branch to search (empty = default branch).
+
+            Returns: {results: [{path, score, snippet}, ...], total_matches}.
             """
             # Fixed internal parameters (not exposed to LLM)
             score_threshold = 0.3
@@ -182,7 +189,9 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             """Delete cloud repository and local sync state. IRREVERSIBLE.
 
             Args:
-                confirm: Must be True to proceed. Returns {status: "cancelled"} if false.
+                confirm: Must be True to proceed.
+
+            Returns: {status: "deleted"} on success, {status: "cancelled"} if confirm=false.
             """
             from .repo.clear import cloud_clear_logic
 
@@ -194,6 +203,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             """List all repositories in your Relace Cloud account.
 
             Returns: [{repo_id, name, auto_index}, ...]. Max 10000 repos.
+            Returns empty list if no repositories exist.
             """
             return cloud_list_logic(repo_client)
 
