@@ -15,13 +15,10 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "view_file",
             "strict": True,
             "description": (
-                "Tool for viewing/exploring the contents of existing files\n\n"
-                "Line numbers are included in the output, indexing at 1. "
-                "If the output does not include the end of the file, it will be noted after the final output line.\n\n"
-                "Example (viewing the first 2 lines of a file):\n"
-                "1 def my_function():\n"
-                '2     print("Hello, World!")\n'
-                "... rest of file truncated ..."
+                "Read file contents with line numbers.\n\n"
+                "Output: '1 first line\\n2 second line\\n...'\n"
+                "If file not found, returns error message.\n"
+                "Out-of-range lines are clamped to file bounds."
             ),
             "parameters": {
                 "type": "object",
@@ -29,16 +26,14 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Absolute path to a file, e.g. `/repo/file.py`.",
+                        "description": "Absolute file path, e.g., `/repo/src/main.py`.",
                     },
                     "view_range": {
                         "type": "array",
                         "items": {"type": "integer"},
                         "default": [1, 100],
                         "description": (
-                            "Range of file lines to view. If not specified, the first 100 lines of the file are shown. "
-                            "If provided, the file will be shown in the indicated line number range, e.g. [11, 12] will show lines 11 and 12. "
-                            "Indexing at 1 to start. Setting `[start_line, -1]` shows all lines from `start_line` to the end of the file."
+                            "[start, end] lines (1-indexed). Use [start, -1] to read to end of file."
                         ),
                     },
                 },
@@ -52,29 +47,22 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "view_directory",
             "strict": True,
             "description": (
-                "Tool for viewing the contents of a directory.\n\n"
-                "* Lists contents recursively, relative to the input directory\n"
-                "* Directories are suffixed with a trailing slash '/'\n"
-                "* Depth might be limited by the tool implementation\n"
-                "* Output is limited to the first 250 items\n\n"
-                "Example output:\n"
-                "file1.txt\n"
-                "file2.txt\n"
-                "subdir1/\n"
-                "subdir1/file3.txt"
+                "List directory contents recursively.\n\n"
+                "Output: relative paths (alphabetical), dirs end with '/'. Max 250 items.\n"
+                "Returns error if path is not a valid directory."
             ),
             "parameters": {
                 "type": "object",
-                "required": ["path", "include_hidden"],
+                "required": ["path"],
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Absolute path to a directory, e.g. `/repo/`.",
+                        "description": "Absolute directory path, e.g., `/repo/src/`.",
                     },
                     "include_hidden": {
                         "type": "boolean",
                         "default": False,
-                        "description": "If true, include hidden files in the output (false by default).",
+                        "description": "Include dotfiles and hidden directories (default: false).",
                     },
                 },
                 "additionalProperties": False,
@@ -87,11 +75,9 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "grep_search",
             "strict": True,
             "description": (
-                "Fast text-based regex search that finds exact pattern matches within files or directories, "
-                "utilizing the ripgrep command for efficient searching. Results will be formatted in the style of ripgrep "
-                "and can be configured to include line numbers and content. To avoid overwhelming output, the results are "
-                "capped at 50 matches. Use the include or exclude patterns to filter the search scope by file type or specific paths. "
-                "This is best for finding exact text matches or regex patterns."
+                "Search for text patterns in files using regex.\n\n"
+                "Use for: finding exact text, symbol references, function calls, imports.\n"
+                "Results capped at 50 matches."
             ),
             "parameters": {
                 "type": "object",
@@ -99,20 +85,22 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "The regex pattern to search for",
+                        "description": (
+                            "Rust regex pattern. For literal text, escape special chars: . * + ? | [ ] ( ) { } ^ $ \\"
+                        ),
                     },
                     "case_sensitive": {
                         "type": "boolean",
                         "default": True,
-                        "description": "Whether the search should be case sensitive (default: true)",
+                        "description": "Match case exactly (default: true).",
                     },
                     "exclude_pattern": {
                         "type": ["string", "null"],
-                        "description": "Glob pattern for files to exclude",
+                        "description": "Glob to skip files (e.g., '*.min.js'). Pass null to exclude nothing.",
                     },
                     "include_pattern": {
                         "type": ["string", "null"],
-                        "description": "Glob pattern for files to include (e.g. '*.ts' for TypeScript files)",
+                        "description": "Glob to limit search (e.g., '*.py'). Pass null to search all files.",
                     },
                 },
                 "additionalProperties": False,
@@ -125,16 +113,9 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "glob",
             "strict": True,
             "description": (
-                "Find files in a directory tree using a glob pattern.\n\n"
-                "Notes:\n"
-                "- Matches are returned as paths relative to the input directory\n"
-                "- Set `include_hidden=true` to match hidden files/directories (e.g. .git)\n"
-                "- For directories only, end the pattern with a trailing slash (e.g. `src/`)\n"
-                "- Output is capped to avoid overwhelming context\n\n"
-                "Examples:\n"
-                "- `**/*.py` (all Python files)\n"
-                "- `src/**/*.ts` (all TS files under src)\n"
-                "- `pyproject.toml` (any file named pyproject.toml)\n"
+                "Find files by glob pattern.\n\n"
+                "Examples: '**/*.py' (all Python), 'src/**/*.ts' (TS under src).\n"
+                "Returns empty list if no matches."
             ),
             "parameters": {
                 "type": "object",
@@ -142,25 +123,25 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "pattern": {
                         "type": "string",
-                        "description": (
-                            "Glob pattern to match (relative; no leading '/'; no '..'). "
-                            "Use `**` to match across directories."
-                        ),
+                        "description": "Glob pattern (no leading '/'). Use '**' to match across directories.",
                     },
                     "path": {
                         "type": "string",
                         "default": "/repo",
-                        "description": "Directory to search under, e.g. `/repo` or `/repo/src`.",
+                        "description": (
+                            "Base directory for search. '/repo' is substituted with actual repo root at runtime. "
+                            "Use absolute paths like '/repo/src' to scope search."
+                        ),
                     },
                     "include_hidden": {
                         "type": "boolean",
                         "default": False,
-                        "description": "If true, include hidden files/directories (false by default).",
+                        "description": "Include dotfiles (default: false).",
                     },
                     "max_results": {
                         "type": "integer",
                         "default": 200,
-                        "description": "Maximum number of matches to return (capped for safety).",
+                        "description": "Max matches to return (default: 200).",
                     },
                 },
                 "additionalProperties": False,
@@ -173,8 +154,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "report_back",
             "strict": True,
             "description": (
-                "Report your findings back to the user after exploring the codebase. "
-                "IMPORTANT: Include PRECISE line ranges for relevant code, not entire files."
+                "Report findings with file locations. MUST be called when exploration is complete.\n\n"
+                "Use this to terminate search and return results to the caller."
             ),
             "parameters": {
                 "type": "object",
@@ -182,7 +163,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "explanation": {
                         "type": "string",
-                        "description": "Details your reasoning for deeming the files relevant for solving the issue.",
+                        "description": "Why these files are relevant to the query.",
                     },
                     "files": {
                         "type": "object",
@@ -196,9 +177,12 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                             },
                         },
                         "description": (
-                            "A dictionary mapping file paths to lists of [start_line, end_line] tuples. "
-                            "Use PRECISE ranges for relevant code sections only (e.g., [[54, 67], [100, 115]]), "
-                            "NOT entire file ranges like [[1, 500]]. Multiple ranges per file are encouraged."
+                            "Map of absolute file path to line ranges (1-indexed, inclusive).\n"
+                            "Example:\n"
+                            "{\n"
+                            '  "/repo/main.py": [[10, 25], [100, 115]],\n'
+                            '  "/repo/utils.py": [[1, 50]]\n'
+                            "}"
                         ),
                     },
                 },
@@ -212,22 +196,9 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "bash",
             "strict": True,
             "description": (
-                "Execute a read-only bash command for code exploration.\n\n"
-                "Platform: Unix/Linux/macOS only (requires bash shell).\n\n"
-                "Use cases:\n"
-                "- Find files with specific patterns (find, locate)\n"
-                "- List directory trees (tree, ls -la)\n"
-                "- Check file types and encodings (file, head, tail, wc)\n"
-                "- Run static analysis tools (read-only)\n"
-                "- Inspect git history (git log)\n\n"
-                "Restrictions:\n"
-                "- Commands run in the repository root (/repo)\n"
-                "- Timeout: 30 seconds\n"
-                "- No file modifications allowed (rm, mv, cp, etc.)\n"
-                "- No network access (curl, wget, ssh, etc.)\n"
-                "- No privilege escalation (sudo, su)\n"
-                "- No pipes or redirections (|, >, >>)\n"
-                "- Output capped at 50000 characters"
+                "Execute read-only bash command.\n\n"
+                "Allowed: find, ls, tree, head, tail, wc, file, git log.\n"
+                "Forbidden: rm, mv, cp, curl, wget, sudo, pipes (|), redirects (>)."
             ),
             "parameters": {
                 "type": "object",
@@ -235,7 +206,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "command": {
                         "type": "string",
-                        "description": "The bash command to execute (read-only operations only).",
+                        "description": "Bash command (read-only only). Timeout: 30s. Output capped at 50000 chars.",
                     },
                 },
                 "additionalProperties": False,
@@ -248,16 +219,10 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "find_symbol",
             "strict": True,
             "description": (
-                "Navigate to a symbol's definition or find all references to it.\n\n"
-                "Actions:\n"
-                "- 'definition': Jump to where the symbol is defined (imports, classes, functions)\n"
-                "- 'references': Find every location where the symbol is used\n\n"
-                "When to use:\n"
-                "- Tracing where a function/class comes from\n"
-                "- Understanding how widely a symbol is used before refactoring\n"
-                "- Following import chains across files\n\n"
-                "Position format: line/column are 1-indexed, matching view_file output.\n"
-                "First call has 2-5s startup delay."
+                "Navigate to symbol definition or find all references using LSP.\n\n"
+                "Use 'definition' to jump to where a symbol is declared.\n"
+                "Use 'references' to find all usages of a symbol.\n"
+                "Returns empty if LSP server unavailable or symbol not found."
             ),
             "parameters": {
                 "type": "object",
@@ -266,19 +231,19 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "action": {
                         "type": "string",
                         "enum": ["definition", "references"],
-                        "description": "'definition' to jump to source, 'references' to find all usages.",
+                        "description": "'definition' = jump to source, 'references' = find all usages.",
                     },
                     "file": {
                         "type": "string",
-                        "description": "Absolute path to the source file containing the symbol.",
+                        "description": "Absolute path to the file.",
                     },
                     "line": {
                         "type": "integer",
-                        "description": "Line number (1-indexed) where the symbol appears.",
+                        "description": "Line number (1-indexed).",
                     },
                     "column": {
                         "type": "integer",
-                        "description": "Column number (1-indexed) where the symbol name starts.",
+                        "description": "Column where symbol appears (1-indexed). Cursor on any part of symbol works.",
                     },
                 },
                 "additionalProperties": False,
@@ -291,18 +256,9 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "search_symbol",
             "strict": True,
             "description": (
-                "Search for symbol definitions by name across the entire workspace.\n\n"
-                "What it finds:\n"
-                "- Function and method definitions\n"
-                "- Class definitions\n"
-                "- Variable and constant declarations\n\n"
-                "What it ignores: string literals, comments, usages (only definitions).\n\n"
-                "When to use:\n"
-                "- Finding where a class/function is defined without knowing the file\n"
-                "- Exploring codebase structure by searching partial names\n"
-                "- Faster than grep when you only need definitions\n\n"
-                "Returns: List of matching symbols with file paths and line numbers.\n"
-                "First call has 2-5s startup delay."
+                "Search for symbol definitions by name across workspace.\n\n"
+                "Supports prefix matching. Returns functions, classes, variables.\n"
+                "Example: query='Config' matches 'ConfigManager', 'Configuration', etc."
             ),
             "parameters": {
                 "type": "object",
@@ -310,7 +266,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Symbol name or prefix to search (e.g., 'Config', 'handle_request').",
+                        "description": "Symbol name or prefix (e.g., 'Config', 'handle_request').",
                     },
                 },
                 "additionalProperties": False,
@@ -323,17 +279,9 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "get_type",
             "strict": True,
             "description": (
-                "Get type information and documentation for a symbol at a position.\n\n"
-                "Returns:\n"
-                "- Inferred or declared type signature\n"
-                "- Docstring if available\n"
-                "- Function parameters and return type\n\n"
-                "When to use:\n"
-                "- Understanding what type a variable holds\n"
-                "- Checking function signatures without navigating to definition\n"
-                "- Reading docstrings inline\n\n"
-                "Position format: line/column are 1-indexed, matching view_file output.\n"
-                "First call has 2-5s startup delay."
+                "Get type info and docstring for a symbol at position.\n\n"
+                "Output: type signature and docstring (if available).\n"
+                "Returns empty if no type info found."
             ),
             "parameters": {
                 "type": "object",
@@ -341,15 +289,15 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "file": {
                         "type": "string",
-                        "description": "Absolute path to the source file.",
+                        "description": "Absolute path to the file.",
                     },
                     "line": {
                         "type": "integer",
-                        "description": "Line number (1-indexed) where the symbol appears.",
+                        "description": "Line number (1-indexed).",
                     },
                     "column": {
                         "type": "integer",
-                        "description": "Column number (1-indexed) where the symbol name starts.",
+                        "description": "Column where symbol appears (1-indexed).",
                     },
                 },
                 "additionalProperties": False,
@@ -362,18 +310,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "list_symbols",
             "strict": True,
             "description": (
-                "Get a structured outline of all symbols defined in a file.\n\n"
-                "Returns hierarchical list of:\n"
-                "- Classes (with nested methods and attributes)\n"
-                "- Functions\n"
-                "- Top-level variables and constants\n"
-                "Each symbol includes: name, kind, and line range.\n\n"
-                "When to use:\n"
-                "- Getting file structure overview before diving into code\n"
-                "- Finding specific function/class locations quickly\n"
-                "- Understanding module organization\n\n"
-                "Faster than grep for structural exploration.\n"
-                "First call has 2-5s startup delay."
+                "Get outline of all symbols in a file.\n\n"
+                "Returns: list of {name, kind, line_start, line_end} for classes, functions, variables."
             ),
             "parameters": {
                 "type": "object",
@@ -381,7 +319,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "file": {
                         "type": "string",
-                        "description": "Absolute path to the source file to analyze.",
+                        "description": "Absolute path to the file.",
                     },
                 },
                 "additionalProperties": False,
@@ -394,16 +332,10 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "call_graph",
             "strict": True,
             "description": (
-                "Trace function call relationships in either direction.\n\n"
-                "Directions:\n"
-                "- 'incoming': Who calls this function? (callers)\n"
-                "- 'outgoing': What does this function call? (callees)\n\n"
-                "When to use:\n"
-                "- Understanding impact before modifying a function\n"
-                "- Tracing execution flow through the codebase\n"
-                "- Finding entry points that lead to a function\n\n"
-                "Position format: line/column are 1-indexed, pointing to the function name.\n"
-                "First call has 2-5s startup delay."
+                "Trace function call relationships using LSP.\n\n"
+                "Use 'incoming' to find callers of a function (who calls this?).\n"
+                "Use 'outgoing' to find callees (what does this function call?).\n"
+                "Useful for understanding dependencies and impact analysis."
             ),
             "parameters": {
                 "type": "object",
@@ -411,20 +343,20 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "file": {
                         "type": "string",
-                        "description": "Absolute path to the source file containing the function.",
+                        "description": "Absolute path to the file.",
                     },
                     "line": {
                         "type": "integer",
-                        "description": "Line number (1-indexed) of the function definition or call.",
+                        "description": "Line number of function (1-indexed).",
                     },
                     "column": {
                         "type": "integer",
-                        "description": "Column number (1-indexed) where the function name starts.",
+                        "description": "Column where function name appears (1-indexed).",
                     },
                     "direction": {
                         "type": "string",
                         "enum": ["incoming", "outgoing"],
-                        "description": "'incoming' for callers, 'outgoing' for callees.",
+                        "description": "'incoming' = who calls this, 'outgoing' = what this calls.",
                     },
                 },
                 "additionalProperties": False,
