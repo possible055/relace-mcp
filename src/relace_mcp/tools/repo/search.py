@@ -119,8 +119,9 @@ def cloud_search_logic(
         # Determine whether to use cached hash for search
         # Only use hash when: (1) no branch specified, or (2) branch matches sync state
         # This prevents ignoring user's branch selection when API prioritizes hash over branch
+        # NOTE: Use repo_head (cloud commit), NOT git_head_sha (local git commit)
         use_cached_hash = (not branch) or (branch == cached_state.git_branch)
-        hash_to_send = git_head if use_cached_hash else ""
+        hash_to_send = cached_state.repo_head if use_cached_hash else ""
 
         if branch and not use_cached_hash:
             warnings_list.append(

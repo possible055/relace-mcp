@@ -107,7 +107,7 @@ def glob_handler(
 
         matches: list[str] = []
         stop = False
-        base_path = Path(base_dir)
+        base_path = Path(base_dir).resolve()
 
         for root, dirs, files in os.walk(resolved, followlinks=False):
             root_path = Path(root)

@@ -17,7 +17,6 @@ def _collect_entries(
     include_hidden: bool,
     gitignore_specs: list | None,
     base_dir: Path,
-    current_rel: Path,
 ) -> tuple[list[tuple[str, Path]], list[tuple[str, Path]]]:
     """Collect files and subdirectories in directory."""
     try:
@@ -29,7 +28,10 @@ def _collect_entries(
     files_list: list[tuple[str, Path]] = []
 
     # Compute relative path for gitignore matching
-    rel_prefix = current_rel.as_posix()
+    try:
+        rel_prefix = current_abs.relative_to(base_dir).as_posix()
+    except ValueError:
+        rel_prefix = ""
     if rel_prefix == ".":
         rel_prefix = ""
 
@@ -73,7 +75,7 @@ def _collect_directory_items(
         # Update gitignore specs for nested directories
         nested_specs = collect_gitignore_specs(current_abs, base_dir)
         files_list, dirs_list = _collect_entries(
-            current_abs, include_hidden, nested_specs, base_dir, current_rel
+            current_abs, include_hidden, nested_specs, base_dir
         )
 
         # List current level files first
@@ -106,7 +108,7 @@ def view_directory_handler(path: str, include_hidden: bool, base_dir: str) -> st
         if not resolved.is_dir():
             return f"Error: Not a directory: {path}"
 
-        base_path = Path(base_dir)
+        base_path = Path(base_dir).resolve()
         items, truncated = _collect_directory_items(resolved, include_hidden, base_path)
 
         result = "\n".join(items)

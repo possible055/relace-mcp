@@ -224,6 +224,17 @@ class TestViewDirectoryHandler:
         assert "ignored_dir" not in result
         assert "ignored.txt" not in result
 
+    def test_respects_gitignore_for_subdirectory_listing(self, tmp_path: Path) -> None:
+        """Should apply .gitignore rules when listing a subdirectory."""
+        (tmp_path / ".gitignore").write_text("sub/ignored.txt\n")
+        (tmp_path / "sub").mkdir()
+        (tmp_path / "sub" / "ignored.txt").write_text("ignored")
+        (tmp_path / "sub" / "visible.txt").write_text("visible")
+
+        result = view_directory_handler("/repo/sub", False, str(tmp_path))
+        assert "visible.txt" in result
+        assert "ignored.txt" not in result
+
 
 class TestGrepSearchHandler:
     """Test grep_search tool handler."""
@@ -492,6 +503,19 @@ class TestGlobHandler:
 
         result2 = glob_handler("**/*.log", "/repo", False, 200, str(tmp_path))
         assert "No matches" in result2
+
+    def test_gitignore_unignore_in_nested_gitignore(self, tmp_path: Path) -> None:
+        """Nested .gitignore !patterns should override parent ignore rules."""
+        (tmp_path / ".gitignore").write_text("*.log\n")
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        (subdir / ".gitignore").write_text("!keep.log\n")
+        (subdir / "keep.log").write_text("keep")
+        (subdir / "other.log").write_text("other")
+
+        result = glob_handler("**/*.log", "/repo", False, 200, str(tmp_path))
+        assert "subdir/keep.log" in result
+        assert "other.log" not in result
 
     def test_glob_without_gitignore_still_works(self, tmp_path: Path) -> None:
         """Should work normally when no .gitignore exists."""
