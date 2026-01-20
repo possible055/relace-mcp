@@ -268,18 +268,29 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             query: str,
             ctx: Context | None = None,
         ) -> dict[str, Any]:
-            """Two-stage semantic + agentic code retrieval.
+            """Find code locations matching a natural language query.
 
-            Stage 1: Cloud semantic retrieval for candidate files
-            Stage 2: Agentic exploration guided by semantic hints
+            Returns file paths with precise line ranges for the relevant code.
 
-            Use when you need both semantic understanding AND precise
-            line-level code locations. Requires prior cloud_sync.
+            When to use:
+            - You need to find WHERE functionality is implemented but don't know file names.
+            - You need to understand high-level patterns (e.g., "how is auth handled?").
+            - You need to find code related to a specific concept that spans multiple files.
 
-            Falls back to pure agentic search if cloud is unavailable.
+            Query guidelines - be SPECIFIC and DETAILED:
+            - BAD:  "auth logic"
+            - GOOD: "the function that validates JWT tokens and extracts user ID from claims"
+
+            - BAD:  "error handling"
+            - GOOD: "where HTTP 4xx errors are caught and transformed into user-facing messages"
+
+            - BAD:  "database code"
+            - GOOD: "the repository method that queries users by email with pagination support"
 
             Args:
                 query: Natural language query describing what to find.
+                       Include: specific behavior, data types, or patterns you're looking for.
+                       Avoid: vague terms, multiple unrelated concerns in one query.
             """
             progress_task = None
             if ctx is not None:

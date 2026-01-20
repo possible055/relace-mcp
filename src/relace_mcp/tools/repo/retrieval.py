@@ -4,8 +4,11 @@ from typing import Any
 
 from ...clients import RelaceRepoClient, SearchLLMClient
 from ...config import RETRIEVAL_USER_PROMPT_TEMPLATE, RelaceConfig
+from ...config.settings import AGENTIC_AUTO_SYNC
 from ..search import FastAgenticSearchHarness
+from .info import cloud_info_logic
 from .search import cloud_search_logic
+from .sync import cloud_sync_logic
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +61,22 @@ async def agentic_retrieval_logic(
 
     warnings_list: list[str] = []
     cloud_results: list[dict[str, Any]] = []
+
+    # Stage 0: Auto-sync if enabled and needed
+    if AGENTIC_AUTO_SYNC:
+        try:
+            info = cloud_info_logic(repo_client, base_dir)
+            if info.get("status", {}).get("needs_sync"):
+                logger.info("[%s] Auto-sync triggered (needs_sync=True)", trace_id)
+                sync_result = cloud_sync_logic(repo_client, base_dir)
+                if sync_result.get("error"):
+                    warnings_list.append(f"Auto-sync failed: {sync_result['error']}")
+                    logger.warning("[%s] Auto-sync failed: %s", trace_id, sync_result["error"])
+                else:
+                    logger.info("[%s] Auto-sync completed successfully", trace_id)
+        except Exception as exc:
+            warnings_list.append(f"Auto-sync error: {exc}")
+            logger.warning("[%s] Auto-sync exception: %s", trace_id, exc)
 
     # Stage 1: Cloud semantic retrieval
     try:
