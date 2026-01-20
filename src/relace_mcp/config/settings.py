@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "RELACE_CLOUD_TOOLS",
+    "SEARCH_LSP_TOOLS_MODE",
     "RelaceConfig",
 ]
 
@@ -90,6 +91,22 @@ MCP_LOGGING = env_bool("MCP_LOGGING", default=False, deprecated_name="RELACE_LOG
 
 # Cloud tools (disabled by default)
 RELACE_CLOUD_TOOLS = env_bool("RELACE_CLOUD_TOOLS", default=False)
+
+
+# LSP tools mode: 'false' (disabled), 'true' (all enabled), or 'auto' (detect installed servers)
+def _get_lsp_tools_mode() -> str:
+    raw = os.environ.get("SEARCH_LSP_TOOLS", "").strip().lower()
+    if raw in {"1", "true", "yes", "y", "on"}:
+        return "true"
+    if raw == "auto":
+        return "auto"
+    return "false"
+
+
+SEARCH_LSP_TOOLS_MODE = _get_lsp_tools_mode()
+
+# Agentic retrieval auto-sync (enabled by default when cloud tools are enabled)
+AGENTIC_AUTO_SYNC = env_bool("RELACE_AGENTIC_AUTO_SYNC", default=True)
 
 # Logging - Cross-platform state directory:
 # - Linux: ~/.local/state/relace

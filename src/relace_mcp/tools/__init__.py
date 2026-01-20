@@ -266,26 +266,31 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         )
         async def agentic_retrieval(
             query: str,
-            branch: str = "",
-            score_threshold: float = 0.3,
-            max_hints: int = 8,
             ctx: Context | None = None,
         ) -> dict[str, Any]:
-            """Two-stage semantic + agentic code retrieval.
+            """Find code locations matching a natural language query.
 
-            Stage 1: Cloud semantic retrieval for candidate files
-            Stage 2: Agentic exploration guided by semantic hints
+            Returns file paths with precise line ranges for the relevant code.
 
-            Use when you need both semantic understanding AND precise
-            line-level code locations. Requires prior cloud_sync.
+            When to use:
+            - You need to find WHERE functionality is implemented but don't know file names.
+            - You need to understand high-level patterns (e.g., "how is auth handled?").
+            - You need to find code related to a specific concept that spans multiple files.
 
-            Falls back to pure agentic search if cloud is unavailable.
+            Query guidelines - be SPECIFIC and DETAILED:
+            - BAD:  "auth logic"
+            - GOOD: "the function that validates JWT tokens and extracts user ID from claims"
+
+            - BAD:  "error handling"
+            - GOOD: "where HTTP 4xx errors are caught and transformed into user-facing messages"
+
+            - BAD:  "database code"
+            - GOOD: "the repository method that queries users by email with pagination support"
 
             Args:
                 query: Natural language query describing what to find.
-                branch: Branch to search (empty uses default).
-                score_threshold: Minimum relevance score for hints (0.0-1.0).
-                max_hints: Maximum number of hint files to use (default 8).
+                       Include: specific behavior, data types, or patterns you're looking for.
+                       Avoid: vague terms, multiple unrelated concerns in one query.
             """
             progress_task = None
             if ctx is not None:
@@ -300,9 +305,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     config,
                     base_dir,
                     query,
-                    branch=branch,
-                    score_threshold=score_threshold,
-                    max_hints=max_hints,
                 )
             finally:
                 if progress_task is not None:
