@@ -110,14 +110,20 @@ uv run python -m benchmark.cli.validate --output validation.json --verbose
 | `--limit` | 全部 | 验证数量 |
 | `-v/--verbose` | 关闭 | 详细输出 |
 
-## 5. 分析结果
+## 5. 分析与报告
 
 ```bash
-# 分析单次运行
+# 分析单次运行 (详细 stdout)
 uv run python -m benchmark.cli.analyze path/to/run.report.json
 
-# 比较多次运行
-uv run python -m benchmark.cli.analyze run1.report.json run2.report.json
+# 比较多次运行 (Markdown 输出)
+uv run python -m benchmark.cli.report run1.report.json run2.report.json
+
+# 从网格搜索找最佳配置
+uv run python -m benchmark.cli.report --best grid_curated_30.grid.json
+
+# 输出比较报告到文件
+uv run python -m benchmark.cli.report -o comparison.md *.report.json
 ```
 
 ## 6. 指标说明
@@ -155,7 +161,9 @@ benchmark/
 ├── cli/
 │   ├── run.py           # 单次运行 CLI
 │   ├── grid.py          # 网格搜索 CLI
-│   ├── analyze.py       # 结果分析
+│   ├── report.py        # 报告生成
+│   ├── analyze.py       # 详细分析
+│   ├── curate.py        # 数据集筛选
 │   ├── validate.py      # 数据集验证
 │   └── build_locbench.py  # Loc-Bench 构建
 ├── analysis/            # 分析工具 (function scope 等)

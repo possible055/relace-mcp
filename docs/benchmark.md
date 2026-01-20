@@ -110,14 +110,20 @@ uv run python -m benchmark.cli.validate --output validation.json --verbose
 | `--limit` | all | Number to validate |
 | `-v/--verbose` | off | Detailed output |
 
-## 5. Analyze Results
+## 5. Analyze and Report Results
 
 ```bash
-# Analyze single run
+# Analyze single run (detailed stdout)
 uv run python -m benchmark.cli.analyze path/to/run.report.json
 
-# Compare multiple runs
-uv run python -m benchmark.cli.analyze run1.report.json run2.report.json
+# Compare multiple runs (Markdown output)
+uv run python -m benchmark.cli.report run1.report.json run2.report.json
+
+# Find best config from grid search
+uv run python -m benchmark.cli.report --best grid_curated_30.grid.json
+
+# Output comparison to file
+uv run python -m benchmark.cli.report -o comparison.md *.report.json
 ```
 
 ## 6. Interpret Metrics
@@ -155,7 +161,9 @@ benchmark/
 ├── cli/
 │   ├── run.py           # Single run CLI
 │   ├── grid.py          # Grid search CLI
-│   ├── analyze.py       # Result analysis
+│   ├── report.py        # Report generation
+│   ├── analyze.py       # Detailed analysis
+│   ├── curate.py        # Dataset curation
 │   ├── validate.py      # Dataset validation
 │   └── build_locbench.py  # Loc-Bench builder
 ├── analysis/            # Analysis tools (function scope, etc.)
