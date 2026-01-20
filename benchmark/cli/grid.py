@@ -23,23 +23,17 @@ def _format_float_for_filename(value: float) -> str:
     "--dataset",
     "dataset_path",
     default=DEFAULT_LOCBENCH_PATH,
-    show_default=True,
     help="Dataset jsonl path (relative to benchmark/ if not absolute)",
 )
+@click.option(
+    "-o",
+    "--output",
+    default=None,
+    help="Output directory prefix (default: grid_<dataset>_<timestamp>/)",
+)
 @click.option("--limit", default=None, type=int, help="Maximum cases to run (default: all)")
-@click.option(
-    "--shuffle/--no-shuffle",
-    default=True,
-    show_default=True,
-    help="Shuffle cases before selecting --limit (recommended to reduce bias)",
-)
-@click.option(
-    "--seed",
-    default=0,
-    show_default=True,
-    type=int,
-    help="Random seed used when shuffling cases",
-)
+@click.option("--seed", default=0, type=int, help="Random seed for shuffling")
+@click.option("--shuffle", is_flag=True, help="Shuffle cases before selecting --limit")
 @click.option(
     "--turns",
     "search_max_turns_values",
@@ -54,31 +48,24 @@ def _format_float_for_filename(value: float) -> str:
     multiple=True,
     type=float,
     required=True,
-    help="Grid values for SEARCH_TEMPERATURE (repeatable, 0.0~1.0 recommended)",
+    help="Grid values for SEARCH_TEMPERATURE (repeatable)",
 )
 @click.option(
-    "--search-prompt-file",
+    "--prompt-file",
+    "search_prompt_file",
     default=None,
-    help="Override SEARCH_PROMPT_FILE for all runs (YAML prompt file)",
-)
-@click.option(
-    "--output",
-    default=None,
-    help=(
-        "Output directory prefix (absolute or relative to benchmark/artifacts/results/). "
-        "Default: grid_<dataset>_<timestamp>/"
-    ),
+    help="Override SEARCH_PROMPT_FILE for all runs (YAML)",
 )
 @click.option("--dry-run", is_flag=True, help="Print planned runs without executing")
 def main(
     dataset_path: str,
+    output: str | None,
     limit: int | None,
-    shuffle: bool,
     seed: int,
+    shuffle: bool,
     search_max_turns_values: tuple[int, ...],
     search_temperature_values: tuple[float, ...],
     search_prompt_file: str | None,
-    output: str | None,
     dry_run: bool,
 ) -> None:
     benchmark_dir = get_benchmark_dir()
@@ -146,13 +133,14 @@ def main(
             dataset_path,
             "--seed",
             str(seed),
-            "--no-progress",
+            "--quiet",
             "--output",
             str(item["output_prefix"]),
         ]
         if limit is not None:
             cmd.extend(["--limit", str(limit)])
-        cmd.append("--shuffle" if shuffle else "--no-shuffle")
+        if shuffle:
+            cmd.append("--shuffle")
 
         click.echo(f"[{i}/{len(planned)}] {' '.join(cmd)}")
         completed = subprocess.run(  # nosec B603

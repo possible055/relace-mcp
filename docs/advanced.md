@@ -29,6 +29,8 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
 | `MCP_LOGGING` | `0` | Set to `1` to enable file logging (**preferred**; `RELACE_LOGGING` is deprecated) |
 | `RELACE_LOGGING` | `0` | Deprecated alias for `MCP_LOGGING` |
+| `RELACE_CLOUD_TOOLS` | `0` | Set to `1` to enable cloud tools (cloud_sync, cloud_search, etc.) |
+| `MCP_SEARCH_MODE` | `agentic` | Search tool mode: `agentic` (fast_search), `indexed` (agentic_retrieval), `both` |
 
 > **Note:** `RELACE_API_KEY` can be omitted if **both**: (1) using non-Relace providers for `APPLY_PROVIDER` and `SEARCH_PROVIDER`, and (2) `RELACE_CLOUD_TOOLS=false`. Otherwise it is required.
 

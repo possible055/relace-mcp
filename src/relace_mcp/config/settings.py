@@ -97,6 +97,17 @@ MCP_LOGGING = env_bool("MCP_LOGGING", default=False, deprecated_name="RELACE_LOG
 RELACE_CLOUD_TOOLS = env_bool("RELACE_CLOUD_TOOLS", default=False)
 
 
+# Search mode: 'agentic' (fast_search), 'indexed' (agentic_retrieval), 'both'
+def _get_search_mode() -> str:
+    raw = os.environ.get("MCP_SEARCH_MODE", "").strip().lower()
+    if raw in {"indexed", "both"}:
+        return raw
+    return "agentic"
+
+
+MCP_SEARCH_MODE = _get_search_mode()
+
+
 # LSP tools mode: 'false' (disabled), 'true' (all enabled), or 'auto' (detect installed servers)
 def _get_lsp_tools_mode() -> str:
     raw = os.environ.get("SEARCH_LSP_TOOLS", "").strip().lower()

@@ -1,14 +1,25 @@
 import json
+from collections import Counter
 from pathlib import Path
 
 import click
 
-from ..config import get_reports_dir
+from ..config import get_reports_dir, get_results_dir
 
 
 def _load_report(path: Path) -> dict:
     with path.open("r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def _load_jsonl_results(path: Path) -> list[dict]:
+    results = []
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            stripped = line.strip()
+            if stripped:
+                results.append(json.loads(stripped))
+    return results
 
 
 def _load_grid_report(path: Path) -> list[dict]:
@@ -97,6 +108,60 @@ def _generate_markdown_grid_best(grid_path: Path, metric: str) -> str:
     return "\n".join(lines)
 
 
+def _generate_failures_report(results_path: Path) -> str:
+    results = _load_jsonl_results(results_path)
+    total = len(results)
+    partial_cases = [r for r in results if r.get("partial", False)]
+    failed_cases = [r for r in results if not r.get("success", True)]
+
+    lines = [
+        f"# Failure Analysis: {results_path.name}",
+        "",
+        f"**Total Cases**: {total}",
+        f"**Failed (success=false)**: {len(failed_cases)} ({len(failed_cases) / total * 100:.1f}%)",
+        f"**Incomplete (partial=true)**: {len(partial_cases)} ({len(partial_cases) / total * 100:.1f}%)",
+        "",
+    ]
+
+    # Error type breakdown
+    error_counts: Counter[str] = Counter()
+    for r in failed_cases:
+        error = r.get("error") or "no_report_back"
+        if "timeout" in error.lower():
+            error_counts["timeout"] += 1
+        elif "rate limit" in error.lower():
+            error_counts["rate_limit"] += 1
+        elif "api" in error.lower():
+            error_counts["api_error"] += 1
+        elif error == "no_report_back":
+            error_counts["no_report_back"] += 1
+        else:
+            error_counts["other"] += 1
+
+    if error_counts:
+        lines.append("## Error Types")
+        for error_type, count in error_counts.most_common():
+            lines.append(f"- `{error_type}`: {count}")
+        lines.append("")
+
+    # List incomplete cases
+    if partial_cases:
+        lines.append("## Incomplete Cases (no report_back)")
+        lines.append("")
+        lines.append("| Case ID | Repo | Turns | Error |")
+        lines.append("|---------|------|-------|-------|")
+        for r in partial_cases[:20]:
+            case_id = r.get("case_id", "")[:30]
+            repo = r.get("repo", "")[:25]
+            turns = r.get("turns_used", 0)
+            error = (r.get("error") or "reached max turns")[:40]
+            lines.append(f"| {case_id} | {repo} | {turns} | {error} |")
+        if len(partial_cases) > 20:
+            lines.append(f"| ... | ... | ... | ({len(partial_cases) - 20} more) |")
+
+    return "\n".join(lines)
+
+
 @click.command()
 @click.argument("inputs", nargs=-1, required=True)
 @click.option(
@@ -111,15 +176,22 @@ def _generate_markdown_grid_best(grid_path: Path, metric: str) -> str:
     help="Find best configuration from grid report (input must be .grid.json)",
 )
 @click.option(
+    "--failures",
+    is_flag=True,
+    help="Analyze failed/incomplete cases from .jsonl result files",
+)
+@click.option(
     "--metric",
     default="avg_file_recall",
     show_default=True,
     help="Metric to optimize when using --best",
 )
-def main(inputs: tuple[str, ...], output: str | None, best: bool, metric: str) -> None:
+def main(
+    inputs: tuple[str, ...], output: str | None, best: bool, failures: bool, metric: str
+) -> None:
     """Generate comparison reports from benchmark results.
 
-    INPUTS: One or more .report.json or .grid.json files.
+    INPUTS: One or more .report.json, .grid.json, or .jsonl files.
 
     Examples:
 
@@ -129,16 +201,26 @@ def main(inputs: tuple[str, ...], output: str | None, best: bool, metric: str) -
       # Find best config from grid search
       python -m benchmark.cli.report --best grid_*.grid.json
 
+      # Analyze failures from result file
+      python -m benchmark.cli.report --failures run.jsonl
+
       # Output to file
       python -m benchmark.cli.report -o comparison.md *.report.json
     """
     reports_dir = get_reports_dir()
+    results_dir = get_results_dir()
     input_paths = []
 
     for inp in inputs:
         p = Path(inp)
         if not p.is_absolute():
-            p = reports_dir / inp
+            # Try reports dir first, then results dir
+            if (reports_dir / inp).exists():
+                p = reports_dir / inp
+            elif (results_dir / inp).exists():
+                p = results_dir / inp
+            else:
+                p = Path(inp)
         if not p.exists():
             click.echo(f"Warning: File not found: {p}", err=True)
             continue
@@ -148,7 +230,12 @@ def main(inputs: tuple[str, ...], output: str | None, best: bool, metric: str) -
         click.echo("Error: No valid input files found.", err=True)
         raise SystemExit(1)
 
-    if best:
+    if failures:
+        if len(input_paths) != 1:
+            click.echo("Error: --failures requires exactly one .jsonl file.", err=True)
+            raise SystemExit(1)
+        content = _generate_failures_report(input_paths[0])
+    elif best:
         if len(input_paths) != 1:
             click.echo("Error: --best requires exactly one .grid.json file.", err=True)
             raise SystemExit(1)

@@ -13,7 +13,7 @@ from fastmcp.server.context import Context
 from ..clients import RelaceRepoClient, SearchLLMClient
 from ..clients.apply import ApplyLLMClient
 from ..config import RelaceConfig, resolve_base_dir
-from ..config.settings import RELACE_CLOUD_TOOLS
+from ..config.settings import MCP_SEARCH_MODE, RELACE_CLOUD_TOOLS
 from .apply import apply_file_logic
 from .repo import (
     agentic_retrieval_logic,
@@ -94,43 +94,46 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     # Fast Agentic Search
     search_client = SearchLLMClient(config)
 
-    @mcp.tool(
-        annotations={
-            "readOnlyHint": True,  # Does not modify environment
-            "destructiveHint": False,  # Read-only = non-destructive
-            "idempotentHint": True,  # Same query = same results
-            "openWorldHint": False,  # Only local codebase
-        }
-    )
-    async def fast_search(query: str, ctx: Context) -> dict[str, Any]:
-        """Search codebase and return relevant file locations.
+    # Register fast_search only if MCP_SEARCH_MODE is 'agentic' or 'both'
+    if MCP_SEARCH_MODE in ("agentic", "both"):
 
-        Args:
-            query: What to find. Natural language (e.g., "where is auth handled")
-                   or specific patterns (e.g., "UserService class").
-
-        Returns: {files: {path: [[start, end], ...]}, explanation: str, partial: bool}
-        """
-        progress_task = asyncio.create_task(
-            _progress_heartbeat(ctx, message="fast_search in progress")
+        @mcp.tool(
+            annotations={
+                "readOnlyHint": True,  # Does not modify environment
+                "destructiveHint": False,  # Read-only = non-destructive
+                "idempotentHint": True,  # Same query = same results
+                "openWorldHint": False,  # Only local codebase
+            }
         )
-        try:
-            # Resolve base_dir dynamically from MCP Roots if not configured
-            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+        async def fast_search(query: str, ctx: Context) -> dict[str, Any]:
+            """Search codebase and return relevant file locations.
 
-            # Get cached LSP languages (auto-detects on first call per base_dir)
-            from ..lsp.languages import get_lsp_languages
+            Args:
+                query: What to find. Natural language (e.g., "where is auth handled")
+                       or specific patterns (e.g., "UserService class").
 
-            lsp_languages = get_lsp_languages(Path(base_dir))
+            Returns: {files: {path: [[start, end], ...]}, explanation: str, partial: bool}
+            """
+            progress_task = asyncio.create_task(
+                _progress_heartbeat(ctx, message="fast_search in progress")
+            )
+            try:
+                # Resolve base_dir dynamically from MCP Roots if not configured
+                base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
 
-            effective_config = replace(config, base_dir=base_dir)
-            return await FastAgenticSearchHarness(
-                effective_config, search_client, lsp_languages=lsp_languages
-            ).run_async(query=query)
-        finally:
-            progress_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await progress_task
+                # Get cached LSP languages (auto-detects on first call per base_dir)
+                from ..lsp.languages import get_lsp_languages
+
+                lsp_languages = get_lsp_languages(Path(base_dir))
+
+                effective_config = replace(config, base_dir=base_dir)
+                return await FastAgenticSearchHarness(
+                    effective_config, search_client, lsp_languages=lsp_languages
+                ).run_async(query=query)
+            finally:
+                progress_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await progress_task
 
     # Cloud Repos (Semantic Search & Sync) - only register if enabled
     if RELACE_CLOUD_TOOLS:
@@ -222,46 +225,49 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
             return cloud_info_logic(repo_client, base_dir)
 
-        @mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,  # Uses cloud API
-            }
-        )
-        async def agentic_retrieval(
-            query: str,
-            ctx: Context | None = None,
-        ) -> dict[str, Any]:
-            """Find code by semantic query. Returns {files: {path: [[start, end], ...]}, explanation}.
+        # Register agentic_retrieval only if MCP_SEARCH_MODE is 'indexed' or 'both'
+        if MCP_SEARCH_MODE in ("indexed", "both"):
 
-            Args:
-                query: Be SPECIFIC. Examples:
-                    ❌ "auth logic"
-                    ✅ "function that validates JWT tokens and extracts user ID"
-                    ❌ "error handling"
-                    ✅ "where HTTP 4xx errors are caught and transformed to user messages"
-            """
-            progress_task = None
-            if ctx is not None:
-                progress_task = asyncio.create_task(
-                    _progress_heartbeat(ctx, message="agentic_retrieval in progress")
-                )
-            try:
-                base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-                return await agentic_retrieval_logic(
-                    repo_client,
-                    search_client,
-                    config,
-                    base_dir,
-                    query,
-                )
-            finally:
-                if progress_task is not None:
-                    progress_task.cancel()
-                    with suppress(asyncio.CancelledError):
-                        await progress_task
+            @mcp.tool(
+                annotations={
+                    "readOnlyHint": True,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": True,  # Uses cloud API
+                }
+            )
+            async def agentic_retrieval(
+                query: str,
+                ctx: Context | None = None,
+            ) -> dict[str, Any]:
+                """Find code by semantic query. Returns {files: {path: [[start, end], ...]}, explanation}.
+
+                Args:
+                    query: Be SPECIFIC. Examples:
+                        ❌ "auth logic"
+                        ✅ "function that validates JWT tokens and extracts user ID"
+                        ❌ "error handling"
+                        ✅ "where HTTP 4xx errors are caught and transformed to user messages"
+                """
+                progress_task = None
+                if ctx is not None:
+                    progress_task = asyncio.create_task(
+                        _progress_heartbeat(ctx, message="agentic_retrieval in progress")
+                    )
+                try:
+                    base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+                    return await agentic_retrieval_logic(
+                        repo_client,
+                        search_client,
+                        config,
+                        base_dir,
+                        query,
+                    )
+                finally:
+                    if progress_task is not None:
+                        progress_task.cancel()
+                        with suppress(asyncio.CancelledError):
+                            await progress_task
 
     # === MCP Resources ===
 
@@ -275,13 +281,16 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 "description": "Edit or create files using fuzzy matching",
                 "enabled": True,
             },
-            {
-                "id": "fast_search",
-                "name": "Fast Search",
-                "description": "Agentic search over local codebase",
-                "enabled": True,
-            },
         ]
+        if MCP_SEARCH_MODE in ("agentic", "both"):
+            tools.append(
+                {
+                    "id": "fast_search",
+                    "name": "Fast Search",
+                    "description": "Agentic search over local codebase",
+                    "enabled": True,
+                }
+            )
         if RELACE_CLOUD_TOOLS:
             tools.extend(
                 [
@@ -315,14 +324,17 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                         "description": "Get sync status for current repository",
                         "enabled": True,
                     },
+                ]
+            )
+            if MCP_SEARCH_MODE in ("indexed", "both"):
+                tools.append(
                     {
                         "id": "agentic_retrieval",
                         "name": "Agentic Retrieval",
                         "description": "Two-stage semantic + agentic code retrieval",
                         "enabled": True,
-                    },
-                ]
-            )
+                    }
+                )
         return tools
 
     if RELACE_CLOUD_TOOLS:

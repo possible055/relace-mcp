@@ -35,9 +35,11 @@ uv run python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.json
 uv run python -m benchmark.cli.run \
   --dataset artifacts/data/processed/elite_50.jsonl \
   --limit 64 --seed 0 --shuffle \
-  --search-max-turns 8 \
-  --search-temperature 0.2 \
-  --no-progress
+  --max-turns 8 --temperature 0.2 -q
+
+# Resume from checkpoint after interruption
+uv run python -m benchmark.cli.run \
+  -o my_run --resume --timeout 300 --fail-fast 5
 ```
 
 **Outputs**:
@@ -47,14 +49,19 @@ uv run python -m benchmark.cli.run \
 **Key options**:
 | Option | Default | Description |
 |--------|---------|-------------|
+| `--dataset` | locbench_v1.jsonl | Dataset path |
+| `-o, --output` | auto | Output file prefix |
 | `--limit` | all | Number of cases |
-| `--shuffle/--no-shuffle` | `--shuffle` | Randomize selection |
 | `--seed` | `0` | Random seed |
-| `--search-max-turns` | env | Override `SEARCH_MAX_TURNS` |
-| `--search-temperature` | env | Override `SEARCH_TEMPERATURE` |
-| `--search-prompt-file` | env | Override `SEARCH_PROMPT_FILE` (YAML) |
-| `--progress/--no-progress` | `--progress` | Show progress |
-| `--verbose` | off | Detailed logging |
+| `--shuffle` | off | Randomize selection |
+| `--max-turns` | env | Override `SEARCH_MAX_TURNS` |
+| `--temperature` | env | Override `SEARCH_TEMPERATURE` |
+| `--prompt-file` | env | Override `SEARCH_PROMPT_FILE` (YAML) |
+| `--timeout` | none | Per-case timeout in seconds |
+| `--fail-fast` | none | Stop after N consecutive failures |
+| `--resume` | off | Resume from checkpoint |
+| `-v, --verbose` | off | Detailed logging |
+| `-q, --quiet` | off | Disable progress bar |
 | `--dry-run` | off | Preview only |
 
 ## 3. Grid Search (Hyperparameter Tuning)

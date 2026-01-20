@@ -35,9 +35,11 @@ uv run python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.json
 uv run python -m benchmark.cli.run \
   --dataset artifacts/data/processed/elite_50.jsonl \
   --limit 64 --seed 0 --shuffle \
-  --search-max-turns 8 \
-  --search-temperature 0.2 \
-  --no-progress
+  --max-turns 8 --temperature 0.2 -q
+
+# 中断后从 checkpoint 恢复
+uv run python -m benchmark.cli.run \
+  -o my_run --resume --timeout 300 --fail-fast 5
 ```
 
 **输出**:
@@ -47,14 +49,19 @@ uv run python -m benchmark.cli.run \
 **常用参数**:
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
+| `--dataset` | locbench_v1.jsonl | 数据集路径 |
+| `-o, --output` | 自动 | 输出文件前缀 |
 | `--limit` | 全部 | Case 数量 |
-| `--shuffle/--no-shuffle` | `--shuffle` | 随机选择 |
 | `--seed` | `0` | 随机种子 |
-| `--search-max-turns` | env | 覆盖 `SEARCH_MAX_TURNS` |
-| `--search-temperature` | env | 覆盖 `SEARCH_TEMPERATURE` |
-| `--search-prompt-file` | env | 覆盖 `SEARCH_PROMPT_FILE` (YAML) |
-| `--progress/--no-progress` | `--progress` | 显示进度 |
-| `--verbose` | 关闭 | 详细日志 |
+| `--shuffle` | 关闭 | 随机选择 |
+| `--max-turns` | env | 覆盖 `SEARCH_MAX_TURNS` |
+| `--temperature` | env | 覆盖 `SEARCH_TEMPERATURE` |
+| `--prompt-file` | env | 覆盖 `SEARCH_PROMPT_FILE` (YAML) |
+| `--timeout` | 无 | 单个 case 超时秒数 |
+| `--fail-fast` | 无 | 连续 N 次失败后停止 |
+| `--resume` | 关闭 | 从 checkpoint 恢复 |
+| `-v, --verbose` | 关闭 | 详细日志 |
+| `-q, --quiet` | 关闭 | 禁用进度条 |
 | `--dry-run` | 关闭 | 仅预览 |
 
 ## 3. 网格搜索 (超参数调优)

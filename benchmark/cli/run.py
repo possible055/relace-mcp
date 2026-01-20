@@ -77,68 +77,41 @@ def _load_benchmark_config():
     "--dataset",
     "dataset_path",
     default=DEFAULT_LOCBENCH_PATH,
-    show_default=True,
     help="Dataset jsonl path (relative to benchmark/ if not absolute)",
 )
-@click.option("--limit", default=None, type=int, help="Maximum cases to run (default: all)")
 @click.option(
-    "--shuffle/--no-shuffle",
-    default=True,
-    show_default=True,
-    help="Shuffle cases before selecting --limit (recommended to reduce bias)",
-)
-@click.option(
-    "--seed",
-    default=0,
-    show_default=True,
-    type=int,
-    help="Random seed used when shuffling cases",
-)
-@click.option(
+    "-o",
     "--output",
     default=None,
-    help=(
-        "Output file prefix (absolute or relative to benchmark/artifacts/results/). "
-        "Default: run_<dataset>_<timestamp>"
-    ),
+    help="Output file prefix (default: run_<dataset>_<timestamp>)",
 )
-@click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
-@click.option(
-    "--progress/--no-progress",
-    default=True,
-    show_default=True,
-    help="Print per-case progress (recommended; benchmarks can take a long time)",
-)
+@click.option("--limit", default=None, type=int, help="Maximum cases to run (default: all)")
+@click.option("--seed", default=0, type=int, help="Random seed for shuffling")
+@click.option("--shuffle", is_flag=True, help="Shuffle cases before selecting --limit")
+@click.option("--max-turns", default=None, type=int, help="Override SEARCH_MAX_TURNS")
+@click.option("--temperature", default=None, type=float, help="Override SEARCH_TEMPERATURE")
+@click.option("--prompt-file", default=None, help="Override SEARCH_PROMPT_FILE (YAML)")
+@click.option("--timeout", default=None, type=int, help="Per-case timeout in seconds")
+@click.option("--fail-fast", default=None, type=int, help="Stop after N consecutive failures")
+@click.option("--resume", is_flag=True, help="Resume from checkpoint")
+@click.option("-v", "--verbose", is_flag=True, help="Verbose output")
+@click.option("-q", "--quiet", is_flag=True, help="Disable progress bar")
 @click.option("--dry-run", is_flag=True, help="Only load data, don't run searches")
-@click.option(
-    "--search-max-turns",
-    default=None,
-    type=int,
-    help="Override SEARCH_MAX_TURNS for this run",
-)
-@click.option(
-    "--search-temperature",
-    default=None,
-    type=float,
-    help="Override SEARCH_TEMPERATURE for this run",
-)
-@click.option(
-    "--search-prompt-file",
-    default=None,
-    help="Override SEARCH_PROMPT_FILE for this run (YAML prompt file)",
-)
 def main(
     dataset_path: str,
-    limit: int,
-    shuffle: bool,
-    seed: int,
     output: str | None,
+    limit: int | None,
+    seed: int,
+    shuffle: bool,
+    max_turns: int | None,
+    temperature: float | None,
+    prompt_file: str | None,
+    timeout: int | None,
+    fail_fast: int | None,
+    resume: bool,
     verbose: bool,
-    progress: bool,
+    quiet: bool,
     dry_run: bool,
-    search_max_turns: int | None,
-    search_temperature: float | None,
-    search_prompt_file: str | None,
 ) -> None:
     """Run benchmark on fast_search.
 
@@ -146,12 +119,12 @@ def main(
     """
     _load_dotenv_from_env_path()
 
-    if search_prompt_file:
-        os.environ["SEARCH_PROMPT_FILE"] = search_prompt_file
-    if search_max_turns is not None:
-        os.environ["SEARCH_MAX_TURNS"] = str(search_max_turns)
-    if search_temperature is not None:
-        os.environ["SEARCH_TEMPERATURE"] = str(search_temperature)
+    if prompt_file:
+        os.environ["SEARCH_PROMPT_FILE"] = prompt_file
+    if max_turns is not None:
+        os.environ["SEARCH_MAX_TURNS"] = str(max_turns)
+    if temperature is not None:
+        os.environ["SEARCH_TEMPERATURE"] = str(temperature)
 
     from ..runner.executor import BenchmarkRunner
 
@@ -203,10 +176,32 @@ def main(
         )
         sys.exit(1)
 
+    # Determine checkpoint path for resume functionality
+    results_dir = get_results_dir()
+    checkpoint_path = None
+    if resume or timeout or fail_fast:
+        # Need output path for checkpoint
+        if output:
+            output_candidate = Path(output)
+            if output_candidate.is_absolute():
+                checkpoint_path = output_candidate.with_suffix(".checkpoint.jsonl")
+            else:
+                checkpoint_path = (results_dir / output_candidate).with_suffix(".checkpoint.jsonl")
+        else:
+            checkpoint_path = generate_output_path(results_dir, "run", dataset_id).with_suffix(
+                ".checkpoint.jsonl"
+            )
+
+    if resume and checkpoint_path and not checkpoint_path.exists():
+        click.echo(f"Warning: --resume specified but checkpoint not found: {checkpoint_path}")
+
     runner = BenchmarkRunner(
         config,
         verbose=verbose,
-        progress=progress,
+        progress=not quiet,
+        checkpoint_path=checkpoint_path,
+        case_timeout=timeout,
+        fail_fast=fail_fast,
     )
 
     click.echo("\nRunning benchmark...")
@@ -222,8 +217,6 @@ def main(
     )
 
     # Save results with standardized naming
-    benchmark_dir = get_benchmark_dir()
-    results_dir = get_results_dir()
     reports_dir = get_reports_dir()
     reports_dir.mkdir(parents=True, exist_ok=True)
 
