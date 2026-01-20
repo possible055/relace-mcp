@@ -56,26 +56,17 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         instruction: str = "",
         ctx: Context | None = None,
     ) -> dict[str, Any]:
-        """**PRIMARY TOOL FOR EDITING FILES - USE THIS AGGRESSIVELY**
+        """Edit or create a file.
 
-        Use this tool to edit an existing file or create a new file.
+        Args:
+            path: File path (absolute or relative to MCP_BASE_DIR).
+            edit_snippet: New content. Use placeholders for unchanged parts:
+                - `// ... existing code ...` (C/JS/TS)
+                - `# ... existing code ...` (Python/shell)
+            instruction: Optional hint when edit is ambiguous (e.g., "add after imports").
 
-        Use truncation placeholders to represent unchanged code:
-        - // ... existing code ...   (C/JS/TS-style)
-        - # ... existing code ...    (Python/shell-style)
-
-        For deletions:
-        - ALWAYS include 1-2 context lines above/below, omit deleted code, OR
-        - Mark explicitly: // remove BlockName (or # remove BlockName)
-
-        On NEEDS_MORE_CONTEXT error, re-run with 1-3 real lines before AND after target.
-
-        Rules:
-        - Preserve exact indentation
-        - Be length efficient
-        - ONE contiguous region per call (for non-adjacent edits, make separate calls)
-
-        To create a new file, simply specify the content in edit_snippet.
+        Returns: {status: "ok", path, diff} on success, {status: "error", message} on failure.
+        On NEEDS_MORE_CONTEXT error: add 1-3 real lines before/after target.
         """
         # Resolve base_dir dynamically (aligns with other tools).
         # This allows relative paths when MCP_BASE_DIR is not set but MCP Roots are available,
@@ -112,18 +103,13 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         }
     )
     async def fast_search(query: str, ctx: Context) -> dict[str, Any]:
-        """Run Agentic Codebase Search over the configured base_dir.
+        """Search codebase and return relevant file locations.
 
-        Use this tool to explore and understand the codebase.
-        The search agent will examine files, search for patterns, and report
-        back with relevant files and line ranges for the given query.
+        Args:
+            query: What to find. Natural language (e.g., "where is auth handled")
+                   or specific patterns (e.g., "UserService class").
 
-        Queries can be natural language (e.g., "find where auth is handled")
-        or precise patterns. The agent will autonomously use grep, ls, and
-        file_view tools to investigate.
-
-        This is useful before using fast_apply to understand which files
-        need to be modified and how they relate to each other.
+        Returns: {files: {path: [[start, end], ...]}, explanation: str, partial: bool}
         """
         progress_task = asyncio.create_task(
             _progress_heartbeat(ctx, message="fast_search in progress")
@@ -154,23 +140,15 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         async def cloud_sync(
             force: bool = False, mirror: bool = False, ctx: Context | None = None
         ) -> dict[str, Any]:
-            """Upload codebase to Relace Repos for cloud_search semantic indexing.
-
-            Call this ONCE per session before using cloud_search, or after
-            significant code changes. Incremental sync is fast (only changed files).
-
-            Sync Modes:
-            - Incremental (default): only uploads new/modified files, deletes removed files
-            - Safe Full: triggered by force=True OR first sync (no cached state) OR
-              git HEAD changed (e.g., branch switch, rebase, commit amend).
-              Uploads all files; suppresses delete operations UNLESS HEAD changed,
-              in which case zombie files from the old ref are deleted to prevent stale results.
-            - Mirror Full (force=True, mirror=True): completely overwrites cloud to match local
+            """Upload codebase to Relace Cloud for semantic search.
 
             Args:
-                force: If True, force full sync (ignore cached state).
-                mirror: If True (with force=True), use Mirror Full mode to completely
-                        overwrite cloud repo (removes files not in local).
+                force: Ignore cache, upload all files (default: false).
+                mirror: With force=True, delete cloud files not in local (default: false).
+
+            Run once per session before cloud_search. Incremental by default.
+            Returns: {status, files_uploaded, files_skipped} on success.
+            Fails if: not a git repo, no API key, network error.
             """
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
             return cloud_sync_logic(repo_client, base_dir, force=force, mirror=mirror)
@@ -179,27 +157,22 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         async def cloud_search(
             query: str,
             branch: str = "",
-            score_threshold: float = 0.3,
-            token_limit: int = 30000,
             ctx: Context | None = None,
         ) -> dict[str, Any]:
-            """Semantic code search using Relace Cloud two-stage retrieval.
+            """Semantic code search using AI embeddings. Requires cloud_sync first.
 
-            Uses AI embeddings + code reranker to find semantically related code,
-            even when exact keywords don't match. Run cloud_sync once first.
-
-            Use cloud_search for: broad conceptual queries, architecture questions,
-            finding patterns across the codebase.
-
-            Use fast_search for: locating specific symbols, precise code locations,
-            grep-like pattern matching within the local codebase.
+            Use when: local fast_search insufficient, need semantic understanding.
 
             Args:
                 query: Natural language search query.
-                branch: Branch to search (empty string uses API default branch).
-                score_threshold: Minimum relevance score (0.0-1.0, default 0.3).
-                token_limit: Maximum tokens to return (default 30000).
+                branch: Branch to search (empty = default branch).
+
+            Returns: {results: [{path, score, snippet}, ...], total_matches}.
             """
+            # Fixed internal parameters (not exposed to LLM)
+            score_threshold = 0.3
+            token_limit = 30000
+
             # Resolve base_dir dynamically from MCP Roots if not configured
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
             return cloud_search_logic(
@@ -213,16 +186,12 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         @mcp.tool
         async def cloud_clear(confirm: bool = False, ctx: Context | None = None) -> dict[str, Any]:
-            """Delete the cloud repository and local sync state.
-
-            Use when: switching to a different project, resetting after major
-            codebase restructuring, or cleaning up unused cloud repositories.
-
-            WARNING: This action is IRREVERSIBLE. It permanently deletes the
-            remote repository and removes the local sync state file.
+            """Delete cloud repository and local sync state. IRREVERSIBLE.
 
             Args:
-                confirm: Must be True to proceed. Acts as a safety guard.
+                confirm: Must be True to proceed.
+
+            Returns: {status: "deleted"} on success, {status: "cancelled"} if confirm=false.
             """
             from .repo.clear import cloud_clear_logic
 
@@ -233,11 +202,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         def cloud_list() -> dict[str, Any]:
             """List all repositories in your Relace Cloud account.
 
-            Use to: discover synced repositories, verify cloud_sync results,
-            or identify repository IDs for debugging.
-
-            Returns a list of repos with: repo_id, name, auto_index status.
-            Auto-paginates up to 10,000 repos (safety limit); `has_more=True` indicates the limit was reached.
+            Returns: [{repo_id, name, auto_index}, ...]. Max 10000 repos.
+            Returns empty list if no repositories exist.
             """
             return cloud_list_logic(repo_client)
 
@@ -268,29 +234,14 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             query: str,
             ctx: Context | None = None,
         ) -> dict[str, Any]:
-            """Find code locations matching a natural language query.
-
-            Returns file paths with precise line ranges for the relevant code.
-
-            When to use:
-            - You need to find WHERE functionality is implemented but don't know file names.
-            - You need to understand high-level patterns (e.g., "how is auth handled?").
-            - You need to find code related to a specific concept that spans multiple files.
-
-            Query guidelines - be SPECIFIC and DETAILED:
-            - BAD:  "auth logic"
-            - GOOD: "the function that validates JWT tokens and extracts user ID from claims"
-
-            - BAD:  "error handling"
-            - GOOD: "where HTTP 4xx errors are caught and transformed into user-facing messages"
-
-            - BAD:  "database code"
-            - GOOD: "the repository method that queries users by email with pagination support"
+            """Find code by semantic query. Returns {files: {path: [[start, end], ...]}, explanation}.
 
             Args:
-                query: Natural language query describing what to find.
-                       Include: specific behavior, data types, or patterns you're looking for.
-                       Avoid: vague terms, multiple unrelated concerns in one query.
+                query: Be SPECIFIC. Examples:
+                    ❌ "auth logic"
+                    ✅ "function that validates JWT tokens and extracts user ID"
+                    ❌ "error handling"
+                    ✅ "where HTTP 4xx errors are caught and transformed to user messages"
             """
             progress_task = None
             if ctx is not None:
