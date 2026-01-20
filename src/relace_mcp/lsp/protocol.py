@@ -9,6 +9,9 @@ CONTENT_LENGTH = "Content-Length"
 HEADER_SEPARATOR = "\r\n\r\n"
 HEADER_LINE_SEPARATOR = "\r\n"
 
+# Hard cap to prevent unbounded growth if a server writes non-LSP bytes to stdout.
+MAX_MESSAGE_BUFFER_BYTES = 16 * 1024 * 1024
+
 
 def encode_message(content: dict[str, Any]) -> bytes:
     """Encode a JSON-RPC message with LSP headers.
@@ -98,9 +101,15 @@ class MessageBuffer:
         """
         header_info = decode_header(bytes(self._buffer))
         if header_info is None:
+            if len(self._buffer) > MAX_MESSAGE_BUFFER_BYTES:
+                raise ValueError(
+                    f"LSP message buffer exceeded {MAX_MESSAGE_BUFFER_BYTES} bytes without a header"
+                )
             return None
 
         content_length, header_end = header_info
+        if content_length > MAX_MESSAGE_BUFFER_BYTES:
+            raise ValueError(f"LSP message too large: {content_length} bytes")
         total_length = header_end + content_length
 
         if len(self._buffer) < total_length:

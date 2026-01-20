@@ -346,6 +346,47 @@ def _check_blocked_patterns(command: str) -> tuple[bool, str]:
     return False, ""
 
 
+def _has_variable_expansion(command: str) -> bool:
+    """Return True if command contains a `$` that bash would expand.
+
+    This is a defense-in-depth guard for the `bash` tool. Shell variable expansion can be used
+    to synthesize absolute paths or bypass token-level path checks (e.g., `${HOME%/*}`).
+
+    Rules:
+    - `$` inside single quotes is not expanded by bash.
+    - Escaped `$` (e.g., `\\$HOME`) is treated as literal.
+    - `$` inside double quotes is still expanded and is blocked.
+    """
+    in_single = False
+    in_double = False
+    escaped = False
+
+    for ch in command:
+        if escaped:
+            escaped = False
+            continue
+
+        # Backslash escapes outside single quotes (including inside double quotes).
+        if not in_single and ch == "\\":  # nosec B105 - escape char
+            escaped = True
+            continue
+
+        # Single quotes are only special outside double quotes.
+        if ch == "'" and not in_double:  # nosec B105 - quote char
+            in_single = not in_single
+            continue
+
+        # Double quotes are only special outside single quotes.
+        if ch == '"' and not in_single:  # nosec B105 - quote char
+            in_double = not in_double
+            continue
+
+        if ch == "$" and not in_single:  # nosec B105 - shell sigil
+            return True
+
+    return False
+
+
 def _check_path_safety(command: str, tokens: list[str]) -> tuple[bool, str]:
     """Check path traversal and absolute path safety.
 
@@ -539,6 +580,13 @@ def is_blocked_command(command: str, base_dir: str) -> tuple[bool, str]:
     blocked, reason = _check_blocked_patterns(command)
     if blocked:
         return blocked, reason
+
+    # Block shell variable expansion to prevent sandbox escape / path synthesis.
+    if _has_variable_expansion(command):
+        return (
+            True,
+            "Blocked pattern: shell variable expansion ($...). Use explicit /repo paths instead.",
+        )
 
     # Parse command tokens
     tokens = _parse_command_tokens(command)

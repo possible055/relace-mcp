@@ -20,6 +20,19 @@ MAX_BASH_CHARS = 15000
 MAX_VIEW_DIRECTORY_CHARS = 8000
 MAX_GLOB_CHARS = 8000
 
+# Common directories to ignore during traversal (shared by glob, grep, encoding detection)
+COMMON_IGNORED_DIRS = frozenset(
+    {
+        "__pycache__",
+        "build",
+        "dist",
+        "node_modules",
+        "site-packages",
+        "target",
+        "venv",
+    }
+)
+
 
 # === Bash Tool ===
 # NOTE: Unix-only (requires bash shell, not available on Windows)
