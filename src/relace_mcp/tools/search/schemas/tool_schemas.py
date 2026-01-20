@@ -469,15 +469,17 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
 
     Args:
         lsp_languages: Set of available LSP language IDs for the current project.
-            If None, uses default tool set (LSP tools require explicit opt-in via SEARCH_ENABLED_TOOLS or SEARCH_LSP_TOOLS).
+            If None, uses default tool set (LSP tools require explicit opt-in via SEARCH_LSP_TOOLS).
             If empty frozenset, LSP tools are hidden.
 
     Environment variables:
-        - SEARCH_LSP_TOOLS: Set to 1/true to enable all LSP tools. This is orthogonal to
-          SEARCH_ENABLED_TOOLS and always takes effect (union logic).
+        - SEARCH_LSP_TOOLS: Gatekeeper for LSP tools. Set to 1/true to enable LSP tools.
+          When false (default), LSP tools are always disabled regardless of SEARCH_ENABLED_TOOLS.
+          When true, all LSP tools are enabled by default, or filtered by SEARCH_ENABLED_TOOLS if set.
         - SEARCH_ENABLED_TOOLS: Comma/space-separated allowlist, e.g.
           "view_file,view_directory,grep_search,glob,find_symbol". `report_back` is always enabled.
           If not set, only basic tools (view_file, view_directory, grep_search, glob) are enabled.
+          When SEARCH_LSP_TOOLS=true and this is set, it also filters which LSP tools are enabled.
           bash requires explicit opt-in for security reasons.
         - SEARCH_TOOL_STRICT: Set to 0/false to omit the non-standard `strict` field from tool schemas.
 
@@ -507,12 +509,14 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
             "glob",
             "report_back",
         }
+        # When SEARCH_LSP_TOOLS=true and no allowlist, enable all LSP tools
+        if SEARCH_LSP_TOOLS:
+            enabled.update(lsp_tool_names)
 
-    # SEARCH_LSP_TOOLS is orthogonal: always takes effect (union logic)
-    # This allows users to set SEARCH_ENABLED_TOOLS for fine-grained control
-    # while still using SEARCH_LSP_TOOLS as a simple toggle for all LSP tools
-    if SEARCH_LSP_TOOLS:
-        enabled.update(lsp_tool_names)
+    # SEARCH_LSP_TOOLS acts as gatekeeper: when false, remove all LSP tools
+    # When true and allowlist is set, the allowlist controls which LSP tools are enabled
+    if not SEARCH_LSP_TOOLS:
+        enabled -= lsp_tool_names
 
     # Always keep report_back so the harness can terminate deterministically.
     enabled.add("report_back")

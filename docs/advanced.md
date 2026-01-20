@@ -60,8 +60,8 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `SEARCH_TIMEOUT_SECONDS` | `120` | Request timeout (also used as `fast_search` wall-clock budget; returns `partial=true` on timeout) |
 | `SEARCH_TEMPERATURE` | `1.0` | LLM sampling temperature (0.0-2.0) |
 | `SEARCH_MAX_TURNS` | `6` | Maximum agent loop turns |
-| `SEARCH_LSP_TOOLS` | `false` | Set to `1` to enable all LSP tools (simpler alternative to `SEARCH_ENABLED_TOOLS`) |
-| `SEARCH_ENABLED_TOOLS` | (basic only) | Tool allowlist (comma/space-separated). If unset, only basic tools (`view_file`, `view_directory`, `grep_search`, `glob`) are enabled (plus `report_back`). LSP tools (`find_symbol`, `search_symbol`, `get_type`, `list_symbols`, `call_graph`) and `bash` require explicit opt-in. |
+| `SEARCH_LSP_TOOLS` | `false` | Gatekeeper for LSP tools. When false, LSP is always disabled. When true, enables all LSP tools (or filtered by `SEARCH_ENABLED_TOOLS` if set). |
+| `SEARCH_ENABLED_TOOLS` | (basic only) | Tool allowlist (comma/space-separated). If unset, only basic tools are enabled. When `SEARCH_LSP_TOOLS=true`, this also filters which LSP tools are enabled. `bash` requires explicit opt-in. |
 | `SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls |
 | `SEARCH_TOOL_STRICT` | `1` | Include `strict` field in tool schemas |
 | `SEARCH_LSP_TIMEOUT_SECONDS` | `15.0` | LSP startup/request timeout |
@@ -236,7 +236,9 @@ export SEARCH_MODEL=gpt-4o
 LSP tools (`find_symbol`, `search_symbol`, `get_type`, `list_symbols`, `call_graph`) are disabled by default. Enable them via:
 
 - **Simple toggle:** `SEARCH_LSP_TOOLS=1` — enables all LSP tools at once
-- **Fine-grained control:** `SEARCH_ENABLED_TOOLS=view_file,view_directory,grep_search,glob,find_symbol,...`
+- **Fine-grained control:** `SEARCH_LSP_TOOLS=1` + `SEARCH_ENABLED_TOOLS=view_file,find_symbol,...` — only listed LSP tools are enabled
+
+> **Note:** `SEARCH_LSP_TOOLS` acts as a **gatekeeper**. When `false` (default), LSP tools are always disabled regardless of `SEARCH_ENABLED_TOOLS`. When `true`, all LSP tools are enabled by default, or filtered by the allowlist if set.
 
 The `find_symbol` tool uses Language Server Protocol for Python semantic queries:
 - `definition`: Jump to symbol definition
