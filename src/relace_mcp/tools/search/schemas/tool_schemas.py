@@ -473,12 +473,12 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
             If empty frozenset, LSP tools are hidden.
 
     Environment variables:
-        - SEARCH_LSP_TOOLS: Set to 1/true to enable all LSP tools. Simpler toggle than SEARCH_ENABLED_TOOLS.
+        - SEARCH_LSP_TOOLS: Set to 1/true to enable all LSP tools. This is orthogonal to
+          SEARCH_ENABLED_TOOLS and always takes effect (union logic).
         - SEARCH_ENABLED_TOOLS: Comma/space-separated allowlist, e.g.
           "view_file,view_directory,grep_search,glob,find_symbol". `report_back` is always enabled.
           If not set, only basic tools (view_file, view_directory, grep_search, glob) are enabled.
-          LSP tools (find_symbol, search_symbol, get_type, list_symbols, call_graph) require
-          explicit opt-in. bash also requires explicit opt-in for security reasons.
+          bash requires explicit opt-in for security reasons.
         - SEARCH_TOOL_STRICT: Set to 0/false to omit the non-standard `strict` field from tool schemas.
 
     Deprecated (still supported with warning):
@@ -499,8 +499,6 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
             enabled.add("find_symbol")
     else:
         # Default: basic exploration tools only
-        # LSP tools (find_symbol, search_symbol, get_type, list_symbols, call_graph)
-        # require explicit opt-in via SEARCH_ENABLED_TOOLS or SEARCH_LSP_TOOLS
         # bash requires opt-in for security (Unix shell, higher risk)
         enabled = {
             "view_file",
@@ -509,9 +507,12 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
             "glob",
             "report_back",
         }
-        # If SEARCH_LSP_TOOLS=true, auto-enable all LSP tools
-        if SEARCH_LSP_TOOLS:
-            enabled.update(lsp_tool_names)
+
+    # SEARCH_LSP_TOOLS is orthogonal: always takes effect (union logic)
+    # This allows users to set SEARCH_ENABLED_TOOLS for fine-grained control
+    # while still using SEARCH_LSP_TOOLS as a simple toggle for all LSP tools
+    if SEARCH_LSP_TOOLS:
+        enabled.update(lsp_tool_names)
 
     # Always keep report_back so the harness can terminate deterministically.
     enabled.add("report_back")
