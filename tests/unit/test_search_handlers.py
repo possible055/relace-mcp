@@ -527,6 +527,102 @@ class TestGlobHandler:
         assert "file.py" in result
         assert "sub/nested.py" in result
 
+    def test_respects_git_info_exclude(self, tmp_path: Path) -> None:
+        """Should respect .git/info/exclude patterns."""
+        # Set up .git/info/exclude
+        git_info = tmp_path / ".git" / "info"
+        git_info.mkdir(parents=True)
+        (git_info / "exclude").write_text("excluded_by_info/\n")
+
+        (tmp_path / "excluded_by_info").mkdir()
+        (tmp_path / "excluded_by_info" / "secret.py").write_text("secret")
+        (tmp_path / "visible.py").write_text("visible")
+
+        result = glob_handler("*.py", "/repo", False, 200, str(tmp_path))
+        assert "visible.py" in result
+        assert "excluded_by_info" not in result
+
+    def test_gitignore_overrides_git_info_exclude(self, tmp_path: Path) -> None:
+        """Project .gitignore should override .git/info/exclude via !patterns."""
+        # .git/info/exclude ignores all .log files
+        git_info = tmp_path / ".git" / "info"
+        git_info.mkdir(parents=True)
+        (git_info / "exclude").write_text("*.log\n")
+
+        # Project .gitignore unignores important.log
+        (tmp_path / ".gitignore").write_text("!important.log\n")
+
+        (tmp_path / "debug.log").write_text("debug")
+        (tmp_path / "important.log").write_text("important")
+
+        result = glob_handler("*.log", "/repo", False, 200, str(tmp_path))
+        assert "important.log" in result
+        assert "debug.log" not in result
+
+    def test_git_info_exclude_overrides_global_excludes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Repo .git/info/exclude should override global excludes."""
+        # Create global excludes file
+        global_ignore = tmp_path / "global_gitignore"
+        global_ignore.write_text("*.tmp\n")
+
+        # Mock get_global_excludes_path to return our test file
+        from relace_mcp.tools.search._impl import gitignore as gi_mod
+
+        gi_mod.get_global_excludes_path.cache_clear()
+        monkeypatch.setattr(gi_mod, "get_global_excludes_path", lambda: global_ignore)
+
+        # .git/info/exclude unignores keep.tmp
+        git_info = tmp_path / ".git" / "info"
+        git_info.mkdir(parents=True)
+        (git_info / "exclude").write_text("!keep.tmp\n")
+
+        (tmp_path / "junk.tmp").write_text("junk")
+        (tmp_path / "keep.tmp").write_text("keep")
+
+        # Clear LRU cache for specs
+        gi_mod.load_gitignore_spec.cache_clear()
+
+        result = glob_handler("*.tmp", "/repo", False, 200, str(tmp_path))
+        assert "keep.tmp" in result
+        assert "junk.tmp" not in result
+
+    def test_full_exclude_priority_chain(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test complete priority chain: global < .git/info/exclude < .gitignore."""
+        # Create global excludes (lowest priority)
+        global_ignore = tmp_path / "global_gitignore"
+        global_ignore.write_text("*.dat\n")
+
+        from relace_mcp.tools.search._impl import gitignore as gi_mod
+
+        gi_mod.get_global_excludes_path.cache_clear()
+        monkeypatch.setattr(gi_mod, "get_global_excludes_path", lambda: global_ignore)
+
+        # .git/info/exclude unignores repo_keep.dat
+        git_info = tmp_path / ".git" / "info"
+        git_info.mkdir(parents=True)
+        (git_info / "exclude").write_text("!repo_keep.dat\n*.bak\n")
+
+        # Project .gitignore unignores project_keep.bak
+        (tmp_path / ".gitignore").write_text("!project_keep.bak\n")
+
+        # Create test files
+        (tmp_path / "global_ignored.dat").write_text("ignored by global")
+        (tmp_path / "repo_keep.dat").write_text("unignored by .git/info/exclude")
+        (tmp_path / "repo_ignored.bak").write_text("ignored by .git/info/exclude")
+        (tmp_path / "project_keep.bak").write_text("unignored by .gitignore")
+
+        gi_mod.load_gitignore_spec.cache_clear()
+
+        result = glob_handler("*.*", "/repo", False, 200, str(tmp_path))
+        assert "repo_keep.dat" in result
+        assert "project_keep.bak" in result
+        assert "global_ignored.dat" not in result
+        assert "repo_ignored.bak" not in result
+
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash is not available on this platform")
 class TestBashHandler:

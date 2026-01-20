@@ -1,10 +1,14 @@
 from collections import deque
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ....utils import validate_file_path
 from .constants import MAX_DIR_ITEMS
 from .gitignore import collect_gitignore_specs, is_ignored
 from .paths import map_repo_path
+
+if TYPE_CHECKING:
+    from pathspec import GitIgnoreSpec
 
 
 def _strip_dot_prefix(path_str: str) -> str:
@@ -15,7 +19,7 @@ def _strip_dot_prefix(path_str: str) -> str:
 def _collect_entries(
     current_abs: Path,
     include_hidden: bool,
-    gitignore_specs: list | None,
+    gitignore_specs: list[tuple[Path, "GitIgnoreSpec"]] | None,
     base_dir: Path,
 ) -> tuple[list[tuple[str, Path]], list[tuple[str, Path]]]:
     """Collect files and subdirectories in directory."""

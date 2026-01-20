@@ -56,7 +56,7 @@ def get_lsp_languages(base_dir: Path) -> frozenset[str]:
         return _lsp_cache[resolved]
 
     if not resolved.is_dir():
-        languages = frozenset()
+        languages: frozenset[str] = frozenset()
         _lsp_cache[resolved] = languages
         return languages
 
