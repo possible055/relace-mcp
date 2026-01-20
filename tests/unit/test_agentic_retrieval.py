@@ -162,3 +162,222 @@ class TestAgenticRetrievalLogic:
             assert "src/auth.py" in prompt
 
             assert result["cloud_hints_used"] == 2
+
+    @pytest.mark.asyncio
+    async def test_happy_path(
+        self,
+        mock_config: RelaceConfig,
+        mock_repo_client: MagicMock,
+        mock_search_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        with (
+            patch("relace_mcp.tools.repo.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.tools.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+        ):
+            mock_cloud.return_value = {"results": [{"filename": "src/core.py", "score": 0.9}]}
+            mock_harness = MagicMock()
+            mock_harness.run_async = AsyncMock(
+                return_value={
+                    "explanation": "Result",
+                    "files": {"src/core.py": [[1, 10]]},
+                    "turns_used": 1,
+                }
+            )
+            mock_harness_cls.return_value = mock_harness
+
+            result = await agentic_retrieval_logic(
+                mock_repo_client,
+                mock_search_client,
+                mock_config,
+                str(tmp_path),
+                "query",
+            )
+
+            assert result["explanation"] == "Result"
+            assert "src/core.py" in result["files"]
+            assert result["cloud_hints_used"] == 1
+            assert "trace_id" in result
+
+    @pytest.mark.asyncio
+    async def test_cloud_search_exception_handling(
+        self,
+        mock_config: RelaceConfig,
+        mock_repo_client: MagicMock,
+        mock_search_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        with (
+            patch("relace_mcp.tools.repo.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.tools.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+        ):
+            mock_cloud.side_effect = Exception("Fatal cloud error")
+            mock_harness = MagicMock()
+            mock_harness.run_async = AsyncMock(
+                return_value={"explanation": "Fallback works", "files": {}, "turns_used": 1}
+            )
+            mock_harness_cls.return_value = mock_harness
+
+            result = await agentic_retrieval_logic(
+                mock_repo_client,
+                mock_search_client,
+                mock_config,
+                str(tmp_path),
+                "query",
+            )
+
+            assert "warnings" in result
+            assert any("Cloud search error: Fatal cloud error" in w for w in result["warnings"])
+            assert result["cloud_hints_used"] == 0
+
+
+class TestAutoSync:
+    @pytest.fixture
+    def mock_config(self, tmp_path: Path) -> RelaceConfig:
+        return RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
+
+    @pytest.fixture
+    def mock_repo_client(self) -> MagicMock:
+        return MagicMock(spec=RelaceRepoClient)
+
+    @pytest.fixture
+    def mock_search_client(self) -> MagicMock:
+        client = MagicMock(spec=SearchLLMClient)
+        client.api_compat = "relace"
+        return client
+
+    @pytest.mark.asyncio
+    async def test_auto_sync_triggered_when_needs_sync(
+        self,
+        mock_config: RelaceConfig,
+        mock_repo_client: MagicMock,
+        mock_search_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        with (
+            patch("relace_mcp.tools.repo.retrieval.AGENTIC_AUTO_SYNC", True),
+            patch("relace_mcp.tools.repo.retrieval.cloud_info_logic") as mock_info,
+            patch("relace_mcp.tools.repo.retrieval.cloud_sync_logic") as mock_sync,
+            patch("relace_mcp.tools.repo.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.tools.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+        ):
+            mock_info.return_value = {"status": {"needs_sync": True}}
+            mock_sync.return_value = {"repo_id": "test-repo"}
+            mock_cloud.return_value = {"results": []}
+            mock_harness = MagicMock()
+            mock_harness.run_async = AsyncMock(
+                return_value={"explanation": "Done", "files": {}, "turns_used": 1}
+            )
+            mock_harness_cls.return_value = mock_harness
+
+            await agentic_retrieval_logic(
+                mock_repo_client,
+                mock_search_client,
+                mock_config,
+                str(tmp_path),
+                "query",
+            )
+
+            mock_info.assert_called_once()
+            mock_sync.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_auto_sync_skipped_when_not_needed(
+        self,
+        mock_config: RelaceConfig,
+        mock_repo_client: MagicMock,
+        mock_search_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        with (
+            patch("relace_mcp.tools.repo.retrieval.AGENTIC_AUTO_SYNC", True),
+            patch("relace_mcp.tools.repo.retrieval.cloud_info_logic") as mock_info,
+            patch("relace_mcp.tools.repo.retrieval.cloud_sync_logic") as mock_sync,
+            patch("relace_mcp.tools.repo.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.tools.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+        ):
+            mock_info.return_value = {"status": {"needs_sync": False}}
+            mock_cloud.return_value = {"results": []}
+            mock_harness = MagicMock()
+            mock_harness.run_async = AsyncMock(
+                return_value={"explanation": "Done", "files": {}, "turns_used": 1}
+            )
+            mock_harness_cls.return_value = mock_harness
+
+            await agentic_retrieval_logic(
+                mock_repo_client,
+                mock_search_client,
+                mock_config,
+                str(tmp_path),
+                "query",
+            )
+
+            mock_info.assert_called_once()
+            mock_sync.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_auto_sync_disabled_via_env(
+        self,
+        mock_config: RelaceConfig,
+        mock_repo_client: MagicMock,
+        mock_search_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        with (
+            patch("relace_mcp.tools.repo.retrieval.AGENTIC_AUTO_SYNC", False),
+            patch("relace_mcp.tools.repo.retrieval.cloud_info_logic") as mock_info,
+            patch("relace_mcp.tools.repo.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.tools.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+        ):
+            mock_cloud.return_value = {"results": []}
+            mock_harness = MagicMock()
+            mock_harness.run_async = AsyncMock(
+                return_value={"explanation": "Done", "files": {}, "turns_used": 1}
+            )
+            mock_harness_cls.return_value = mock_harness
+
+            await agentic_retrieval_logic(
+                mock_repo_client,
+                mock_search_client,
+                mock_config,
+                str(tmp_path),
+                "query",
+            )
+
+            mock_info.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_auto_sync_failure_continues_search(
+        self,
+        mock_config: RelaceConfig,
+        mock_repo_client: MagicMock,
+        mock_search_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        with (
+            patch("relace_mcp.tools.repo.retrieval.AGENTIC_AUTO_SYNC", True),
+            patch("relace_mcp.tools.repo.retrieval.cloud_info_logic") as mock_info,
+            patch("relace_mcp.tools.repo.retrieval.cloud_sync_logic") as mock_sync,
+            patch("relace_mcp.tools.repo.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.tools.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+        ):
+            mock_info.return_value = {"status": {"needs_sync": True}}
+            mock_sync.return_value = {"error": "Network timeout"}
+            mock_cloud.return_value = {"results": []}
+            mock_harness = MagicMock()
+            mock_harness.run_async = AsyncMock(
+                return_value={"explanation": "Still works", "files": {}, "turns_used": 1}
+            )
+            mock_harness_cls.return_value = mock_harness
+
+            result = await agentic_retrieval_logic(
+                mock_repo_client,
+                mock_search_client,
+                mock_config,
+                str(tmp_path),
+                "query",
+            )
+
+            assert "warnings" in result
+            assert any("Auto-sync failed" in w for w in result["warnings"])
+            assert result["explanation"] == "Still works"

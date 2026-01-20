@@ -59,7 +59,8 @@
 | `SEARCH_TIMEOUT_SECONDS` | `120` | 请求超时（同时作为 `fast_search` 的总耗时预算；超时会返回 `partial=true`） |
 | `SEARCH_TEMPERATURE` | `1.0` | 采样温度（0.0-2.0） |
 | `SEARCH_MAX_TURNS` | `6` | 最大 agent 循环轮数 |
-| `SEARCH_ENABLED_TOOLS` | (仅基础工具) | 工具允许列表（逗号/空格分隔）；未设置时仅启用基础工具（`view_file`、`view_directory`、`grep_search`、`glob`，并始终包含 `report_back`）。LSP 工具（`find_symbol`、`search_symbol`、`get_type`、`list_symbols`、`call_graph`）以及 `bash` 需要显式加入。 |
+| `SEARCH_LSP_TOOLS` | `false` | LSP 工具模式：`false`（禁用）、`true`（全部启用）、`auto`（检测已安装的服务器） |
+| `SEARCH_ENABLED_TOOLS` | (仅基础工具) | 工具允许列表（逗号/空格分隔）。未设置时仅启用基础工具。当 `SEARCH_LSP_TOOLS=true/auto` 时，此变量也可过滤启用哪些 LSP 工具。`bash` 需要显式加入。 |
 | `SEARCH_PARALLEL_TOOL_CALLS` | `1` | 启用并行工具调用 |
 | `SEARCH_TOOL_STRICT` | `1` | 在 tool schema 中包含 `strict` 字段 |
 | `SEARCH_LSP_TIMEOUT_SECONDS` | `15.0` | LSP 启动/请求超时 |
@@ -232,7 +233,13 @@ export SEARCH_MODEL=gpt-4o
 
 ### LSP 工具
 
-LSP 工具（`find_symbol`、`search_symbol`、`get_type`、`list_symbols`、`call_graph`）默认禁用；需要通过 `SEARCH_ENABLED_TOOLS` 显式加入。
+LSP 工具（`find_symbol`、`search_symbol`、`get_type`、`list_symbols`、`call_graph`）默认禁用。可通过以下方式启用：
+
+- **自动检测：** `SEARCH_LSP_TOOLS=auto` — 仅启用已安装服务器的语言
+- **全部启用：** `SEARCH_LSP_TOOLS=1` — 一次启用所有 LSP 工具
+- **精细控制：** `SEARCH_LSP_TOOLS=1` + `SEARCH_ENABLED_TOOLS=view_file,find_symbol,...` — 仅启用列表中的 LSP 工具
+
+> **注意：** `SEARCH_LSP_TOOLS` 作为**门控开关**。为 `false`（默认）时，LSP 工具始终禁用。为 `auto` 时，仅启用已安装服务器对应的语言。为 `true` 时，默认启用所有 LSP 工具，或由允许列表过滤。
 
 `find_symbol` 工具使用 Language Server Protocol 进行 Python 语义查询：
 - `definition`：跳转到符号定义

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from relace_mcp.lsp.languages import clear_lsp_cache, get_lsp_languages
 
 
@@ -26,3 +28,29 @@ class TestGetLspLanguages:
 
         languages = get_lsp_languages(tmp_path)
         assert "typescript" not in languages
+
+
+class TestDetectAvailableLspServers:
+    def test_detects_installed_servers(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Should detect servers that are available in PATH."""
+        from relace_mcp.lsp.languages import detect_available_lsp_servers
+
+        # Mock shutil.which to simulate basedpyright being installed
+        def mock_which(cmd: str) -> str | None:
+            if cmd == "basedpyright-langserver":
+                return "/usr/bin/basedpyright-langserver"
+            return None
+
+        monkeypatch.setattr("shutil.which", mock_which)
+
+        result = detect_available_lsp_servers()
+        assert "python" in result
+
+    def test_returns_empty_when_no_servers(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Should return empty set when no LSP servers are installed."""
+        from relace_mcp.lsp.languages import detect_available_lsp_servers
+
+        monkeypatch.setattr("shutil.which", lambda cmd: None)
+
+        result = detect_available_lsp_servers()
+        assert result == frozenset()
