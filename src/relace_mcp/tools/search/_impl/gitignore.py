@@ -1,5 +1,5 @@
 import os
-import subprocess
+import subprocess  # nosec B404 - safe use with fixed args, no user input
 from functools import lru_cache
 from pathlib import Path
 
@@ -30,7 +30,7 @@ def get_global_excludes_path() -> Path | None:
     """
     # Try git config first
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 - fixed command, no user input
             ["git", "config", "--global", "core.excludesFile"],
             capture_output=True,
             text=True,
