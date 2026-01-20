@@ -34,10 +34,6 @@ async def agentic_retrieval_logic(
     config: RelaceConfig,
     base_dir: str,
     query: str,
-    branch: str = "",
-    score_threshold: float = 0.3,
-    max_hints: int = 8,
-    token_limit: int = 10000,
 ) -> dict[str, Any]:
     """Two-stage retrieval: cloud semantic + agentic exploration.
 
@@ -47,14 +43,16 @@ async def agentic_retrieval_logic(
         config: Relace configuration.
         base_dir: Repository base directory.
         query: Natural language query.
-        branch: Branch to search (empty uses default).
-        score_threshold: Minimum relevance score for cloud results.
-        max_hints: Maximum number of hint files to include.
-        token_limit: Token limit for cloud search (lower for hints-only use).
 
     Returns:
         Dict with explanation, files, and metadata (same format as fast_search).
     """
+    # Fixed internal parameters
+    branch = ""
+    score_threshold = 0.3
+    max_hints = 8
+    token_limit = 10000
+
     trace_id = str(uuid.uuid4())[:8]
     logger.info("[%s] Starting agentic retrieval", trace_id)
 

@@ -266,9 +266,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         )
         async def agentic_retrieval(
             query: str,
-            branch: str = "",
-            score_threshold: float = 0.3,
-            max_hints: int = 8,
             ctx: Context | None = None,
         ) -> dict[str, Any]:
             """Two-stage semantic + agentic code retrieval.
@@ -283,9 +280,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
             Args:
                 query: Natural language query describing what to find.
-                branch: Branch to search (empty uses default).
-                score_threshold: Minimum relevance score for hints (0.0-1.0).
-                max_hints: Maximum number of hint files to use (default 8).
             """
             progress_task = None
             if ctx is not None:
@@ -300,9 +294,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     config,
                     base_dir,
                     query,
-                    branch=branch,
-                    score_threshold=score_threshold,
-                    max_hints=max_hints,
                 )
             finally:
                 if progress_task is not None:
