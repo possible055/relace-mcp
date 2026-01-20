@@ -12,6 +12,7 @@ from ..config.settings import (
     SEARCH_PARALLEL_TOOL_CALLS,
     SEARCH_TEMPERATURE,
     SEARCH_TIMEOUT_SECONDS,
+    SEARCH_TOP_P,
 )
 
 logger = logging.getLogger(__name__)
@@ -101,11 +102,16 @@ class SearchLLMClient:
                 )
                 include_parallel_tool_calls = False
 
+        temp = temperature if temperature is not None else SEARCH_TEMPERATURE
+
         extra_body: dict[str, Any] = {
             "tools": tools,
             "tool_choice": "auto",
-            "top_p": 0.95,
         }
+
+        # Only include top_p when explicitly configured
+        if SEARCH_TOP_P is not None:
+            extra_body["top_p"] = SEARCH_TOP_P
 
         if include_relace_sampling:
             extra_body["top_k"] = 100
@@ -114,7 +120,6 @@ class SearchLLMClient:
         if include_parallel_tool_calls:
             extra_body["parallel_tool_calls"] = True
 
-        temp = temperature if temperature is not None else SEARCH_TEMPERATURE
         try:
             data, _latency_ms = self._chat_client.chat_completions(
                 messages=messages,
@@ -208,11 +213,16 @@ class SearchLLMClient:
                 )
                 include_parallel_tool_calls = False
 
+        temp = temperature if temperature is not None else SEARCH_TEMPERATURE
+
         extra_body: dict[str, Any] = {
             "tools": tools,
             "tool_choice": "auto",
-            "top_p": 0.95,
         }
+
+        # Only include top_p when explicitly configured
+        if SEARCH_TOP_P is not None:
+            extra_body["top_p"] = SEARCH_TOP_P
 
         if include_relace_sampling:
             extra_body["top_k"] = 100
@@ -221,7 +231,6 @@ class SearchLLMClient:
         if include_parallel_tool_calls:
             extra_body["parallel_tool_calls"] = True
 
-        temp = temperature if temperature is not None else SEARCH_TEMPERATURE
         try:
             data, _latency_ms = await self._chat_client.chat_completions_async(
                 messages=messages,
@@ -304,8 +313,9 @@ class SearchLLMClient:
         compat_body: dict[str, Any] = {
             "tools": stripped_tools,
             "tool_choice": "auto",
-            "top_p": 0.95,
         }
+        if SEARCH_TOP_P is not None:
+            compat_body["top_p"] = SEARCH_TOP_P
 
         logger.warning(
             "[%s] Request rejected (status=%s, provider=%s, api_compat=%s). Retrying with "
@@ -355,8 +365,9 @@ class SearchLLMClient:
         compat_body: dict[str, Any] = {
             "tools": stripped_tools,
             "tool_choice": "auto",
-            "top_p": 0.95,
         }
+        if SEARCH_TOP_P is not None:
+            compat_body["top_p"] = SEARCH_TOP_P
 
         logger.warning(
             "[%s] Request rejected (status=%s, provider=%s, api_compat=%s). Retrying with "

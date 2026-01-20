@@ -58,6 +58,10 @@ SEARCH_PARALLEL_TOOL_CALLS = env_bool(
     default=True,
     deprecated_name="RELACE_SEARCH_PARALLEL_TOOL_CALLS",
 )
+# Search top_p (optional, only set if explicitly configured)
+# Some providers (e.g., Mistral) require top_p=1 for greedy sampling (temperature=0)
+_search_top_p_raw = os.getenv("SEARCH_TOP_P", "").strip()
+SEARCH_TOP_P: float | None = float(_search_top_p_raw) if _search_top_p_raw else None
 
 
 # Relace Repos API (Infrastructure Endpoint for cloud sync/search)
