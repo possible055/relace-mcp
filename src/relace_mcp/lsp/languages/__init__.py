@@ -89,6 +89,25 @@ def get_lsp_languages(base_dir: Path) -> frozenset[str]:
     return languages
 
 
+def detect_available_lsp_servers() -> frozenset[str]:
+    """Detect which LSP servers are available in the current environment.
+
+    Checks if the LSP server executable for each supported language
+    is available in the system PATH.
+
+    Returns:
+        Set of language IDs (e.g., {"python", "go"}) for which
+        the LSP server is installed.
+    """
+    import shutil
+
+    available: set[str] = set()
+    for lang_id, config in LANGUAGE_CONFIGS.items():
+        if config.command and shutil.which(config.command[0]):
+            available.add(lang_id)
+    return frozenset(available)
+
+
 def clear_lsp_cache(base_dir: Path | None = None) -> None:
     """Clear cache for specific dir or all."""
     if base_dir is None:
@@ -103,5 +122,6 @@ __all__ = [
     "LANGUAGE_CONFIGS",
     "get_config_for_file",
     "get_lsp_languages",
+    "detect_available_lsp_servers",
     "clear_lsp_cache",
 ]

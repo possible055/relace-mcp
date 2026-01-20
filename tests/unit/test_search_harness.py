@@ -506,3 +506,48 @@ class TestToolSchemas:
         grep = next(t for t in TOOL_SCHEMAS if t["function"]["name"] == "grep_search")
         case_sensitive = grep["function"]["parameters"]["properties"]["case_sensitive"]
         assert case_sensitive.get("default") is True
+
+    def test_lsp_tools_auto_mode_with_server(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """SEARCH_LSP_TOOLS=auto should enable LSP tools when servers are installed."""
+        import importlib
+
+        import relace_mcp.config.settings as settings
+        import relace_mcp.tools.search.schemas.tool_schemas as tool_schemas
+
+        # Set auto mode
+        monkeypatch.setenv("SEARCH_LSP_TOOLS", "auto")
+        monkeypatch.delenv("SEARCH_ENABLED_TOOLS", raising=False)
+
+        # Mock detect_available_lsp_servers to return python
+        monkeypatch.setattr(
+            tool_schemas, "detect_available_lsp_servers", lambda: frozenset({"python"})
+        )
+
+        # Reload to pick up env change
+        importlib.reload(settings)
+        importlib.reload(tool_schemas)
+
+        schemas = tool_schemas.get_tool_schemas()
+        names = {t["function"]["name"] for t in schemas}
+        assert "find_symbol" in names
+
+    def test_lsp_tools_auto_mode_no_server(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """SEARCH_LSP_TOOLS=auto should disable LSP tools when no servers installed."""
+        import importlib
+
+        import relace_mcp.config.settings as settings
+        import relace_mcp.tools.search.schemas.tool_schemas as tool_schemas
+
+        monkeypatch.setenv("SEARCH_LSP_TOOLS", "auto")
+        monkeypatch.delenv("SEARCH_ENABLED_TOOLS", raising=False)
+
+        # Reload settings first to pick up env change
+        importlib.reload(settings)
+        importlib.reload(tool_schemas)
+
+        # Now mock detect_available_lsp_servers AFTER reload
+        monkeypatch.setattr(tool_schemas, "detect_available_lsp_servers", lambda: frozenset())
+
+        schemas = tool_schemas.get_tool_schemas()
+        names = {t["function"]["name"] for t in schemas}
+        assert "find_symbol" not in names
