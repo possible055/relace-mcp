@@ -4,7 +4,8 @@ from functools import lru_cache
 from pathlib import Path
 
 from ....utils import validate_file_path
-from .constants import MAX_GLOB_DEPTH, MAX_GLOB_MATCHES
+from .constants import COMMON_IGNORED_DIRS, MAX_GLOB_DEPTH, MAX_GLOB_MATCHES
+from .gitignore import collect_gitignore_specs, is_ignored
 from .paths import map_repo_path
 
 
@@ -106,16 +107,44 @@ def glob_handler(
 
         matches: list[str] = []
         stop = False
+        base_path = Path(base_dir).resolve()
 
         for root, dirs, files in os.walk(resolved, followlinks=False):
-            rel_root = Path(root).relative_to(resolved)
+            root_path = Path(root)
+            rel_root = root_path.relative_to(resolved)
             if len(rel_root.parts) >= MAX_GLOB_DEPTH:
                 dirs.clear()
                 continue
 
+            # Avoid huge dependency dirs and caches.
+            dirs[:] = [d for d in dirs if d not in COMMON_IGNORED_DIRS]
+
             if not include_hidden:
                 dirs[:] = [d for d in dirs if not d.startswith(".")]
                 files = [f for f in files if not f.startswith(".")]
+
+            # Apply gitignore rules to prune directories
+            gitignore_specs = collect_gitignore_specs(root_path, base_path)
+            if gitignore_specs:
+                try:
+                    root_rel = root_path.relative_to(base_path).as_posix()
+                except ValueError:
+                    root_rel = ""
+
+                pruned_dirs = []
+                for d in dirs:
+                    dir_rel = f"{root_rel}/{d}" if root_rel else d
+                    if not is_ignored(dir_rel, True, gitignore_specs, base_path):
+                        pruned_dirs.append(d)
+                dirs[:] = pruned_dirs
+
+                # Also filter files by gitignore
+                pruned_files = []
+                for f in files:
+                    file_rel = f"{root_rel}/{f}" if root_rel else f
+                    if not is_ignored(file_rel, False, gitignore_specs, base_path):
+                        pruned_files.append(f)
+                files = pruned_files
 
             dirs.sort()
             files.sort()

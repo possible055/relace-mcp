@@ -77,7 +77,7 @@ class TestCloudSearchLogic:
         assert result["query"] == "user authentication"
         assert len(result["results"]) == 2
         assert result["repo_id"] == "test-repo-id"
-        assert result["hash"] == mock_sync_state.git_head_sha
+        assert result["hash"] == mock_sync_state.repo_head
         assert result["result_count"] == 2
         assert isinstance(result.get("trace_id"), str)
         assert len(result["trace_id"]) == 8
@@ -99,7 +99,7 @@ class TestCloudSearchLogic:
         assert call_kwargs["repo_id"] == "test-repo-id"
         assert call_kwargs["query"] == "error handling"
         assert call_kwargs["branch"] == ""
-        assert call_kwargs["hash"] == mock_sync_state.git_head_sha
+        assert call_kwargs["hash"] == mock_sync_state.repo_head
         assert call_kwargs["score_threshold"] == 0.5
         assert call_kwargs["token_limit"] == 10000
         assert call_kwargs["include_content"] is True
