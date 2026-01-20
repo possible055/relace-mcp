@@ -71,12 +71,12 @@ async def agentic_retrieval_logic(
                 sync_result = cloud_sync_logic(repo_client, base_dir)
                 if sync_result.get("error"):
                     warnings_list.append(f"Auto-sync failed: {sync_result['error']}")
-                    logger.warning("[%s] Auto-sync failed: %s", trace_id, sync_result["error"])
+                    logger.warning("[%s] Auto-sync failed, see warnings", trace_id)
                 else:
                     logger.info("[%s] Auto-sync completed successfully", trace_id)
         except Exception as exc:
             warnings_list.append(f"Auto-sync error: {exc}")
-            logger.warning("[%s] Auto-sync exception: %s", trace_id, exc)
+            logger.warning("[%s] Auto-sync exception occurred, see warnings", trace_id)
 
     # Stage 1: Cloud semantic retrieval
     try:

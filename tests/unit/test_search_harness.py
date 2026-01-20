@@ -518,14 +518,14 @@ class TestToolSchemas:
         monkeypatch.setenv("SEARCH_LSP_TOOLS", "auto")
         monkeypatch.delenv("SEARCH_ENABLED_TOOLS", raising=False)
 
-        # Mock detect_available_lsp_servers to return python
-        monkeypatch.setattr(
-            tool_schemas, "detect_available_lsp_servers", lambda: frozenset({"python"})
-        )
-
         # Reload to pick up env change
         importlib.reload(settings)
         importlib.reload(tool_schemas)
+
+        # Mock detect_available_lsp_servers AFTER reload to avoid being overwritten
+        monkeypatch.setattr(
+            tool_schemas, "detect_available_lsp_servers", lambda: frozenset({"python"})
+        )
 
         schemas = tool_schemas.get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
