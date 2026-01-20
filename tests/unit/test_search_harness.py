@@ -475,11 +475,20 @@ class TestToolSchemas:
 
     def test_lsp_query_backward_compat(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """lsp_query in allowlist should map to find_symbol for backward compatibility."""
-        from relace_mcp.tools.search.schemas import get_tool_schemas
+        import importlib
 
+        import relace_mcp.config.settings as settings
+        import relace_mcp.tools.search.schemas.tool_schemas as tool_schemas
+
+        # Enable LSP gatekeeper (required for any LSP tool to be enabled)
+        monkeypatch.setenv("SEARCH_LSP_TOOLS", "true")
         monkeypatch.setenv("SEARCH_ENABLED_TOOLS", "view_file,lsp_query")
+        # Reload modules to pick up monkeypatched env vars
+        # (SEARCH_LSP_TOOLS is imported at module level in tool_schemas)
+        importlib.reload(settings)
+        importlib.reload(tool_schemas)
 
-        schemas = get_tool_schemas()
+        schemas = tool_schemas.get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
         assert "find_symbol" in names
         assert "lsp_query" not in names
