@@ -2,6 +2,7 @@ import shutil
 from typing import Any
 
 from ....config.compat import getenv_with_fallback
+from ....config.settings import SEARCH_LSP_TOOLS
 
 _TRUTHY = {"1", "true", "yes", "y", "on"}
 _FALSY = {"0", "false", "no", "n", "off"}
@@ -468,10 +469,11 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
 
     Args:
         lsp_languages: Set of available LSP language IDs for the current project.
-            If None, uses default tool set (LSP tools require explicit opt-in via SEARCH_ENABLED_TOOLS).
+            If None, uses default tool set (LSP tools require explicit opt-in via SEARCH_ENABLED_TOOLS or SEARCH_LSP_TOOLS).
             If empty frozenset, LSP tools are hidden.
 
     Environment variables:
+        - SEARCH_LSP_TOOLS: Set to 1/true to enable all LSP tools. Simpler toggle than SEARCH_ENABLED_TOOLS.
         - SEARCH_ENABLED_TOOLS: Comma/space-separated allowlist, e.g.
           "view_file,view_directory,grep_search,glob,find_symbol". `report_back` is always enabled.
           If not set, only basic tools (view_file, view_directory, grep_search, glob) are enabled.
@@ -486,6 +488,9 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
         "SEARCH_ENABLED_TOOLS", "RELACE_SEARCH_ENABLED_TOOLS"
     ).strip()
 
+    # LSP tool names for easy reference
+    lsp_tool_names = {"find_symbol", "search_symbol", "get_type", "list_symbols", "call_graph"}
+
     if raw_allowlist:
         enabled = {t.strip().lower() for t in _split_tool_list(raw_allowlist)}
         # Backward compatibility: lsp_query is now find_symbol
@@ -495,7 +500,7 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
     else:
         # Default: basic exploration tools only
         # LSP tools (find_symbol, search_symbol, get_type, list_symbols, call_graph)
-        # require explicit opt-in via SEARCH_ENABLED_TOOLS
+        # require explicit opt-in via SEARCH_ENABLED_TOOLS or SEARCH_LSP_TOOLS
         # bash requires opt-in for security (Unix shell, higher risk)
         enabled = {
             "view_file",
@@ -504,6 +509,9 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
             "glob",
             "report_back",
         }
+        # If SEARCH_LSP_TOOLS=true, auto-enable all LSP tools
+        if SEARCH_LSP_TOOLS:
+            enabled.update(lsp_tool_names)
 
     # Always keep report_back so the harness can terminate deterministically.
     enabled.add("report_back")
@@ -514,11 +522,7 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
 
     # Hide LSP tools if no LSP languages are available for this project
     if lsp_languages is not None and not lsp_languages:
-        enabled.discard("find_symbol")
-        enabled.discard("search_symbol")
-        enabled.discard("get_type")
-        enabled.discard("list_symbols")
-        enabled.discard("call_graph")
+        enabled -= lsp_tool_names
 
     selected = [
         schema for schema in _ALL_TOOL_SCHEMAS if schema.get("function", {}).get("name") in enabled

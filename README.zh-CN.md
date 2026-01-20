@@ -140,10 +140,11 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 | 变量 | 必需 | 说明 |
 |------|------|------|
 | `RELACE_API_KEY` | ✅* | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥 |
-| `MCP_BASE_DIR` | ❌ | 项目根目录（自动检测：MCP Roots → Git → CWD） |
-| `MCP_DOTENV_PATH` | ❌ | `.env` 文件路径，用于集中配置 |
 | `RELACE_CLOUD_TOOLS` | ❌ | 设为 `1` 启用云端工具 |
+| `SEARCH_LSP_TOOLS` | ❌ | 设为 `1` 启用 LSP 工具（`find_symbol`、`search_symbol` 等） |
+| `MCP_BASE_DIR` | ❌ | 项目根目录（自动检测：MCP Roots → Git → CWD） |
 | `MCP_LOGGING` | ❌ | 设为 `1` 启用文件日志 |
+| `MCP_DOTENV_PATH` | ❌ | `.env` 文件路径，用于集中配置 |
 
 `*` 仅当**同时满足**：(1) `APPLY_PROVIDER` 与 `SEARCH_PROVIDER` 均为非 Relace 提供商，且 (2) `RELACE_CLOUD_TOOLS=false` 时可省略。
 
@@ -154,6 +155,17 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 核心工具（`fast_apply`、`fast_search`）始终可用。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。
 
 详细参数请参见 [docs/tools.zh-CN.md](docs/tools.zh-CN.md)。
+
+## 语言支持
+
+LSP 工具使用系统上安装的外部语言服务器。
+
+| 语言 | 语言服务器 | 安装命令 |
+|------|-----------|----------|
+| Python | basedpyright | (已内置) |
+| TypeScript/JS | typescript-language-server | `npm i -g typescript-language-server typescript` |
+| Go | gopls | `go install golang.org/x/tools/gopls@latest` |
+| Rust | rust-analyzer | `rustup component add rust-analyzer` |
 
 ## 仪表盘
 

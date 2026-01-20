@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "RELACE_CLOUD_TOOLS",
+    "SEARCH_LSP_TOOLS",
     "RelaceConfig",
 ]
 
@@ -90,6 +91,9 @@ MCP_LOGGING = env_bool("MCP_LOGGING", default=False, deprecated_name="RELACE_LOG
 
 # Cloud tools (disabled by default)
 RELACE_CLOUD_TOOLS = env_bool("RELACE_CLOUD_TOOLS", default=False)
+
+# LSP tools (disabled by default; simpler toggle than SEARCH_ENABLED_TOOLS)
+SEARCH_LSP_TOOLS = env_bool("SEARCH_LSP_TOOLS", default=False)
 
 # Agentic retrieval auto-sync (enabled by default when cloud tools are enabled)
 AGENTIC_AUTO_SYNC = env_bool("RELACE_AGENTIC_AUTO_SYNC", default=True)

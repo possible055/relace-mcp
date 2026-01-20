@@ -60,6 +60,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `SEARCH_TIMEOUT_SECONDS` | `120` | Request timeout (also used as `fast_search` wall-clock budget; returns `partial=true` on timeout) |
 | `SEARCH_TEMPERATURE` | `1.0` | LLM sampling temperature (0.0-2.0) |
 | `SEARCH_MAX_TURNS` | `6` | Maximum agent loop turns |
+| `SEARCH_LSP_TOOLS` | `false` | Set to `1` to enable all LSP tools (simpler alternative to `SEARCH_ENABLED_TOOLS`) |
 | `SEARCH_ENABLED_TOOLS` | (basic only) | Tool allowlist (comma/space-separated). If unset, only basic tools (`view_file`, `view_directory`, `grep_search`, `glob`) are enabled (plus `report_back`). LSP tools (`find_symbol`, `search_symbol`, `get_type`, `list_symbols`, `call_graph`) and `bash` require explicit opt-in. |
 | `SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls |
 | `SEARCH_TOOL_STRICT` | `1` | Include `strict` field in tool schemas |
@@ -232,7 +233,10 @@ export SEARCH_MODEL=gpt-4o
 
 ### LSP Tool
 
-LSP tools (`find_symbol`, `search_symbol`, `get_type`, `list_symbols`, `call_graph`) are disabled by default; opt-in via `SEARCH_ENABLED_TOOLS`.
+LSP tools (`find_symbol`, `search_symbol`, `get_type`, `list_symbols`, `call_graph`) are disabled by default. Enable them via:
+
+- **Simple toggle:** `SEARCH_LSP_TOOLS=1` — enables all LSP tools at once
+- **Fine-grained control:** `SEARCH_ENABLED_TOOLS=view_file,view_directory,grep_search,glob,find_symbol,...`
 
 The `find_symbol` tool uses Language Server Protocol for Python semantic queries:
 - `definition`: Jump to symbol definition
