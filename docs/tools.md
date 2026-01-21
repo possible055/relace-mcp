@@ -30,7 +30,7 @@ UDiff of changes, or confirmation for new files.
 
 ---
 
-## `fast_search`
+## `agentic_search`
 
 Search the codebase and return relevant files and line ranges. Uses an agentic loop to autonomously explore the codebase.
 
@@ -58,6 +58,14 @@ Search the codebase and return relevant files and line ranges. Uses an agentic l
   "partial": false
 }
 ```
+
+---
+
+## `fast_search`
+
+> **DEPRECATED**: Use `agentic_search` instead. This alias will be removed in 0.2.5.
+
+Alias for `agentic_search`. Returns identical results with an additional `_deprecated` field.
 
 ---
 

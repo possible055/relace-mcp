@@ -160,7 +160,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             """
             result = await _agentic_search_impl(query, ctx)
             result["_deprecated"] = (
-                "Tool 'fast_search' is deprecated and will be removed in v2.0. "
+                "Tool 'fast_search' is deprecated and will be removed in v0.2.5. "
                 "Use 'agentic_search' instead."
             )
             return result
@@ -343,7 +343,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 {
                     "id": "fast_search",
                     "name": "Fast Search",
-                    "description": "[DEPRECATED] Alias for agentic_search. Will be removed in v2.0.",
+                    "description": "[DEPRECATED] Alias for agentic_search. Will be removed in v0.2.5.",
                     "enabled": True,
                     "deprecated": True,
                 }

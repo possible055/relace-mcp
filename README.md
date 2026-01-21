@@ -16,8 +16,8 @@
 
 MCP server providing AI-powered code editing and intelligent codebase exploration tools.
 
-| Without | With `fast_search` + `fast_apply` |
-|:--------|:----------------------------------|
+| Without | With `agentic_search` + `fast_apply` |
+|:--------|:-------------------------------------|
 | Manual grep, misses related files | Ask naturally, get precise locations |
 | Edits break imports elsewhere | Traces imports and call chains |
 | Full rewrites burn tokens | Describe changes, no line numbers |
@@ -26,7 +26,8 @@ MCP server providing AI-powered code editing and intelligent codebase exploratio
 ## Features
 
 - **Fast Apply** — Apply code edits at 10,000+ tokens/sec via Relace API
-- **Fast Search** — Agentic codebase exploration with natural language queries
+- **Agentic Search** — Agentic codebase exploration with natural language queries (`fast_search` is deprecated alias, removed in 0.2.5)
+- **Agentic Retrieval** — Two-stage semantic + agentic code retrieval (requires `RELACE_CLOUD_TOOLS=1` and `MCP_SEARCH_MODE=indexed` or `both`)
 - **Cloud Sync** — Upload local codebase to Relace Cloud for semantic search
 - **Cloud Search** — Semantic code search over cloud-synced repositories
 - **Dashboard** — Real-time terminal UI for monitoring operations
@@ -141,6 +142,7 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 |----------|----------|-------------|
 | `RELACE_API_KEY` | ✅* | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
 | `RELACE_CLOUD_TOOLS` | ❌ | Set to `1` to enable cloud tools |
+| `MCP_SEARCH_MODE` | ❌ | Search mode: `agentic` (default), `indexed`, or `both` |
 | `SEARCH_LSP_TOOLS` | ❌ | LSP tools: `1` (all on), `auto` (detect installed servers), `0` (off, default) |
 | `MCP_BASE_DIR` | ❌ | Project root (auto-detected via MCP Roots → Git → CWD) |
 | `MCP_LOGGING` | ❌ | Set to `1` to enable file logging |
@@ -152,7 +154,7 @@ For `.env` usage, encoding settings, custom LLM providers, and more, see [docs/a
 
 ## Tools
 
-Core tools (`fast_apply`, `fast_search`) are always available. Cloud tools require `RELACE_CLOUD_TOOLS=1`.
+Core tools (`fast_apply`, `agentic_search`) are always available. `fast_search` is a deprecated alias for `agentic_search` (removed in 0.2.5). Cloud tools require `RELACE_CLOUD_TOOLS=1`. `agentic_retrieval` requires both `RELACE_CLOUD_TOOLS=1` and `MCP_SEARCH_MODE=indexed` or `both`.
 
 For detailed parameters, see [docs/tools.md](docs/tools.md).
 
@@ -180,14 +182,20 @@ For detailed usage, see [docs/dashboard.md](docs/dashboard.md).
 
 ## Benchmark
 
-Evaluate `fast_search` performance using standard code localization datasets.
+Evaluate `agentic_search` performance using the [Loc-Bench](https://huggingface.co/datasets/IvanaXu/LocAgent) code localization dataset.
 
 ```bash
+# Install benchmark dependencies
 pip install relace-mcp[benchmark]
-uv run python -m benchmark.cli.run --dataset artifacts/data/processed/elite_50.jsonl --limit 20
+
+# Build dataset from Hugging Face
+uv run python -m benchmark.cli.build_locbench --output artifacts/data/raw/locbench_v1.jsonl
+
+# Run evaluation
+uv run python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.jsonl --limit 20
 ```
 
-For detailed instructions, see [docs/benchmark.md](docs/benchmark.md).
+For grid search, analysis tools, and metrics interpretation, see [docs/benchmark.md](docs/benchmark.md).
 
 ## Platform Support
 
