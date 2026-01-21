@@ -69,6 +69,7 @@ class BenchmarkRunner:
         checkpoint_path: Path | None = None,
         case_timeout: int | None = None,
         fail_fast: int | None = None,
+        search_mode: str = "agentic",
     ):
         self.config = config
         self.verbose = verbose
@@ -78,6 +79,7 @@ class BenchmarkRunner:
         self.checkpoint_path = checkpoint_path
         self.case_timeout = case_timeout
         self.fail_fast = fail_fast
+        self.search_mode = search_mode
 
     def run_benchmark(
         self,
@@ -294,9 +296,28 @@ class BenchmarkRunner:
 
         start_time = time.perf_counter()
         lsp_languages = get_lsp_languages(repo_path)
-        result = FastAgenticSearchHarness(
-            effective_config, client, lsp_languages=lsp_languages
-        ).run(case.query)
+
+        if self.search_mode == "indexed":
+            import asyncio
+
+            from relace_mcp.clients import RelaceRepoClient
+            from relace_mcp.tools.repo import agentic_retrieval_logic
+
+            repo_client = RelaceRepoClient(effective_config)
+            result = asyncio.get_event_loop().run_until_complete(
+                agentic_retrieval_logic(
+                    repo_client,
+                    client,
+                    effective_config,
+                    str(repo_path),
+                    case.query,
+                )
+            )
+        else:
+            result = FastAgenticSearchHarness(
+                effective_config, client, lsp_languages=lsp_languages
+            ).run(case.query)
+
         latency_ms = (time.perf_counter() - start_time) * 1000
 
         returned_files_raw = result.get("files", {})

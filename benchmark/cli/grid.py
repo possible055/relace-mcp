@@ -3,6 +3,7 @@ import json
 import os
 import subprocess  # nosec B404
 import sys
+import time
 from pathlib import Path
 
 import click
@@ -35,7 +36,7 @@ def _format_float_for_filename(value: float) -> str:
 @click.option("--seed", default=0, type=int, help="Random seed for shuffling")
 @click.option("--shuffle", is_flag=True, help="Shuffle cases before selecting --limit")
 @click.option(
-    "--turns",
+    "--max-turns",
     "search_max_turns_values",
     multiple=True,
     type=int,
@@ -106,9 +107,19 @@ def main(
             }
         )
 
-    click.echo(f"Dataset: {resolved_dataset_path}")
+    # Display paths relative to benchmark_dir for cleaner output
+    try:
+        dataset_display = resolved_dataset_path.relative_to(benchmark_dir)
+    except ValueError:
+        dataset_display = resolved_dataset_path
+    try:
+        output_display = grid_dir.relative_to(benchmark_dir)
+    except ValueError:
+        output_display = grid_dir
+
+    click.echo(f"Dataset: {dataset_display}")
     click.echo(f"Planned runs: {len(planned)}")
-    click.echo(f"Output dir: {grid_dir}")
+    click.echo(f"Output dir: {output_display}")
 
     if dry_run:
         for item in planned[:20]:
@@ -118,7 +129,14 @@ def main(
         return
 
     summaries: list[dict[str, object]] = []
+    total_runs = len(planned)
+    wall_start = time.perf_counter()
+
     for i, item in enumerate(planned, 1):
+        # Print run header
+        config_info = f"max_turns={item['search_max_turns']} temp={item['search_temperature']}"
+        click.echo(f"\n[Run {i}/{total_runs}] {config_info}")
+
         env = dict(os.environ)
         env["SEARCH_MAX_TURNS"] = str(item["search_max_turns"])
         env["SEARCH_TEMPERATURE"] = str(item["search_temperature"])
@@ -133,7 +151,6 @@ def main(
             dataset_path,
             "--seed",
             str(seed),
-            "--quiet",
             "--output",
             str(item["output_prefix"]),
         ]
@@ -142,18 +159,14 @@ def main(
         if shuffle:
             cmd.append("--shuffle")
 
-        click.echo(f"[{i}/{len(planned)}] {' '.join(cmd)}")
+        # Let subprocess output directly (progress bar visible)
         completed = subprocess.run(  # nosec B603
             cmd,
             cwd=str(project_root),
             env=env,
-            text=True,
-            capture_output=True,
             check=False,
         )
         if completed.returncode != 0:
-            click.echo(completed.stdout)
-            click.echo(completed.stderr, err=True)
             raise SystemExit(completed.returncode)
 
         output_prefix = Path(str(item["output_prefix"]))
@@ -188,6 +201,11 @@ def main(
                 "search": (report.get("metadata") or {}).get("search"),
             }
         )
+
+    # Final summary
+    elapsed = time.perf_counter() - wall_start
+    mins, secs = divmod(int(elapsed), 60)
+    click.echo(f"\nGrid completed: {total_runs} runs in {mins:02d}:{secs:02d}")
 
     report_out = get_reports_dir() / f"{grid_dir.name}.grid.json"
     report_out.parent.mkdir(parents=True, exist_ok=True)

@@ -97,6 +97,23 @@ def _load_benchmark_config():
 @click.option("-v", "--verbose", is_flag=True, help="Verbose output")
 @click.option("-q", "--quiet", is_flag=True, help="Disable progress bar")
 @click.option("--dry-run", is_flag=True, help="Only load data, don't run searches")
+@click.option(
+    "--search-mode",
+    type=click.Choice(["agentic", "indexed"]),
+    default="agentic",
+    help="Search mode: agentic (fast_search) or indexed (agentic_retrieval)",
+)
+@click.option(
+    "--lsp-tools",
+    type=click.Choice(["true", "false", "auto"]),
+    default=None,
+    help="LSP tools mode: true (all), false (disabled), auto (detect servers)",
+)
+@click.option(
+    "--enabled-tools",
+    default=None,
+    help="Comma-separated list of enabled internal tools (e.g., view_file,grep_search,bash)",
+)
 def main(
     dataset_path: str,
     output: str | None,
@@ -112,8 +129,11 @@ def main(
     verbose: bool,
     quiet: bool,
     dry_run: bool,
+    search_mode: str,
+    lsp_tools: str | None,
+    enabled_tools: str | None,
 ) -> None:
-    """Run benchmark on fast_search.
+    """Run benchmark on fast_search or agentic_retrieval.
 
     Large repos are automatically excluded via EXCLUDED_REPOS in config.
     """
@@ -125,6 +145,10 @@ def main(
         os.environ["SEARCH_MAX_TURNS"] = str(max_turns)
     if temperature is not None:
         os.environ["SEARCH_TEMPERATURE"] = str(temperature)
+    if lsp_tools is not None:
+        os.environ["SEARCH_LSP_TOOLS"] = lsp_tools
+    if enabled_tools is not None:
+        os.environ["SEARCH_ENABLED_TOOLS"] = enabled_tools
 
     from ..runner.executor import BenchmarkRunner
 
@@ -138,6 +162,9 @@ def main(
     click.echo(f"  limit:   {limit if limit is not None else 'all'}")
     click.echo(f"  shuffle: {shuffle}")
     click.echo(f"  seed:    {seed}")
+    click.echo(f"  search_mode: {search_mode}")
+    click.echo(f"  lsp_tools: {lsp_tools or 'default'}")
+    click.echo(f"  enabled_tools: {enabled_tools or 'default'}")
     click.echo(f"  excluded repos: {len(EXCLUDED_REPOS)}")
 
     try:
@@ -202,6 +229,7 @@ def main(
         checkpoint_path=checkpoint_path,
         case_timeout=timeout,
         fail_fast=fail_fast,
+        search_mode=search_mode,
     )
 
     click.echo("\nRunning benchmark...")
@@ -213,6 +241,9 @@ def main(
             "limit": limit,
             "shuffle": shuffle,
             "seed": seed,
+            "search_mode": search_mode,
+            "lsp_tools": lsp_tools,
+            "enabled_tools": enabled_tools,
         },
     )
 

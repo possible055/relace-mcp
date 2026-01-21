@@ -112,32 +112,3 @@ def extract_function_scopes(
 
     output_path = relative_path if relative_path else str(file_path)
     return _find_functions_at_lines(tree, source, line_numbers, output_path)
-
-
-def normalize_gt_to_function_scopes(
-    repo_path: Path,
-    ground_truth_files: dict[str, list[tuple[int, int]]],
-) -> list[FunctionScope]:
-    """Normalize ground truth line ranges to function scopes.
-
-    Args:
-        repo_path: Root path of the repository.
-        ground_truth_files: Ground truth as {file_path: [(start, end), ...]}.
-
-    Returns:
-        List of FunctionScope objects covering all ground truth.
-    """
-    all_scopes: list[FunctionScope] = []
-
-    for rel_path, ranges in ground_truth_files.items():
-        full_path = repo_path / rel_path
-
-        # Collect all lines from ranges
-        lines: set[int] = set()
-        for start, end in ranges:
-            lines.update(range(start, end + 1))
-
-        scopes = extract_function_scopes(full_path, lines, relative_path=rel_path)
-        all_scopes.extend(scopes)
-
-    return all_scopes
