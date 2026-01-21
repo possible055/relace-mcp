@@ -20,13 +20,15 @@ def cloud_clear_logic(
     confirm: bool = False,
     repo_id: str | None = None,
 ) -> dict[str, Any]:
-    """Clear (delete) the cloud repository and local sync state.
+    """Clear (delete) the cloud repository and optionally local sync state.
 
     Args:
         client: RelaceRepoClient instance.
         base_dir: Base directory of the repository.
         confirm: Confirmation flag to proceed with deletion.
         repo_id: Optional repo ID to delete directly (bypasses base_dir lookup).
+            Note: Direct repo_id mode only deletes the cloud repo; local sync
+            state is not cleared since no base_dir is used for lookup.
 
     Returns:
         Dict containing operation result.

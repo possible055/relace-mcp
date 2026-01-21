@@ -120,6 +120,9 @@ class BenchmarkRunner:
                         continue
                     try:
                         data = json.loads(line)
+                        # Backward compatibility: map old 'success' field to 'completed'
+                        if "success" in data and "completed" not in data:
+                            data["completed"] = data.pop("success")
                         completed_ids.add(data["case_id"])
                         results.append(
                             BenchmarkResult(

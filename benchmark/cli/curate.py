@@ -69,7 +69,7 @@ def _stratified_curate(
     selected: list[dict] = []
     selected_ids: set[str] = set()
 
-    if balance_repo:
+    if balance_repo and by_repo:
         repos = list(by_repo.keys())
         rng.shuffle(repos)
         per_repo = max(1, target_count // len(repos))
@@ -126,6 +126,10 @@ def _print_stats(cases: list[dict], label: str) -> None:
         by_repo[case.get("repo", "unknown")] += 1
 
     click.echo(f"\n{label} ({len(cases)} cases):")
+    if not cases:
+        click.echo("  (no cases)")
+        return
+
     click.echo("  Category distribution:")
     for cat, count in sorted(by_category.items()):
         click.echo(f"    {cat}: {count} ({count / len(cases) * 100:.1f}%)")

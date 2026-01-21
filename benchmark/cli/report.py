@@ -115,12 +115,15 @@ def _generate_failures_report(results_path: Path) -> str:
     partial_cases = [r for r in results if r.get("partial", False)]
     incomplete_cases = [r for r in results if not r.get("completed", True)]
 
+    incomplete_pct = (len(incomplete_cases) / total * 100) if total else 0.0
+    partial_pct = (len(partial_cases) / total * 100) if total else 0.0
+
     lines = [
         f"# Failure Analysis: {results_path.name}",
         "",
         f"**Total Cases**: {total}",
-        f"**Incomplete (completed=false)**: {len(incomplete_cases)} ({len(incomplete_cases) / total * 100:.1f}%)",
-        f"**Partial (partial=true)**: {len(partial_cases)} ({len(partial_cases) / total * 100:.1f}%)",
+        f"**Incomplete (completed=false)**: {len(incomplete_cases)} ({incomplete_pct:.1f}%)",
+        f"**Partial (partial=true)**: {len(partial_cases)} ({partial_pct:.1f}%)",
         "",
     ]
 
