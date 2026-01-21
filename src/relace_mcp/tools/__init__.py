@@ -208,19 +208,26 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             return cloud_clear_logic(repo_client, base_dir, confirm=confirm, repo_id=repo_id)
 
         @mcp.tool
-        def cloud_list() -> dict[str, Any]:
+        def cloud_list(reason: str = "") -> dict[str, Any]:
             """List all repositories in your Relace Cloud account.
+
+            Args:
+                reason: Brief explanation of why you are calling this tool.
 
             Returns: [{repo_id, name, auto_index}, ...]. Max 10000 repos.
             Returns empty list if no repositories exist.
             """
+            del reason  # LLM chain-of-thought only
             return cloud_list_logic(repo_client)
 
         @mcp.tool
-        async def cloud_info(ctx: Context | None = None) -> dict[str, Any]:
+        async def cloud_info(reason: str = "", ctx: Context | None = None) -> dict[str, Any]:
             """Get detailed sync status for the current repository.
 
             Use before cloud_sync to understand what action is needed.
+
+            Args:
+                reason: Brief explanation of why you are calling this tool.
 
             Returns:
             - local: Current git branch and HEAD commit
@@ -228,6 +235,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             - cloud: Cloud repo info (if exists)
             - status: Whether sync is needed and recommended action
             """
+            del reason  # LLM chain-of-thought only
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
             return cloud_info_logic(repo_client, base_dir)
 
@@ -279,7 +287,11 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
     @mcp.resource("relace://tools_list", mime_type="application/json")
     def tools_list() -> list[dict[str, Any]]:
-        """List all available tools with their status."""
+        """List all registered Relace MCP tools with their enabled status.
+
+        Returns: [{id, name, description, enabled}, ...] for each tool.
+        Use this to discover available capabilities before calling tools.
+        """
         tools = [
             {
                 "id": "fast_apply",
