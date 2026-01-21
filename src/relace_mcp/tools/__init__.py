@@ -42,6 +42,9 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 return
             await asyncio.sleep(5)
 
+    # Agentic Search client (used by both agentic_search and agentic_retrieval)
+    search_client = SearchLLMClient(config)
+
     @mcp.tool(
         annotations={
             "readOnlyHint": False,  # Modifies files
@@ -91,31 +94,14 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 with suppress(asyncio.CancelledError):
                     await progress_task
 
-    # Fast Agentic Search
-    search_client = SearchLLMClient(config)
-
-    # Register fast_search only if MCP_SEARCH_MODE is 'agentic' or 'both'
+    # Register agentic_search (primary) and fast_search (deprecated alias)
+    # Only when MCP_SEARCH_MODE is 'agentic' or 'both'
     if MCP_SEARCH_MODE in ("agentic", "both"):
 
-        @mcp.tool(
-            annotations={
-                "readOnlyHint": True,  # Does not modify environment
-                "destructiveHint": False,  # Read-only = non-destructive
-                "idempotentHint": True,  # Same query = same results
-                "openWorldHint": False,  # Only local codebase
-            }
-        )
-        async def fast_search(query: str, ctx: Context) -> dict[str, Any]:
-            """Search codebase and return relevant file locations.
-
-            Args:
-                query: What to find. Natural language (e.g., "where is auth handled")
-                       or specific patterns (e.g., "UserService class").
-
-            Returns: {files: {path: [[start, end], ...]}, explanation: str, partial: bool}
-            """
+        async def _agentic_search_impl(query: str, ctx: Context) -> dict[str, Any]:
+            """Internal implementation for agentic search."""
             progress_task = asyncio.create_task(
-                _progress_heartbeat(ctx, message="fast_search in progress")
+                _progress_heartbeat(ctx, message="agentic_search in progress")
             )
             try:
                 # Resolve base_dir dynamically from MCP Roots if not configured
@@ -134,6 +120,50 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 progress_task.cancel()
                 with suppress(asyncio.CancelledError):
                     await progress_task
+
+        @mcp.tool(
+            annotations={
+                "readOnlyHint": True,  # Does not modify environment
+                "destructiveHint": False,  # Read-only = non-destructive
+                "idempotentHint": True,  # Same query = same results
+                "openWorldHint": False,  # Only local codebase
+            }
+        )
+        async def agentic_search(query: str, ctx: Context) -> dict[str, Any]:
+            """Search codebase and return relevant file locations.
+
+            Args:
+                query: What to find. Natural language (e.g., "where is auth handled")
+                       or specific patterns (e.g., "UserService class").
+
+            Returns: {files: {path: [[start, end], ...]}, explanation: str, partial: bool}
+            """
+            return await _agentic_search_impl(query, ctx)
+
+        @mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": False,
+            }
+        )
+        async def fast_search(query: str, ctx: Context) -> dict[str, Any]:
+            """[DEPRECATED] Use `agentic_search` instead.
+
+            Search codebase and return relevant file locations.
+
+            Args:
+                query: What to find. Natural language or specific patterns.
+
+            Returns: {files: {path: [[start, end], ...]}, explanation: str, partial: bool, _deprecated: str}
+            """
+            result = await _agentic_search_impl(query, ctx)
+            result["_deprecated"] = (
+                "Tool 'fast_search' is deprecated and will be removed in v2.0. "
+                "Use 'agentic_search' instead."
+            )
+            return result
 
     # Cloud Repos (Semantic Search & Sync) - only register if enabled
     if RELACE_CLOUD_TOOLS:
@@ -303,10 +333,19 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         if MCP_SEARCH_MODE in ("agentic", "both"):
             tools.append(
                 {
-                    "id": "fast_search",
-                    "name": "Fast Search",
+                    "id": "agentic_search",
+                    "name": "Agentic Search",
                     "description": "Agentic search over local codebase",
                     "enabled": True,
+                }
+            )
+            tools.append(
+                {
+                    "id": "fast_search",
+                    "name": "Fast Search",
+                    "description": "[DEPRECATED] Alias for agentic_search. Will be removed in v2.0.",
+                    "enabled": True,
+                    "deprecated": True,
                 }
             )
         if RELACE_CLOUD_TOOLS:

@@ -206,18 +206,19 @@ def main(
     # Determine checkpoint path for resume functionality
     results_dir = get_results_dir()
     checkpoint_path = None
-    if resume or timeout or fail_fast:
-        # Need output path for checkpoint
-        if output:
-            output_candidate = Path(output)
-            if output_candidate.is_absolute():
-                checkpoint_path = output_candidate.with_suffix(".checkpoint.jsonl")
-            else:
-                checkpoint_path = (results_dir / output_candidate).with_suffix(".checkpoint.jsonl")
+
+    # Generate output path once upfront to ensure checkpoint and results share the same path
+    if output:
+        output_candidate = Path(output)
+        if output_candidate.is_absolute():
+            resolved_output_path = output_candidate
         else:
-            checkpoint_path = generate_output_path(results_dir, "run", dataset_id).with_suffix(
-                ".checkpoint.jsonl"
-            )
+            resolved_output_path = results_dir / output_candidate
+    else:
+        resolved_output_path = generate_output_path(results_dir, "run", dataset_id)
+
+    if resume or timeout or fail_fast:
+        checkpoint_path = resolved_output_path.with_suffix(".checkpoint.jsonl")
 
     if resume and checkpoint_path and not checkpoint_path.exists():
         click.echo(f"Warning: --resume specified but checkpoint not found: {checkpoint_path}")
@@ -251,14 +252,7 @@ def main(
     reports_dir = get_reports_dir()
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    if output:
-        output_candidate = Path(output)
-        if output_candidate.is_absolute():
-            output_path = output_candidate
-        else:
-            output_path = results_dir / output_candidate
-    else:
-        output_path = generate_output_path(results_dir, "run", dataset_id)
+    output_path = resolved_output_path
 
     jsonl_path = (
         output_path if output_path.suffix == ".jsonl" else output_path.with_suffix(".jsonl")
