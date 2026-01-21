@@ -85,6 +85,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `RELACE_REPO_SYNC_MAX_FILES` | `5000` | Maximum files per sync |
 | `RELACE_REPO_LIST_MAX` | `10000` | Maximum repos to fetch |
 | `RELACE_UPLOAD_MAX_WORKERS` | `8` | Concurrent upload workers |
+| `RELACE_AGENTIC_AUTO_SYNC` | `1` | Auto-sync before agentic retrieval (when cloud tools enabled) |
 
 ### Third-Party API Keys
 

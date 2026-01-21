@@ -188,18 +188,24 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             )
 
         @mcp.tool
-        async def cloud_clear(confirm: bool = False, ctx: Context | None = None) -> dict[str, Any]:
+        async def cloud_clear(
+            confirm: bool = False,
+            repo_id: str | None = None,
+            ctx: Context | None = None,
+        ) -> dict[str, Any]:
             """Delete cloud repository and local sync state. IRREVERSIBLE.
 
             Args:
                 confirm: Must be True to proceed.
+                repo_id: Optional repo ID to delete directly (use cloud_list to find).
+                         If not provided, deletes the repo associated with current directory.
 
             Returns: {status: "deleted"} on success, {status: "cancelled"} if confirm=false.
             """
             from .repo.clear import cloud_clear_logic
 
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-            return cloud_clear_logic(repo_client, base_dir, confirm=confirm)
+            return cloud_clear_logic(repo_client, base_dir, confirm=confirm, repo_id=repo_id)
 
         @mcp.tool
         def cloud_list() -> dict[str, Any]:

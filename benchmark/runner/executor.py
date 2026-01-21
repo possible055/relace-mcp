@@ -180,13 +180,13 @@ class BenchmarkRunner:
                     checkpoint_file.flush()
 
                 # Track consecutive failures for fail-fast
-                if result.success:
+                if result.completed:
                     consecutive_failures = 0
                 else:
                     consecutive_failures += 1
 
                 if self.verbose:
-                    status_icon = "✓" if result.success else "✗"
+                    status_icon = "✓" if result.completed else "✗"
                     print(
                         f"  {status_icon} recall={result.file_recall:.0%} "
                         f"search={result.latency_ms / 1000:.1f}s",
@@ -237,7 +237,7 @@ class BenchmarkRunner:
             return BenchmarkResult(
                 case_id=case.id,
                 repo=case.repo,
-                success=False,
+                completed=False,
                 returned_files_count=0,
                 ground_truth_files_count=len(case.ground_truth_files),
                 file_recall=0.0,
@@ -272,7 +272,7 @@ class BenchmarkRunner:
             return BenchmarkResult(
                 case_id=case.id,
                 repo=case.repo,
-                success=False,
+                completed=False,
                 returned_files_count=0,
                 ground_truth_files_count=len(case.ground_truth_files),
                 file_recall=0.0,
@@ -378,7 +378,7 @@ class BenchmarkRunner:
         return BenchmarkResult(
             case_id=case.id,
             repo=case.repo,
-            success=not partial,
+            completed=not partial,
             returned_files_count=returned_files_count,
             ground_truth_files_count=ground_truth_files_count,
             file_recall=file_recall,
@@ -409,7 +409,8 @@ class BenchmarkRunner:
                 metadata=metadata,
                 total_cases=0,
                 stats={
-                    "success_rate": 0.0,
+                    "completion_rate": 0.0,
+                    "avg_quality_score": 0.0,
                     "avg_returned_files": 0.0,
                     "avg_ground_truth_files": 0.0,
                     "avg_file_recall": 0.0,
@@ -429,6 +430,19 @@ class BenchmarkRunner:
         def avg(field: str) -> float:
             return sum(getattr(r, field) for r in results) / n
 
+        # Compute quality_score: weighted combination of recall + precision + function hit
+        # Weights: file_recall=0.4, line_precision_matched=0.4, function_hit_rate=0.2
+        def quality_score(r: BenchmarkResult) -> float:
+            func_weight = 0.2 if r.functions_total > 0 else 0.0
+            remaining = 1.0 - func_weight
+            return (
+                (remaining / 2) * r.file_recall
+                + (remaining / 2) * r.line_precision_matched
+                + func_weight * r.function_hit_rate
+            )
+
+        avg_quality_score = sum(quality_score(r) for r in results) / n
+
         function_results = [r for r in results if r.functions_total > 0]
         function_cases = len(function_results)
         avg_function_hit_rate = (
@@ -438,7 +452,8 @@ class BenchmarkRunner:
         )
 
         stats: dict[str, float] = {
-            "success_rate": sum(1 for r in results if r.success) / n,
+            "completion_rate": sum(1 for r in results if r.completed) / n,
+            "avg_quality_score": avg_quality_score,
             "avg_returned_files": avg("returned_files_count"),
             "avg_ground_truth_files": avg("ground_truth_files_count"),
             "avg_file_recall": avg("file_recall"),

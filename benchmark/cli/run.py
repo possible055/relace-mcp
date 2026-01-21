@@ -281,7 +281,8 @@ def main(
     click.echo("=" * 50)
     s = summary.stats
     click.echo(f"Total Cases:       {summary.total_cases}")
-    click.echo(f"Success Rate:      {s['success_rate']:.1%}")
+    click.echo(f"Completion Rate:   {s['completion_rate']:.1%}")
+    click.echo(f"Quality Score:     {s['avg_quality_score']:.1%}")
     click.echo(f"Avg Returned Files:{s['avg_returned_files']:.2f}")
     click.echo(f"Avg GT Files:      {s['avg_ground_truth_files']:.2f}")
     click.echo(f"Avg File Recall:   {s['avg_file_recall']:.1%}")

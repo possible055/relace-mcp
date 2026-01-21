@@ -31,7 +31,8 @@ def _extract_metrics(report: dict) -> dict:
     if "runs" in report:
         return {}
     return {
-        "success_rate": report.get("success_rate", 0),
+        "completion_rate": report.get("completion_rate", 0),
+        "avg_quality_score": report.get("avg_quality_score", 0),
         "avg_file_recall": report.get("avg_file_recall", 0),
         "avg_file_precision": report.get("avg_file_precision", 0),
         "avg_line_coverage": report.get("avg_line_coverage", 0),
@@ -55,8 +56,8 @@ def _format_pct(value: float) -> str:
 def _generate_markdown_comparison(reports: list[tuple[str, dict]]) -> str:
     lines = ["# Benchmark Comparison Report", ""]
 
-    lines.append("| Run | Success | F.Recall | F.Prec | L.Cov | L.Prec(M) | Turns | Latency |")
-    lines.append("|-----|---------|----------|--------|-------|-----------|-------|---------|")
+    lines.append("| Run | Compl. | Quality | F.Recall | F.Prec | L.Prec(M) | Turns | Latency |")
+    lines.append("|-----|--------|---------|----------|--------|-----------|-------|---------|")
 
     for name, report in reports:
         m = _extract_metrics(report)
@@ -64,10 +65,10 @@ def _generate_markdown_comparison(reports: list[tuple[str, dict]]) -> str:
             continue
         lines.append(
             f"| {name} | "
-            f"{_format_pct(m['success_rate'])} | "
+            f"{_format_pct(m['completion_rate'])} | "
+            f"{_format_pct(m['avg_quality_score'])} | "
             f"{_format_pct(m['avg_file_recall'])} | "
             f"{_format_pct(m['avg_file_precision'])} | "
-            f"{_format_pct(m['avg_line_coverage'])} | "
             f"{_format_pct(m['avg_line_precision_matched'])} | "
             f"{m['avg_turns']:.1f} | "
             f"{m['avg_latency_ms']:.0f}ms |"
@@ -96,10 +97,10 @@ def _generate_markdown_grid_best(grid_path: Path, metric: str) -> str:
         f"- `search_temperature`: {config.get('search_temperature')}",
         "",
         "## Metrics",
-        f"- Success Rate: {_format_pct(metrics.get('success_rate', 0))}",
+        f"- Completion Rate: {_format_pct(metrics.get('completion_rate', 0))}",
+        f"- Quality Score: {_format_pct(metrics.get('avg_quality_score', 0))}",
         f"- File Recall: {_format_pct(metrics.get('avg_file_recall', 0))}",
         f"- File Precision: {_format_pct(metrics.get('avg_file_precision', 0))}",
-        f"- Line Coverage: {_format_pct(metrics.get('avg_line_coverage', 0))}",
         f"- Line Prec (Matched): {_format_pct(metrics.get('avg_line_precision_matched', 0))}",
         f"- Avg Turns: {metrics.get('avg_turns', 0):.1f}",
         f"- Avg Latency: {metrics.get('avg_latency_ms', 0):.0f}ms",
@@ -112,20 +113,20 @@ def _generate_failures_report(results_path: Path) -> str:
     results = _load_jsonl_results(results_path)
     total = len(results)
     partial_cases = [r for r in results if r.get("partial", False)]
-    failed_cases = [r for r in results if not r.get("success", True)]
+    incomplete_cases = [r for r in results if not r.get("completed", True)]
 
     lines = [
         f"# Failure Analysis: {results_path.name}",
         "",
         f"**Total Cases**: {total}",
-        f"**Failed (success=false)**: {len(failed_cases)} ({len(failed_cases) / total * 100:.1f}%)",
-        f"**Incomplete (partial=true)**: {len(partial_cases)} ({len(partial_cases) / total * 100:.1f}%)",
+        f"**Incomplete (completed=false)**: {len(incomplete_cases)} ({len(incomplete_cases) / total * 100:.1f}%)",
+        f"**Partial (partial=true)**: {len(partial_cases)} ({len(partial_cases) / total * 100:.1f}%)",
         "",
     ]
 
     # Error type breakdown
     error_counts: Counter[str] = Counter()
-    for r in failed_cases:
+    for r in incomplete_cases:
         error = r.get("error") or "no_report_back"
         if "timeout" in error.lower():
             error_counts["timeout"] += 1

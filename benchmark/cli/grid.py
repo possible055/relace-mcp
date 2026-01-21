@@ -190,7 +190,8 @@ def main(
                     "report": str(report_path),
                 },
                 "metrics": {
-                    "success_rate": report.get("success_rate"),
+                    "completion_rate": report.get("completion_rate"),
+                    "avg_quality_score": report.get("avg_quality_score"),
                     "avg_file_recall": report.get("avg_file_recall"),
                     "avg_file_precision": report.get("avg_file_precision"),
                     "avg_line_coverage": report.get("avg_line_coverage"),
