@@ -70,6 +70,7 @@ class BenchmarkRunner:
         case_timeout: int | None = None,
         fail_fast: int | None = None,
         search_mode: str = "agentic",
+        resume: bool = False,
     ):
         self.config = config
         self.verbose = verbose
@@ -80,6 +81,7 @@ class BenchmarkRunner:
         self.case_timeout = case_timeout
         self.fail_fast = fail_fast
         self.search_mode = search_mode
+        self.resume = resume
 
     def run_benchmark(
         self,
@@ -112,7 +114,7 @@ class BenchmarkRunner:
 
         # Resume: load completed cases from checkpoint
         completed_ids: set[str] = set()
-        if self.checkpoint_path and self.checkpoint_path.exists():
+        if self.resume and self.checkpoint_path and self.checkpoint_path.exists():
             with self.checkpoint_path.open("r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
@@ -307,7 +309,7 @@ class BenchmarkRunner:
             from relace_mcp.tools.repo import agentic_retrieval_logic
 
             repo_client = RelaceRepoClient(effective_config)
-            result = asyncio.get_event_loop().run_until_complete(
+            result = asyncio.run(
                 agentic_retrieval_logic(
                     repo_client,
                     client,

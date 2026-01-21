@@ -231,6 +231,7 @@ def main(
         case_timeout=timeout,
         fail_fast=fail_fast,
         search_mode=search_mode,
+        resume=resume,
     )
 
     click.echo("\nRunning benchmark...")
