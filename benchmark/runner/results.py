@@ -8,7 +8,7 @@ from typing import Any
 class BenchmarkResult:
     case_id: str
     repo: str
-    success: bool
+    completed: bool
     returned_files_count: int
     ground_truth_files_count: int
     file_recall: float

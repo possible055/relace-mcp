@@ -91,12 +91,12 @@ Semantic code search over the cloud-synced repository. Requires running `cloud_s
 
 ### Parameters
 
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| `query` | ✅ | — | Natural language search query |
-| `branch` | ❌ | `""` | Branch to search (empty uses API default) |
-| `score_threshold` | ❌ | `0.3` | Minimum relevance score (0.0-1.0) |
-| `token_limit` | ❌ | `30000` | Maximum tokens to return |
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `query` | ✅ | Natural language search query |
+| `branch` | ❌ | Branch to search (empty uses API default) |
+
+> **Note:** Internal parameters (`score_threshold=0.3`, `token_limit=30000`) are not exposed to LLM.
 
 ---
 

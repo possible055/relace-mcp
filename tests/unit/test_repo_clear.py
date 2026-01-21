@@ -100,3 +100,40 @@ def test_cloud_clear_delete_failure(tmp_path: Path) -> None:
                 assert result["status"] == "error"
                 # Should NOT clear sync state on failure
                 mock_clear_state.assert_not_called()
+
+
+def test_cloud_clear_direct_repo_id(tmp_path: Path) -> None:
+    """Should delete directly by repo_id without base_dir lookup."""
+    mock_repo_client = _create_mock_repo_client(tmp_path.name)
+
+    result = cloud_clear_logic(
+        mock_repo_client, str(tmp_path), confirm=True, repo_id="direct-repo-id"
+    )
+
+    assert result["status"] == "deleted"
+    assert result["repo_id"] == "direct-repo-id"
+    mock_repo_client.delete_repo.assert_called_with("direct-repo-id", trace_id=ANY)
+    mock_repo_client.list_repos.assert_not_called()
+
+
+def test_cloud_clear_direct_repo_id_failure(tmp_path: Path) -> None:
+    """Should handle direct repo_id delete failure."""
+    mock_repo_client = _create_mock_repo_client(tmp_path.name)
+    mock_repo_client.delete_repo.return_value = False
+
+    result = cloud_clear_logic(
+        mock_repo_client, str(tmp_path), confirm=True, repo_id="fail-repo-id"
+    )
+
+    assert result["status"] == "error"
+    assert result["repo_id"] == "fail-repo-id"
+
+
+def test_cloud_clear_direct_repo_id_requires_confirm(tmp_path: Path) -> None:
+    """Direct repo_id mode still requires confirm."""
+    mock_repo_client = _create_mock_repo_client(tmp_path.name)
+
+    result = cloud_clear_logic(mock_repo_client, str(tmp_path), confirm=False, repo_id="some-id")
+
+    assert result["status"] == "cancelled"
+    mock_repo_client.delete_repo.assert_not_called()

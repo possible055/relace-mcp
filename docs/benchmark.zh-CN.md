@@ -2,7 +2,7 @@
 
 > **注意**: 此模块正在开发中，API 和指标可能会变更。
 
-使用 [MULocBench](https://github.com/MULocBench/MULocBench) 数据集评估 `fast_search` 性能。
+使用 Loc-Bench 数据集（源自 [LocAgent](https://github.com/IvanaXu/LocAgent)）评估 `fast_search` 性能。
 
 ## 1. 准备
 
@@ -16,12 +16,11 @@ RELACE_API_KEY=your-key-here    # 或: OPENAI_API_KEY, OPENROUTER_API_KEY
 
 **数据集**:
 
-- **MULocBench**: 从 [MULocBench](https://github.com/MULocBench/MULocBench) 下载 → 放置于 `benchmark/artifacts/data/raw/mulocbench_v1.jsonl`
-- **Loc-Bench (LocAgent)**: 通过 Hugging Face datasets-server 构建（无需 LocAgent）:
-  ```bash
-  uv run python -m benchmark.cli.build_locbench \
-    --output artifacts/data/raw/locbench_v1.jsonl
-  ```
+通过 Hugging Face datasets-server 构建 Loc-Bench（无需 LocAgent）:
+```bash
+uv run python -m benchmark.cli.build_locbench \
+  --output artifacts/data/raw/locbench_v1.jsonl
+```
 
 ## 2. 单次运行
 
@@ -36,9 +35,11 @@ uv run python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.json
 uv run python -m benchmark.cli.run \
   --dataset artifacts/data/processed/elite_50.jsonl \
   --limit 64 --seed 0 --shuffle \
-  --search-max-turns 8 \
-  --search-temperature 0.2 \
-  --no-progress
+  --max-turns 8 --temperature 0.2 -q
+
+# 中断后从 checkpoint 恢复
+uv run python -m benchmark.cli.run \
+  -o my_run --resume --timeout 300 --fail-fast 5
 ```
 
 **输出**:
@@ -48,14 +49,19 @@ uv run python -m benchmark.cli.run \
 **常用参数**:
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
+| `--dataset` | locbench_v1.jsonl | 数据集路径 |
+| `-o, --output` | 自动 | 输出文件前缀 |
 | `--limit` | 全部 | Case 数量 |
-| `--shuffle/--no-shuffle` | `--shuffle` | 随机选择 |
 | `--seed` | `0` | 随机种子 |
-| `--search-max-turns` | env | 覆盖 `SEARCH_MAX_TURNS` |
-| `--search-temperature` | env | 覆盖 `SEARCH_TEMPERATURE` |
-| `--search-prompt-file` | env | 覆盖 `SEARCH_PROMPT_FILE` (YAML) |
-| `--progress/--no-progress` | `--progress` | 显示进度 |
-| `--verbose` | 关闭 | 详细日志 |
+| `--shuffle` | 关闭 | 随机选择 |
+| `--max-turns` | env | 覆盖 `SEARCH_MAX_TURNS` |
+| `--temperature` | env | 覆盖 `SEARCH_TEMPERATURE` |
+| `--prompt-file` | env | 覆盖 `SEARCH_PROMPT_FILE` (YAML) |
+| `--timeout` | 无 | 单个 case 超时秒数 |
+| `--fail-fast` | 无 | 连续 N 次失败后停止 |
+| `--resume` | 关闭 | 从 checkpoint 恢复 |
+| `-v, --verbose` | 关闭 | 详细日志 |
+| `-q, --quiet` | 关闭 | 禁用进度条 |
 | `--dry-run` | 关闭 | 仅预览 |
 
 ## 3. 网格搜索 (超参数调优)
@@ -111,14 +117,20 @@ uv run python -m benchmark.cli.validate --output validation.json --verbose
 | `--limit` | 全部 | 验证数量 |
 | `-v/--verbose` | 关闭 | 详细输出 |
 
-## 5. 分析结果
+## 5. 分析与报告
 
 ```bash
-# 分析单次运行
+# 分析单次运行 (详细 stdout)
 uv run python -m benchmark.cli.analyze path/to/run.report.json
 
-# 比较多次运行
-uv run python -m benchmark.cli.analyze run1.report.json run2.report.json
+# 比较多次运行 (Markdown 输出)
+uv run python -m benchmark.cli.report run1.report.json run2.report.json
+
+# 从网格搜索找最佳配置
+uv run python -m benchmark.cli.report --best grid_curated_30.grid.json
+
+# 输出比较报告到文件
+uv run python -m benchmark.cli.report -o comparison.md *.report.json
 ```
 
 ## 6. 指标说明
@@ -156,7 +168,9 @@ benchmark/
 ├── cli/
 │   ├── run.py           # 单次运行 CLI
 │   ├── grid.py          # 网格搜索 CLI
-│   ├── analyze.py       # 结果分析
+│   ├── report.py        # 报告生成
+│   ├── analyze.py       # 详细分析
+│   ├── curate.py        # 数据集筛选
 │   ├── validate.py      # 数据集验证
 │   └── build_locbench.py  # Loc-Bench 构建
 ├── analysis/            # 分析工具 (function scope 等)

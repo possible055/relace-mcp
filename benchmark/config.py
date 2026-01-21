@@ -53,14 +53,6 @@ def get_repos_dir() -> Path:
     return REPOS_DIR
 
 
-def get_data_dir() -> Path:
-    return DATA_DIR
-
-
-def get_cache_dir() -> Path:
-    return CACHE_DIR
-
-
 def get_results_dir() -> Path:
     return RESULTS_DIR
 
