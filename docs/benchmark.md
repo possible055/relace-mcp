@@ -2,7 +2,7 @@
 
 > **Note**: This module is under active development. APIs and metrics may change.
 
-Evaluates `fast_search` performance using the Loc-Bench dataset (derived from [LocAgent](https://github.com/IvanaXu/LocAgent)).
+Evaluates `agentic_search` performance using the Loc-Bench dataset (derived from [LocAgent](https://github.com/IvanaXu/LocAgent)).
 
 ## 1. Setup
 
