@@ -58,6 +58,10 @@ SEARCH_PARALLEL_TOOL_CALLS = env_bool(
     default=True,
     deprecated_name="RELACE_SEARCH_PARALLEL_TOOL_CALLS",
 )
+# Search top_p (optional, only set if explicitly configured)
+# Some providers (e.g., Mistral) require top_p=1 for greedy sampling (temperature=0)
+_search_top_p_raw = os.getenv("SEARCH_TOP_P", "").strip()
+SEARCH_TOP_P: float | None = float(_search_top_p_raw) if _search_top_p_raw else None
 
 
 # Relace Repos API (Infrastructure Endpoint for cloud sync/search)
@@ -91,6 +95,17 @@ MCP_LOGGING = env_bool("MCP_LOGGING", default=False, deprecated_name="RELACE_LOG
 
 # Cloud tools (disabled by default)
 RELACE_CLOUD_TOOLS = env_bool("RELACE_CLOUD_TOOLS", default=False)
+
+
+# Search mode: 'agentic' (fast_search), 'indexed' (agentic_retrieval), 'both'
+def _get_search_mode() -> str:
+    raw = os.environ.get("MCP_SEARCH_MODE", "").strip().lower()
+    if raw in {"indexed", "both"}:
+        return raw
+    return "agentic"
+
+
+MCP_SEARCH_MODE = _get_search_mode()
 
 
 # LSP tools mode: 'false' (disabled), 'true' (all enabled), or 'auto' (detect installed servers)

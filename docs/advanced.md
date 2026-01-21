@@ -29,6 +29,8 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
 | `MCP_LOGGING` | `0` | Set to `1` to enable file logging (**preferred**; `RELACE_LOGGING` is deprecated) |
 | `RELACE_LOGGING` | `0` | Deprecated alias for `MCP_LOGGING` |
+| `RELACE_CLOUD_TOOLS` | `0` | Set to `1` to enable cloud tools (cloud_sync, cloud_search, etc.) |
+| `MCP_SEARCH_MODE` | `agentic` | Search tool mode: `agentic` (fast_search), `indexed` (agentic_retrieval), `both` |
 
 > **Note:** `RELACE_API_KEY` can be omitted if **both**: (1) using non-Relace providers for `APPLY_PROVIDER` and `SEARCH_PROVIDER`, and (2) `RELACE_CLOUD_TOOLS=false`. Otherwise it is required.
 
@@ -83,6 +85,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `RELACE_REPO_SYNC_MAX_FILES` | `5000` | Maximum files per sync |
 | `RELACE_REPO_LIST_MAX` | `10000` | Maximum repos to fetch |
 | `RELACE_UPLOAD_MAX_WORKERS` | `8` | Concurrent upload workers |
+| `RELACE_AGENTIC_AUTO_SYNC` | `1` | Auto-sync before agentic retrieval (when cloud tools enabled) |
 
 ### Third-Party API Keys
 

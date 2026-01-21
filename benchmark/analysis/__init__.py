@@ -1,7 +1,4 @@
 """AST and code analysis utilities.
 
-Provides tree-sitter based parsing and analysis for:
-    - Function scope extraction
-    - AST boundary normalization
-    - Call graph analysis
+Provides tree-sitter based parsing for function scope extraction.
 """

@@ -2,7 +2,7 @@
 
 > **Note**: This module is under active development. APIs and metrics may change.
 
-Evaluates `fast_search` performance using [MULocBench](https://github.com/MULocBench/MULocBench) dataset.
+Evaluates `fast_search` performance using the Loc-Bench dataset (derived from [LocAgent](https://github.com/IvanaXu/LocAgent)).
 
 ## 1. Setup
 
@@ -16,12 +16,11 @@ RELACE_API_KEY=your-key-here    # or: OPENAI_API_KEY, OPENROUTER_API_KEY
 
 **Dataset**:
 
-- **MULocBench**: Download from [MULocBench](https://github.com/MULocBench/MULocBench) → place in `benchmark/artifacts/data/raw/mulocbench_v1.jsonl`
-- **Loc-Bench (LocAgent)**: Build from Hugging Face via datasets-server (no LocAgent required):
-  ```bash
-  uv run python -m benchmark.cli.build_locbench \
-    --output artifacts/data/raw/locbench_v1.jsonl
-  ```
+Build the Loc-Bench dataset from Hugging Face via datasets-server (no LocAgent required):
+```bash
+uv run python -m benchmark.cli.build_locbench \
+  --output artifacts/data/raw/locbench_v1.jsonl
+```
 
 ## 2. Single Run
 
@@ -36,9 +35,11 @@ uv run python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.json
 uv run python -m benchmark.cli.run \
   --dataset artifacts/data/processed/elite_50.jsonl \
   --limit 64 --seed 0 --shuffle \
-  --search-max-turns 8 \
-  --search-temperature 0.2 \
-  --no-progress
+  --max-turns 8 --temperature 0.2 -q
+
+# Resume from checkpoint after interruption
+uv run python -m benchmark.cli.run \
+  -o my_run --resume --timeout 300 --fail-fast 5
 ```
 
 **Outputs**:
@@ -48,14 +49,19 @@ uv run python -m benchmark.cli.run \
 **Key options**:
 | Option | Default | Description |
 |--------|---------|-------------|
+| `--dataset` | locbench_v1.jsonl | Dataset path |
+| `-o, --output` | auto | Output file prefix |
 | `--limit` | all | Number of cases |
-| `--shuffle/--no-shuffle` | `--shuffle` | Randomize selection |
 | `--seed` | `0` | Random seed |
-| `--search-max-turns` | env | Override `SEARCH_MAX_TURNS` |
-| `--search-temperature` | env | Override `SEARCH_TEMPERATURE` |
-| `--search-prompt-file` | env | Override `SEARCH_PROMPT_FILE` (YAML) |
-| `--progress/--no-progress` | `--progress` | Show progress |
-| `--verbose` | off | Detailed logging |
+| `--shuffle` | off | Randomize selection |
+| `--max-turns` | env | Override `SEARCH_MAX_TURNS` |
+| `--temperature` | env | Override `SEARCH_TEMPERATURE` |
+| `--prompt-file` | env | Override `SEARCH_PROMPT_FILE` (YAML) |
+| `--timeout` | none | Per-case timeout in seconds |
+| `--fail-fast` | none | Stop after N consecutive failures |
+| `--resume` | off | Resume from checkpoint |
+| `-v, --verbose` | off | Detailed logging |
+| `-q, --quiet` | off | Disable progress bar |
 | `--dry-run` | off | Preview only |
 
 ## 3. Grid Search (Hyperparameter Tuning)
@@ -111,14 +117,20 @@ uv run python -m benchmark.cli.validate --output validation.json --verbose
 | `--limit` | all | Number to validate |
 | `-v/--verbose` | off | Detailed output |
 
-## 5. Analyze Results
+## 5. Analyze and Report Results
 
 ```bash
-# Analyze single run
+# Analyze single run (detailed stdout)
 uv run python -m benchmark.cli.analyze path/to/run.report.json
 
-# Compare multiple runs
-uv run python -m benchmark.cli.analyze run1.report.json run2.report.json
+# Compare multiple runs (Markdown output)
+uv run python -m benchmark.cli.report run1.report.json run2.report.json
+
+# Find best config from grid search
+uv run python -m benchmark.cli.report --best grid_curated_30.grid.json
+
+# Output comparison to file
+uv run python -m benchmark.cli.report -o comparison.md *.report.json
 ```
 
 ## 6. Interpret Metrics
@@ -156,7 +168,9 @@ benchmark/
 ├── cli/
 │   ├── run.py           # Single run CLI
 │   ├── grid.py          # Grid search CLI
-│   ├── analyze.py       # Result analysis
+│   ├── report.py        # Report generation
+│   ├── analyze.py       # Detailed analysis
+│   ├── curate.py        # Dataset curation
 │   ├── validate.py      # Dataset validation
 │   └── build_locbench.py  # Loc-Bench builder
 ├── analysis/            # Analysis tools (function scope, etc.)

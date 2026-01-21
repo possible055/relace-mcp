@@ -5,6 +5,7 @@
 ## 目录
 
 - [环境变量参考](#环境变量参考)
+- [使用 .env 文件](#使用-env-文件)
 - [同步模式](#同步模式)
 - [日志](#日志)
 - [替代提供商](#替代提供商)
@@ -28,6 +29,8 @@
 | `RELACE_DEFAULT_ENCODING` | — | 强制项目文件编码（如 `gbk`、`big5`） |
 | `MCP_LOGGING` | `0` | 设为 `1` 启用文件日志（推荐；`RELACE_LOGGING` 已弃用） |
 | `RELACE_LOGGING` | `0` | `MCP_LOGGING` 的弃用别名 |
+| `RELACE_CLOUD_TOOLS` | `0` | 设为 `1` 启用云工具（cloud_sync、cloud_search 等） |
+| `MCP_SEARCH_MODE` | `agentic` | 搜索工具模式：`agentic`（fast_search）、`indexed`（agentic_retrieval）、`both` |
 
 > **注意：** 仅当**同时满足**以下条件时可省略 `RELACE_API_KEY`：(1) `APPLY_PROVIDER` 和 `SEARCH_PROVIDER` 均使用非 Relace 提供商，且 (2) `RELACE_CLOUD_TOOLS=false`。否则必须设置。
 
@@ -82,6 +85,7 @@
 | `RELACE_REPO_SYNC_MAX_FILES` | `5000` | 每次同步最大文件数 |
 | `RELACE_REPO_LIST_MAX` | `10000` | 最大获取仓库数 |
 | `RELACE_UPLOAD_MAX_WORKERS` | `8` | 并发上传工作线程数 |
+| `RELACE_AGENTIC_AUTO_SYNC` | `1` | 在 agentic retrieval 前自动同步（启用 cloud tools 时） |
 
 ### 第三方 API Keys
 
@@ -93,7 +97,7 @@
 | `OPENROUTER_API_KEY` | `*_PROVIDER=openrouter` 且未设置 `*_API_KEY` |
 | `CEREBRAS_API_KEY` | `*_PROVIDER=cerebras` 且未设置 `*_API_KEY` |
 
-### 使用 .env 文件
+## 使用 .env 文件
 
 可以使用集中的 `.env` 文件代替在 MCP 配置中设置多个环境变量：
 

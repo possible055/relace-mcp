@@ -18,13 +18,17 @@ def cloud_clear_logic(
     client: RelaceRepoClient,
     base_dir: str,
     confirm: bool = False,
+    repo_id: str | None = None,
 ) -> dict[str, Any]:
-    """Clear (delete) the cloud repository and local sync state.
+    """Clear (delete) the cloud repository and optionally local sync state.
 
     Args:
         client: RelaceRepoClient instance.
         base_dir: Base directory of the repository.
         confirm: Confirmation flag to proceed with deletion.
+        repo_id: Optional repo ID to delete directly (bypasses base_dir lookup).
+            Note: Direct repo_id mode only deletes the cloud repo; local sync
+            state is not cleared since no base_dir is used for lookup.
 
     Returns:
         Dict containing operation result.
@@ -42,6 +46,42 @@ def cloud_clear_logic(
         log_cloud_clear_start(trace_id, None, None, confirm=False)
         log_cloud_clear_complete(trace_id, result)
         return result
+
+    # Direct repo_id mode: bypass base_dir lookup entirely
+    if repo_id:
+        logger.info("[%s] Direct delete mode with repo_id=%s", trace_id, repo_id)
+        log_cloud_clear_start(trace_id, None, None, confirm=True)
+        try:
+            if client.delete_repo(repo_id, trace_id=trace_id):
+                result = {
+                    "trace_id": trace_id,
+                    "status": "deleted",
+                    "message": f"Repository ({repo_id}) deleted successfully.",
+                    "repo_id": repo_id,
+                }
+                log_cloud_clear_complete(trace_id, result)
+                return result
+            else:
+                result = {
+                    "trace_id": trace_id,
+                    "status": "error",
+                    "message": f"Failed to delete repository ({repo_id}).",
+                    "repo_id": repo_id,
+                }
+                log_cloud_clear_complete(trace_id, result)
+                return result
+        except Exception as exc:
+            logger.error("[%s] Cloud clear failed: %s", trace_id, exc)
+            result = {
+                "trace_id": trace_id,
+                "status": "error",
+                "message": f"Operation failed: {str(exc)}",
+                "error": str(exc),
+                "repo_id": repo_id,
+                **build_cloud_error_details(exc),
+            }
+            log_cloud_clear_error(trace_id, None, None, result)
+            return result
 
     local_repo_name: str | None = None
     cloud_repo_name: str | None = None
