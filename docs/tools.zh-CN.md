@@ -30,7 +30,7 @@
 
 ---
 
-## `fast_search`
+## `agentic_search`
 
 搜索代码库并返回相关文件和行范围。使用智能循环自主探索代码库。
 
@@ -58,6 +58,14 @@
   "partial": false
 }
 ```
+
+---
+
+## `fast_search`
+
+> **已弃用**：请使用 `agentic_search`。此别名将于 0.2.5 移除。
+
+`agentic_search` 的别名。返回相同结果，但会额外包含 `_deprecated` 字段。
 
 ---
 

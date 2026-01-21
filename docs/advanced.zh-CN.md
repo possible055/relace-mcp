@@ -30,7 +30,7 @@
 | `MCP_LOGGING` | `0` | 设为 `1` 启用文件日志（推荐；`RELACE_LOGGING` 已弃用） |
 | `RELACE_LOGGING` | `0` | `MCP_LOGGING` 的弃用别名 |
 | `RELACE_CLOUD_TOOLS` | `0` | 设为 `1` 启用云工具（cloud_sync、cloud_search 等） |
-| `MCP_SEARCH_MODE` | `agentic` | 搜索工具模式：`agentic`（fast_search）、`indexed`（agentic_retrieval）、`both` |
+| `MCP_SEARCH_MODE` | `agentic` | 搜索工具模式：`agentic`（agentic_search）、`indexed`（agentic_retrieval）、`both` |
 
 > **注意：** 仅当**同时满足**以下条件时可省略 `RELACE_API_KEY`：(1) `APPLY_PROVIDER` 和 `SEARCH_PROVIDER` 均使用非 Relace 提供商，且 (2) `RELACE_CLOUD_TOOLS=false`。否则必须设置。
 
@@ -50,7 +50,7 @@
 
 > **注意：** `RELACE_APPLY_*`、`RELACE_TIMEOUT_SECONDS` 变体已弃用，但仍支持（会显示警告）。
 
-### Fast Search
+### Agentic Search
 
 | 变量 | 默认值 | 描述 |
 |------|--------|------|
@@ -59,7 +59,7 @@
 | `SEARCH_MODEL` | `relace-search` | 覆盖模型名称 |
 | `SEARCH_API_KEY` | — | 非 Relace 提供商的 API key |
 | `SEARCH_PROMPT_FILE` | — | 覆盖 search prompt YAML 路径 |
-| `SEARCH_TIMEOUT_SECONDS` | `120` | 请求超时（同时作为 `fast_search` 的总耗时预算；超时会返回 `partial=true`） |
+| `SEARCH_TIMEOUT_SECONDS` | `120` | 请求超时（同时作为 `agentic_search` 的总耗时预算；超时会返回 `partial=true`） |
 | `SEARCH_TEMPERATURE` | `1.0` | 采样温度（0.0-2.0） |
 | `SEARCH_MAX_TURNS` | `6` | 最大 agent 循环轮数 |
 | `SEARCH_LSP_TOOLS` | `false` | LSP 工具模式：`false`（禁用）、`true`（全部启用）、`auto`（检测已安装的服务器） |
@@ -72,7 +72,7 @@
 
 #### 进度与超时
 
-- `fast_search` 会周期性发送 progress 通知，避免客户端空闲超时。
+- `agentic_search` 会周期性发送 progress 通知，避免客户端空闲超时。
 - 若仍遇到客户端/host 硬超时，建议降低 `SEARCH_MAX_TURNS` 或提高 `SEARCH_TIMEOUT_SECONDS`。
 
 ### Cloud Sync
