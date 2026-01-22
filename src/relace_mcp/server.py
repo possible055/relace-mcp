@@ -210,10 +210,11 @@ def main() -> None:
             host=args.host,
             port=args.port,
             path=args.path,
+            show_banner=False,
         )
     else:
         logger.info("Starting Relace MCP Server (STDIO)")
-        server.run()
+        server.run(show_banner=False)
 
 
 if __name__ == "__main__":

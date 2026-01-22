@@ -244,7 +244,7 @@ class TestMain:
 
             main()
 
-            mock_server.run.assert_called_once_with()
+            mock_server.run.assert_called_once_with(show_banner=False)
 
     @pytest.mark.usefixtures("clean_env")
     def test_main_http_mode(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -282,6 +282,7 @@ class TestMain:
                 host="127.0.0.1",
                 port=9000,
                 path="/api/mcp",
+                show_banner=False,
             )
 
     @pytest.mark.usefixtures("clean_env")
@@ -308,6 +309,7 @@ class TestMain:
                 host="127.0.0.1",
                 port=8080,
                 path="/mcp",
+                show_banner=False,
             )
 
     @pytest.mark.usefixtures("clean_env")

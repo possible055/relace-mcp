@@ -20,6 +20,7 @@ class TestSymbolInfo:
             name="my_func", kind=12, uri="file:///base/src/main.py", line=5, character=4
         )
         result = info.to_grep_format("/base")
+        assert result is not None
         assert "[function]" in result
         assert "/repo/src/main.py:6:5" in result
         assert "my_func" in result
@@ -34,6 +35,7 @@ class TestSymbolInfo:
             container_name="MyClass",
         )
         result = info.to_grep_format("/base")
+        assert result is not None
         assert "(MyClass)" in result
 
 
