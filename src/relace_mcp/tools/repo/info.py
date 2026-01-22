@@ -3,9 +3,10 @@ import uuid
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
+from ._git import get_current_git_info, is_git_dirty
+from ._logging import _extract_error_fields, log_cloud_event
 from .errors import build_cloud_error_details
-from .logging import log_cloud_info_complete, log_cloud_info_error, log_cloud_info_start
-from .state import get_current_git_info, get_repo_identity, is_git_dirty, load_sync_state
+from .state import get_repo_identity, load_sync_state
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +48,21 @@ def cloud_info_logic(
                 "status": None,
                 "error": "Invalid base_dir: cannot derive repository name.",
             }
-            log_cloud_info_error(trace_id, local_repo_name or None, None, result)
+            log_cloud_event(
+                "cloud_info_error",
+                trace_id,
+                repo_name=local_repo_name or None,
+                cloud_repo_name=None,
+                **_extract_error_fields(result),
+            )
             return result
 
-        log_cloud_info_start(trace_id, local_repo_name, cloud_repo_name)
+        log_cloud_event(
+            "cloud_info_start",
+            trace_id,
+            repo_name=local_repo_name,
+            cloud_repo_name=cloud_repo_name,
+        )
 
         # Get current git info
         current_branch, current_head = get_current_git_info(base_dir)
@@ -190,7 +202,12 @@ def cloud_info_logic(
             "status": status_info,
             "warnings": warnings,
         }
-        log_cloud_info_complete(trace_id, result_payload)
+        log_cloud_event(
+            "cloud_info_complete",
+            trace_id,
+            repo_name=local_repo_name,
+            cloud_repo_name=cloud_repo_name,
+        )
         return result_payload
 
     except Exception as exc:
@@ -206,5 +223,11 @@ def cloud_info_logic(
             "error": str(exc),
             **build_cloud_error_details(exc),
         }
-        log_cloud_info_error(trace_id, local_repo_name or None, cloud_repo_name or None, result)
+        log_cloud_event(
+            "cloud_info_error",
+            trace_id,
+            repo_name=local_repo_name or None,
+            cloud_repo_name=cloud_repo_name or None,
+            **_extract_error_fields(result),
+        )
         return result

@@ -3,9 +3,10 @@ import uuid
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
+from ._git import get_current_git_info, is_git_dirty
+from ._logging import _extract_error_fields, log_cloud_event
 from .errors import build_cloud_error_details
-from .logging import log_cloud_search_complete, log_cloud_search_error, log_cloud_search_start
-from .state import get_current_git_info, get_repo_identity, is_git_dirty, load_sync_state
+from .state import get_repo_identity, load_sync_state
 
 logger = logging.getLogger(__name__)
 
@@ -54,17 +55,24 @@ def cloud_search_logic(
                 "hash": "",
                 "error": "Invalid base_dir: cannot derive repository name.",
             }
-            log_cloud_search_error(trace_id, None, None, error_result)
+            log_cloud_event(
+                "cloud_search_error",
+                trace_id,
+                repo_name=None,
+                cloud_repo_name=None,
+                **_extract_error_fields(error_result),
+            )
             return error_result
 
-        log_cloud_search_start(
+        log_cloud_event(
+            "cloud_search_start",
             trace_id,
-            local_repo_name,
-            cloud_repo_name,
-            query,
-            branch,
-            score_threshold,
-            token_limit,
+            repo_name=local_repo_name,
+            cloud_repo_name=cloud_repo_name,
+            query_preview=(query or "")[:500],
+            branch=branch,
+            score_threshold=score_threshold,
+            token_limit=token_limit,
         )
 
         # Read repo_id from sync state (requires prior cloud_sync)
@@ -87,11 +95,17 @@ def cloud_search_logic(
                 "cloud_repo_name": cloud_repo_name,
                 "error": f"No sync state found for '{local_repo_name}'. Run cloud_sync first.",
             }
-            log_cloud_search_error(trace_id, local_repo_name, cloud_repo_name, no_sync_result)
+            log_cloud_event(
+                "cloud_search_error",
+                trace_id,
+                repo_name=local_repo_name,
+                cloud_repo_name=cloud_repo_name,
+                **_extract_error_fields(no_sync_result),
+            )
             return no_sync_result
 
         warnings_list: list[str] = []
-        current_branch, current_head = get_current_git_info(base_dir)
+        _, current_head = get_current_git_info(base_dir)
         if current_head and git_head and current_head != git_head:
             warnings_list.append(
                 f"Local git HEAD ({current_head[:8]}) differs from last synced HEAD ({git_head[:8]}). "
@@ -162,7 +176,13 @@ def cloud_search_logic(
             "cloud_repo_name": cached_state.cloud_repo_name or cloud_repo_name,
             "warnings": warnings_list,
         }
-        log_cloud_search_complete(trace_id, result_payload)
+        log_cloud_event(
+            "cloud_search_complete",
+            trace_id,
+            repo_name=local_repo_name,
+            cloud_repo_name=cached_state.cloud_repo_name or cloud_repo_name,
+            result_count=len(results),
+        )
         return result_payload
 
     except Exception as exc:
@@ -180,5 +200,11 @@ def cloud_search_logic(
         if local_repo_name and cloud_repo_name:
             exc_result["repo_name"] = local_repo_name
             exc_result["cloud_repo_name"] = cloud_repo_name
-        log_cloud_search_error(trace_id, local_repo_name, cloud_repo_name, exc_result)
+        log_cloud_event(
+            "cloud_search_error",
+            trace_id,
+            repo_name=local_repo_name,
+            cloud_repo_name=cloud_repo_name,
+            **_extract_error_fields(exc_result),
+        )
         return exc_result

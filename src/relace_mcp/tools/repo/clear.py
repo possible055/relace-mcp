@@ -3,12 +3,8 @@ import uuid
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
+from ._logging import log_cloud_event
 from .errors import build_cloud_error_details
-from .logging import (
-    log_cloud_clear_complete,
-    log_cloud_clear_error,
-    log_cloud_clear_start,
-)
 from .state import clear_sync_state, get_repo_identity, load_sync_state
 
 logger = logging.getLogger(__name__)
@@ -43,14 +39,23 @@ def cloud_clear_logic(
             "message": "Operation cancelled. Access to this tool requires 'confirm=True' to proceed with irreversible deletion.",
             "repo_id": None,
         }
-        log_cloud_clear_start(trace_id, None, None, confirm=False)
-        log_cloud_clear_complete(trace_id, result)
+        log_cloud_event(
+            "cloud_clear_start", trace_id, repo_name=None, cloud_repo_name=None, confirm=False
+        )
+        log_cloud_event("cloud_clear_complete", trace_id, status="cancelled")
         return result
 
     # Direct repo_id mode: bypass base_dir lookup entirely
     if repo_id:
         logger.info("[%s] Direct delete mode with repo_id=%s", trace_id, repo_id)
-        log_cloud_clear_start(trace_id, None, None, confirm=True)
+        log_cloud_event(
+            "cloud_clear_start",
+            trace_id,
+            repo_name=None,
+            cloud_repo_name=None,
+            confirm=True,
+            repo_id=repo_id,
+        )
         try:
             if client.delete_repo(repo_id, trace_id=trace_id):
                 result = {
@@ -59,7 +64,7 @@ def cloud_clear_logic(
                     "message": f"Repository ({repo_id}) deleted successfully.",
                     "repo_id": repo_id,
                 }
-                log_cloud_clear_complete(trace_id, result)
+                log_cloud_event("cloud_clear_complete", trace_id, status="deleted")
                 return result
             else:
                 result = {
@@ -68,7 +73,7 @@ def cloud_clear_logic(
                     "message": f"Failed to delete repository ({repo_id}).",
                     "repo_id": repo_id,
                 }
-                log_cloud_clear_complete(trace_id, result)
+                log_cloud_event("cloud_clear_complete", trace_id, status="error")
                 return result
         except Exception as exc:
             logger.error("[%s] Cloud clear failed: %s", trace_id, exc)
@@ -80,7 +85,7 @@ def cloud_clear_logic(
                 "repo_id": repo_id,
                 **build_cloud_error_details(exc),
             }
-            log_cloud_clear_error(trace_id, None, None, result)
+            log_cloud_event("cloud_clear_error", trace_id, result=result)
             return result
 
     local_repo_name: str | None = None
@@ -95,11 +100,19 @@ def cloud_clear_logic(
                 "message": "Invalid base_dir: cannot derive repository name from root, current directory, or empty path.",
                 "repo_id": None,
             }
-            log_cloud_clear_start(trace_id, None, None, confirm=True)
-            log_cloud_clear_error(trace_id, None, None, result)
+            log_cloud_event(
+                "cloud_clear_start", trace_id, repo_name=None, cloud_repo_name=None, confirm=True
+            )
+            log_cloud_event("cloud_clear_error", trace_id, result=result)
             return result
 
-        log_cloud_clear_start(trace_id, local_repo_name, cloud_repo_name, confirm=True)
+        log_cloud_event(
+            "cloud_clear_start",
+            trace_id,
+            repo_name=local_repo_name,
+            cloud_repo_name=cloud_repo_name,
+            confirm=True,
+        )
 
         # 1. Try to get repo_id from local sync state (safest)
         repo_id = None
@@ -136,7 +149,7 @@ def cloud_clear_logic(
                     "repo_name": local_repo_name,
                     "cloud_repo_name": cloud_repo_name,
                 }
-                log_cloud_clear_complete(trace_id, result)
+                log_cloud_event("cloud_clear_complete", trace_id, status="error")
                 return result
 
             if matching_repos:
@@ -154,7 +167,7 @@ def cloud_clear_logic(
                 "repo_name": local_repo_name,
                 "cloud_repo_name": cloud_repo_name,
             }
-            log_cloud_clear_complete(trace_id, result)
+            log_cloud_event("cloud_clear_complete", trace_id, status="not_found")
             return result
 
         # 3. specific deletion
@@ -170,7 +183,7 @@ def cloud_clear_logic(
                 "cloud_repo_name": cloud_repo_name,
                 "repo_id": repo_id,
             }
-            log_cloud_clear_complete(trace_id, result)
+            log_cloud_event("cloud_clear_complete", trace_id, status="deleted")
             return result
         else:
             result = {
@@ -181,7 +194,7 @@ def cloud_clear_logic(
                 "cloud_repo_name": cloud_repo_name,
                 "repo_id": repo_id,
             }
-            log_cloud_clear_complete(trace_id, result)
+            log_cloud_event("cloud_clear_complete", trace_id, status="error")
             return result
 
     except Exception as exc:
@@ -193,5 +206,5 @@ def cloud_clear_logic(
             "error": str(exc),
             **build_cloud_error_details(exc),
         }
-        log_cloud_clear_error(trace_id, local_repo_name, cloud_repo_name, result)
+        log_cloud_event("cloud_clear_error", trace_id, result=result)
         return result

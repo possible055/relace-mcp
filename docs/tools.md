@@ -164,8 +164,49 @@ Two-stage semantic + agentic code retrieval. Combines semantic hints with local 
 1. **Stage 1**: Loads semantic hints based on `MCP_RETRIEVAL_BACKEND`
    - `relace`: run `cloud_search`
    - `codanna`: run `codanna mcp semantic_search_with_context --json`
+   - `chunkhound`: run `chunkhound search --json` (install separately: `pip install chunkhound`)
    - `none`: skip hints
 2. **Stage 2**: Uses hints to guide agentic exploration (grep, view, etc.)
+
+### Backend Configuration
+
+#### ChunkHound (Recommended for local semantic search)
+
+```bash
+# Install chunkhound separately
+pip install chunkhound
+
+# Configure via environment variables
+export MCP_RETRIEVAL_BACKEND=chunkhound
+export CHUNKHOUND_EMBEDDING__PROVIDER=openai  # or voyageai, openai-compatible
+export OPENAI_API_KEY=sk-xxx  # or VOYAGE_API_KEY
+
+# Or configure via .chunkhound.json in project root
+```
+
+Example `.chunkhound.json`:
+```json
+{
+  "embedding": {
+    "provider": "openai",
+    "api_key": "sk-xxx",
+    "model": "text-embedding-3-small"
+  }
+}
+```
+
+For local Ollama:
+```json
+{
+  "embedding": {
+    "provider": "openai-compatible",
+    "base_url": "http://localhost:11434/v1",
+    "model": "qwen3-embedding:8b"
+  }
+}
+```
+
+#### Codanna
 
 Set `MCP_RETRIEVAL_BACKEND=codanna` to use a local codanna index (run `codanna init` + `codanna index <dir>`).
 

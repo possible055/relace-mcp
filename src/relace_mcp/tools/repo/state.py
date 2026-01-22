@@ -1,13 +1,14 @@
 import hashlib
 import json
 import logging
-import subprocess  # nosec B404 - used safely with hardcoded commands only
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from platformdirs import user_state_dir
+
+from ._git import get_git_remote_origin_url, get_git_root
 
 logger = logging.getLogger(__name__)
 
@@ -23,43 +24,6 @@ def _sanitize_repo_name(repo_name: str) -> str:
     return "".join(c if c.isalnum() or c in "-_" else "_" for c in repo_name)
 
 
-def _get_git_root(base_dir: str) -> Path:
-    base_path = Path(base_dir).resolve()
-    try:
-        result = subprocess.run(  # nosec B603 B607 - hardcoded command
-            ["git", "rev-parse", "--show-toplevel"],
-            cwd=base_dir,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            top = result.stdout.strip()
-            if top:
-                return Path(top).resolve()
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        logger.debug("Failed to get git root")
-    return base_path
-
-
-def _get_git_remote_origin_url(repo_root: Path) -> str:
-    try:
-        result = subprocess.run(  # nosec B603 B607 - hardcoded command
-            ["git", "config", "--get", "remote.origin.url"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            url = result.stdout.strip()
-            if url:
-                return url
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        logger.debug("Failed to get git remote origin url")
-    return ""
-
-
 def get_repo_identity(base_dir: str) -> tuple[str, str, str]:
     """Derive stable identifiers for mapping local projects to cloud/state.
 
@@ -70,10 +34,10 @@ def get_repo_identity(base_dir: str) -> tuple[str, str, str]:
         - Uses git top-level directory when available.
         - Uses a short SHA-256 fingerprint of (remote.origin.url OR repo_root path).
     """
-    repo_root = _get_git_root(base_dir)
+    repo_root = get_git_root(base_dir)
     local_repo_name = repo_root.name
 
-    origin_url = _get_git_remote_origin_url(repo_root)
+    origin_url = get_git_remote_origin_url(repo_root)
     identity_source = origin_url or str(repo_root)
     fingerprint = hashlib.sha256(identity_source.encode("utf-8")).hexdigest()[:_FINGERPRINT_LEN]
     cloud_repo_name = f"{local_repo_name}__{fingerprint}" if local_repo_name else ""
@@ -81,24 +45,7 @@ def get_repo_identity(base_dir: str) -> tuple[str, str, str]:
 
 
 def get_repo_root(base_dir: str) -> str:
-    return str(_get_git_root(base_dir))
-
-
-def is_git_dirty(base_dir: str) -> bool:
-    repo_root = _get_git_root(base_dir)
-    try:
-        result = subprocess.run(  # nosec B603 B607 - hardcoded command
-            ["git", "status", "--porcelain"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            return bool(result.stdout.strip())
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        logger.debug("Failed to get git dirty status")
-    return False
+    return str(get_git_root(base_dir))
 
 
 @dataclass
@@ -318,50 +265,3 @@ def clear_sync_state(base_dir: str) -> bool:
     except OSError as exc:
         logger.error("Failed to clear sync state for '%s': %s", repo_name, exc)
         return False
-
-
-def get_current_git_info(base_dir: str) -> tuple[str, str]:
-    """Get current Git branch name and HEAD commit SHA.
-
-    Handles:
-    - Normal branch: returns ("main", "abc123...")
-    - Detached HEAD: returns ("HEAD", "abc123...")
-    - Non-git project or git unavailable: returns ("", "")
-
-    Args:
-        base_dir: Base directory of the repository.
-
-    Returns:
-        Tuple of (branch_name, head_sha). Either or both may be empty strings.
-    """
-    branch = ""
-    head_sha = ""
-
-    try:
-        # Get branch name (symbolic ref)
-        # --abbrev-ref HEAD returns branch name, or "HEAD" if detached
-        result = subprocess.run(  # nosec B603 B607 - hardcoded command
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=base_dir,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            branch = result.stdout.strip()
-
-        # Get HEAD commit SHA
-        result = subprocess.run(  # nosec B603 B607 - hardcoded command
-            ["git", "rev-parse", "HEAD"],
-            cwd=base_dir,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            head_sha = result.stdout.strip()
-
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        logger.debug("Failed to get git info")
-
-    return branch, head_sha

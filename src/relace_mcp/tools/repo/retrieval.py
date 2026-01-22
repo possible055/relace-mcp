@@ -6,7 +6,7 @@ from ...clients import RelaceRepoClient, SearchLLMClient
 from ...config import RETRIEVAL_USER_PROMPT_TEMPLATE, RelaceConfig
 from ...config.settings import AGENTIC_AUTO_SYNC, RETRIEVAL_BACKEND
 from ..search import FastAgenticSearchHarness
-from .codanna import codanna_search
+from ._local_backend import chunkhound_search, codanna_search
 from .info import cloud_info_logic
 from .search import cloud_search_logic
 from .sync import cloud_sync_logic
@@ -79,7 +79,7 @@ async def agentic_retrieval_logic(
             warnings_list.append(f"Auto-sync error: {exc}")
             logger.warning("[%s] Auto-sync exception occurred, see warnings", trace_id)
 
-    # Stage 1: Semantic retrieval (Relace or Codanna)
+    # Stage 1: Semantic retrieval (Relace, Codanna, or ChunkHound)
     if RETRIEVAL_BACKEND == "none":
         warnings_list.append("Semantic retrieval disabled (MCP_RETRIEVAL_BACKEND=none).")
     elif RETRIEVAL_BACKEND == "codanna":
@@ -102,6 +102,26 @@ async def agentic_retrieval_logic(
         except Exception as exc:
             warnings_list.append(f"Codanna search error: {exc}. Proceeding without hints.")
             logger.warning("[%s] Codanna search exception: %s", trace_id, exc)
+    elif RETRIEVAL_BACKEND == "chunkhound":
+        try:
+            cloud_results = chunkhound_search(
+                query,
+                base_dir=base_dir,
+                limit=max_hints,
+                threshold=score_threshold,
+            )
+            if not cloud_results:
+                warnings_list.append("ChunkHound returned no results. Proceeding without hints.")
+            else:
+                logger.info(
+                    "[%s] ChunkHound returned %d results, using top %d as hints",
+                    trace_id,
+                    len(cloud_results),
+                    min(len(cloud_results), max_hints),
+                )
+        except Exception as exc:
+            warnings_list.append(f"ChunkHound search error: {exc}. Proceeding without hints.")
+            logger.warning("[%s] ChunkHound search exception: %s", trace_id, exc)
     else:
         if repo_client is None:
             warnings_list.append(
