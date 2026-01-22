@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import tempfile
@@ -64,6 +65,89 @@ def invalidate_roots_cache(ctx: "Context | None" = None) -> None:
 
 # Markers that indicate a directory is a project root
 PROJECT_MARKERS = (".git", "pyproject.toml", "package.json", "Cargo.toml", "go.mod", ".project")
+
+# WSL mount prefix for Windows drives (e.g., /mnt/c/Users/...)
+# TODO: extend for other scenarios like Linux + remote Windows
+WSL_MNT_PREFIX = "/mnt/"
+
+
+def get_workspace_storage_dir() -> Path | None:
+    """Get Antigravity workspaceStorage directory path in WSL environment.
+
+    Scans /mnt/c/Users/ to find Antigravity's workspaceStorage directory.
+    This is used when MCP server runs in WSL but IDE runs on Windows.
+
+    Returns:
+        Path to workspaceStorage directory, or None if not found.
+    """
+    wsl_users_dir = Path(f"{WSL_MNT_PREFIX}c/Users")
+    if not wsl_users_dir.exists():
+        return None
+
+    for user_dir in wsl_users_dir.iterdir():
+        if not user_dir.is_dir():
+            continue
+        if user_dir.name in ("Public", "Default", "Default User", "All Users"):
+            continue
+        storage_path = (
+            user_dir / "AppData" / "Roaming" / "Antigravity" / "User" / "workspaceStorage"
+        )
+        if storage_path.exists():
+            return storage_path
+    return None
+
+
+def resolve_workspace_from_storage() -> str | None:
+    """Resolve current project path from Antigravity workspaceStorage.
+
+    Reads workspace.json from the most recently modified workspace subdirectory
+    and extracts the project path. Only handles vscode-remote://wsl+<distro>/...
+    format used when IDE connects to WSL.
+
+    Subdirectories are filtered:
+        - Timestamp dirs (all digits): skipped, these are for file history
+        - Hex hash dirs (32 chars): processed, these contain workspace.json
+
+    Returns:
+        Absolute path to project directory (e.g., /home/user/project),
+        or None if not found.
+    """
+    storage_dir = get_workspace_storage_dir()
+    if not storage_dir:
+        return None
+
+    # Get subdirs sorted by mtime (newest first), skip timestamp dirs (digits only)
+    subdirs: list[tuple[Path, float]] = []
+    try:
+        for entry in storage_dir.iterdir():
+            if entry.is_dir() and not entry.name.isdigit():
+                try:
+                    subdirs.append((entry, entry.stat().st_mtime))
+                except OSError:
+                    continue
+    except OSError:
+        return None
+
+    subdirs.sort(key=lambda x: x[1], reverse=True)
+
+    for subdir, _ in subdirs:
+        workspace_json = subdir / "workspace.json"
+        if not workspace_json.exists():
+            continue
+        try:
+            data = json.loads(workspace_json.read_text(encoding="utf-8"))
+            folder = data.get("folder")
+            if not folder or not folder.startswith("vscode-remote://wsl"):
+                continue
+            # vscode-remote://wsl%2Bdebian/home/... -> /home/...
+            decoded = unquote(folder)
+            idx = decoded.find("/", len("vscode-remote://wsl+"))
+            if idx != -1:
+                return decoded[idx:]
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    return None
 
 
 def validate_project_directory(path: str) -> tuple[bool, str]:
@@ -299,8 +383,9 @@ async def resolve_base_dir(
     1. MCP_BASE_DIR env var (explicit config takes priority, trusted)
     2. Cached MCP Roots (invalidated by notifications/roots/list_changed)
     3. Fresh MCP Roots from client (dynamic, per-workspace)
-    4. Git repository root detection (fallback)
-    5. Current working directory (last resort with warning)
+    4. IDE workspaceStorage (Antigravity/VSCode local state)
+    5. Git repository root detection (fallback)
+    6. Current working directory (last resort with warning)
 
     Args:
         config_base_dir: Base directory from config (may be None)
@@ -357,7 +442,18 @@ async def resolve_base_dir(
         except Exception as e:
             logger.info("MCP Roots unavailable (client may not support roots): %s", e)
 
-    # 4. Try Git root detection from cwd
+    # 4. Try IDE workspaceStorage (Antigravity/VSCode)
+    workspace_path = resolve_workspace_from_storage()
+    if workspace_path:
+        resolved = str(Path(workspace_path).resolve())
+        source = "workspaceStorage (fallback)"
+        if validate_base_dir(resolved):
+            logger.info("[base_dir] Resolved from %s: %s", source, resolved)
+            _check_project_safety(resolved, source)
+            return resolved, source
+        logger.warning("[base_dir] workspaceStorage path is invalid: %s", resolved)
+
+    # 5. Try Git root detection from cwd
     try:
         cwd = Path.cwd().resolve()
     except Exception:
@@ -378,7 +474,7 @@ async def resolve_base_dir(
             _check_project_safety(resolved, source)
             return resolved, source
 
-    # 5. Fallback to cwd with warning
+    # 6. Fallback to cwd with warning
     resolved = str(cwd)
     source = "cwd (fallback)"
     logger.info("[base_dir] Resolved from %s: %s", source, resolved)

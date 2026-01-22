@@ -254,6 +254,10 @@ class TestResolveBaseDir:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Falls back to Git root when MCP Roots unavailable."""
+        import relace_mcp.config.base_dir as base_dir_module
+
+        monkeypatch.setattr(base_dir_module, "resolve_workspace_from_storage", lambda: None)
+
         # Setup: create git repo structure
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
@@ -272,6 +276,9 @@ class TestResolveBaseDir:
     @pytest.mark.asyncio
     async def test_falls_back_to_cwd(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Falls back to cwd when no Git repo found."""
+        import relace_mcp.config.base_dir as base_dir_module
+
+        monkeypatch.setattr(base_dir_module, "resolve_workspace_from_storage", lambda: None)
         monkeypatch.chdir(tmp_path)
 
         ctx = MagicMock()
@@ -284,6 +291,10 @@ class TestResolveBaseDir:
     @pytest.mark.asyncio
     async def test_handles_ctx_none(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Handles ctx=None gracefully (e.g., during startup)."""
+        import relace_mcp.config.base_dir as base_dir_module
+
+        monkeypatch.setattr(base_dir_module, "resolve_workspace_from_storage", lambda: None)
+
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
         monkeypatch.chdir(tmp_path)
@@ -297,6 +308,10 @@ class TestResolveBaseDir:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Gracefully handles exceptions from list_roots."""
+        import relace_mcp.config.base_dir as base_dir_module
+
+        monkeypatch.setattr(base_dir_module, "resolve_workspace_from_storage", lambda: None)
+
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
         monkeypatch.chdir(tmp_path)
@@ -316,6 +331,7 @@ class TestResolveBaseDir:
         import relace_mcp.config.base_dir as base_dir_module
 
         monkeypatch.setattr(base_dir_module, "find_git_root", lambda _: None)
+        monkeypatch.setattr(base_dir_module, "resolve_workspace_from_storage", lambda: None)
         monkeypatch.chdir(Path.cwd().anchor)
 
         with pytest.raises(RuntimeError):
@@ -326,6 +342,10 @@ class TestResolveBaseDir:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Single MCP Root may be invalid; should fall back to Git root."""
+        import relace_mcp.config.base_dir as base_dir_module
+
+        monkeypatch.setattr(base_dir_module, "resolve_workspace_from_storage", lambda: None)
+
         (tmp_path / ".git").mkdir()
         cwd = tmp_path / "src"
         cwd.mkdir()
@@ -346,6 +366,10 @@ class TestResolveBaseDir:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Multiple MCP Roots may all be invalid; should fall back to Git root."""
+        import relace_mcp.config.base_dir as base_dir_module
+
+        monkeypatch.setattr(base_dir_module, "resolve_workspace_from_storage", lambda: None)
+
         (tmp_path / ".git").mkdir()
         cwd = tmp_path / "src"
         cwd.mkdir()
