@@ -8,10 +8,21 @@ from relace_mcp.lsp.languages.typescript import TYPESCRIPT_CONFIG
 
 class TestGetConfigForFile:
     def test_matches_extensions(self) -> None:
-        assert get_config_for_file("a.py").language_id == "python"
-        assert get_config_for_file("a.ts").language_id == "typescript"
-        assert get_config_for_file("a.go").language_id == "go"
-        assert get_config_for_file("a.rs").language_id == "rust"
+        python_config = get_config_for_file("a.py")
+        assert python_config is not None
+        assert python_config.language_id == "python"
+
+        typescript_config = get_config_for_file("a.ts")
+        assert typescript_config is not None
+        assert typescript_config.language_id == "typescript"
+
+        go_config = get_config_for_file("a.go")
+        assert go_config is not None
+        assert go_config.language_id == "go"
+
+        rust_config = get_config_for_file("a.rs")
+        assert rust_config is not None
+        assert rust_config.language_id == "rust"
         assert get_config_for_file("a.txt") is None
 
 

@@ -1847,7 +1847,7 @@ wheels = [
 
 [[package]]
 name = "relace-mcp"
-version = "0.2.4a2"
+version = "0.2.4"
 source = { editable = "." }
 dependencies = [
     { name = "basedpyright" },
