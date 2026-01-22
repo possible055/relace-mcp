@@ -1895,7 +1895,7 @@ requires-dist = [
     { name = "charset-normalizer", specifier = ">=3.0.0" },
     { name = "click", marker = "extra == 'benchmark'", specifier = ">=8.0.0" },
     { name = "dead", marker = "extra == 'dev'", specifier = ">=1.5.2" },
-    { name = "fastmcp", specifier = ">=2.0.0" },
+    { name = "fastmcp", specifier = ">=2.0.0,<3" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "interrogate", marker = "extra == 'dev'", specifier = ">=1.7.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.19.1" },
