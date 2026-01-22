@@ -168,6 +168,7 @@ def _iter_searchable_files(
         dirs[:] = _filter_visible_dirs(dirs)
 
         # Apply gitignore rules to prune directories and files
+        root_rel = ""
         gitignore_specs = collect_gitignore_specs(root_path, base_path)
         if gitignore_specs:
             try:

@@ -55,6 +55,11 @@ def _format_running_stats(results: list[BenchmarkResult]) -> str:
     return f"R:{avg_recall:.0%} P:{avg_precision:.0%}"
 
 
+def _print_progress(line: str) -> None:
+    # ANSI: \033[2K clears the entire line, \r returns cursor to start
+    print(f"\033[2K\r{line}", end="", flush=True)
+
+
 class CaseTimeoutError(Exception):
     pass
 
@@ -109,7 +114,6 @@ class BenchmarkRunner:
         wall_start = time.perf_counter()
         results: list[BenchmarkResult] = []
         total = len(cases)
-        last_line_len = 0
         consecutive_failures = 0
 
         # Resume: load completed cases from checkpoint
@@ -155,9 +159,7 @@ class BenchmarkRunner:
                     if self.progress and not self.verbose:
                         progress_bar = _format_progress_bar(current, total)
                         line = f"{progress_bar} [{current}/{total}] {case.id} (cached)"
-                        padding = " " * max(0, last_line_len - len(line))
-                        print(f"\r{line}{padding}", end="", flush=True)
-                        last_line_len = len(line)
+                        _print_progress(line)
                     continue
 
                 elapsed = time.perf_counter() - wall_start
@@ -167,9 +169,7 @@ class BenchmarkRunner:
                 if self.progress and not self.verbose:
                     progress_bar = _format_progress_bar(current - 1, total)
                     line = f"{progress_bar} [{current}/{total}] {case.id} {eta} {stats}"
-                    padding = " " * max(0, last_line_len - len(line))
-                    print(f"\r{line}{padding}", end="", flush=True)
-                    last_line_len = len(line)
+                    _print_progress(line)
 
                 if self.verbose:
                     print(f"[{current}/{total}] {case.id} ({case.repo})", flush=True)
@@ -211,8 +211,7 @@ class BenchmarkRunner:
             progress_bar = _format_progress_bar(total, total)
             final_stats = _format_running_stats(results)
             line = f"{progress_bar} done {final_stats}"
-            padding = " " * max(0, last_line_len - len(line))
-            print(f"\r{line}{padding}", flush=True)
+            print(f"\033[2K\r{line}", flush=True)
 
         completed_at = datetime.now(UTC)
         duration_ms = (time.perf_counter() - wall_start) * 1000
