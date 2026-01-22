@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "RELACE_CLOUD_TOOLS",
+    "RETRIEVAL_BACKEND",
     "SEARCH_LSP_TOOLS_MODE",
     "RelaceConfig",
 ]
@@ -95,6 +96,7 @@ MCP_LOGGING = env_bool("MCP_LOGGING", default=False, deprecated_name="RELACE_LOG
 
 # Cloud tools (disabled by default)
 RELACE_CLOUD_TOOLS = env_bool("RELACE_CLOUD_TOOLS", default=False)
+RETRIEVAL_BACKEND = os.getenv("MCP_RETRIEVAL_BACKEND", "relace").strip().lower()
 
 
 # Search mode: 'agentic' (fast_search), 'indexed' (agentic_retrieval), 'both'
