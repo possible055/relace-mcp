@@ -191,8 +191,10 @@ def main() -> None:
     # Fix Windows CRLF issue for stdio transport
     # Windows converts \n to \r\n by default, breaking JSON-RPC
     if sys.platform == "win32":
-        sys.stdout.reconfigure(newline="\n")
-        sys.stdin.reconfigure(newline="\n")
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(newline="\n")
+        if hasattr(sys.stdin, "reconfigure"):
+            sys.stdin.reconfigure(newline="\n")
 
     # Configure logging FIRST to prevent stdout pollution
     _configure_logging_for_stdio()
