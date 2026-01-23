@@ -1,5 +1,5 @@
 import logging
-import subprocess
+import subprocess  # nosec B404
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 def get_git_root(base_dir: str) -> Path:
     base_path = Path(base_dir).resolve()
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607
             ["git", "rev-parse", "--show-toplevel"],
             cwd=base_dir,
             capture_output=True,
@@ -26,7 +26,7 @@ def get_git_root(base_dir: str) -> Path:
 
 def get_git_remote_origin_url(repo_root: Path) -> str:
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607
             ["git", "config", "--get", "remote.origin.url"],
             cwd=repo_root,
             capture_output=True,
@@ -47,7 +47,7 @@ def get_current_git_info(base_dir: str) -> tuple[str, str]:
     head_sha = ""
 
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
             cwd=base_dir,
             capture_output=True,
@@ -57,7 +57,7 @@ def get_current_git_info(base_dir: str) -> tuple[str, str]:
         if result.returncode == 0:
             branch = result.stdout.strip()
 
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607
             ["git", "rev-parse", "HEAD"],
             cwd=base_dir,
             capture_output=True,
@@ -76,7 +76,7 @@ def get_current_git_info(base_dir: str) -> tuple[str, str]:
 def is_git_dirty(base_dir: str) -> bool:
     repo_root = get_git_root(base_dir)
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607
             ["git", "status", "--porcelain"],
             cwd=repo_root,
             capture_output=True,

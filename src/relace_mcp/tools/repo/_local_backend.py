@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-import subprocess
+import subprocess  # nosec B404
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ def _run_cli_json(
         }
 
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603
             command,
             cwd=base_dir,
             capture_output=True,
@@ -90,7 +90,7 @@ def chunkhound_search(
 def _ensure_chunkhound_index(base_dir: str, env: dict[str, str]) -> None:
     command = ["chunkhound", "index"]
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603
             command,
             cwd=base_dir,
             capture_output=True,
