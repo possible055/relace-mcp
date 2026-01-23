@@ -160,8 +160,6 @@ class RelaceConfig:
             if not os.path.isdir(base_dir):
                 raise RuntimeError(f"MCP_BASE_DIR does not exist or is not a directory: {base_dir}")
             logger.info("Using MCP_BASE_DIR: %s", base_dir)
-        else:
-            logger.info("MCP_BASE_DIR not set; will resolve from MCP Roots or cwd at runtime")
 
         # default_encoding from env (will be overridden by detection if None)
         default_encoding = RELACE_DEFAULT_ENCODING
