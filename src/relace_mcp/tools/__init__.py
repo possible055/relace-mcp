@@ -13,7 +13,7 @@ from fastmcp.server.context import Context
 from ..clients import RelaceRepoClient, SearchLLMClient
 from ..clients.apply import ApplyLLMClient
 from ..config import RelaceConfig, resolve_base_dir
-from ..config.settings import MCP_SEARCH_MODE, RELACE_CLOUD_TOOLS
+from ..config.settings import MCP_SEARCH_MODE, RELACE_CLOUD_TOOLS, RETRIEVAL_BACKEND
 from .apply import apply_file_logic
 from .repo import (
     agentic_retrieval_logic,
@@ -165,6 +165,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             )
             return result
 
+    repo_client: RelaceRepoClient | None = None
+
     # Cloud Repos (Semantic Search & Sync) - only register if enabled
     if RELACE_CLOUD_TOOLS:
         repo_client = RelaceRepoClient(config)
@@ -269,49 +271,48 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
             return cloud_info_logic(repo_client, base_dir)
 
-        # Register agentic_retrieval only if MCP_SEARCH_MODE is 'indexed' or 'both'
-        if MCP_SEARCH_MODE in ("indexed", "both"):
+    if MCP_SEARCH_MODE in ("indexed", "both") and RETRIEVAL_BACKEND != "none":
 
-            @mcp.tool(
-                annotations={
-                    "readOnlyHint": True,
-                    "destructiveHint": False,
-                    "idempotentHint": True,
-                    "openWorldHint": True,  # Uses cloud API
-                }
-            )
-            async def agentic_retrieval(
-                query: str,
-                ctx: Context | None = None,
-            ) -> dict[str, Any]:
-                """Find code by semantic query. Returns {files: {path: [[start, end], ...]}, explanation}.
+        @mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": RETRIEVAL_BACKEND == "relace",
+            }
+        )
+        async def agentic_retrieval(
+            query: str,
+            ctx: Context | None = None,
+        ) -> dict[str, Any]:
+            """Find code by semantic query. Returns {files: {path: [[start, end], ...]}, explanation}.
 
-                Args:
-                    query: Be SPECIFIC. Examples:
-                        ❌ "auth logic"
-                        ✅ "function that validates JWT tokens and extracts user ID"
-                        ❌ "error handling"
-                        ✅ "where HTTP 4xx errors are caught and transformed to user messages"
-                """
-                progress_task = None
-                if ctx is not None:
-                    progress_task = asyncio.create_task(
-                        _progress_heartbeat(ctx, message="agentic_retrieval in progress")
-                    )
-                try:
-                    base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-                    return await agentic_retrieval_logic(
-                        repo_client,
-                        search_client,
-                        config,
-                        base_dir,
-                        query,
-                    )
-                finally:
-                    if progress_task is not None:
-                        progress_task.cancel()
-                        with suppress(asyncio.CancelledError):
-                            await progress_task
+            Args:
+                query: Be SPECIFIC. Examples:
+                    ❌ "auth logic"
+                    ✅ "function that validates JWT tokens and extracts user ID"
+                    ❌ "error handling"
+                    ✅ "where HTTP 4xx errors are caught and transformed to user messages"
+            """
+            progress_task = None
+            if ctx is not None:
+                progress_task = asyncio.create_task(
+                    _progress_heartbeat(ctx, message="agentic_retrieval in progress")
+                )
+            try:
+                base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+                return await agentic_retrieval_logic(
+                    repo_client,
+                    search_client,
+                    config,
+                    base_dir,
+                    query,
+                )
+            finally:
+                if progress_task is not None:
+                    progress_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await progress_task
 
     # === MCP Resources ===
 
@@ -383,15 +384,15 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     },
                 ]
             )
-            if MCP_SEARCH_MODE in ("indexed", "both"):
-                tools.append(
-                    {
-                        "id": "agentic_retrieval",
-                        "name": "Agentic Retrieval",
-                        "description": "Two-stage semantic + agentic code retrieval",
-                        "enabled": True,
-                    }
-                )
+        if MCP_SEARCH_MODE in ("indexed", "both") and RETRIEVAL_BACKEND != "none":
+            tools.append(
+                {
+                    "id": "agentic_retrieval",
+                    "name": "Agentic Retrieval",
+                    "description": "Two-stage semantic + agentic code retrieval",
+                    "enabled": True,
+                }
+            )
         return tools
 
     if RELACE_CLOUD_TOOLS:

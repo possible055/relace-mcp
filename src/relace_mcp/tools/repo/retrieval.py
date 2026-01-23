@@ -4,8 +4,9 @@ from typing import Any
 
 from ...clients import RelaceRepoClient, SearchLLMClient
 from ...config import RETRIEVAL_USER_PROMPT_TEMPLATE, RelaceConfig
-from ...config.settings import AGENTIC_AUTO_SYNC
+from ...config.settings import AGENTIC_AUTO_SYNC, RETRIEVAL_BACKEND
 from ..search import FastAgenticSearchHarness
+from ._local_backend import chunkhound_search, codanna_search
 from .info import cloud_info_logic
 from .search import cloud_search_logic
 from .sync import cloud_sync_logic
@@ -32,16 +33,16 @@ def build_semantic_hints_section(cloud_results: list[dict[str, Any]], max_hints:
 
 
 async def agentic_retrieval_logic(
-    repo_client: RelaceRepoClient,
+    repo_client: RelaceRepoClient | None,
     search_client: SearchLLMClient,
     config: RelaceConfig,
     base_dir: str,
     query: str,
 ) -> dict[str, Any]:
-    """Two-stage retrieval: cloud semantic + agentic exploration.
+    """Two-stage retrieval: semantic hints + agentic exploration.
 
     Args:
-        repo_client: Client for cloud semantic search.
+        repo_client: Client for cloud semantic search (Relace backend only).
         search_client: Client for agentic search LLM.
         config: Relace configuration.
         base_dir: Repository base directory.
@@ -62,8 +63,8 @@ async def agentic_retrieval_logic(
     warnings_list: list[str] = []
     cloud_results: list[dict[str, Any]] = []
 
-    # Stage 0: Auto-sync if enabled and needed
-    if AGENTIC_AUTO_SYNC:
+    # Stage 0: Auto-sync if enabled and needed (Relace backend only)
+    if AGENTIC_AUTO_SYNC and RETRIEVAL_BACKEND == "relace" and repo_client is not None:
         try:
             info = cloud_info_logic(repo_client, base_dir)
             if info.get("status", {}).get("needs_sync"):
@@ -78,36 +79,86 @@ async def agentic_retrieval_logic(
             warnings_list.append(f"Auto-sync error: {exc}")
             logger.warning("[%s] Auto-sync exception occurred, see warnings", trace_id)
 
-    # Stage 1: Cloud semantic retrieval
-    try:
-        cloud_result = cloud_search_logic(
-            repo_client,
-            base_dir,
-            query,
-            branch=branch,
-            score_threshold=score_threshold,
-            token_limit=token_limit,
-        )
-
-        if cloud_result.get("error"):
-            warnings_list.append(
-                f"Cloud search failed: {cloud_result['error']}. Proceeding without hints."
+    # Stage 1: Semantic retrieval (Relace, Codanna, or ChunkHound)
+    if RETRIEVAL_BACKEND == "none":
+        warnings_list.append("Semantic retrieval disabled (MCP_RETRIEVAL_BACKEND=none).")
+    elif RETRIEVAL_BACKEND == "codanna":
+        try:
+            cloud_results = codanna_search(
+                query,
+                base_dir=base_dir,
+                limit=max_hints,
+                threshold=score_threshold,
             )
-            logger.warning("[%s] Cloud search failed, see warnings", trace_id)
-        else:
-            cloud_results = cloud_result.get("results", [])
             if not cloud_results:
-                warnings_list.append("Cloud search returned no results. Proceeding without hints.")
+                warnings_list.append("Codanna returned no results. Proceeding without hints.")
             else:
                 logger.info(
-                    "[%s] Cloud search returned %d results, using top %d as hints",
+                    "[%s] Codanna returned %d results, using top %d as hints",
                     trace_id,
                     len(cloud_results),
                     min(len(cloud_results), max_hints),
                 )
-    except Exception as exc:
-        warnings_list.append(f"Cloud search error: {exc}. Proceeding without hints.")
-        logger.warning("[%s] Cloud search exception: %s", trace_id, exc)
+        except Exception as exc:
+            warnings_list.append(f"Codanna search error: {exc}. Proceeding without hints.")
+            logger.warning("[%s] Codanna search exception: %s", trace_id, exc)
+    elif RETRIEVAL_BACKEND == "chunkhound":
+        try:
+            cloud_results = chunkhound_search(
+                query,
+                base_dir=base_dir,
+                limit=max_hints,
+                threshold=score_threshold,
+            )
+            if not cloud_results:
+                warnings_list.append("ChunkHound returned no results. Proceeding without hints.")
+            else:
+                logger.info(
+                    "[%s] ChunkHound returned %d results, using top %d as hints",
+                    trace_id,
+                    len(cloud_results),
+                    min(len(cloud_results), max_hints),
+                )
+        except Exception as exc:
+            warnings_list.append(f"ChunkHound search error: {exc}. Proceeding without hints.")
+            logger.warning("[%s] ChunkHound search exception: %s", trace_id, exc)
+    else:
+        if repo_client is None:
+            warnings_list.append(
+                "Relace semantic retrieval unavailable (RELACE_CLOUD_TOOLS=false). Proceeding without hints."
+            )
+        else:
+            try:
+                cloud_result = cloud_search_logic(
+                    repo_client,
+                    base_dir,
+                    query,
+                    branch=branch,
+                    score_threshold=score_threshold,
+                    token_limit=token_limit,
+                )
+
+                if cloud_result.get("error"):
+                    warnings_list.append(
+                        f"Cloud search failed: {cloud_result['error']}. Proceeding without hints."
+                    )
+                    logger.warning("[%s] Cloud search failed, see warnings", trace_id)
+                else:
+                    cloud_results = cloud_result.get("results", [])
+                    if not cloud_results:
+                        warnings_list.append(
+                            "Cloud search returned no results. Proceeding without hints."
+                        )
+                    else:
+                        logger.info(
+                            "[%s] Cloud search returned %d results, using top %d as hints",
+                            trace_id,
+                            len(cloud_results),
+                            min(len(cloud_results), max_hints),
+                        )
+            except Exception as exc:
+                warnings_list.append(f"Cloud search error: {exc}. Proceeding without hints.")
+                logger.warning("[%s] Cloud search exception: %s", trace_id, exc)
 
     # Stage 2: Build augmented prompt
     hints_section = build_semantic_hints_section(cloud_results, max_hints)

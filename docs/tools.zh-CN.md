@@ -157,23 +157,64 @@
 
 ## `agentic_retrieval`
 
-两阶段语义 + 智能代码检索。结合云端语义搜索与本地智能探索以获取精确结果。
+两阶段语义 + 智能代码检索。结合语义提示与本地智能探索以获取精确结果。
 
 ### 行为
 
-1. **阶段 1**：运行 `cloud_search` 获取语义相关的候选文件
-2. **阶段 2**：将候选文件作为提示引导智能探索（grep、view 等）
+1. **阶段 1**：根据 `MCP_RETRIEVAL_BACKEND` 加载语义提示
+   - `relace`：运行 `cloud_search`
+   - `codanna`：运行 `codanna mcp semantic_search_with_context --json`
+   - `chunkhound`：运行 `chunkhound search --json`（需单独安装：`pip install chunkhound`）
+   - `none`：跳过提示
+2. **阶段 2**：使用提示引导智能探索（grep、view 等）
 
-若云端不可用则回退到纯智能搜索。
+### Backend 配置
+
+#### ChunkHound（推荐用于本地语义搜索）
+
+```bash
+# 单独安装 chunkhound
+pip install chunkhound
+
+# 通过环境变量配置
+export MCP_RETRIEVAL_BACKEND=chunkhound
+export CHUNKHOUND_EMBEDDING__PROVIDER=openai  # 或 voyageai, openai-compatible
+export OPENAI_API_KEY=sk-xxx  # 或 VOYAGE_API_KEY
+
+# 或在项目根目录创建 .chunkhound.json 配置
+```
+
+示例 `.chunkhound.json`：
+```json
+{
+  "embedding": {
+    "provider": "openai",
+    "api_key": "sk-xxx",
+    "model": "text-embedding-3-small"
+  }
+}
+```
+
+使用本地 Ollama：
+```json
+{
+  "embedding": {
+    "provider": "openai-compatible",
+    "base_url": "http://localhost:11434/v1",
+    "model": "qwen3-embedding:8b"
+  }
+}
+```
+
+#### Codanna
+
+设置 `MCP_RETRIEVAL_BACKEND=codanna` 使用本地 codanna 索引（先执行 `codanna init` + `codanna index <dir>`）。
 
 ### 参数
 
 | 参数 | 必需 | 默认值 | 描述 |
 |------|------|--------|------|
 | `query` | ✅ | — | 描述要查找内容的自然语言查询 |
-| `branch` | ❌ | `""` | 要搜索的分支（空值使用 API 默认值） |
-| `score_threshold` | ❌ | `0.3` | 提示文件的最低相关性分数（0.0-1.0） |
-| `max_hints` | ❌ | `8` | 使用的最大提示文件数 |
 
 ### 响应示例
 

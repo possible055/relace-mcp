@@ -9,12 +9,12 @@ from typing import Any
 from ...clients.repo import RelaceRepoClient
 from ...config.settings import REPO_SYNC_MAX_FILES
 from ...tools.apply.file_io import decode_text_best_effort, get_project_encoding
+from ._git import get_current_git_info
+from ._logging import _extract_error_fields, log_cloud_event
 from .errors import build_cloud_error_details
-from .logging import log_cloud_sync_complete, log_cloud_sync_error, log_cloud_sync_start
 from .state import (
     SyncState,
     compute_file_hash,
-    get_current_git_info,
     get_repo_identity,
     get_repo_root,
     load_sync_state,
@@ -412,17 +412,24 @@ def cloud_sync_logic(
             "deletes_suppressed": 0,
             "error": "Invalid base_dir: cannot derive repository name.",
         }
-        log_cloud_sync_error(trace_id, local_repo_name or None, None, result)
+        log_cloud_event(
+            "cloud_sync_error",
+            trace_id,
+            repo_name=local_repo_name or None,
+            cloud_repo_name=None,
+            **_extract_error_fields(result),
+        )
         return result
 
-    log_cloud_sync_start(
+    log_cloud_event(
+        "cloud_sync_start",
         trace_id,
-        original_base_dir,
-        base_dir,
-        local_repo_name,
-        cloud_repo_name,
-        force,
-        mirror,
+        requested_base_dir=original_base_dir,
+        base_dir=base_dir,
+        repo_name=local_repo_name,
+        cloud_repo_name=cloud_repo_name,
+        force=force,
+        mirror=mirror,
     )
 
     try:
@@ -658,7 +665,25 @@ def cloud_sync_logic(
             "state_saved": state_saved,
             "warnings": warnings_list,
         }
-        log_cloud_sync_complete(trace_id, result_payload)
+        log_cloud_event(
+            "cloud_sync_complete",
+            trace_id,
+            repo_id=result_payload.get("repo_id"),
+            repo_name=result_payload.get("repo_name"),
+            cloud_repo_name=result_payload.get("cloud_repo_name"),
+            repo_head=result_payload.get("repo_head"),
+            sync_mode=result_payload.get("sync_mode"),
+            is_incremental=result_payload.get("is_incremental"),
+            files_created=result_payload.get("files_created"),
+            files_updated=result_payload.get("files_updated"),
+            files_deleted=result_payload.get("files_deleted"),
+            files_unchanged=result_payload.get("files_unchanged"),
+            files_skipped=result_payload.get("files_skipped"),
+            files_found=result_payload.get("files_found"),
+            files_selected=result_payload.get("files_selected"),
+            files_truncated=result_payload.get("files_truncated"),
+            warnings_count=len(warnings_list),
+        )
         return result_payload
 
     except Exception as exc:
@@ -684,5 +709,11 @@ def cloud_sync_logic(
             "error": str(exc),
             **build_cloud_error_details(exc),
         }
-        log_cloud_sync_error(trace_id, local_repo_name, cloud_repo_name, result)
+        log_cloud_event(
+            "cloud_sync_error",
+            trace_id,
+            repo_name=local_repo_name,
+            cloud_repo_name=cloud_repo_name,
+            **_extract_error_fields(result),
+        )
         return result

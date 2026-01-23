@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "RELACE_CLOUD_TOOLS",
+    "RETRIEVAL_BACKEND",
     "SEARCH_LSP_TOOLS_MODE",
     "RelaceConfig",
 ]
@@ -95,6 +96,7 @@ MCP_LOGGING = env_bool("MCP_LOGGING", default=False, deprecated_name="RELACE_LOG
 
 # Cloud tools (disabled by default)
 RELACE_CLOUD_TOOLS = env_bool("RELACE_CLOUD_TOOLS", default=False)
+RETRIEVAL_BACKEND = os.getenv("MCP_RETRIEVAL_BACKEND", "relace").strip().lower()
 
 
 # Search mode: 'agentic' (fast_search), 'indexed' (agentic_retrieval), 'both'
@@ -158,8 +160,6 @@ class RelaceConfig:
             if not os.path.isdir(base_dir):
                 raise RuntimeError(f"MCP_BASE_DIR does not exist or is not a directory: {base_dir}")
             logger.info("Using MCP_BASE_DIR: %s", base_dir)
-        else:
-            logger.info("MCP_BASE_DIR not set; will resolve from MCP Roots or cwd at runtime")
 
         # default_encoding from env (will be overridden by detection if None)
         default_encoding = RELACE_DEFAULT_ENCODING

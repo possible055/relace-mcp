@@ -8,10 +8,10 @@ import pytest
 from relace_mcp.clients.repo import RelaceRepoClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.tools.apply.file_io import set_project_encoding
+from relace_mcp.tools.repo._git import get_current_git_info
 from relace_mcp.tools.repo.state import (
     SyncState,
     compute_file_hash,
-    get_current_git_info,
     load_sync_state,
     save_sync_state,
 )
