@@ -1860,7 +1860,6 @@ name = "relace-mcp"
 version = "0.2.5.dev2"
 source = { editable = "." }
 dependencies = [
-    { name = "basedpyright" },
     { name = "charset-normalizer" },
     { name = "fastmcp" },
     { name = "httpx" },
@@ -1882,6 +1881,7 @@ benchmark = [
 ]
 dev = [
     { name = "bandit" },
+    { name = "basedpyright" },
     { name = "build" },
     { name = "dead" },
     { name = "interrogate" },
@@ -1893,6 +1893,9 @@ dev = [
     { name = "ruff" },
     { name = "types-pyyaml" },
 ]
+pyright = [
+    { name = "basedpyright" },
+]
 tools = [
     { name = "textual" },
 ]
@@ -1900,7 +1903,8 @@ tools = [
 [package.metadata]
 requires-dist = [
     { name = "bandit", extras = ["toml"], marker = "extra == 'dev'", specifier = ">=1.9.0" },
-    { name = "basedpyright", specifier = ">=1.20.0" },
+    { name = "basedpyright", marker = "extra == 'dev'", specifier = ">=1.20.0" },
+    { name = "basedpyright", marker = "extra == 'pyright'", specifier = ">=1.20.0" },
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "charset-normalizer", specifier = ">=3.0.0" },
     { name = "click", marker = "extra == 'benchmark'", specifier = ">=8.0.0" },
@@ -1927,7 +1931,7 @@ requires-dist = [
     { name = "tree-sitter-python", marker = "extra == 'benchmark'", specifier = ">=0.24.0" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.0" },
 ]
-provides-extras = ["dev", "tools", "benchmark"]
+provides-extras = ["pyright", "dev", "tools", "benchmark"]
 
 [[package]]
 name = "requests"

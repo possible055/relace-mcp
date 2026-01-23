@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import sys
 import tempfile
 import warnings
 from dataclasses import replace
@@ -17,6 +18,30 @@ from .tools.apply.encoding import detect_project_encoding
 from .tools.apply.file_io import set_project_encoding
 
 logger = logging.getLogger(__name__)
+
+
+def _configure_logging_for_stdio() -> None:
+    """Configure logging to avoid stdout pollution in stdio transport mode.
+
+    MCP stdio transport requires clean stdout (JSON-RPC only).
+    All logging must go to stderr or file.
+    """
+    # Redirect all warnings to stderr (not stdout)
+    warnings.filterwarnings("default")
+
+    # Configure root logger to stderr only
+    root = logging.getLogger()
+    # Remove any existing handlers that might write to stdout
+    for handler in root.handlers[:]:
+        root.removeHandler(handler)
+
+    # Add stderr handler
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    )
+    root.addHandler(stderr_handler)
+    root.setLevel(logging.WARNING)  # Only warnings and above by default
 
 
 def _load_dotenv_from_path() -> None:
@@ -158,6 +183,9 @@ def build_server(config: RelaceConfig | None = None, run_health_check: bool = Tr
 
 
 def main() -> None:
+    # Configure logging FIRST to prevent stdout pollution
+    _configure_logging_for_stdio()
+
     parser = argparse.ArgumentParser(
         prog="relace-mcp",
         description="Relace MCP Server - Fast code merging via Relace API",
