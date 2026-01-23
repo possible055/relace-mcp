@@ -467,10 +467,6 @@ async def resolve_base_dir(
             logger.warning("[base_dir] Git root is invalid or inaccessible: %s", resolved)
         else:
             logger.info("[base_dir] Resolved from %s: %s (cwd: %s)", source, resolved, cwd)
-            logger.info(
-                "MCP_BASE_DIR not set and MCP Roots unavailable. Using Git root: %s",
-                resolved,
-            )
             _check_project_safety(resolved, source)
             return resolved, source
 
@@ -481,10 +477,5 @@ async def resolve_base_dir(
     if not validate_base_dir(resolved):
         raise RuntimeError(f"Cannot resolve a valid base_dir (cwd is invalid): {cwd}")
 
-    logger.info(
-        "MCP_BASE_DIR not set, MCP Roots unavailable, no Git repo found. "
-        "Using cwd: %s (may be unreliable)",
-        cwd,
-    )
     _check_project_safety(resolved, source)
     return resolved, source

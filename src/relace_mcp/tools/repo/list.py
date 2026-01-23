@@ -3,8 +3,8 @@ import uuid
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
+from ._logging import _extract_error_fields, log_cloud_event
 from .errors import build_cloud_error_details
-from .logging import log_cloud_list_complete, log_cloud_list_error, log_cloud_list_start
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ def cloud_list_logic(client: RelaceRepoClient) -> dict[str, Any]:
     logger.info("[%s] Listing cloud repositories", trace_id)
 
     try:
-        log_cloud_list_start(trace_id)
+        log_cloud_event("cloud_list_start", trace_id)
         repos = client.list_repos(trace_id=trace_id)
 
         # Extract relevant fields from each repo
@@ -58,7 +58,7 @@ def cloud_list_logic(client: RelaceRepoClient) -> dict[str, Any]:
             "repos": repo_summaries,
             "has_more": has_more,
         }
-        log_cloud_list_complete(trace_id, result)
+        log_cloud_event("cloud_list_complete", trace_id, count=len(repo_summaries))
         return result
 
     except Exception as exc:
@@ -71,5 +71,5 @@ def cloud_list_logic(client: RelaceRepoClient) -> dict[str, Any]:
             "error": str(exc),
             **build_cloud_error_details(exc),
         }
-        log_cloud_list_error(trace_id, result)
+        log_cloud_event("cloud_list_error", trace_id, **_extract_error_fields(result))
         return result

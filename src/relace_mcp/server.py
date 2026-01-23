@@ -188,11 +188,6 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
-    )
-
     _load_dotenv_from_path()
 
     config = RelaceConfig.from_env()
@@ -213,7 +208,6 @@ def main() -> None:
             show_banner=False,
         )
     else:
-        logger.info("Starting Relace MCP Server (STDIO)")
         server.run(show_banner=False)
 
 
