@@ -52,7 +52,7 @@ def _run_cli_json(
 
 
 def chunkhound_search(
-    query: str, *, base_dir: str, limit: int = 8, threshold: float = 0.3
+    query: str, *, base_dir: str, limit: int = 8, threshold: float = 0.3, _retry: bool = False
 ) -> list[dict[str, Any]]:
     env = os.environ.copy()
     env["HOME"] = os.environ.get("HOME", base_dir)
@@ -70,9 +70,15 @@ def chunkhound_search(
             ) from exc
         stderr = str(exc)
         if "not indexed" in stderr.lower() or "no index" in stderr.lower():
+            if _retry:
+                raise RuntimeError(
+                    "ChunkHound index creation failed or index still not found"
+                ) from exc
             logger.info("ChunkHound index not found, attempting to create...")
             _ensure_chunkhound_index(base_dir, env)
-            return chunkhound_search(query, base_dir=base_dir, limit=limit, threshold=threshold)
+            return chunkhound_search(
+                query, base_dir=base_dir, limit=limit, threshold=threshold, _retry=True
+            )
         raise
 
     if data is None:

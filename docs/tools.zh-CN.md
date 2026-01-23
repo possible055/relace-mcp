@@ -164,8 +164,49 @@
 1. **阶段 1**：根据 `MCP_RETRIEVAL_BACKEND` 加载语义提示
    - `relace`：运行 `cloud_search`
    - `codanna`：运行 `codanna mcp semantic_search_with_context --json`
+   - `chunkhound`：运行 `chunkhound search --json`（需单独安装：`pip install chunkhound`）
    - `none`：跳过提示
 2. **阶段 2**：使用提示引导智能探索（grep、view 等）
+
+### Backend 配置
+
+#### ChunkHound（推荐用于本地语义搜索）
+
+```bash
+# 单独安装 chunkhound
+pip install chunkhound
+
+# 通过环境变量配置
+export MCP_RETRIEVAL_BACKEND=chunkhound
+export CHUNKHOUND_EMBEDDING__PROVIDER=openai  # 或 voyageai, openai-compatible
+export OPENAI_API_KEY=sk-xxx  # 或 VOYAGE_API_KEY
+
+# 或在项目根目录创建 .chunkhound.json 配置
+```
+
+示例 `.chunkhound.json`：
+```json
+{
+  "embedding": {
+    "provider": "openai",
+    "api_key": "sk-xxx",
+    "model": "text-embedding-3-small"
+  }
+}
+```
+
+使用本地 Ollama：
+```json
+{
+  "embedding": {
+    "provider": "openai-compatible",
+    "base_url": "http://localhost:11434/v1",
+    "model": "qwen3-embedding:8b"
+  }
+}
+```
+
+#### Codanna
 
 设置 `MCP_RETRIEVAL_BACKEND=codanna` 使用本地 codanna 索引（先执行 `codanna init` + `codanna index <dir>`）。
 
