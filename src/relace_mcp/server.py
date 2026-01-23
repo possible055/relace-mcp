@@ -1,10 +1,16 @@
 import argparse
 import logging
 import os
+import sys
 import tempfile
 import warnings
 from dataclasses import replace
 from pathlib import Path
+
+# Suppress FastMCP's Rich console output for stdio transport
+# This MUST be set BEFORE fastmcp is imported
+if "FASTMCP_LOG_LEVEL" not in os.environ:
+    os.environ["FASTMCP_LOG_LEVEL"] = "ERROR"
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
@@ -17,6 +23,30 @@ from .tools.apply.encoding import detect_project_encoding
 from .tools.apply.file_io import set_project_encoding
 
 logger = logging.getLogger(__name__)
+
+
+def _configure_logging_for_stdio() -> None:
+    """Configure logging to avoid stdout pollution in stdio transport mode.
+
+    MCP stdio transport requires clean stdout (JSON-RPC only).
+    All logging must go to stderr or file.
+    """
+    # Redirect all warnings to stderr (not stdout)
+    warnings.filterwarnings("default")
+
+    # Configure root logger to stderr only
+    root = logging.getLogger()
+    # Remove any existing handlers that might write to stdout
+    for handler in root.handlers[:]:
+        root.removeHandler(handler)
+
+    # Add stderr handler
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    )
+    root.addHandler(stderr_handler)
+    root.setLevel(logging.WARNING)  # Only warnings and above by default
 
 
 def _load_dotenv_from_path() -> None:
@@ -187,6 +217,17 @@ def main() -> None:
         help="MCP endpoint path for HTTP mode (default: /mcp)",
     )
     args = parser.parse_args()
+
+    # stdio-only fixes: must be applied before any output
+    if args.transport == "stdio":
+        # Fix Windows CRLF issue - Windows converts \n to \r\n, breaking JSON-RPC
+        if sys.platform == "win32":
+            if hasattr(sys.stdout, "reconfigure"):
+                sys.stdout.reconfigure(newline="\n")
+            if hasattr(sys.stdin, "reconfigure"):
+                sys.stdin.reconfigure(newline="\n")
+        # Configure logging to avoid stdout pollution
+        _configure_logging_for_stdio()
 
     _load_dotenv_from_path()
 

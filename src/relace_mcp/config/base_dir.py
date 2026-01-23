@@ -71,6 +71,48 @@ PROJECT_MARKERS = (".git", "pyproject.toml", "package.json", "Cargo.toml", "go.m
 WSL_MNT_PREFIX = "/mnt/"
 
 
+def get_workspace_storage_dirs() -> list[Path]:
+    """Get workspaceStorage directories for VSCode-based IDEs in WSL environment.
+
+    Scans /mnt/c/Users/<user>/AppData/Roaming/*/User/workspaceStorage to find
+    all IDE workspaceStorage directories. This is used when MCP server runs
+    in WSL but IDE runs on Windows.
+
+    Returns:
+        List of existing workspaceStorage directory paths, sorted by mtime (newest first).
+    """
+    wsl_users_dir = Path(f"{WSL_MNT_PREFIX}c/Users")
+    if not wsl_users_dir.exists():
+        return []
+
+    storage_dirs: list[tuple[Path, float]] = []
+
+    for user_dir in wsl_users_dir.iterdir():
+        if not user_dir.is_dir():
+            continue
+        if user_dir.name in ("Public", "Default", "Default User", "All Users"):
+            continue
+
+        # Scan all apps in AppData/Roaming for VSCode-style workspaceStorage
+        roaming_dir = user_dir / "AppData" / "Roaming"
+        if not roaming_dir.exists():
+            continue
+
+        for app_dir in roaming_dir.iterdir():
+            if not app_dir.is_dir():
+                continue
+            storage_path = app_dir / "User" / "workspaceStorage"
+            if storage_path.exists():
+                try:
+                    storage_dirs.append((storage_path, storage_path.stat().st_mtime))
+                except OSError:
+                    continue
+
+    # Sort by mtime (newest first) to prioritize recently used IDE
+    storage_dirs.sort(key=lambda x: x[1], reverse=True)
+    return [p for p, _ in storage_dirs]
+
+
 def get_workspace_storage_dir() -> Path | None:
     """Get Antigravity workspaceStorage directory path in WSL environment.
 
@@ -79,22 +121,12 @@ def get_workspace_storage_dir() -> Path | None:
 
     Returns:
         Path to workspaceStorage directory, or None if not found.
-    """
-    wsl_users_dir = Path(f"{WSL_MNT_PREFIX}c/Users")
-    if not wsl_users_dir.exists():
-        return None
 
-    for user_dir in wsl_users_dir.iterdir():
-        if not user_dir.is_dir():
-            continue
-        if user_dir.name in ("Public", "Default", "Default User", "All Users"):
-            continue
-        storage_path = (
-            user_dir / "AppData" / "Roaming" / "Antigravity" / "User" / "workspaceStorage"
-        )
-        if storage_path.exists():
-            return storage_path
-    return None
+    .. deprecated::
+        Use get_workspace_storage_dirs() instead for multi-IDE support.
+    """
+    dirs = get_workspace_storage_dirs()
+    return dirs[0] if dirs else None
 
 
 def resolve_workspace_from_storage() -> str | None:
