@@ -5,7 +5,7 @@ from typing import Any
 
 import yaml
 
-from .base_dir import resolve_base_dir
+from .base_dir import invalidate_roots_cache, resolve_base_dir
 from .compat import getenv_with_fallback
 from .provider import ProviderConfig, create_provider_config
 
@@ -109,6 +109,7 @@ __all__ = [
     "ProviderConfig",
     "create_provider_config",
     "resolve_base_dir",
+    "invalidate_roots_cache",
     # Prompts - Relace native (for internal submodule use)
     "SEARCH_SYSTEM_PROMPT",
     "SEARCH_USER_PROMPT_TEMPLATE",

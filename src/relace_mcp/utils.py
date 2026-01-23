@@ -1,5 +1,49 @@
 import os
 from pathlib import Path
+from urllib.parse import unquote, urlparse
+from urllib.request import url2pathname
+
+
+def uri_to_path(uri: str) -> str:
+    """Convert file:// URI to filesystem path robustly.
+
+    Args:
+        uri: File URI (e.g., "file:///home/user/project")
+
+    Returns:
+        Filesystem path (e.g., "/home/user/project")
+    """
+    parsed = urlparse(uri)
+    if parsed.scheme != "file":
+        return unquote(uri)
+
+    raw_path = parsed.path
+    if parsed.netloc and parsed.netloc != "localhost":
+        raw_path = f"//{parsed.netloc}{parsed.path}"
+
+    path = url2pathname(raw_path)
+
+    if os.name == "nt" and path.startswith("/") and len(path) > 2 and path[1] == ":":
+        path = path[1:]
+
+    return path
+
+
+def find_git_root(start: str) -> Path | None:
+    """Walk up from start directory to find .git directory.
+
+    Args:
+        start: Starting directory path
+
+    Returns:
+        Path to Git repository root, or None if not found
+    """
+    current = Path(start).resolve()
+    while current != current.parent:
+        if (current / ".git").exists():
+            return current
+        current = current.parent
+    return None
 
 
 def resolve_repo_path(
