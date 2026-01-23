@@ -188,17 +188,6 @@ def build_server(config: RelaceConfig | None = None, run_health_check: bool = Tr
 
 
 def main() -> None:
-    # Fix Windows CRLF issue for stdio transport
-    # Windows converts \n to \r\n by default, breaking JSON-RPC
-    if sys.platform == "win32":
-        if hasattr(sys.stdout, "reconfigure"):
-            sys.stdout.reconfigure(newline="\n")
-        if hasattr(sys.stdin, "reconfigure"):
-            sys.stdin.reconfigure(newline="\n")
-
-    # Configure logging FIRST to prevent stdout pollution
-    _configure_logging_for_stdio()
-
     parser = argparse.ArgumentParser(
         prog="relace-mcp",
         description="Relace MCP Server - Fast code merging via Relace API",
@@ -228,6 +217,17 @@ def main() -> None:
         help="MCP endpoint path for HTTP mode (default: /mcp)",
     )
     args = parser.parse_args()
+
+    # stdio-only fixes: must be applied before any output
+    if args.transport == "stdio":
+        # Fix Windows CRLF issue - Windows converts \n to \r\n, breaking JSON-RPC
+        if sys.platform == "win32":
+            if hasattr(sys.stdout, "reconfigure"):
+                sys.stdout.reconfigure(newline="\n")
+            if hasattr(sys.stdin, "reconfigure"):
+                sys.stdin.reconfigure(newline="\n")
+        # Configure logging to avoid stdout pollution
+        _configure_logging_for_stdio()
 
     _load_dotenv_from_path()
 
