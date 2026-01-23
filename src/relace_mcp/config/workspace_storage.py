@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from pathlib import Path
 from urllib.parse import unquote
@@ -8,8 +9,15 @@ from relace_mcp.utils import uri_to_path
 # --- Constants ---
 
 WSL_MNT_PREFIX = "/mnt/"
-_WINDOWS_IDE_CWD_PATTERN = re.compile(r"^(.+)[/\\]AppData[/\\]Local[/\\]Programs[/\\]([^/\\]+)")
 _SKIP_USER_DIRS = frozenset(("Public", "Default", "Default User", "All Users"))
+
+# CWD patterns to extract IDE name from installation path
+# Windows: AppData\Local\Programs\<IDE>
+_WINDOWS_IDE_CWD_PATTERN = re.compile(r"^(.+)[/\\]AppData[/\\]Local[/\\]Programs[/\\]([^/\\]+)")
+# macOS: /Applications/<IDE>.app/...
+_MACOS_IDE_CWD_PATTERN = re.compile(r"^/Applications/([^/]+)\.app(?:/|$)")
+# Linux: /usr/share/<ide>, /opt/<ide>, or ~/.local/share/<ide> (AppImage)
+_LINUX_IDE_CWD_PATTERN = re.compile(r"^(?:/usr/share|/opt|.+/\.local/share)/([^/]+)")
 
 
 # --- Internal helpers ---
@@ -87,6 +95,48 @@ def _get_wsl_workspace_storage_dir() -> Path | None:
     return best[0] if best else None
 
 
+def _get_workspace_storage_for_ide(ide_name: str) -> Path | None:
+    """Get workspaceStorage path for given IDE on current platform (tries case variants)."""
+    import sys
+
+    base_name = ide_name.removesuffix(".app")
+    # Try multiple case variants: original, Title Case, lower case
+    variants = [base_name, base_name.title(), base_name.lower()]
+    home = Path.home()
+
+    for name in variants:
+        if sys.platform == "darwin":
+            storage = home / "Library" / "Application Support" / name / "User" / "workspaceStorage"
+        elif sys.platform == "win32":
+            appdata = Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
+            storage = appdata / name / "User" / "workspaceStorage"
+        else:
+            storage = home / ".config" / name / "User" / "workspaceStorage"
+
+        if storage.exists():
+            return storage
+    return None
+
+
+def _extract_ide_name_from_cwd() -> str | None:
+    """Extract IDE name from CWD if running from IDE installation path."""
+    try:
+        cwd = str(Path.cwd().resolve())
+    except Exception:
+        return None
+
+    # Try Windows pattern
+    if match := _WINDOWS_IDE_CWD_PATTERN.match(cwd):
+        return match.group(2)
+    # Try macOS pattern
+    if match := _MACOS_IDE_CWD_PATTERN.match(cwd):
+        return match.group(1)
+    # Try Linux pattern
+    if match := _LINUX_IDE_CWD_PATTERN.match(cwd):
+        return match.group(1)
+    return None
+
+
 # --- Public API ---
 
 
@@ -106,32 +156,22 @@ def resolve_workspace_from_storage() -> str | None:
 
 
 def resolve_workspace_from_cwd_ide_path() -> str | None:
-    """Resolve project path when CWD is IDE installation directory (Windows native).
+    """Resolve project path when CWD is IDE installation directory.
 
-    Detects when MCP server is spawned from IDE install path and maps it
-    to the corresponding workspaceStorage location.
-
-    Pattern:
-        C:\\Users\\xxx\\AppData\\Local\\Programs\\<IDE>
-        -> C:\\Users\\xxx\\AppData\\Roaming\\<IDE>\\User\\workspaceStorage
+    Cross-platform support:
+        Windows: AppData\\Local\\Programs\\<IDE> -> AppData\\Roaming\\<IDE>\\User\\workspaceStorage
+        macOS:   /Applications/<IDE>.app/... -> ~/Library/Application Support/<IDE>/User/workspaceStorage
+        Linux:   /usr/share/<ide> or /opt/<ide> -> ~/.config/<IDE>/User/workspaceStorage
 
     Returns:
         Absolute path to project directory, or None if not applicable.
     """
-    try:
-        cwd_str = str(Path.cwd().resolve())
-    except Exception:
+    ide_name = _extract_ide_name_from_cwd()
+    if not ide_name:
         return None
 
-    match = _WINDOWS_IDE_CWD_PATTERN.match(cwd_str)
-    if not match:
+    storage_dir = _get_workspace_storage_for_ide(ide_name)
+    if not storage_dir:
         return None
 
-    user_dir, ide_name = match.groups()
-    roaming_storage = (
-        Path(user_dir) / "AppData" / "Roaming" / ide_name / "User" / "workspaceStorage"
-    )
-    if not roaming_storage.exists():
-        return None
-
-    return _resolve_project_from_storage_dir(roaming_storage)
+    return _resolve_project_from_storage_dir(storage_dir)
