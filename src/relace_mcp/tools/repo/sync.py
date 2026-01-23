@@ -682,7 +682,7 @@ def cloud_sync_logic(
             files_found=result_payload.get("files_found"),
             files_selected=result_payload.get("files_selected"),
             files_truncated=result_payload.get("files_truncated"),
-            warnings_count=len(result_payload.get("warnings") or []),
+            warnings_count=len(warnings_list),
         )
         return result_payload
 
