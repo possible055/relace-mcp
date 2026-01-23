@@ -7,6 +7,11 @@ import warnings
 from dataclasses import replace
 from pathlib import Path
 
+# Suppress FastMCP's Rich console output for stdio transport
+# This MUST be set BEFORE fastmcp is imported
+if "FASTMCP_LOG_LEVEL" not in os.environ:
+    os.environ["FASTMCP_LOG_LEVEL"] = "ERROR"
+
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 
@@ -183,6 +188,12 @@ def build_server(config: RelaceConfig | None = None, run_health_check: bool = Tr
 
 
 def main() -> None:
+    # Fix Windows CRLF issue for stdio transport
+    # Windows converts \n to \r\n by default, breaking JSON-RPC
+    if sys.platform == "win32":
+        sys.stdout.reconfigure(newline="\n")
+        sys.stdin.reconfigure(newline="\n")
+
     # Configure logging FIRST to prevent stdout pollution
     _configure_logging_for_stdio()
 
