@@ -28,9 +28,7 @@ MCP server providing AI-powered code editing and intelligent codebase exploratio
 - **Fast Apply** — Apply code edits at 10,000+ tokens/sec via Relace API
 - **Agentic Search** — Agentic codebase exploration with natural language queries
 - **Agentic Retrieval** — Two-stage semantic + agentic code retrieval (requires `MCP_SEARCH_RETRIEVAL=1`)
-- **Cloud Sync** — Upload local codebase to Relace Cloud for semantic search
 - **Cloud Search** — Semantic code search over cloud-synced repositories
-- **Dashboard** — Real-time terminal UI for monitoring operations
 
 ## Quick Start
 
@@ -215,6 +213,12 @@ For grid search, analysis tools, and metrics interpretation, see [docs/benchmark
 | `ENCODING_ERROR` | Set `RELACE_DEFAULT_ENCODING` explicitly |
 | `AUTH_ERROR` | Verify API key is valid and not expired |
 | `RATE_LIMIT` | Too many requests; wait and retry |
+| `CONNECTION_TIMEOUT` | Check network connection or increase timeout setting |
+| `INVALID_PATH` | File path doesn't exist or no permission; verify path and access rights |
+| `SYNTAX_ERROR` | Invalid edit_snippet format; ensure placeholder syntax is correct |
+| `NO_MATCH_FOUND` | No search results; try broader query or run `cloud_sync` first |
+| `CLOUD_NOT_SYNCED` | Repository not synced to Relace Cloud; run `cloud_sync` first |
+| `CONFLICT_DETECTED` | Edit conflict; file was modified, re-read before editing |
 
 ## Development
 
