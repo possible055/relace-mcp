@@ -81,7 +81,7 @@ Synchronize local codebase to Relace Cloud for semantic search. Uploads source f
 - Skips files > 1MB and common non-source directories (`node_modules`, `__pycache__`, etc.)
 - Sync state stored in your platform state directory (e.g., `~/.local/state/relace/sync/` on Linux), keyed by repo name + fingerprint
 
-> For advanced sync modes (incremental, safe full, mirror), see [advanced.md](advanced.md#sync-modes).
+> For advanced sync modes (incremental, safe full, mirror), see [advanced/index.md](../advanced/index.md#sync-modes).
 
 ---
 

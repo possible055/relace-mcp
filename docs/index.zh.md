@@ -148,13 +148,13 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 
 `*` 仅当**同时满足**：(1) `APPLY_PROVIDER` 与 `SEARCH_PROVIDER` 均为非 Relace 提供商，且 (2) `RELACE_CLOUD_TOOLS=false` 时可省略。
 
-`.env` 使用方法、编码设置、自定义 LLM 等进阶设置，请参见 [docs/advanced.zh-CN.md](docs/advanced.zh-CN.md)。
+`.env` 使用方法、编码设置、自定义 LLM 等高级设置，请参见 [advanced/index.zh.md](advanced/index.zh.md)。
 
 ## 工具
 
 核心工具（`fast_apply`、`agentic_search`）始终可用。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`agentic_retrieval` 需同时设置 `RELACE_CLOUD_TOOLS=1` 及 `MCP_SEARCH_MODE=indexed` 或 `both`。
 
-详细参数请参见 [docs/tools.zh-CN.md](docs/tools.zh-CN.md)。
+详细参数请参见 [tools/index.zh.md](tools/index.zh.md)。
 
 ## 语言支持
 
@@ -176,7 +176,7 @@ pip install relace-mcp[tools]
 relogs
 ```
 
-详细用法请参见 [docs/dashboard.zh-CN.md](docs/dashboard.zh-CN.md)。
+详细用法请参见 [advanced/dashboard.zh.md](advanced/dashboard.zh.md)。
 
 ## 基准测试
 
@@ -193,7 +193,7 @@ uv run python -m benchmark.cli.build_locbench --output artifacts/data/raw/locben
 uv run python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.jsonl --limit 20
 ```
 
-网格搜索、分析工具及指标说明请参见 [docs/benchmark.zh-CN.md](docs/benchmark.zh-CN.md)。
+网格搜索、分析工具及指标说明请参见 [advanced/benchmark.zh.md](advanced/benchmark.zh.md)。
 
 ## 平台支持
 

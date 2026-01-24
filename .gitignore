@@ -35,3 +35,6 @@ benchmark/artifacts/
 
 # SonarQube
 sonar-project.properties
+
+# Site
+site/
