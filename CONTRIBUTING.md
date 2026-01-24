@@ -19,7 +19,7 @@ This project uses [uv](https://github.com/astral-sh/uv) for dependency managemen
 
 3.  **Install dependencies**:
     ```bash
-    uv sync --extra dev
+    uv sync --extra dev --group dev
     ```
 
 ## Coding Standards
