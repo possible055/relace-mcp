@@ -38,7 +38,7 @@ def cloud_search_logic(
         - error: Error message if failed (optional)
     """
     trace_id = str(uuid.uuid4())[:8]
-    logger.info("[%s] Starting cloud semantic search", trace_id)
+    logger.debug("[%s] Starting cloud semantic search", trace_id)
 
     local_repo_name: str | None = None
     cloud_repo_name: str | None = None
@@ -81,7 +81,7 @@ def cloud_search_logic(
         if cached_state and cached_state.repo_id:
             repo_id = cached_state.repo_id
             git_head = cached_state.git_head_sha or ""
-            logger.info("[%s] Using cached repo state", trace_id)
+            logger.debug("[%s] Using cached repo state", trace_id)
         else:
             logger.warning("[%s] No sync state found for repository", trace_id)
             no_sync_result: dict[str, Any] = {
@@ -158,7 +158,7 @@ def cloud_search_logic(
         # Format results
         raw_results = result.get("results")
         results: list[Any] = raw_results if isinstance(raw_results, list) else []
-        logger.info(
+        logger.debug(
             "[%s] Cloud search completed, found %d results",
             trace_id,
             len(results),

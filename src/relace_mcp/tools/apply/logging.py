@@ -26,7 +26,7 @@ def rotate_log_if_needed() -> None:
                 f".{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.log"
             )
             settings.LOG_PATH.rename(rotated_path)
-            logger.info("Rotated log file to %s", rotated_path)
+            logger.debug("Rotated log file to %s", rotated_path)
 
             # Clean up old log files exceeding limit
             rotated_logs = sorted(settings.LOG_PATH.parent.glob("relace.*.log"), reverse=True)

@@ -1,4 +1,5 @@
 import asyncio
+import time
 from collections import deque
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -35,6 +36,8 @@ class LogViewerApp(App[None]):
     MAX_FLUSH_LOG_EVENTS = 250
     MAX_FLUSH_TREE_EVENTS = 100
     TAIL_YIELD_EVERY = 200
+    INSIGHTS_BUFFER_MAX = 5000
+    INSIGHTS_REFRESH_MIN_INTERVAL_S = 0.25
 
     BINDINGS = [
         # Main actions
@@ -81,6 +84,9 @@ class LogViewerApp(App[None]):
         self._stats_dirty = True
 
         self._insights_include_failed = True
+        self._insights_events: deque[dict[str, Any]] = deque(maxlen=self.INSIGHTS_BUFFER_MAX)
+        self._insights_dirty = False
+        self._last_insights_refresh_at = 0.0
 
         # When reloading, pause tailing to avoid interleaving/duplicates.
         self._reload_in_progress = False
@@ -142,6 +148,9 @@ class LogViewerApp(App[None]):
         self._stats_apply_success = 0
         self._stats_search_complete = 0
         self._stats_dirty = True
+        self._insights_events.clear()
+        self._insights_dirty = False
+        self._last_insights_refresh_at = 0.0
 
         # Clear all widgets (views are persistent but should reset on reload)
         self.query_one("#log-all", RichLog).clear()
@@ -181,6 +190,8 @@ class LogViewerApp(App[None]):
 
         if kind in INSIGHTS_KINDS:
             self._pending["tree-insights"].append(event)
+            self._insights_events.append(event)
+            self._insights_dirty = True
 
         # 5. To 'Errors'
         if "error" in kind:
@@ -329,31 +340,20 @@ class LogViewerApp(App[None]):
             if not insights_pending:
                 return
 
-            # Insights is a bit different: it re-renders the whole tree based on session state
-            # but for consistency with others we'll drain the queue.
-            # However, get_tool_turn_stats needs ALL relevant events to compute accurately.
-            # So here we'll just clear the queue and trigger a full refresh of the insight tree
-            # using the data we already have if needed, but actually the app's _route_event
-            # just feeds events.
-            # Let's simplify: drain the queue into a local cache if needed, but InsightsTree.update_stats
-            # actually takes a list of events.
-            # For now, let's just trigger update_stats if we have NEW events.
             has_new = False
             while insights_pending:
                 insights_pending.popleft()
                 has_new = True
 
-            if has_new:
-                # We need all events matching INSIGHTS_KINDS.
-                # Easiest way? Fetch from log_reader (re-reading) or keep a local buffer?
-                # The app doesn't keep a global list of all events, only deques for widgets.
-                # This is a bit tricky with the current architecture.
-                # Let's fix this by having action_reload and tail accumulate events for insights.
-                # Actually, the most efficient way for Insights is to just re-read the last 100 tool calls.
-                from .log_reader import INSIGHTS_KINDS, read_log_events
-
-                events = read_log_events(enabled_kinds=set(INSIGHTS_KINDS), max_events=1000)
-                insights_tree.update_stats(events, include_failed=self._insights_include_failed)
+            if has_new or self._insights_dirty:
+                now = time.monotonic()
+                if now - self._last_insights_refresh_at >= self.INSIGHTS_REFRESH_MIN_INTERVAL_S:
+                    self._last_insights_refresh_at = now
+                    self._insights_dirty = False
+                    insights_tree.update_stats(
+                        list(self._insights_events),
+                        include_failed=self._insights_include_failed,
+                    )
 
     async def _tail_log(self) -> None:
         log_path = get_log_path()
@@ -434,10 +434,8 @@ class LogViewerApp(App[None]):
         self._insights_include_failed = message.include_failed
         # Trigger refresh of insights tree
         tree = self.query_one("#insights-widget", InsightsTree)
-        from .log_reader import INSIGHTS_KINDS, read_log_events
-
-        events = read_log_events(enabled_kinds=set(INSIGHTS_KINDS), max_events=1000)
-        tree.update_stats(events, include_failed=self._insights_include_failed)
+        self._insights_dirty = True
+        tree.update_stats(list(self._insights_events), include_failed=self._insights_include_failed)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "toggle-failed":
@@ -464,6 +462,7 @@ class LogViewerApp(App[None]):
             snapshot_size = log_path.stat().st_size
             bytes_read = 0
             matched = 0
+            scanned = 0
 
             # Stream + yield so the UI can keep responding while loading lots of events.
             with open(log_path, "rb") as f:
@@ -472,6 +471,7 @@ class LogViewerApp(App[None]):
                     if not line_bytes:
                         break
                     bytes_read += len(line_bytes)
+                    scanned += 1
 
                     line = line_bytes.decode("utf-8", errors="replace")
                     event = parse_log_event(line)
@@ -485,6 +485,8 @@ class LogViewerApp(App[None]):
                         matched += 1
                         if matched % 5000 == 0:
                             await asyncio.sleep(0)
+                    if scanned % 5000 == 0:
+                        await asyncio.sleep(0)
         finally:
             self._reload_in_progress = False
 

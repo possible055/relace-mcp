@@ -17,7 +17,7 @@ from fastmcp import FastMCP
 
 from .config import RelaceConfig
 from .config.settings import ENCODING_DETECTION_SAMPLE_LIMIT, LOG_PATH, MCP_LOGGING
-from .middleware import RootsMiddleware
+from .middleware import RootsMiddleware, ToolTracingMiddleware
 from .tools import register_tools
 from .tools.apply.encoding import detect_project_encoding
 from .tools.apply.file_io import set_project_encoding
@@ -30,6 +30,12 @@ def _configure_logging_for_stdio() -> None:
 
     MCP stdio transport requires clean stdout (JSON-RPC only).
     All logging must go to stderr or file.
+
+    Set MCP_LOG_LEVEL environment variable to control log verbosity:
+    - DEBUG: Full diagnostic output (for troubleshooting)
+    - INFO: Informational messages
+    - WARNING: Only warnings and errors (default)
+    - ERROR: Only errors
     """
     # Redirect all warnings to stderr (not stdout)
     warnings.filterwarnings("default")
@@ -46,7 +52,11 @@ def _configure_logging_for_stdio() -> None:
         logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     )
     root.addHandler(stderr_handler)
-    root.setLevel(logging.WARNING)  # Only warnings and above by default
+
+    # Allow user to override log level via environment variable
+    level_str = os.getenv("MCP_LOG_LEVEL", "WARNING").upper()
+    level = getattr(logging, level_str, logging.WARNING)
+    root.setLevel(level)
 
 
 def _load_dotenv_from_path() -> None:
@@ -67,7 +77,7 @@ def _load_dotenv_from_path() -> None:
         path = Path(dotenv_path).expanduser()
         if path.exists():
             load_dotenv(path)
-            logger.info("Loaded .env from MCP_DOTENV_PATH: %s", path)
+            logger.debug("Loaded .env from MCP_DOTENV_PATH: %s", path)
         else:
             logger.warning("MCP_DOTENV_PATH does not exist: %s", dotenv_path)
             load_dotenv()  # Fallback to default
@@ -140,7 +150,7 @@ def detect_and_set_encoding(config: RelaceConfig) -> RelaceConfig:
     """
     # If already set via environment, just apply it
     if config.default_encoding:
-        logger.info("Using configured project encoding: %s", config.default_encoding)
+        logger.debug("Using configured project encoding: %s", config.default_encoding)
         set_project_encoding(config.default_encoding)
         return config
 
@@ -154,12 +164,12 @@ def detect_and_set_encoding(config: RelaceConfig) -> RelaceConfig:
     detected = detect_project_encoding(base_dir, sample_limit=ENCODING_DETECTION_SAMPLE_LIMIT)
 
     if detected:
-        logger.info("Auto-detected project encoding: %s", detected)
+        logger.debug("Auto-detected project encoding: %s", detected)
         set_project_encoding(detected)
         # Return updated config with detected encoding
         return replace(config, default_encoding=detected)
 
-    logger.info("No regional encoding detected, using UTF-8 as default")
+    logger.debug("No regional encoding detected, using UTF-8 as default")
     return config
 
 
@@ -170,7 +180,7 @@ def build_server(config: RelaceConfig | None = None, run_health_check: bool = Tr
     if run_health_check:
         try:
             results = check_health(config)
-            logger.info("Health check passed: %s", results)
+            logger.debug("Health check passed: %s", results)
         except RuntimeError as exc:
             logger.error("Health check failed: %s", exc)
             raise
@@ -182,6 +192,7 @@ def build_server(config: RelaceConfig | None = None, run_health_check: bool = Tr
 
     # Register middleware to handle MCP notifications (e.g., roots/list_changed)
     mcp.add_middleware(RootsMiddleware())
+    mcp.add_middleware(ToolTracingMiddleware())
 
     register_tools(mcp, config)
     return mcp
@@ -235,7 +246,7 @@ def main() -> None:
     server = build_server(config)
 
     if args.transport in ("http", "streamable-http"):
-        logger.info(
+        logger.debug(
             "Starting Relace MCP Server (HTTP) on %s:%d%s",
             args.host,
             args.port,

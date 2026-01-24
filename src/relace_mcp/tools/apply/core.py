@@ -110,7 +110,7 @@ def _create_new_file(ctx: ApplyContext, resolved_path: Path, edit_snippet: str) 
     file_io.atomic_write(resolved_path, edit_snippet, encoding=encoding)
 
     apply_logging.log_create_success(ctx.trace_id, resolved_path, edit_snippet, ctx.instruction)
-    logger.info("[%s] Created new file %s", ctx.trace_id, resolved_path)
+    logger.debug("[%s] Created new file %s", ctx.trace_id, resolved_path)
 
     return _ok_result(
         ctx,
@@ -206,7 +206,7 @@ async def _apply_to_existing_file(
                 ctx.elapsed_ms(),
             )
 
-        logger.info("[%s] No changes needed (idempotent) for %s", ctx.trace_id, resolved_path)
+        logger.debug("[%s] No changes needed (idempotent) for %s", ctx.trace_id, resolved_path)
         return _ok_result(
             ctx,
             str(resolved_path),
@@ -260,7 +260,7 @@ async def _apply_to_existing_file(
     apply_logging.log_apply_success(
         ctx.trace_id, ctx.started_at, resolved_path, file_size, edit_snippet, ctx.instruction, usage
     )
-    logger.info(
+    logger.debug(
         "[%s] Applied edit to %s (latency=%dms)",
         ctx.trace_id,
         resolved_path,

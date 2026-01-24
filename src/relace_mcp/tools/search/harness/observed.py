@@ -20,13 +20,46 @@ class ObservedFilesMixin:
 
         Grep output format: path:line:content
         Note: grep output paths are relative to base_dir, converted to absolute paths.
+        Handles filenames containing colons by parsing from the end of path segment.
         """
-        # Parse grep output, extract path:line
-        pattern = r"^([^:]+):(\d+):"
         for line in grep_output.split("\n"):
-            match = re.match(pattern, line)
+            if not line:
+                continue
+
+            # Find the pattern ":line_number:" from the right side to handle colons in filenames
+            # We look for the last occurrence of :digits: pattern
+            match = None
+            search_pos = len(line) - 1
+
+            while search_pos > 0:
+                # Find the last colon
+                colon_pos = line.rfind(":", 0, search_pos)
+                if colon_pos <= 0:
+                    break
+
+                # Check if there's a number before this colon
+                prev_colon = line.rfind(":", 0, colon_pos)
+                if prev_colon < 0:
+                    break
+
+                potential_num = line[prev_colon + 1 : colon_pos]
+                if potential_num.isdigit():
+                    # Found :digits: pattern, path is everything before prev_colon
+                    rel_path = line[:prev_colon]
+                    line_num = int(potential_num)
+                    match = (rel_path, line_num)
+                    break
+
+                search_pos = colon_pos
+
+            if not match:
+                # Fallback to original pattern for compatibility
+                m = re.match(r"^([^:]+):(\d+):", line)
+                if m:
+                    match = (m.group(1), int(m.group(2)))
+
             if match:
-                rel_path = match.group(1)
+                rel_path, line_num = match
                 # Normalize path format: remove ./ prefix
                 if rel_path.startswith("./"):
                     rel_path = rel_path[2:]
@@ -35,7 +68,6 @@ class ObservedFilesMixin:
                 if not abs_path:
                     # Defense-in-depth: ignore any path that escapes base_dir.
                     continue
-                line_num = int(match.group(2))
 
                 if abs_path not in self._observed_files:
                     self._observed_files[abs_path] = []

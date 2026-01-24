@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from relace_mcp.config.workspace_storage import (
+    is_cwd_in_ide_installation,
     resolve_workspace_from_cwd_ide_path,
     resolve_workspace_from_storage,
 )
@@ -44,11 +45,11 @@ def invalidate_roots_cache(ctx: "Context | None" = None) -> None:
     key = _roots_cache_key(ctx)
     if key is None:
         if _roots_cache:
-            logger.info("[base_dir] Roots cache cleared")
+            logger.debug("[base_dir] Roots cache cleared")
             _roots_cache.clear()
         return
     if key in _roots_cache:
-        logger.info("[base_dir] Roots cache invalidated (session=%s)", key)
+        logger.debug("[base_dir] Roots cache invalidated (session=%s)", key)
         _roots_cache.pop(key, None)
 
 
@@ -70,6 +71,18 @@ def _is_project_directory(path: str) -> tuple[bool, str]:
     if not any((resolved / m).exists() for m in PROJECT_MARKERS):
         return False, "no project markers found"
     return True, ""
+
+
+def validate_project_directory(path: str) -> tuple[bool, str]:
+    """Validate that a directory is safe to operate on.
+
+    Args:
+        path: Candidate project directory.
+
+    Returns:
+        (is_safe, reason). If is_safe is True, reason is an empty string.
+    """
+    return _is_project_directory(path)
 
 
 def _is_accessible_directory(path: str, *, require_write: bool = False) -> bool:
@@ -103,6 +116,18 @@ def _is_accessible_directory(path: str, *, require_write: bool = False) -> bool:
     return True
 
 
+def validate_base_dir(path: str) -> bool:
+    """Validate base_dir is a usable directory.
+
+    Args:
+        path: Candidate base directory.
+
+    Returns:
+        True if the directory exists, is accessible, and is not a filesystem root.
+    """
+    return _is_accessible_directory(path)
+
+
 def _select_best_root(roots: "Sequence[Root]") -> str:
     root_paths: list[str] = []
     for r in roots:
@@ -126,22 +151,46 @@ def _select_best_root(roots: "Sequence[Root]") -> str:
     return root_paths[0]
 
 
+def select_best_root(roots: "Sequence[Root]") -> str:
+    """Select the best root path from MCP Roots.
+
+    Args:
+        roots: MCP Roots from the client.
+
+    Returns:
+        Absolute path string of the selected root.
+    """
+    return _select_best_root(roots)
+
+
 async def resolve_base_dir(
     config_base_dir: str | None,
     ctx: "Context | None" = None,
 ) -> tuple[str, str]:
     """Resolve base_dir with fallback chain.
 
-    Priority: MCP_BASE_DIR -> Cached Roots -> Fresh Roots -> workspaceStorage -> Git root -> cwd
+    Priority: MCP_BASE_DIR -> Cached Roots -> Fresh Roots -> Git root -> workspaceStorage -> cwd
     """
+    # Log entry point for debugging
+    try:
+        current_cwd = str(Path.cwd())
+    except Exception:
+        current_cwd = "<unavailable>"
+    logger.debug(
+        "[base_dir] resolve started, config_base_dir=%s, cwd=%s", config_base_dir, current_cwd
+    )
+
     # 1. Explicit config - trusted
     if config_base_dir:
-        return str(Path(config_base_dir).resolve()), "MCP_BASE_DIR"
+        resolved = str(Path(config_base_dir).resolve())
+        logger.debug("[base_dir] resolved=%s source=MCP_BASE_DIR", resolved)
+        return resolved, "MCP_BASE_DIR"
 
     # 2. Cached MCP Roots
     cache_key = _roots_cache_key(ctx)
     if cache_key and (cached := _roots_cache.get(cache_key)):
         if _is_accessible_directory(cached[0]):
+            logger.debug("[base_dir] resolved=%s source=%s (cached)", cached[0], cached[1])
             return cached
         _roots_cache.pop(cache_key, None)
 
@@ -149,6 +198,9 @@ async def resolve_base_dir(
     if ctx is not None:
         try:
             roots = await ctx.list_roots()
+            logger.debug(
+                "[base_dir] MCP roots: %s", [str(r.uri) for r in roots] if roots else "empty"
+            )
             if roots:
                 if len(roots) == 1:
                     path = uri_to_path(str(roots[0].uri))
@@ -160,19 +212,12 @@ async def resolve_base_dir(
                 if _is_accessible_directory(resolved):
                     if cache_key:
                         _cache_roots(cache_key, resolved, source)
+                    logger.debug("[base_dir] resolved=%s source=%s", resolved, source)
                     return resolved, source
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("[base_dir] MCP roots failed: %s", exc)
 
-    # 4. IDE workspaceStorage (stricter: require project markers)
-    workspace_path = resolve_workspace_from_storage() or resolve_workspace_from_cwd_ide_path()
-    if workspace_path:
-        resolved = str(Path(workspace_path).resolve())
-        is_project, _ = _is_project_directory(resolved)
-        if is_project and _is_accessible_directory(resolved):
-            return resolved, "workspaceStorage (fallback)"
-
-    # 5. Git root
+    # 4. Git root (preferred over workspaceStorage in normal cases)
     try:
         cwd = Path.cwd().resolve()
     except Exception:
@@ -181,10 +226,24 @@ async def resolve_base_dir(
     if git_root := find_git_root(str(cwd)):
         resolved = str(git_root.resolve())
         if _is_accessible_directory(resolved):
+            logger.debug("[base_dir] resolved=%s source=Git root (fallback)", resolved)
             return resolved, "Git root (fallback)"
+
+    # 5. IDE workspaceStorage (only when CWD is IDE installation dir)
+    # This prevents WSL from picking wrong project when launched from correct repo
+    if is_cwd_in_ide_installation():
+        logger.debug("[base_dir] CWD is IDE installation, trying workspaceStorage")
+        workspace_path = resolve_workspace_from_storage() or resolve_workspace_from_cwd_ide_path()
+        if workspace_path:
+            resolved = str(Path(workspace_path).resolve())
+            is_project, _ = _is_project_directory(resolved)
+            if is_project and _is_accessible_directory(resolved):
+                logger.debug("[base_dir] resolved=%s source=workspaceStorage (fallback)", resolved)
+                return resolved, "workspaceStorage (fallback)"
 
     # 6. cwd
     resolved = str(cwd)
     if not _is_accessible_directory(resolved):
         raise RuntimeError(f"Cannot resolve valid base_dir: {cwd}")
+    logger.debug("[base_dir] resolved=%s source=cwd (fallback)", resolved)
     return resolved, "cwd (fallback)"

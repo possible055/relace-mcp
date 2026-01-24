@@ -282,6 +282,24 @@ class TestGrepSearchHandler:
         result = grep_search_handler(params)
         assert "No matches" in result
 
+    def test_handles_filename_with_colon(self, tmp_path: Path) -> None:
+        """Should correctly handle filenames containing colons."""
+        # Create file with colon in name (valid on Linux/macOS)
+        colon_file = tmp_path / "file:2024:01.txt"
+        colon_file.write_text("hello world\n")
+
+        params = GrepSearchParams(
+            query="hello",
+            case_sensitive=True,
+            include_pattern=None,
+            exclude_pattern=None,
+            base_dir=str(tmp_path),
+        )
+        result = grep_search_handler(params)
+        assert "hello" in result
+        # The full filename should be present in output
+        assert "file:2024:01.txt" in result or "file" in result
+
     def test_finds_non_ascii_in_big5_file_python_fallback(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

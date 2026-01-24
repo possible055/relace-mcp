@@ -30,7 +30,7 @@ def cloud_clear_logic(
         Dict containing operation result.
     """
     trace_id = str(uuid.uuid4())[:8]
-    logger.info("[%s] Starting cloud clear", trace_id)
+    logger.debug("[%s] Starting cloud clear", trace_id)
 
     if not confirm:
         result = {
@@ -47,7 +47,7 @@ def cloud_clear_logic(
 
     # Direct repo_id mode: bypass base_dir lookup entirely
     if repo_id:
-        logger.info("[%s] Direct delete mode with repo_id=%s", trace_id, repo_id)
+        logger.debug("[%s] Direct delete mode with repo_id=%s", trace_id, repo_id)
         log_cloud_event(
             "cloud_clear_start",
             trace_id,
@@ -119,7 +119,7 @@ def cloud_clear_logic(
         sync_state = load_sync_state(base_dir)
         if sync_state:
             repo_id = sync_state.repo_id
-            logger.info("[%s] Found repo_id from local sync state: %s", trace_id, repo_id)
+            logger.debug("[%s] Found repo_id from local sync state: %s", trace_id, repo_id)
 
         # 2. Fallback: Search by name (riskier, but needed if local state is missing)
         if not repo_id:
@@ -157,7 +157,7 @@ def cloud_clear_logic(
                 repo_id = r.get("repo_id") or r.get("id")
 
         if not repo_id:
-            logger.info("[%s] No repository found on cloud for %s", trace_id, cloud_repo_name)
+            logger.debug("[%s] No repository found on cloud for %s", trace_id, cloud_repo_name)
             # Even if repo not found remotely, ensure local state is clean
             clear_sync_state(base_dir)
             result = {
@@ -171,7 +171,7 @@ def cloud_clear_logic(
             return result
 
         # 3. specific deletion
-        logger.info("[%s] Deleting cloud repo %s (repo_id=%s)", trace_id, cloud_repo_name, repo_id)
+        logger.debug("[%s] Deleting cloud repo %s (repo_id=%s)", trace_id, cloud_repo_name, repo_id)
         if client.delete_repo(repo_id, trace_id=trace_id):
             # 4. Clear local state only after successful remote deletion
             clear_sync_state(base_dir)

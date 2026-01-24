@@ -25,7 +25,7 @@ def cloud_list_logic(client: RelaceRepoClient) -> dict[str, Any]:
         - error: Error message if failed (optional)
     """
     trace_id = str(uuid.uuid4())[:8]
-    logger.info("[%s] Listing cloud repositories", trace_id)
+    logger.debug("[%s] Listing cloud repositories", trace_id)
 
     try:
         log_cloud_event("cloud_list_start", trace_id)
@@ -50,7 +50,7 @@ def cloud_list_logic(client: RelaceRepoClient) -> dict[str, Any]:
         # Note: This may be a false positive if total is exactly 10,000.
         has_more = len(repos) >= 10000
 
-        logger.info("[%s] Found %d repositories", trace_id, len(repo_summaries))
+        logger.debug("[%s] Found %d repositories", trace_id, len(repo_summaries))
 
         result = {
             "trace_id": trace_id,

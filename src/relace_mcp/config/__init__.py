@@ -30,7 +30,7 @@ def _load_prompt_file(
     if custom_path:
         custom_path_obj = Path(custom_path).expanduser()
         if custom_path_obj.exists():
-            logger.info("Loading custom prompt from %s (via %s)", custom_path_obj, env_var)
+            logger.debug("Loading custom prompt from %s (via %s)", custom_path_obj, env_var)
             with custom_path_obj.open(encoding="utf-8") as f:
                 result = yaml.safe_load(f)
             if result is None:

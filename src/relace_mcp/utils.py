@@ -46,6 +46,40 @@ def find_git_root(start: str) -> Path | None:
     return None
 
 
+def _is_path_within_base(resolved: Path, base_resolved: Path) -> bool:
+    """Check if resolved path is within base directory (handles case-insensitivity).
+
+    Uses os.path.samefile for existing paths (handles symlinks and case-insensitive FS).
+    Falls back to string prefix comparison for non-existing paths.
+
+    Args:
+        resolved: Resolved path to check.
+        base_resolved: Resolved base directory.
+
+    Returns:
+        True if path is within base directory.
+    """
+    # For existing paths, use samefile to handle symlinks and case-insensitivity
+    if resolved.exists() and base_resolved.exists():
+        # Check if any parent is the same as base_dir
+        current = resolved
+        while current != current.parent:
+            try:
+                if os.path.samefile(current, base_resolved):
+                    return True
+            except OSError:
+                break
+            current = current.parent
+        return False
+
+    # For non-existing paths, use relative_to (standard check)
+    try:
+        resolved.relative_to(base_resolved)
+        return True
+    except ValueError:
+        return False
+
+
 def resolve_repo_path(
     path: str,
     base_dir: str,
@@ -91,10 +125,8 @@ def resolve_repo_path(
         except (OSError, RuntimeError) as exc:
             raise ValueError(f"Cannot resolve path (circular symlink?): {path}") from exc
         # Validate within base_dir
-        try:
-            resolved.relative_to(base_resolved)
-        except ValueError as exc:
-            raise ValueError(f"Path escapes base_dir: {path}") from exc
+        if not _is_path_within_base(resolved, base_resolved):
+            raise ValueError(f"Path escapes base_dir: {path}")
         return str(resolved)
 
     # Handle relative paths
@@ -105,10 +137,8 @@ def resolve_repo_path(
             resolved = (base_resolved / path).resolve()
         except (OSError, RuntimeError) as exc:
             raise ValueError(f"Cannot resolve path (circular symlink?): {path}") from exc
-        try:
-            resolved.relative_to(base_resolved)
-        except ValueError as exc:
-            raise ValueError(f"Path escapes base_dir: {path}") from exc
+        if not _is_path_within_base(resolved, base_resolved):
+            raise ValueError(f"Path escapes base_dir: {path}")
         return str(resolved)
 
     # Handle absolute paths
@@ -119,10 +149,8 @@ def resolve_repo_path(
     except (OSError, RuntimeError) as exc:
         raise ValueError(f"Cannot resolve path (circular symlink?): {path}") from exc
     if require_within_base_dir:
-        try:
-            resolved.relative_to(base_resolved)
-        except ValueError as exc:
-            raise ValueError(f"Path escapes base_dir: {path}") from exc
+        if not _is_path_within_base(resolved, base_resolved):
+            raise ValueError(f"Path escapes base_dir: {path}")
     return str(resolved)
 
 
@@ -185,11 +213,7 @@ def validate_file_path(file_path: str, base_dir: str, *, allow_empty: bool = Fal
         raise RuntimeError(f"Invalid file path: {file_path}") from exc
 
     base_resolved = Path(base_dir).resolve()
-    try:
-        resolved.relative_to(base_resolved)
-    except ValueError as exc:
-        raise RuntimeError(
-            f"Access denied: {file_path} is outside allowed directory {base_dir}"
-        ) from exc
+    if not _is_path_within_base(resolved, base_resolved):
+        raise RuntimeError(f"Access denied: {file_path} is outside allowed directory {base_dir}")
 
     return resolved

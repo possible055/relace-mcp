@@ -12,12 +12,21 @@ WSL_MNT_PREFIX = "/mnt/"
 _SKIP_USER_DIRS = frozenset(("Public", "Default", "Default User", "All Users"))
 
 # CWD patterns to extract IDE name from installation path
-# Windows: AppData\Local\Programs\<IDE>
-_WINDOWS_IDE_CWD_PATTERN = re.compile(r"^(.+)[/\\]AppData[/\\]Local[/\\]Programs[/\\]([^/\\]+)")
+# Windows: AppData\Local\Programs\<IDE> or Program Files\<IDE>
+_WINDOWS_IDE_CWD_PATTERN = re.compile(
+    r"^(?:.+[/\\]AppData[/\\]Local[/\\]Programs|[A-Za-z]:[/\\]Program Files(?:\s*\(x86\))?)[/\\]([^/\\]+)"
+)
 # macOS: /Applications/<IDE>.app/...
 _MACOS_IDE_CWD_PATTERN = re.compile(r"^/Applications/([^/]+)\.app(?:/|$)")
-# Linux: /usr/share/<ide>, /opt/<ide>, or ~/.local/share/<ide> (AppImage)
-_LINUX_IDE_CWD_PATTERN = re.compile(r"^(?:/usr/share|/opt|.+/\.local/share)/([^/]+)")
+# Linux: /usr/share/<ide>, /opt/<ide>, ~/.local/share/<ide> (AppImage), or /snap/<ide>
+_LINUX_IDE_CWD_PATTERN = re.compile(r"^(?:/usr/share|/opt|/snap|.+/\.local/share)/([^/]+)")
+
+# IDE installation folder name -> Roaming/config folder name mapping
+# Most forks use the same name, only VS Code variants differ
+_IDE_NAME_TO_ROAMING: dict[str, str] = {
+    "Microsoft VS Code": "Code",
+    "Microsoft VS Code Insiders": "Code - Insiders",
+}
 
 
 # --- Internal helpers ---
@@ -100,8 +109,15 @@ def _get_workspace_storage_for_ide(ide_name: str) -> Path | None:
     import sys
 
     base_name = ide_name.removesuffix(".app")
-    # Try multiple case variants: original, Title Case, lower case
-    variants = [base_name, base_name.title(), base_name.lower()]
+
+    # Map installation folder name to roaming folder name (handles VS Code variants)
+    mapped_name = _IDE_NAME_TO_ROAMING.get(base_name)
+    if mapped_name:
+        variants = [mapped_name]
+    else:
+        # Most forks use the same name; try case variants
+        variants = [base_name, base_name.title(), base_name.lower()]
+
     home = Path.home()
 
     for name in variants:
@@ -127,7 +143,7 @@ def _extract_ide_name_from_cwd() -> str | None:
 
     # Try Windows pattern
     if match := _WINDOWS_IDE_CWD_PATTERN.match(cwd):
-        return match.group(2)
+        return match.group(1)
     # Try macOS pattern
     if match := _MACOS_IDE_CWD_PATTERN.match(cwd):
         return match.group(1)
@@ -138,6 +154,11 @@ def _extract_ide_name_from_cwd() -> str | None:
 
 
 # --- Public API ---
+
+
+def is_cwd_in_ide_installation() -> bool:
+    """Check if CWD is inside an IDE installation directory."""
+    return _extract_ide_name_from_cwd() is not None
 
 
 def resolve_workspace_from_storage() -> str | None:
