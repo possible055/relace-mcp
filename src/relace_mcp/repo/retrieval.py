@@ -2,14 +2,12 @@ import logging
 import uuid
 from typing import Any
 
-from ...clients import RelaceRepoClient, SearchLLMClient
-from ...config import RETRIEVAL_USER_PROMPT_TEMPLATE, RelaceConfig
-from ...config.settings import AGENTIC_AUTO_SYNC, RETRIEVAL_BACKEND
-from ..search import FastAgenticSearchHarness
-from ._local_backend import chunkhound_search, codanna_search
-from .info import cloud_info_logic
-from .search import cloud_search_logic
-from .sync import cloud_sync_logic
+from ..clients import RelaceRepoClient, SearchLLMClient
+from ..config import RETRIEVAL_USER_PROMPT_TEMPLATE, RelaceConfig
+from ..config.settings import AGENTIC_AUTO_SYNC, RETRIEVAL_BACKEND
+from ..tools.search import FastAgenticSearchHarness
+from .cloud import cloud_info_logic, cloud_search_logic, cloud_sync_logic
+from .local import chunkhound_search, codanna_search
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +169,7 @@ async def agentic_retrieval_logic(
     from dataclasses import replace
     from pathlib import Path
 
-    from ...lsp.languages import get_lsp_languages
+    from ..lsp.languages import get_lsp_languages
 
     effective_config = replace(config, base_dir=base_dir)
     lsp_languages = get_lsp_languages(Path(base_dir))

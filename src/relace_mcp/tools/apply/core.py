@@ -11,8 +11,10 @@ import openai
 
 from ...clients.apply import ApplyLLMClient, ApplyRequest, ApplyResponse
 from ...config.settings import APPLY_SEMANTIC_CHECK, MAX_FILE_SIZE_BYTES
+from ...encoding import atomic_write, get_project_encoding, read_text_with_fallback
+from ...encoding.exceptions import EncodingDetectionError as BaseEncodingDetectionError
 from ...utils import validate_file_path
-from . import errors, file_io, snippet
+from . import errors, snippet
 from . import logging as apply_logging
 from .exceptions import (
     ApiInvalidResponseError,
@@ -106,8 +108,8 @@ def _resolve_path(
 
 def _create_new_file(ctx: ApplyContext, resolved_path: Path, edit_snippet: str) -> dict[str, Any]:
     resolved_path.parent.mkdir(parents=True, exist_ok=True)
-    encoding = file_io.get_project_encoding() or "utf-8"
-    file_io.atomic_write(resolved_path, edit_snippet, encoding=encoding)
+    encoding = get_project_encoding() or "utf-8"
+    atomic_write(resolved_path, edit_snippet, encoding=encoding)
 
     apply_logging.log_create_success(ctx.trace_id, resolved_path, edit_snippet, ctx.instruction)
     logger.debug("[%s] Created new file %s", ctx.trace_id, resolved_path)
@@ -147,7 +149,7 @@ async def _apply_to_existing_file(
     if not os.access(resolved_path.parent, os.W_OK):
         raise FileNotWritableError(f"Directory not writable: {resolved_path.parent}")
 
-    initial_code, detected_encoding = file_io.read_text_with_fallback(resolved_path)
+    initial_code, detected_encoding = read_text_with_fallback(resolved_path)
 
     if snippet.should_run_anchor_precheck(edit_snippet, ctx.instruction):
         if not snippet.anchor_precheck(concrete, initial_code):
@@ -255,7 +257,7 @@ async def _apply_to_existing_file(
                 ctx.elapsed_ms(),
             )
 
-    file_io.atomic_write(resolved_path, merged_code, encoding=detected_encoding)
+    atomic_write(resolved_path, merged_code, encoding=detected_encoding)
 
     apply_logging.log_apply_success(
         ctx.trace_id, ctx.started_at, resolved_path, file_size, edit_snippet, ctx.instruction, usage
@@ -352,16 +354,18 @@ async def apply_file_logic(
                 ctx.elapsed_ms(),
             )
 
-        if isinstance(exc, ApplyError):
+        if isinstance(exc, (ApplyError, BaseEncodingDetectionError)):
+            error_code = getattr(exc, "error_code", "ENCODING_ERROR")
+            message = getattr(exc, "message", str(exc))
             logger.warning(
                 "[%s] Apply error (%s) for %s: %s",
                 ctx.trace_id,
-                exc.error_code,
+                error_code,
                 file_path,
-                exc.message,
+                message,
             )
             return errors.recoverable_error(
-                exc.error_code, exc.message, file_path, instruction, ctx.trace_id, ctx.elapsed_ms()
+                error_code, message, file_path, instruction, ctx.trace_id, ctx.elapsed_ms()
             )
 
         if isinstance(exc, PermissionError):

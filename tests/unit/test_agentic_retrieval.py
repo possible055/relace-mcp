@@ -5,7 +5,7 @@ import pytest
 
 from relace_mcp.clients import RelaceRepoClient, SearchLLMClient
 from relace_mcp.config import RelaceConfig
-from relace_mcp.tools.repo.retrieval import (
+from relace_mcp.repo.retrieval import (
     agentic_retrieval_logic,
     build_semantic_hints_section,
 )
@@ -68,8 +68,8 @@ class TestAgenticRetrievalLogic:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.tools.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.return_value = {"error": "Network error", "results": []}
             mock_harness = MagicMock()
@@ -99,8 +99,8 @@ class TestAgenticRetrievalLogic:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.tools.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.return_value = {"results": []}
             mock_harness = MagicMock()
@@ -130,8 +130,8 @@ class TestAgenticRetrievalLogic:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.tools.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.return_value = {
                 "results": [
@@ -172,8 +172,8 @@ class TestAgenticRetrievalLogic:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.tools.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.return_value = {"results": [{"filename": "src/core.py", "score": 0.9}]}
             mock_harness = MagicMock()
@@ -208,8 +208,8 @@ class TestAgenticRetrievalLogic:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.tools.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.side_effect = Exception("Fatal cloud error")
             mock_harness = MagicMock()
@@ -255,11 +255,11 @@ class TestAutoSync:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.tools.repo.retrieval.AGENTIC_AUTO_SYNC", True),
-            patch("relace_mcp.tools.repo.retrieval.cloud_info_logic") as mock_info,
-            patch("relace_mcp.tools.repo.retrieval.cloud_sync_logic") as mock_sync,
-            patch("relace_mcp.tools.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.repo.retrieval.AGENTIC_AUTO_SYNC", True),
+            patch("relace_mcp.repo.retrieval.cloud_info_logic") as mock_info,
+            patch("relace_mcp.repo.retrieval.cloud_sync_logic") as mock_sync,
+            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_info.return_value = {"status": {"needs_sync": True}}
             mock_sync.return_value = {"repo_id": "test-repo"}
@@ -290,11 +290,11 @@ class TestAutoSync:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.tools.repo.retrieval.AGENTIC_AUTO_SYNC", True),
-            patch("relace_mcp.tools.repo.retrieval.cloud_info_logic") as mock_info,
-            patch("relace_mcp.tools.repo.retrieval.cloud_sync_logic") as mock_sync,
-            patch("relace_mcp.tools.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.repo.retrieval.AGENTIC_AUTO_SYNC", True),
+            patch("relace_mcp.repo.retrieval.cloud_info_logic") as mock_info,
+            patch("relace_mcp.repo.retrieval.cloud_sync_logic") as mock_sync,
+            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_info.return_value = {"status": {"needs_sync": False}}
             mock_cloud.return_value = {"results": []}
@@ -324,10 +324,10 @@ class TestAutoSync:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.tools.repo.retrieval.AGENTIC_AUTO_SYNC", False),
-            patch("relace_mcp.tools.repo.retrieval.cloud_info_logic") as mock_info,
-            patch("relace_mcp.tools.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.repo.retrieval.AGENTIC_AUTO_SYNC", False),
+            patch("relace_mcp.repo.retrieval.cloud_info_logic") as mock_info,
+            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.return_value = {"results": []}
             mock_harness = MagicMock()
@@ -355,11 +355,11 @@ class TestAutoSync:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.tools.repo.retrieval.AGENTIC_AUTO_SYNC", True),
-            patch("relace_mcp.tools.repo.retrieval.cloud_info_logic") as mock_info,
-            patch("relace_mcp.tools.repo.retrieval.cloud_sync_logic") as mock_sync,
-            patch("relace_mcp.tools.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.repo.retrieval.AGENTIC_AUTO_SYNC", True),
+            patch("relace_mcp.repo.retrieval.cloud_info_logic") as mock_info,
+            patch("relace_mcp.repo.retrieval.cloud_sync_logic") as mock_sync,
+            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_info.return_value = {"status": {"needs_sync": True}}
             mock_sync.return_value = {"error": "Network timeout"}

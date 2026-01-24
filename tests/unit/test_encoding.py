@@ -3,13 +3,13 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from relace_mcp.tools.apply.encoding import (
-    detect_project_encoding,
-)
-from relace_mcp.tools.apply.file_io import (
+from relace_mcp.encoding import (
     get_project_encoding,
     read_text_with_fallback,
     set_project_encoding,
+)
+from relace_mcp.tools.apply.encoding import (
+    detect_project_encoding,
 )
 
 

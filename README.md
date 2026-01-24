@@ -26,7 +26,7 @@ MCP server providing AI-powered code editing and intelligent codebase exploratio
 ## Features
 
 - **Fast Apply** — Apply code edits at 10,000+ tokens/sec via Relace API
-- **Agentic Search** — Agentic codebase exploration with natural language queries (`fast_search` is deprecated alias, removed in 0.2.5)
+- **Agentic Search** — Agentic codebase exploration with natural language queries (`fast_search` is deprecated alias, will be removed in 0.2.5)
 - **Agentic Retrieval** — Two-stage semantic + agentic code retrieval (requires `RELACE_CLOUD_TOOLS=1` and `MCP_SEARCH_MODE=indexed` or `both`)
 - **Cloud Sync** — Upload local codebase to Relace Cloud for semantic search
 - **Cloud Search** — Semantic code search over cloud-synced repositories
@@ -154,7 +154,7 @@ For `.env` usage, encoding settings, custom LLM providers, and more, see [docs/a
 
 ## Tools
 
-Core tools (`fast_apply`, `agentic_search`) are always available. `fast_search` is a deprecated alias for `agentic_search` (removed in 0.2.5). Cloud tools require `RELACE_CLOUD_TOOLS=1`. `agentic_retrieval` requires both `RELACE_CLOUD_TOOLS=1` and `MCP_SEARCH_MODE=indexed` or `both`.
+Core tools (`fast_apply`, `agentic_search`) are always available. `fast_search` is a deprecated alias for `agentic_search` (will be removed in 0.2.5). Cloud tools require `RELACE_CLOUD_TOOLS=1`. `agentic_retrieval` requires both `RELACE_CLOUD_TOOLS=1` and `MCP_SEARCH_MODE=indexed` or `both`.
 
 For detailed parameters, see [docs/tools.md](docs/tools.md).
 

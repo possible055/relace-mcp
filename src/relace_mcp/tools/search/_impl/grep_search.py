@@ -11,7 +11,7 @@ from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 
-from ....tools.apply.file_io import get_project_encoding, read_text_best_effort
+from ....encoding import get_project_encoding, read_text_best_effort
 from ..schemas import GrepSearchParams
 from .constants import COMMON_IGNORED_DIRS, GREP_TIMEOUT_SECONDS, MAX_GREP_DEPTH, MAX_GREP_MATCHES
 from .gitignore import collect_gitignore_specs, is_ignored

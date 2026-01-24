@@ -3,9 +3,13 @@ import uuid
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
-from ._logging import log_cloud_event
-from .errors import build_cloud_error_details
-from .state import clear_sync_state, get_repo_identity, load_sync_state
+from ..core import (
+    build_cloud_error_details,
+    clear_sync_state,
+    get_repo_identity,
+    load_sync_state,
+    log_cloud_event,
+)
 
 logger = logging.getLogger(__name__)
 

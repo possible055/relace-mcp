@@ -11,10 +11,8 @@ from .exceptions import EncodingDetectionError
 
 logger = logging.getLogger(__name__)
 
-# Module-level state for project encoding (set by server at startup)
 _project_encoding: str | None = None
 
-# Encodings that are effectively UTF-8 for our purposes
 _UTF8_COMPATIBLE = frozenset({"utf-8", "utf-8-sig", "ascii", "us-ascii"})
 
 
@@ -54,18 +52,14 @@ def _looks_like_binary(data: bytes, sample_size: int = 8192) -> bool:
 
     sample = data[:sample_size]
 
-    # Null bytes are a strong indicator of binary
     if b"\x00" in sample:
         return True
 
-    # Check ratio of non-text bytes (excluding common control chars)
-    # Allow: tab (0x09), newline (0x0a), carriage return (0x0d), and printable ASCII
     non_text_count = 0
     for byte in sample:
-        if byte < 0x09 or (0x0E <= byte < 0x20 and byte != 0x1B):  # Allow ESC for ANSI
+        if byte < 0x09 or (0x0E <= byte < 0x20 and byte != 0x1B):
             non_text_count += 1
 
-    # If more than 30% non-text bytes, likely binary
     if len(sample) > 0 and non_text_count / len(sample) > 0.30:
         return True
 
@@ -81,8 +75,6 @@ def _detect_declared_encoding(path: Path, raw: bytes) -> str | None:
     if path.suffix.lower() not in {".py", ".pyi"}:
         return None
 
-    # tokenize.detect_encoding is the canonical implementation for Python source encoding.
-    # It handles UTF-8 BOM and coding cookies on the first two lines.
     try:
         encoding, _ = tokenize.detect_encoding(io.BytesIO(raw).readline)
         return encoding.lower() if encoding else None
@@ -122,14 +114,10 @@ def decode_text_with_fallback(
         try:
             return raw.decode(declared), declared
         except (UnicodeDecodeError, LookupError):
-            # Fall through to other strategies
             pass
 
-    # Fast path: UTF-8
     try:
         text = raw.decode("utf-8")
-        # If the project encoding is configured and the file is ASCII-only, preserve
-        # the project encoding to keep newly written non-ASCII content consistent.
         if preferred and preferred not in _UTF8_COMPATIBLE and text.isascii():
             return text, preferred
         return text, "utf-8"
@@ -151,7 +139,6 @@ def decode_text_with_fallback(
         except (UnicodeDecodeError, LookupError):
             preferred_text = None
 
-    # Robust path: charset_normalizer (helps distinguish GBK vs Big5 without naive fallbacks)
     result = from_bytes(raw)
     best = result.best()
     if best is not None and best.encoding:
@@ -159,11 +146,7 @@ def decode_text_with_fallback(
         best_ok = best.coherence >= min_coherence
 
         if preferred_text is not None:
-            # Type narrowing: preferred_text is not None implies preferred is not None
-            # (due to the check at line 149: `if preferred and preferred not in _UTF8_COMPATIBLE`)
             assert preferred is not None  # nosec B101 - type narrowing only
-            # When a project encoding is explicitly configured/detected, prefer it unless
-            # charset_normalizer is strongly confident it's a different encoding family.
             if encoding_family(preferred) == encoding_family(best_enc):
                 return preferred_text, preferred
 
@@ -176,7 +159,6 @@ def decode_text_with_fallback(
             logger.debug("Detected encoding %s for %s", best_enc, path or "<bytes>")
             return str(best), best_enc
 
-    # Last resort: preferred encoding (if configured/detected)
     if preferred_text is not None:
         assert preferred is not None  # nosec B101 - type narrowing only
         return preferred_text, preferred
@@ -207,7 +189,6 @@ def decode_text_best_effort(
         )
         return text
     except EncodingDetectionError:
-        # As a last resort, return a lossy UTF-8 decode for robustness.
         return raw.decode("utf-8", errors=errors)
 
 
@@ -235,8 +216,6 @@ def read_text_with_fallback(path: Path) -> tuple[str, str]:
         raw,
         path=path,
         preferred_encoding=_project_encoding,
-        # Be tolerant here: binary files are filtered earlier, and short source files
-        # can yield very low coherence scores even when the encoding is correct.
         min_coherence=0.0,
     )
 
@@ -276,19 +255,14 @@ def atomic_write(path: Path, content: str, encoding: str) -> None:
     Raises:
         OSError: Raised when write fails.
     """
-    # Use uuid to generate unique temp file name, avoiding concurrent write collisions
     unique_suffix = f".{uuid.uuid4().hex[:8]}.tmp"
     temp_path = path.with_suffix(path.suffix + unique_suffix)
     try:
-        # Use open with newline='' to preserve original line endings on all platforms.
-        # Without this, Windows would convert \n to \r\n in text mode.
         with temp_path.open("w", encoding=encoding, newline="") as f:
             f.write(content)
             f.flush()
             os.fsync(f.fileno())
-        # os.replace is atomic on POSIX systems
         os.replace(temp_path, path)
     except Exception:
-        # Clean up temp file
         temp_path.unlink(missing_ok=True)
         raise

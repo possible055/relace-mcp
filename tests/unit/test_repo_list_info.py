@@ -7,9 +7,9 @@ import pytest
 
 from relace_mcp.clients.repo import RelaceRepoClient
 from relace_mcp.config import RelaceConfig
-from relace_mcp.tools.repo.info import cloud_info_logic
-from relace_mcp.tools.repo.list import cloud_list_logic
-from relace_mcp.tools.repo.state import SyncState
+from relace_mcp.repo.cloud.info import cloud_info_logic
+from relace_mcp.repo.cloud.list import cloud_list_logic
+from relace_mcp.repo.core.state import SyncState
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ def mock_repo_client(_mock_config: RelaceConfig) -> MagicMock:
 def _patch_repo_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep cloud_repo_name == local repo dir name for unit tests."""
     monkeypatch.setattr(
-        "relace_mcp.tools.repo.info.get_repo_identity",
+        "relace_mcp.repo.cloud.info.get_repo_identity",
         lambda base_dir: (Path(base_dir).resolve().name, Path(base_dir).resolve().name, "fp"),
     )
 
@@ -128,9 +128,9 @@ class TestCloudInfoLogic:
 
     def test_info_returns_local_git_info(self, tmp_path: Path, mock_repo_client: MagicMock) -> None:
         """Should return local git info."""
-        with patch("relace_mcp.tools.repo.info.get_current_git_info") as mock_git:
+        with patch("relace_mcp.repo.cloud.info.get_current_git_info") as mock_git:
             mock_git.return_value = ("main", "abc123def456789012345678901234567890")
-            with patch("relace_mcp.tools.repo.info.load_sync_state", return_value=None):
+            with patch("relace_mcp.repo.cloud.info.load_sync_state", return_value=None):
                 result = cloud_info_logic(mock_repo_client, str(tmp_path))
 
         assert result["local"]["git_branch"] == "main"
@@ -150,9 +150,9 @@ class TestCloudInfoLogic:
             skipped_files={"binary.dat"},
         )
 
-        with patch("relace_mcp.tools.repo.info.get_current_git_info") as mock_git:
+        with patch("relace_mcp.repo.cloud.info.get_current_git_info") as mock_git:
             mock_git.return_value = ("main", "abc123def456789012345678901234567890")
-            with patch("relace_mcp.tools.repo.info.load_sync_state", return_value=cached):
+            with patch("relace_mcp.repo.cloud.info.load_sync_state", return_value=cached):
                 result = cloud_info_logic(mock_repo_client, str(tmp_path))
 
         synced = result["synced"]
@@ -172,10 +172,10 @@ class TestCloudInfoLogic:
             files={},
         )
 
-        with patch("relace_mcp.tools.repo.info.get_current_git_info") as mock_git:
+        with patch("relace_mcp.repo.cloud.info.get_current_git_info") as mock_git:
             # Current head is different from cached
             mock_git.return_value = ("main", "new_head_sha_987654321098765432109876")
-            with patch("relace_mcp.tools.repo.info.load_sync_state", return_value=cached):
+            with patch("relace_mcp.repo.cloud.info.load_sync_state", return_value=cached):
                 result = cloud_info_logic(mock_repo_client, str(tmp_path))
 
         assert result["status"]["ref_changed"] is True
@@ -195,10 +195,10 @@ class TestCloudInfoLogic:
             files={},
         )
 
-        with patch("relace_mcp.tools.repo.info.get_current_git_info") as mock_git:
+        with patch("relace_mcp.repo.cloud.info.get_current_git_info") as mock_git:
             # Same head as cached
             mock_git.return_value = ("main", "same_head_sha_123456789012345678901234")
-            with patch("relace_mcp.tools.repo.info.load_sync_state", return_value=cached):
+            with patch("relace_mcp.repo.cloud.info.load_sync_state", return_value=cached):
                 result = cloud_info_logic(mock_repo_client, str(tmp_path))
 
         assert result["status"]["ref_changed"] is False
@@ -217,9 +217,9 @@ class TestCloudInfoLogic:
             },
         ]
 
-        with patch("relace_mcp.tools.repo.info.get_current_git_info") as mock_git:
+        with patch("relace_mcp.repo.cloud.info.get_current_git_info") as mock_git:
             mock_git.return_value = ("main", "abc123def456789012345678901234567890")
-            with patch("relace_mcp.tools.repo.info.load_sync_state", return_value=None):
+            with patch("relace_mcp.repo.cloud.info.load_sync_state", return_value=None):
                 result = cloud_info_logic(mock_repo_client, str(tmp_path))
 
         assert result["cloud"] is not None
@@ -234,9 +234,9 @@ class TestCloudInfoLogic:
             },
         ]
 
-        with patch("relace_mcp.tools.repo.info.get_current_git_info") as mock_git:
+        with patch("relace_mcp.repo.cloud.info.get_current_git_info") as mock_git:
             mock_git.return_value = ("main", "abc123def456789012345678901234567890")
-            with patch("relace_mcp.tools.repo.info.load_sync_state", return_value=None):
+            with patch("relace_mcp.repo.cloud.info.load_sync_state", return_value=None):
                 result = cloud_info_logic(mock_repo_client, str(tmp_path))
 
         assert result["cloud"] is None
@@ -245,9 +245,9 @@ class TestCloudInfoLogic:
         """Should handle list API errors gracefully."""
         mock_repo_client.list_repos.side_effect = RuntimeError("API error")
 
-        with patch("relace_mcp.tools.repo.info.get_current_git_info") as mock_git:
+        with patch("relace_mcp.repo.cloud.info.get_current_git_info") as mock_git:
             mock_git.return_value = ("main", "abc123def456789012345678901234567890")
-            with patch("relace_mcp.tools.repo.info.load_sync_state", return_value=None):
+            with patch("relace_mcp.repo.cloud.info.load_sync_state", return_value=None):
                 result = cloud_info_logic(mock_repo_client, str(tmp_path))
 
         # Should still return local info
@@ -261,9 +261,9 @@ class TestCloudInfoLogic:
         self, tmp_path: Path, mock_repo_client: MagicMock
     ) -> None:
         """Should suggest sync when no sync state exists."""
-        with patch("relace_mcp.tools.repo.info.get_current_git_info") as mock_git:
+        with patch("relace_mcp.repo.cloud.info.get_current_git_info") as mock_git:
             mock_git.return_value = ("main", "abc123def456789012345678901234567890")
-            with patch("relace_mcp.tools.repo.info.load_sync_state", return_value=None):
+            with patch("relace_mcp.repo.cloud.info.load_sync_state", return_value=None):
                 result = cloud_info_logic(mock_repo_client, str(tmp_path))
 
         assert result["synced"] is None
