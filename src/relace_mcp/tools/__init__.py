@@ -100,12 +100,29 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 with suppress(asyncio.CancelledError):
                     await progress_task
 
-    # Register agentic_search (primary) and fast_search (deprecated alias)
-    # Only when MCP_SEARCH_MODE is 'agentic' or 'both'
+    # Register agentic_search when MCP_SEARCH_MODE is 'agentic' or 'both'
     if MCP_SEARCH_MODE in ("agentic", "both"):
 
-        async def _agentic_search_impl(query: str, ctx: Context) -> dict[str, Any]:
-            """Internal implementation for agentic search."""
+        @mcp.tool(
+            annotations={
+                "readOnlyHint": True,  # Does not modify environment
+                "destructiveHint": False,  # Read-only = non-destructive
+                "idempotentHint": True,  # Same query = same results
+                "openWorldHint": False,  # Only local codebase
+            }
+        )
+        async def agentic_search(query: str, ctx: Context) -> dict[str, Any]:
+            """Search codebase and return relevant file locations.
+
+            Use when: exploring code structure, finding entrypoints, tracing call chains.
+            Do NOT use when: you need semantic/conceptual search—use agentic_retrieval.
+
+            Args:
+                query: What to find. Natural language (e.g., "where is auth handled")
+                       or specific patterns (e.g., "UserService class").
+
+            Returns: {files: {path: [[start, end], ...]}, explanation: str, partial: bool}
+            """
             await ctx.info(f"Searching: {query[:100]}")
             progress_task = asyncio.create_task(
                 _progress_heartbeat(ctx, message="agentic_search in progress")
@@ -130,53 +147,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 progress_task.cancel()
                 with suppress(asyncio.CancelledError):
                     await progress_task
-
-        @mcp.tool(
-            annotations={
-                "readOnlyHint": True,  # Does not modify environment
-                "destructiveHint": False,  # Read-only = non-destructive
-                "idempotentHint": True,  # Same query = same results
-                "openWorldHint": False,  # Only local codebase
-            }
-        )
-        async def agentic_search(query: str, ctx: Context) -> dict[str, Any]:
-            """Search codebase and return relevant file locations.
-
-            Use when: exploring code structure, finding entrypoints, tracing call chains.
-            Do NOT use when: you need semantic/conceptual search—use agentic_retrieval.
-
-            Args:
-                query: What to find. Natural language (e.g., "where is auth handled")
-                       or specific patterns (e.g., "UserService class").
-
-            Returns: {files: {path: [[start, end], ...]}, explanation: str, partial: bool}
-            """
-            return await _agentic_search_impl(query, ctx)
-
-        @mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": False,
-            }
-        )
-        async def fast_search(query: str, ctx: Context) -> dict[str, Any]:
-            """[DEPRECATED] Use `agentic_search` instead.
-
-            Search codebase and return relevant file locations.
-
-            Args:
-                query: What to find. Natural language or specific patterns.
-
-            Returns: {files: {path: [[start, end], ...]}, explanation: str, partial: bool, _deprecated: str}
-            """
-            result = await _agentic_search_impl(query, ctx)
-            result["_deprecated"] = (
-                "Tool 'fast_search' is deprecated and will be removed in v0.2.5. "
-                "Use 'agentic_search' instead."
-            )
-            return result
 
     repo_client: RelaceRepoClient | None = None
 
@@ -387,15 +357,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     "name": "Agentic Search",
                     "description": "Agentic search over local codebase",
                     "enabled": True,
-                }
-            )
-            tools.append(
-                {
-                    "id": "fast_search",
-                    "name": "Fast Search",
-                    "description": "[DEPRECATED] Alias for agentic_search. Will be removed in v0.2.5.",
-                    "enabled": True,
-                    "deprecated": True,
                 }
             )
         if RELACE_CLOUD_TOOLS:

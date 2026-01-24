@@ -64,15 +64,9 @@ def _load_dotenv_from_path() -> None:
 
     Priority:
     1. MCP_DOTENV_PATH environment variable (explicit path)
-    2. RELACE_DOTENV_PATH environment variable (deprecated alias)
-    3. Default dotenv search (current directory and parents)
+    2. Default dotenv search (current directory and parents)
     """
     dotenv_path = os.getenv("MCP_DOTENV_PATH", "").strip()
-    if not dotenv_path:
-        legacy_path = os.getenv("RELACE_DOTENV_PATH", "").strip()
-        if legacy_path:
-            logger.warning("RELACE_DOTENV_PATH is deprecated; use MCP_DOTENV_PATH instead")
-            dotenv_path = legacy_path
     if dotenv_path:
         path = Path(dotenv_path).expanduser()
         if path.exists():

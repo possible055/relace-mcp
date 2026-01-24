@@ -7,7 +7,7 @@ def map_repo_path(path: str, base_dir: str) -> str:
     This function is for INTERNAL use only - translating paths from Relace Search API
     which uses /repo as the virtual repository root.
 
-    External API (fast_apply, fast_search results) now uses absolute paths.
+    External API (fast_apply, agentic_search results) now uses absolute paths.
 
     Args:
         path: Path from Relace API, format: /repo or /repo/...

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from platformdirs import user_state_dir
 
-from .compat import env_bool, getenv_with_fallback
+from .compat import env_bool
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +18,10 @@ __all__ = [
 
 # Fast Apply (OpenAI-compatible base URL; SDK appends /chat/completions automatically)
 APPLY_BASE_URL = (
-    getenv_with_fallback("APPLY_ENDPOINT", "RELACE_APPLY_ENDPOINT")
-    or "https://instantapply.endpoint.relace.run/v1/apply"
+    os.getenv("APPLY_ENDPOINT", "") or "https://instantapply.endpoint.relace.run/v1/apply"
 )
-APPLY_MODEL = getenv_with_fallback("APPLY_MODEL", "RELACE_APPLY_MODEL") or "auto"
-TIMEOUT_SECONDS = float(
-    getenv_with_fallback("APPLY_TIMEOUT_SECONDS", "RELACE_TIMEOUT_SECONDS") or "60.0"
-)
+APPLY_MODEL = os.getenv("APPLY_MODEL", "") or "auto"
+TIMEOUT_SECONDS = float(os.getenv("APPLY_TIMEOUT_SECONDS", "") or "60.0")
 MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0
 
@@ -44,21 +41,12 @@ DEFAULT_PROVIDER_BASE_URLS: dict[str, str] = {
 }
 
 # Fast Agentic Search (OpenAI-compatible base URL; SDK appends /chat/completions automatically)
-SEARCH_BASE_URL = (
-    getenv_with_fallback("SEARCH_ENDPOINT", "RELACE_SEARCH_ENDPOINT")
-    or "https://search.endpoint.relace.run/v1/search"
-)
-SEARCH_MODEL = getenv_with_fallback("SEARCH_MODEL", "RELACE_SEARCH_MODEL") or "relace-search"
-SEARCH_TIMEOUT_SECONDS = float(
-    getenv_with_fallback("SEARCH_TIMEOUT_SECONDS", "RELACE_SEARCH_TIMEOUT_SECONDS") or "120.0"
-)
-SEARCH_MAX_TURNS = int(getenv_with_fallback("SEARCH_MAX_TURNS", "RELACE_SEARCH_MAX_TURNS") or "6")
+SEARCH_BASE_URL = os.getenv("SEARCH_ENDPOINT", "") or "https://search.endpoint.relace.run/v1/search"
+SEARCH_MODEL = os.getenv("SEARCH_MODEL", "") or "relace-search"
+SEARCH_TIMEOUT_SECONDS = float(os.getenv("SEARCH_TIMEOUT_SECONDS", "") or "120.0")
+SEARCH_MAX_TURNS = int(os.getenv("SEARCH_MAX_TURNS", "") or "6")
 # Search parallel tool calls (default: true)
-SEARCH_PARALLEL_TOOL_CALLS = env_bool(
-    "SEARCH_PARALLEL_TOOL_CALLS",
-    default=True,
-    deprecated_name="RELACE_SEARCH_PARALLEL_TOOL_CALLS",
-)
+SEARCH_PARALLEL_TOOL_CALLS = env_bool("SEARCH_PARALLEL_TOOL_CALLS", default=True)
 # Search top_p (optional, only set if explicitly configured)
 # Some providers (e.g., Mistral) require top_p=1 for greedy sampling (temperature=0)
 _search_top_p_raw = os.getenv("SEARCH_TOP_P", "").strip()
@@ -87,19 +75,17 @@ ENCODING_DETECTION_SAMPLE_LIMIT = 30
 
 
 # Semantic check (validates new/delete intent correctness, disabled by default)
-APPLY_SEMANTIC_CHECK = env_bool(
-    "APPLY_SEMANTIC_CHECK", default=False, deprecated_name="APPLY_POST_CHECK"
-)
+APPLY_SEMANTIC_CHECK = env_bool("APPLY_SEMANTIC_CHECK", default=False)
 
 # Local file logging (disabled by default)
-MCP_LOGGING = env_bool("MCP_LOGGING", default=False, deprecated_name="RELACE_LOGGING")
+MCP_LOGGING = env_bool("MCP_LOGGING", default=False)
 
 # Cloud tools (disabled by default)
 RELACE_CLOUD_TOOLS = env_bool("RELACE_CLOUD_TOOLS", default=False)
 RETRIEVAL_BACKEND = os.getenv("MCP_RETRIEVAL_BACKEND", "relace").strip().lower()
 
 
-# Search mode: 'agentic' (fast_search), 'indexed' (agentic_retrieval), 'both'
+# Search mode: 'agentic' (agentic_search), 'indexed' (agentic_retrieval), 'both'
 def _get_search_mode() -> str:
     raw = os.environ.get("MCP_SEARCH_MODE", "").strip().lower()
     if raw in {"indexed", "both"}:
@@ -155,7 +141,7 @@ class RelaceConfig:
                 "Set RELACE_CLOUD_TOOLS=false or provide RELACE_API_KEY."
             )
 
-        base_dir = getenv_with_fallback("MCP_BASE_DIR", "RELACE_BASE_DIR") or None
+        base_dir = os.getenv("MCP_BASE_DIR", "").strip() or None
         if base_dir:
             if not os.path.isdir(base_dir):
                 raise RuntimeError(f"MCP_BASE_DIR does not exist or is not a directory: {base_dir}")

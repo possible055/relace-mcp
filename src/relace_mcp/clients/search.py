@@ -43,9 +43,6 @@ class SearchLLMClient:
         SEARCH_API_KEY: API key (or use provider-specific key)
         SEARCH_PARALLEL_TOOL_CALLS: Enable parallel tool calls (default: true)
         SEARCH_TOOL_STRICT: Include strict field in tool schemas (default: true)
-
-    Deprecated (still supported with warning):
-        RELACE_SEARCH_* variants are deprecated, use SEARCH_* instead.
     """
 
     def __init__(self, config: RelaceConfig) -> None:

@@ -161,7 +161,6 @@ class TestFastAgenticSearchHarness:
         """Even if the model hallucinates tool calls, disabled tools must not execute."""
         # Ensure default tool allowlist is active (bash is opt-in).
         monkeypatch.delenv("SEARCH_ENABLED_TOOLS", raising=False)
-        monkeypatch.delenv("RELACE_SEARCH_ENABLED_TOOLS", raising=False)
 
         # If bash ever executes here, the handler would be called.
         from relace_mcp.tools.search.harness import tool_calls as tc_mod

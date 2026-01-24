@@ -21,7 +21,6 @@ def _mock_chat_response(content: str = "ok") -> MagicMock:
 @pytest.mark.usefixtures("clean_env")
 def test_relace_provider_uses_config_api_key_by_default(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("SEARCH_PROVIDER", raising=False)
-    monkeypatch.delenv("RELACE_SEARCH_PROVIDER", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     mock_response = _mock_chat_response()
@@ -175,7 +174,6 @@ def test_openrouter_provider_requires_provider_key(tmp_path, monkeypatch) -> Non
     monkeypatch.setenv("SEARCH_PROVIDER", "openrouter")
     monkeypatch.setenv("SEARCH_MODEL", "openai/gpt-4o")
     monkeypatch.delenv("SEARCH_API_KEY", raising=False)
-    monkeypatch.delenv("RELACE_SEARCH_API_KEY", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
     config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))

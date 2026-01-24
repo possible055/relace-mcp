@@ -6,7 +6,6 @@ from typing import Any
 import yaml
 
 from .base_dir import invalidate_roots_cache, resolve_base_dir
-from .compat import getenv_with_fallback
 from .provider import ProviderConfig, create_provider_config
 
 # Public API: RelaceConfig is the main configuration class
@@ -18,15 +17,9 @@ logger = logging.getLogger(__name__)
 _LLM_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 
-def _load_prompt_file(
-    default_path: Path, env_var: str, deprecated_env_var: str = ""
-) -> dict[str, Any]:
+def _load_prompt_file(default_path: Path, env_var: str) -> dict[str, Any]:
     """Load prompt file from custom path (env var) or default path."""
-    custom_path = (
-        getenv_with_fallback(env_var, deprecated_env_var).strip()
-        if deprecated_env_var
-        else os.getenv(env_var, "").strip()
-    )
+    custom_path = os.getenv(env_var, "").strip()
     if custom_path:
         custom_path_obj = Path(custom_path).expanduser()
         if custom_path_obj.exists():
@@ -57,9 +50,9 @@ def _load_prompt_file(
 
 
 # Load search_relace.yaml (Fast Agentic Search - Relace native)
-# Override with SEARCH_PROMPT_FILE if set (deprecated: RELACE_SEARCH_PROMPT_FILE)
+# Override with SEARCH_PROMPT_FILE if set
 _PROMPTS_PATH = _LLM_PROMPTS_DIR / "search_relace.yaml"
-_PROMPTS = _load_prompt_file(_PROMPTS_PATH, "SEARCH_PROMPT_FILE", "RELACE_SEARCH_PROMPT_FILE")
+_PROMPTS = _load_prompt_file(_PROMPTS_PATH, "SEARCH_PROMPT_FILE")
 
 # Search prompt constants (prefixed for consistency with APPLY_SYSTEM_PROMPT)
 SEARCH_SYSTEM_PROMPT: str = _PROMPTS["system_prompt"].strip()
@@ -70,9 +63,7 @@ SEARCH_TURN_INSTRUCTIONS: dict[str, str] = _PROMPTS["turn_instructions"]
 # Load search_openai.yaml (Fast Agentic Search - OpenAI-compatible)
 # Also override with SEARCH_PROMPT_FILE (same env var, one tool = one variable)
 _PROMPTS_OPENAI_PATH = _LLM_PROMPTS_DIR / "search_openai.yaml"
-_PROMPTS_OPENAI = _load_prompt_file(
-    _PROMPTS_OPENAI_PATH, "SEARCH_PROMPT_FILE", "RELACE_SEARCH_PROMPT_FILE"
-)
+_PROMPTS_OPENAI = _load_prompt_file(_PROMPTS_OPENAI_PATH, "SEARCH_PROMPT_FILE")
 
 # OpenAI-compatible search prompt constants
 SEARCH_SYSTEM_PROMPT_OPENAI: str = _PROMPTS_OPENAI["system_prompt"].strip()
@@ -81,11 +72,9 @@ SEARCH_TURN_HINT_TEMPLATE_OPENAI: str = _PROMPTS_OPENAI["turn_hint_template"].st
 SEARCH_TURN_INSTRUCTIONS_OPENAI: dict[str, str] = _PROMPTS_OPENAI["turn_instructions"]
 
 # Load apply_openai.yaml (Fast Apply for OpenAI-compatible endpoints)
-# Override with APPLY_PROMPT_FILE if set (deprecated: RELACE_APPLY_PROMPT_FILE)
+# Override with APPLY_PROMPT_FILE if set
 _APPLY_PROMPTS_PATH = _LLM_PROMPTS_DIR / "apply_openai.yaml"
-_APPLY_PROMPTS = _load_prompt_file(
-    _APPLY_PROMPTS_PATH, "APPLY_PROMPT_FILE", "RELACE_APPLY_PROMPT_FILE"
-)
+_APPLY_PROMPTS = _load_prompt_file(_APPLY_PROMPTS_PATH, "APPLY_PROMPT_FILE")
 
 # Apply prompt constant (only injected for non-Relace endpoints)
 APPLY_SYSTEM_PROMPT: str = _APPLY_PROMPTS["apply_system_prompt"].strip()
