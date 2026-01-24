@@ -20,59 +20,36 @@ class ObservedFilesMixin:
 
         Grep output format: path:line:content
         Note: grep output paths are relative to base_dir, converted to absolute paths.
-        Handles filenames containing colons by parsing from the end of path segment.
+
+        We intentionally parse the FIRST ":<digits>:" delimiter from the left.
+        This avoids mis-parsing the line number when the matched content contains
+        ":<digits>:" sequences (e.g., "foo:12:bar:34:baz").
         """
         for line in grep_output.split("\n"):
             if not line:
                 continue
 
-            # Find the pattern ":line_number:" from the right side to handle colons in filenames
-            # We look for the last occurrence of :digits: pattern
-            match = None
-            search_pos = len(line) - 1
+            m = re.search(r":(\d+):", line)
+            if not m:
+                continue
 
-            while search_pos > 0:
-                # Find the last colon
-                colon_pos = line.rfind(":", 0, search_pos)
-                if colon_pos <= 0:
-                    break
+            rel_path = line[: m.start()]
+            line_num = int(m.group(1))
 
-                # Check if there's a number before this colon
-                prev_colon = line.rfind(":", 0, colon_pos)
-                if prev_colon < 0:
-                    break
+            # Normalize path format: remove ./ prefix
+            if rel_path.startswith("./"):
+                rel_path = rel_path[2:]
 
-                potential_num = line[prev_colon + 1 : colon_pos]
-                if potential_num.isdigit():
-                    # Found :digits: pattern, path is everything before prev_colon
-                    rel_path = line[:prev_colon]
-                    line_num = int(potential_num)
-                    match = (rel_path, line_num)
-                    break
+            # Convert to absolute path
+            abs_path = self._to_absolute_path(rel_path)
+            if not abs_path:
+                # Defense-in-depth: ignore any path that escapes base_dir.
+                continue
 
-                search_pos = colon_pos
-
-            if not match:
-                # Fallback to original pattern for compatibility
-                m = re.match(r"^([^:]+):(\d+):", line)
-                if m:
-                    match = (m.group(1), int(m.group(2)))
-
-            if match:
-                rel_path, line_num = match
-                # Normalize path format: remove ./ prefix
-                if rel_path.startswith("./"):
-                    rel_path = rel_path[2:]
-                # Convert to absolute path
-                abs_path = self._to_absolute_path(rel_path)
-                if not abs_path:
-                    # Defense-in-depth: ignore any path that escapes base_dir.
-                    continue
-
-                if abs_path not in self._observed_files:
-                    self._observed_files[abs_path] = []
-                # Record single-line range
-                self._observed_files[abs_path].append([line_num, line_num])
+            if abs_path not in self._observed_files:
+                self._observed_files[abs_path] = []
+            # Record single-line range
+            self._observed_files[abs_path].append([line_num, line_num])
 
     def _merge_observed_ranges(self) -> dict[str, list[list[int]]]:
         """Merge and deduplicate ranges in observed_files.

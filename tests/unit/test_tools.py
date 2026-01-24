@@ -651,7 +651,8 @@ class TestApplyFileLogicSnippetPreview:
         )
 
         logged = json.loads(mock_log_path.read_text().strip())
-        assert len(logged["edit_snippet_preview"]) == 200
+        # Redacted preview starts with first 200 chars, may include truncation marker
+        assert logged["edit_snippet_preview"].startswith(long_snippet[:200])
 
 
 class TestApplyFileLogicPathNormalization:
