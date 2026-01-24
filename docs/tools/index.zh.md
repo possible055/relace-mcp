@@ -81,7 +81,7 @@
 - 跳过大于 1MB 的文件和常见非源代码目录（`node_modules`、`__pycache__` 等）
 - 同步状态存储在平台 state 目录中（例如 Linux 为 `~/.local/state/relace/sync/`），按 repo 名称 + fingerprint 进行区分
 
-> 高级同步模式（增量、安全完整、镜像）请参见 [advanced.zh-CN.md](advanced.zh-CN.md#同步模式)。
+> 高级同步模式（增量、安全完整、镜像）请参见 [advanced/index.zh.md](../advanced/index.zh.md#同步模式)。
 
 ---
 
