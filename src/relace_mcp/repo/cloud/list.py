@@ -3,8 +3,7 @@ import uuid
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
-from ._logging import _extract_error_fields, log_cloud_event
-from .errors import build_cloud_error_details
+from ..core import _extract_error_fields, build_cloud_error_details, log_cloud_event
 
 logger = logging.getLogger(__name__)
 

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from relace_mcp.tools.apply.file_io import set_project_encoding
+from relace_mcp.encoding import set_project_encoding
 from relace_mcp.tools.search._impl import (
     MAX_TOOL_RESULT_CHARS,
     bash_handler,

@@ -19,16 +19,6 @@ class FileTooLargeError(ApplyError):
         super().__init__(f"File too large ({file_size} bytes). Maximum allowed: {max_size} bytes")
 
 
-class EncodingDetectionError(ApplyError):
-    """Cannot detect file encoding."""
-
-    error_code = "ENCODING_ERROR"
-
-    def __init__(self, path: str) -> None:
-        self.path = path
-        super().__init__(f"Cannot detect encoding for file: {path}")
-
-
 class ApiInvalidResponseError(ApplyError):
     """API returned invalid response."""
 

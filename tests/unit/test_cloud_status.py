@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from relace_mcp.tools.repo.state import SyncState
+from relace_mcp.repo.core.state import SyncState
 
 
 class TestCloudStatusLogic:
@@ -85,7 +85,7 @@ class TestCloudStatusLogic:
     @pytest.mark.asyncio
     async def test_cloud_status_returns_not_synced_when_no_state(self, tmp_path: Path) -> None:
         """cloud_status should return not synced message when no sync state exists."""
-        from relace_mcp.tools.repo.state import get_repo_identity, load_sync_state
+        from relace_mcp.repo.core.state import get_repo_identity, load_sync_state
 
         # Simulate cloud_status logic when state is None
         local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(str(tmp_path))
@@ -111,8 +111,8 @@ class TestCloudStatusLogic:
         self, tmp_path: Path, sample_sync_state: SyncState
     ) -> None:
         """Test cloud_status response building with sync state."""
-        from relace_mcp.tools.repo import state as state_module
-        from relace_mcp.tools.repo.state import get_repo_identity
+        from relace_mcp.repo.core import state as state_module
+        from relace_mcp.repo.core.state import get_repo_identity
 
         local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(str(tmp_path))
 

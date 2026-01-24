@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from ....config.settings import MAX_FILE_SIZE_BYTES
-from ....tools.apply.file_io import read_text_best_effort
+from ....encoding import read_text_best_effort
 from ....utils import validate_file_path
 from .paths import map_repo_path
 

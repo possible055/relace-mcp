@@ -2,8 +2,8 @@ from pathlib import Path
 from unittest.mock import ANY, MagicMock, patch
 
 from relace_mcp.clients.repo import RelaceRepoClient
-from relace_mcp.tools.repo.clear import cloud_clear_logic
-from relace_mcp.tools.repo.state import SyncState
+from relace_mcp.repo.cloud.clear import cloud_clear_logic
+from relace_mcp.repo.core.state import SyncState
 
 
 def _create_mock_repo_client(repo_name: str) -> MagicMock:
@@ -31,11 +31,11 @@ def test_cloud_clear_uses_sync_state(tmp_path: Path) -> None:
     cached = SyncState(repo_id="state-repo-id", repo_head="abc", last_sync="", files={})
 
     with patch(
-        "relace_mcp.tools.repo.clear.get_repo_identity",
+        "relace_mcp.repo.cloud.clear.get_repo_identity",
         return_value=(tmp_path.name, tmp_path.name, "fp"),
     ):
-        with patch("relace_mcp.tools.repo.clear.load_sync_state", return_value=cached):
-            with patch("relace_mcp.tools.repo.clear.clear_sync_state") as mock_clear_state:
+        with patch("relace_mcp.repo.cloud.clear.load_sync_state", return_value=cached):
+            with patch("relace_mcp.repo.cloud.clear.clear_sync_state") as mock_clear_state:
                 result = cloud_clear_logic(mock_repo_client, str(tmp_path), confirm=True)
 
                 assert result["status"] == "deleted"
@@ -51,11 +51,11 @@ def test_cloud_clear_searches_api_fallback(tmp_path: Path) -> None:
     mock_repo_client = _create_mock_repo_client(tmp_path.name)
 
     with patch(
-        "relace_mcp.tools.repo.clear.get_repo_identity",
+        "relace_mcp.repo.cloud.clear.get_repo_identity",
         return_value=(tmp_path.name, tmp_path.name, "fp"),
     ):
-        with patch("relace_mcp.tools.repo.clear.load_sync_state", return_value=None):
-            with patch("relace_mcp.tools.repo.clear.clear_sync_state"):
+        with patch("relace_mcp.repo.cloud.clear.load_sync_state", return_value=None):
+            with patch("relace_mcp.repo.cloud.clear.clear_sync_state"):
                 result = cloud_clear_logic(mock_repo_client, str(tmp_path), confirm=True)
 
                 assert result["status"] == "deleted"
@@ -70,11 +70,11 @@ def test_cloud_clear_not_found(tmp_path: Path) -> None:
     mock_repo_client.list_repos.return_value = []
 
     with patch(
-        "relace_mcp.tools.repo.clear.get_repo_identity",
+        "relace_mcp.repo.cloud.clear.get_repo_identity",
         return_value=(tmp_path.name, tmp_path.name, "fp"),
     ):
-        with patch("relace_mcp.tools.repo.clear.load_sync_state", return_value=None):
-            with patch("relace_mcp.tools.repo.clear.clear_sync_state") as mock_clear_state:
+        with patch("relace_mcp.repo.cloud.clear.load_sync_state", return_value=None):
+            with patch("relace_mcp.repo.cloud.clear.clear_sync_state") as mock_clear_state:
                 result = cloud_clear_logic(mock_repo_client, str(tmp_path), confirm=True)
 
                 assert result["status"] == "not_found"
@@ -90,11 +90,11 @@ def test_cloud_clear_delete_failure(tmp_path: Path) -> None:
     mock_repo_client.delete_repo.return_value = False
 
     with patch(
-        "relace_mcp.tools.repo.clear.get_repo_identity",
+        "relace_mcp.repo.cloud.clear.get_repo_identity",
         return_value=(tmp_path.name, tmp_path.name, "fp"),
     ):
-        with patch("relace_mcp.tools.repo.clear.load_sync_state", return_value=cached):
-            with patch("relace_mcp.tools.repo.clear.clear_sync_state") as mock_clear_state:
+        with patch("relace_mcp.repo.cloud.clear.load_sync_state", return_value=cached):
+            with patch("relace_mcp.repo.cloud.clear.clear_sync_state") as mock_clear_state:
                 result = cloud_clear_logic(mock_repo_client, str(tmp_path), confirm=True)
 
                 assert result["status"] == "error"

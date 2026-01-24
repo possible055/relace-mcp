@@ -305,7 +305,7 @@ class BenchmarkRunner:
             import asyncio
 
             from relace_mcp.clients import RelaceRepoClient
-            from relace_mcp.tools.repo import agentic_retrieval_logic
+            from relace_mcp.repo import agentic_retrieval_logic
 
             repo_client = RelaceRepoClient(effective_config)
             result = asyncio.run(

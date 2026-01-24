@@ -7,8 +7,8 @@ import pytest
 
 from relace_mcp.clients.repo import RelaceRepoClient
 from relace_mcp.config import RelaceConfig
-from relace_mcp.tools.repo.search import cloud_search_logic
-from relace_mcp.tools.repo.state import SyncState
+from relace_mcp.repo.cloud.search import cloud_search_logic
+from relace_mcp.repo.core.state import SyncState
 
 
 @pytest.fixture
@@ -53,10 +53,10 @@ def mock_sync_state(monkeypatch: pytest.MonkeyPatch) -> SyncState:
         skipped_files=set(),
     )
     monkeypatch.setattr(
-        "relace_mcp.tools.repo.search.get_repo_identity",
+        "relace_mcp.repo.cloud.search.get_repo_identity",
         lambda _base_dir: ("project", "project__fp", "fp"),
     )
-    monkeypatch.setattr("relace_mcp.tools.repo.search.load_sync_state", lambda _base_dir: state)
+    monkeypatch.setattr("relace_mcp.repo.cloud.search.load_sync_state", lambda _base_dir: state)
     return state
 
 
@@ -131,7 +131,7 @@ class TestCloudSearchLogic:
 
     def test_search_returns_error_when_not_synced(self, mock_repo_client: MagicMock) -> None:
         """Should return an error when no sync state exists."""
-        from relace_mcp.tools.repo import search as repo_search
+        from relace_mcp.repo.cloud import search as repo_search
 
         original = repo_search.load_sync_state
         try:

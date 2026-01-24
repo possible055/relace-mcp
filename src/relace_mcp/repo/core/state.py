@@ -8,7 +8,7 @@ from typing import Any
 
 from platformdirs import user_state_dir
 
-from ._git import get_git_remote_origin_url, get_git_root
+from .git import get_git_remote_origin_url, get_git_root
 
 logger = logging.getLogger(__name__)
 
