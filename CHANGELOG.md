@@ -9,13 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.5] - TBD
 
+### Added
+
+- **Pluggable code indexing backends** — `MCP_RETRIEVAL_BACKEND` supports `relace`, `codanna`, `chunkhound`, or `none`.
+- **Local semantic hints** — Codanna (local index) and ChunkHound (auto-index) support for `agentic_retrieval` without cloud dependency.
+- **Cross-platform workspace storage** — IDE-aware workspace detection for VSCode, Cursor, Windsurf, and Zed across platforms.
+
 ### Changed
 
 - **`MCP_LOGGING` unified** — Now accepts `off` (default), `safe` (with redaction), or `full` (no redaction). Replaces separate `MCP_LOGGING` and `MCP_LOG_REDACT` variables.
+- **`MCP_SEARCH_MODE` → `MCP_SEARCH_RETRIEVAL`** — Simplified boolean flag (`1` to enable `agentic_retrieval` tool).
+- **`agentic_retrieval` parameter simplification** — Removed `branch`, `score_threshold`, and `max_hints` parameters; only `query` is required.
+- **Tool descriptions enhanced** — Improved consistency and clarity across all MCP tools.
 
 ### Removed
 
 - **`fast_search` tool** — Use `agentic_search` instead.
+- **`MCP_SEARCH_MODE` environment variable** — Use `MCP_SEARCH_RETRIEVAL=1` instead.
+- **`MCP_LOG_REDACT` environment variable** — Integrated into `MCP_LOGGING` values (`safe` or `full`).
+- **`agentic_retrieval` parameters** — `branch`, `score_threshold`, and `max_hints` removed.
 - **Deprecated environment variables** — All `RELACE_*` prefixed aliases removed:
   - `RELACE_APPLY_ENDPOINT` → Use `APPLY_ENDPOINT`
   - `RELACE_APPLY_MODEL` → Use `APPLY_MODEL`
@@ -114,7 +126,3 @@ The following will be **removed in v0.2.5**. Migration warnings are emitted when
 1. **Update tool calls**: Replace `fast_search` with `agentic_search` in your MCP client configuration.
 2. **Update environment variables**: Rename deprecated `RELACE_*` variables to their new names.
 3. **Check logs**: `DeprecationWarning` messages indicate which deprecated items are still in use.
-
-[Unreleased]: https://github.com/anthropics/relace-mcp/compare/v0.2.5...HEAD
-[0.2.5]: https://github.com/anthropics/relace-mcp/compare/v0.2.4...v0.2.5
-[0.2.4]: https://github.com/anthropics/relace-mcp/releases/tag/v0.2.4

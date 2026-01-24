@@ -18,7 +18,7 @@ def redact_value(value: str, max_len: int = 200) -> str:
     if not value:
         return value
     if not MCP_LOG_REDACT:
-        return value[:max_len] if len(value) > max_len else value
+        return value
     if len(value) <= max_len:
         return value
     suffix = f"... [truncated, len={len(value)}]"
