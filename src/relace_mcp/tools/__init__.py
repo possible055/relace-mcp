@@ -142,6 +142,9 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         async def agentic_search(query: str, ctx: Context) -> dict[str, Any]:
             """Search codebase and return relevant file locations.
 
+            Use when: exploring code structure, finding entrypoints, tracing call chains.
+            Do NOT use when: you need semantic/conceptual search—use agentic_retrieval.
+
             Args:
                 query: What to find. Natural language (e.g., "where is auth handled")
                        or specific patterns (e.g., "UserService class").
@@ -181,7 +184,14 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     if RELACE_CLOUD_TOOLS:
         repo_client = RelaceRepoClient(config)
 
-        @mcp.tool
+        @mcp.tool(
+            annotations={
+                "readOnlyHint": False,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
         async def cloud_sync(
             force: bool = False, mirror: bool = False, ctx: Context | None = None
         ) -> dict[str, Any]:
@@ -198,7 +208,14 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
             return cloud_sync_logic(repo_client, base_dir, force=force, mirror=mirror)
 
-        @mcp.tool
+        @mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
         async def cloud_search(
             query: str,
             branch: str = "",
@@ -206,7 +223,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         ) -> dict[str, Any]:
             """Semantic code search using AI embeddings. Requires cloud_sync first.
 
-            Use when: local fast_search insufficient, need semantic understanding.
+            Use when: local agentic_search insufficient, need cross-repo semantic understanding.
+            Do NOT use when: haven't run cloud_sync, or query is structural—use agentic_search.
 
             Args:
                 query: Natural language search query.
@@ -229,7 +247,14 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 token_limit=token_limit,
             )
 
-        @mcp.tool
+        @mcp.tool(
+            annotations={
+                "readOnlyHint": False,
+                "destructiveHint": True,
+                "idempotentHint": False,
+                "openWorldHint": True,
+            }
+        )
         async def cloud_clear(
             confirm: bool = False,
             repo_id: str | None = None,
@@ -249,7 +274,14 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
             return cloud_clear_logic(repo_client, base_dir, confirm=confirm, repo_id=repo_id)
 
-        @mcp.tool
+        @mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
         def cloud_list(reason: str = "") -> dict[str, Any]:
             """List all repositories in your Relace Cloud account.
 
@@ -266,7 +298,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         async def cloud_info(reason: str = "", ctx: Context | None = None) -> dict[str, Any]:
             """Get detailed sync status for the current repository.
 
-            Use before cloud_sync to understand what action is needed.
+            Use when: checking if cloud_sync is needed, diagnosing sync issues.
+            Do NOT use when: not using cloud features.
 
             Args:
                 reason: Brief explanation of why you are calling this tool.
@@ -298,7 +331,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             """Find code by semantic query. Returns {files: {path: [[start, end], ...]}, explanation}.
 
             Args:
-                query: Be SPECIFIC. Examples:
+                query: Be SPECIFIC—name concrete artifacts (function, class, API, data type)
+                    and describe behavior, not abstract concepts. Examples:
                     ❌ "auth logic"
                     ✅ "function that validates JWT tokens and extracts user ID"
                     ❌ "error handling"

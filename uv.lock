@@ -2,18 +2,8 @@ version = 1
 revision = 3
 requires-python = ">=3.11"
 resolution-markers = [
-    "python_full_version >= '3.14' and sys_platform == 'win32'",
-    "python_full_version >= '3.14' and sys_platform == 'emscripten'",
-    "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
-    "python_full_version == '3.13.*' and sys_platform == 'win32'",
-    "python_full_version == '3.12.*' and sys_platform == 'win32'",
-    "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
-    "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
-    "python_full_version < '3.12' and sys_platform == 'win32'",
-    "python_full_version < '3.12' and sys_platform == 'emscripten'",
-    "python_full_version < '3.12' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version >= '3.12'",
+    "python_full_version < '3.12'",
 ]
 
 [[package]]
@@ -1857,9 +1847,10 @@ wheels = [
 
 [[package]]
 name = "relace-mcp"
-version = "0.2.5.dev3"
+version = "0.2.4"
 source = { editable = "." }
 dependencies = [
+    { name = "basedpyright" },
     { name = "charset-normalizer" },
     { name = "fastmcp" },
     { name = "httpx" },
@@ -1881,7 +1872,6 @@ benchmark = [
 ]
 dev = [
     { name = "bandit" },
-    { name = "basedpyright" },
     { name = "build" },
     { name = "dead" },
     { name = "interrogate" },
@@ -1893,9 +1883,6 @@ dev = [
     { name = "ruff" },
     { name = "types-pyyaml" },
 ]
-pyright = [
-    { name = "basedpyright" },
-]
 tools = [
     { name = "textual" },
 ]
@@ -1903,13 +1890,12 @@ tools = [
 [package.metadata]
 requires-dist = [
     { name = "bandit", extras = ["toml"], marker = "extra == 'dev'", specifier = ">=1.9.0" },
-    { name = "basedpyright", marker = "extra == 'dev'", specifier = ">=1.20.0" },
-    { name = "basedpyright", marker = "extra == 'pyright'", specifier = ">=1.20.0" },
+    { name = "basedpyright", specifier = ">=1.20.0" },
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "charset-normalizer", specifier = ">=3.0.0" },
     { name = "click", marker = "extra == 'benchmark'", specifier = ">=8.0.0" },
     { name = "dead", marker = "extra == 'dev'", specifier = ">=1.5.2" },
-    { name = "fastmcp", specifier = ">=2.0.0,<3" },
+    { name = "fastmcp", specifier = ">=2.0.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "interrogate", marker = "extra == 'dev'", specifier = ">=1.7.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.19.1" },
@@ -1931,7 +1917,7 @@ requires-dist = [
     { name = "tree-sitter-python", marker = "extra == 'benchmark'", specifier = ">=0.24.0" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.0" },
 ]
-provides-extras = ["pyright", "dev", "tools", "benchmark"]
+provides-extras = ["dev", "tools", "benchmark"]
 
 [[package]]
 name = "requests"
@@ -2113,8 +2099,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
-    { name = "jeepney", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "cryptography" },
+    { name = "jeepney" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [
