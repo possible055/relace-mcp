@@ -1,4 +1,5 @@
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -282,6 +283,7 @@ class TestGrepSearchHandler:
         result = grep_search_handler(params)
         assert "No matches" in result
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="Windows forbids colons in filenames")
     def test_handles_filename_with_colon(self, tmp_path: Path) -> None:
         """Should correctly handle filenames containing colons."""
         # Create file with colon in name (valid on Linux/macOS)

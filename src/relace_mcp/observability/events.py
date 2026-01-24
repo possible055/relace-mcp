@@ -21,7 +21,8 @@ def redact_value(value: str, max_len: int = 200) -> str:
         return value[:max_len] if len(value) > max_len else value
     if len(value) <= max_len:
         return value
-    return f"{value[:max_len]}... [truncated, len={len(value)}]"
+    suffix = f"... [truncated, len={len(value)}]"
+    return f"{value[: max_len - len(suffix)]}{suffix}"
 
 
 def rotate_log_if_needed() -> None:

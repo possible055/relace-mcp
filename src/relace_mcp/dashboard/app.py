@@ -354,6 +354,8 @@ class LogViewerApp(App[None]):
                         list(self._insights_events),
                         include_failed=self._insights_include_failed,
                     )
+                elif has_new:
+                    self._insights_dirty = True
 
     async def _tail_log(self) -> None:
         log_path = get_log_path()
