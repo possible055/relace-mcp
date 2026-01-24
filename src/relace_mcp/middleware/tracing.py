@@ -69,5 +69,5 @@ class ToolTracingMiddleware(Middleware):
 
             if hasattr(ctx, "debug"):
                 await ctx.debug(message)
-        except Exception:
+        except Exception:  # nosec B110
             pass

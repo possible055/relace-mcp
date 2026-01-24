@@ -18,4 +18,4 @@ MCP_LOG_SAMPLE_RATE = _parse_sample_rate()
 def should_sample() -> bool:
     if MCP_LOG_SAMPLE_RATE >= 1.0:
         return True
-    return random.random() < MCP_LOG_SAMPLE_RATE
+    return random.random() < MCP_LOG_SAMPLE_RATE  # nosec B311

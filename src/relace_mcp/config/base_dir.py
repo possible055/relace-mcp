@@ -135,7 +135,7 @@ def _select_best_root(roots: "Sequence[Root]") -> str:
             p = str(Path(uri_to_path(str(r.uri))).resolve())
             if _is_accessible_directory(p):
                 root_paths.append(p)
-        except Exception:
+        except Exception:  # nosec B112
             continue
 
     if not root_paths:

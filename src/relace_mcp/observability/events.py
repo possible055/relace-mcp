@@ -22,6 +22,8 @@ def redact_value(value: str, max_len: int = 200) -> str:
     if len(value) <= max_len:
         return value
     suffix = f"... [truncated, len={len(value)}]"
+    if max_len <= len(suffix):
+        return value[:max_len]
     return f"{value[: max_len - len(suffix)]}{suffix}"
 
 
