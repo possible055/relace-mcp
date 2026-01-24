@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 from relace_mcp.tools.search._impl.lsp import (
     LSPQueryParams,
     _format_lsp_results,
-    lsp_query_handler,
+    find_symbol_handler,
 )
 
 
@@ -85,12 +85,12 @@ class TestFormatLSPResults:
         assert "/repo/src/main.py:6:11" in result
 
 
-class TestLSPQueryHandler:
-    """Tests for lsp_query_handler function."""
+class TestFindSymbolHandler:
+    """Tests for find_symbol_handler function."""
 
     def test_invalid_action_returns_error(self, tmp_path: Path) -> None:
         params = LSPQueryParams(action="invalid", file="/repo/x.py", line=1, column=1)
-        result = lsp_query_handler(params, str(tmp_path))
+        result = find_symbol_handler(params, str(tmp_path))
         assert "Error" in result
         assert "Unknown action" in result
 
@@ -101,7 +101,7 @@ class TestLSPQueryHandler:
             line=1,
             column=1,
         )
-        result = lsp_query_handler(params, str(tmp_path))
+        result = find_symbol_handler(params, str(tmp_path))
         assert "Error" in result
         assert "not found" in result
 
@@ -129,7 +129,7 @@ class TestLSPQueryHandler:
             line=1,
             column=1,
         )
-        result = lsp_query_handler(params, str(tmp_path))
+        result = find_symbol_handler(params, str(tmp_path))
 
         called_config = mock_manager.session.call_args[0][0]
         assert called_config.language_id == "typescript"
@@ -146,7 +146,7 @@ class TestLSPQueryHandler:
             line=-1,
             column=1,
         )
-        result = lsp_query_handler(params, str(tmp_path))
+        result = find_symbol_handler(params, str(tmp_path))
         assert "Error" in result
         assert "line" in result
 
@@ -159,7 +159,7 @@ class TestLSPQueryHandler:
             line=1,
             column=-1,
         )
-        result = lsp_query_handler(params, str(tmp_path))
+        result = find_symbol_handler(params, str(tmp_path))
         assert "Error" in result
         assert "column" in result
 
@@ -205,7 +205,7 @@ class TestLSPQueryHandler:
             column=1,
         )
         # Pass symlink path as base_dir - this should NOT raise ValueError
-        result = lsp_query_handler(params, str(symlink_dir))
+        result = find_symbol_handler(params, str(symlink_dir))
 
         # Should succeed, not return "Invalid path" error
         assert "Error" not in result
@@ -236,7 +236,7 @@ class TestLSPQueryHandler:
             line=1,
             column=5,
         )
-        result = lsp_query_handler(params, str(tmp_path))
+        result = find_symbol_handler(params, str(tmp_path))
 
         mock_client.definition.assert_called_once()
         assert "test.py:1:5" in result
@@ -263,7 +263,7 @@ class TestLSPQueryHandler:
             line=1,
             column=1,
         )
-        result = lsp_query_handler(params, str(tmp_path))
+        result = find_symbol_handler(params, str(tmp_path))
 
         assert "Error" in result
         assert "timed out" in result
@@ -293,7 +293,7 @@ class TestLSPQueryHandler:
             line=1,
             column=1,
         )
-        result = lsp_query_handler(params, str(tmp_path))
+        result = find_symbol_handler(params, str(tmp_path))
 
         mock_client.references.assert_called_once()
         lines = result.split("\n")

@@ -25,7 +25,7 @@ def compute_file_recall(
     """Compute what fraction of ground truth files were found.
 
     Args:
-        returned_files: Files returned by fast_search (path -> [[start, end], ...]).
+        returned_files: Files returned by agentic_search (path -> [[start, end], ...]).
         ground_truth: Ground truth files from dataset annotations (path -> [(start, end), ...]).
         repo_root: Repository root for normalizing absolute paths to relative paths.
 
@@ -52,7 +52,7 @@ def compute_file_precision(
     """Compute what fraction of returned files are in ground truth.
 
     Args:
-        returned_files: Files returned by fast_search.
+        returned_files: Files returned by agentic_search.
         ground_truth: Ground truth files from dataset annotations.
 
     Returns:
@@ -78,7 +78,7 @@ def compute_line_coverage(
     """Compute what fraction of ground truth lines are covered.
 
     Args:
-        returned_files: Files returned by fast_search (path -> [[start, end], ...]).
+        returned_files: Files returned by agentic_search (path -> [[start, end], ...]).
         ground_truth: Ground truth files from dataset annotations (path -> [(start, end), ...]).
 
     Returns:
@@ -122,7 +122,7 @@ def compute_line_precision_matched(
     in both returned and GT, providing a pure measure of range accuracy.
 
     Args:
-        returned_files: Files returned by fast_search (path -> [[start, end], ...]).
+        returned_files: Files returned by agentic_search (path -> [[start, end], ...]).
         ground_truth: Ground truth files from dataset annotations (path -> [(start, end), ...]).
         repo_root: Repository root for normalizing absolute paths.
 
@@ -165,7 +165,7 @@ def compute_function_hits(
     """Compute how many target functions have any returned-line overlap.
 
     Args:
-        returned_files: fast_search output (path -> [[start, end], ...]).
+        returned_files: agentic_search output (path -> [[start, end], ...]).
         function_targets: Sequence of (path, [(start, end), ...]) per function.
         repo_root: Repository root for normalizing absolute paths.
 

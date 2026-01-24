@@ -77,7 +77,6 @@ class TestApplyClientSystemPrompt:
             import os
 
             orig_provider = os.environ.pop("APPLY_PROVIDER", None)
-            orig_legacy_provider = os.environ.pop("RELACE_APPLY_PROVIDER", None)
             try:
                 client = ApplyLLMClient(mock_config)
                 # Default api_compat should be 'relace'
@@ -95,8 +94,6 @@ class TestApplyClientSystemPrompt:
             finally:
                 if orig_provider is not None:
                     os.environ["APPLY_PROVIDER"] = orig_provider
-                if orig_legacy_provider is not None:
-                    os.environ["RELACE_APPLY_PROVIDER"] = orig_legacy_provider
 
     def test_user_message_format(self, mock_config: RelaceConfig) -> None:
         """User message should contain proper XML tags."""
@@ -104,7 +101,6 @@ class TestApplyClientSystemPrompt:
             import os
 
             orig_provider = os.environ.pop("APPLY_PROVIDER", None)
-            orig_legacy_provider = os.environ.pop("RELACE_APPLY_PROVIDER", None)
             try:
                 client = ApplyLLMClient(mock_config)
 
@@ -122,8 +118,6 @@ class TestApplyClientSystemPrompt:
             finally:
                 if orig_provider is not None:
                     os.environ["APPLY_PROVIDER"] = orig_provider
-                if orig_legacy_provider is not None:
-                    os.environ["RELACE_APPLY_PROVIDER"] = orig_legacy_provider
 
     def test_user_message_without_instruction(self, mock_config: RelaceConfig) -> None:
         """User message should not include instruction tag when instruction is None."""
@@ -131,7 +125,6 @@ class TestApplyClientSystemPrompt:
             import os
 
             orig_provider = os.environ.pop("APPLY_PROVIDER", None)
-            orig_legacy_provider = os.environ.pop("RELACE_APPLY_PROVIDER", None)
             try:
                 client = ApplyLLMClient(mock_config)
 
@@ -149,5 +142,3 @@ class TestApplyClientSystemPrompt:
             finally:
                 if orig_provider is not None:
                     os.environ["APPLY_PROVIDER"] = orig_provider
-                if orig_legacy_provider is not None:
-                    os.environ["RELACE_APPLY_PROVIDER"] = orig_legacy_provider

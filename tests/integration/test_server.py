@@ -50,14 +50,14 @@ class TestServerToolRegistration:
             assert "fast_apply" in tool_names
 
     @pytest.mark.asyncio
-    async def test_fast_search_registered(self, mock_config: RelaceConfig) -> None:
-        """Verify fast_search registration via public API Client.list_tools()."""
+    async def test_agentic_search_registered(self, mock_config: RelaceConfig) -> None:
+        """Verify agentic_search registration via public API Client.list_tools()."""
         server = build_server(config=mock_config)
 
         async with Client(server) as client:
             tools = await client.list_tools()
             tool_names = [t.name for t in tools]
-            assert "fast_search" in tool_names
+            assert "agentic_search" in tool_names
 
 
 class TestServerToolExecution:
@@ -147,14 +147,14 @@ class TestServerIntegration:
     """Integration tests for server behavior."""
 
     @pytest.mark.asyncio
-    async def test_fast_search_tool_has_correct_schema(self, mock_config: RelaceConfig) -> None:
-        """Should have correct input schema for fast_search."""
+    async def test_agentic_search_tool_has_correct_schema(self, mock_config: RelaceConfig) -> None:
+        """Should have correct input schema for agentic_search."""
         server = build_server(config=mock_config)
 
         async with Client(server) as client:
             tools = await client.list_tools()
 
-            search_tool = next((t for t in tools if t.name == "fast_search"), None)
+            search_tool = next((t for t in tools if t.name == "agentic_search"), None)
             assert search_tool is not None
 
             schema = search_tool.inputSchema

@@ -61,14 +61,6 @@ Search the codebase and return relevant files and line ranges. Uses an agentic l
 
 ---
 
-## `fast_search`
-
-> **DEPRECATED**: Use `agentic_search` instead. This alias will be removed in 0.2.5.
-
-Alias for `agentic_search`. Returns identical results with an additional `_deprecated` field.
-
----
-
 ## `cloud_sync`
 
 > **Note:** All `cloud_*` tools include a `trace_id` field in responses. On failures, responses may also include `status_code`, `error_code`, `retryable`, and `recommended_action`.

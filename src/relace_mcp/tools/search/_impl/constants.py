@@ -1,4 +1,4 @@
-from ....config.compat import getenv_with_fallback
+import os
 
 # Directory listing limit
 MAX_DIR_ITEMS = 250
@@ -46,12 +46,9 @@ BASH_MAX_OUTPUT_CHARS = 50000
 MAX_LSP_RESULTS = 50
 
 
-def _parse_positive_float_env_with_fallback(new_name: str, old_name: str, default: float) -> float:
-    """Parse positive float from env var with deprecation fallback."""
-    raw = getenv_with_fallback(new_name, old_name)
-    if not raw:
-        return default
-    raw = raw.strip()
+def _parse_positive_float_env(name: str, default: float) -> float:
+    """Parse positive float from env var."""
+    raw = os.getenv(name, "").strip()
     if not raw:
         return default
     try:
@@ -65,7 +62,5 @@ def _parse_positive_float_env_with_fallback(new_name: str, old_name: str, defaul
 
 
 # Hard upper bound for LSP startup/shutdown/requests (seconds).
-# Use SEARCH_LSP_TIMEOUT_SECONDS to override (RELACE_LSP_TIMEOUT_SECONDS is deprecated).
-LSP_TIMEOUT_SECONDS = _parse_positive_float_env_with_fallback(
-    "SEARCH_LSP_TIMEOUT_SECONDS", "RELACE_LSP_TIMEOUT_SECONDS", 15.0
-)
+# Use SEARCH_LSP_TIMEOUT_SECONDS to override.
+LSP_TIMEOUT_SECONDS = _parse_positive_float_env("SEARCH_LSP_TIMEOUT_SECONDS", 15.0)

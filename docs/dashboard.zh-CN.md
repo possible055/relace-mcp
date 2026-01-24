@@ -2,7 +2,7 @@
 
 实时终端日志查看器，用于监控 `fast_apply` 和 `agentic_search` 操作。
 
-当 `MCP_LOGGING=1` 时，Cloud 工具事件（`cloud_*`）也会出现在 **All** 与 **Errors** 视图中。
+当 `MCP_LOGGING=safe` 或 `MCP_LOGGING=full` 时，Cloud 工具事件（`cloud_*`）也会出现在 **All** 与 **Errors** 视图中。
 
 ## 安装
 

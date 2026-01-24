@@ -65,8 +65,8 @@ def build_run_metadata(
 
     # Get provider info from environment/settings (avoid private attribute access)
     provider = os.getenv("SEARCH_PROVIDER", "relace").strip().lower()
-    model = os.getenv("SEARCH_MODEL", os.getenv("RELACE_SEARCH_MODEL", "")).strip()
-    base_url = os.getenv("SEARCH_BASE_URL", os.getenv("RELACE_SEARCH_BASE_URL", "")).strip()
+    model = os.getenv("SEARCH_MODEL", "").strip()
+    base_url = os.getenv("SEARCH_ENDPOINT", "").strip()
     prompt_file = os.getenv("SEARCH_PROMPT_FILE", "").strip() or None
 
     case_list = [

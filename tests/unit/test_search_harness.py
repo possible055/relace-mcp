@@ -161,7 +161,6 @@ class TestFastAgenticSearchHarness:
         """Even if the model hallucinates tool calls, disabled tools must not execute."""
         # Ensure default tool allowlist is active (bash is opt-in).
         monkeypatch.delenv("SEARCH_ENABLED_TOOLS", raising=False)
-        monkeypatch.delenv("RELACE_SEARCH_ENABLED_TOOLS", raising=False)
 
         # If bash ever executes here, the handler would be called.
         from relace_mcp.tools.search.harness import tool_calls as tc_mod
@@ -472,26 +471,6 @@ class TestToolSchemas:
         schemas = get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
         assert names == {"view_file", "grep_search", "glob", "report_back"}
-
-    def test_lsp_query_backward_compat(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """lsp_query in allowlist should map to find_symbol for backward compatibility."""
-        import importlib
-
-        import relace_mcp.config.settings as settings
-        import relace_mcp.tools.search.schemas.tool_schemas as tool_schemas
-
-        # Enable LSP gatekeeper (required for any LSP tool to be enabled)
-        monkeypatch.setenv("SEARCH_LSP_TOOLS", "true")
-        monkeypatch.setenv("SEARCH_ENABLED_TOOLS", "view_file,lsp_query")
-        # Reload modules to pick up monkeypatched env vars
-        # (SEARCH_LSP_TOOLS is imported at module level in tool_schemas)
-        importlib.reload(settings)
-        importlib.reload(tool_schemas)
-
-        schemas = tool_schemas.get_tool_schemas()
-        names = {t["function"]["name"] for t in schemas}
-        assert "find_symbol" in names
-        assert "lsp_query" not in names
 
     def test_schema_has_default_per_official_docs(self) -> None:
         """Per Relace official docs, certain params should have default values."""

@@ -2,7 +2,6 @@ import logging
 import os
 from dataclasses import dataclass
 
-from .compat import getenv_with_fallback
 from .settings import DEFAULT_PROVIDER_BASE_URLS, OPENAI_PROVIDER, RELACE_PROVIDER
 
 logger = logging.getLogger(__name__)
@@ -47,7 +46,6 @@ def create_provider_config(
     """Create provider configuration from environment variables.
 
     Reads and validates all provider-related environment variables at config layer.
-    Supports deprecated RELACE_* prefixed variables for backward compatibility.
 
     Args:
         prefix: Environment variable prefix (e.g., "SEARCH" or "APPLY").
@@ -68,27 +66,21 @@ def create_provider_config(
     model_env = f"{prefix}_MODEL"
     api_key_env = f"{prefix}_API_KEY"
 
-    # Deprecated names (RELACE_* prefix)
-    deprecated_provider_env = f"RELACE_{prefix}_PROVIDER"
-    deprecated_base_url_env = f"RELACE_{prefix}_ENDPOINT"
-    deprecated_model_env = f"RELACE_{prefix}_MODEL"
-    deprecated_api_key_env = f"RELACE_{prefix}_API_KEY"
-
     # Parse provider
-    raw_provider = getenv_with_fallback(provider_env, deprecated_provider_env).strip()
+    raw_provider = os.getenv(provider_env, "").strip()
     provider = (raw_provider if raw_provider else RELACE_PROVIDER).lower()
 
     # Derive API compatibility mode
     api_compat = RELACE_PROVIDER if provider == RELACE_PROVIDER else OPENAI_PROVIDER
 
     # Parse base URL
-    base_url = getenv_with_fallback(base_url_env, deprecated_base_url_env).strip()
+    base_url = os.getenv(base_url_env, "").strip()
     if not base_url:
         base_url = DEFAULT_PROVIDER_BASE_URLS.get(provider, default_base_url)
     base_url = _normalize_base_url(base_url)
 
     # Parse model
-    model = getenv_with_fallback(model_env, deprecated_model_env).strip()
+    model = os.getenv(model_env, "").strip()
     if not model:
         model = "gpt-4o" if provider == OPENAI_PROVIDER else default_model
 
@@ -101,7 +93,7 @@ def create_provider_config(
         )
 
     # Parse API key
-    api_key = getenv_with_fallback(api_key_env, deprecated_api_key_env).strip()
+    api_key = os.getenv(api_key_env, "").strip()
 
     if not api_key:
         if api_compat == RELACE_PROVIDER:

@@ -16,7 +16,7 @@ class ToolTracingMiddleware(Middleware):
     """Middleware that traces tool execution with timing and MCP protocol logging.
 
     Sends tool execution metrics to the client via MCP protocol logging,
-    and writes structured events to local JSONL log when MCP_LOGGING=true.
+    and writes structured events to local JSONL log when MCP_LOGGING=safe|full.
     """
 
     async def on_call_tool(

@@ -24,7 +24,7 @@ async def test_tool_registration(tmp_path):
 
     # FastMCP's get_tool is usually asynchronous
     # Here we only test basic required tools; cloud tools depend on configuration
-    target_tools = ["fast_apply", "fast_search"]
+    target_tools = ["fast_apply", "agentic_search"]
     from relace_mcp.config.settings import RELACE_CLOUD_TOOLS
 
     if RELACE_CLOUD_TOOLS:

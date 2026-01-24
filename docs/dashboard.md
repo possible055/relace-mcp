@@ -2,7 +2,7 @@
 
 A real-time terminal-based log viewer for monitoring `fast_apply` and `agentic_search` operations.
 
-Cloud tool events (`cloud_*`) also appear in the **All** and **Errors** views when `MCP_LOGGING=1`.
+Cloud tool events (`cloud_*`) also appear in the **All** and **Errors** views when `MCP_LOGGING=safe` or `MCP_LOGGING=full`.
 
 ## Installation
 

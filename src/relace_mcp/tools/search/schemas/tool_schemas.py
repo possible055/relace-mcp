@@ -1,7 +1,7 @@
+import os
 import shutil
 from typing import Any
 
-from ....config.compat import getenv_with_fallback
 from ....config.settings import SEARCH_LSP_TOOLS_MODE
 from ....lsp.languages import detect_available_lsp_servers
 
@@ -372,8 +372,7 @@ def _split_tool_list(raw: str) -> list[str]:
 
 
 def _include_tool_strict() -> bool:
-    raw = getenv_with_fallback("SEARCH_TOOL_STRICT", "RELACE_SEARCH_TOOL_STRICT") or "1"
-    raw = raw.strip().lower()
+    raw = os.getenv("SEARCH_TOOL_STRICT", "1").strip().lower()
     if raw in _TRUTHY:
         return True
     if raw in _FALSY:
@@ -416,13 +415,8 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
           When SEARCH_LSP_TOOLS=true/auto and this is set, it also filters which LSP tools are enabled.
           bash requires explicit opt-in for security reasons.
         - SEARCH_TOOL_STRICT: Set to 0/false to omit the non-standard `strict` field from tool schemas.
-
-    Deprecated (still supported with warning):
-        RELACE_SEARCH_ENABLED_TOOLS, RELACE_SEARCH_TOOL_STRICT
     """
-    raw_allowlist = getenv_with_fallback(
-        "SEARCH_ENABLED_TOOLS", "RELACE_SEARCH_ENABLED_TOOLS"
-    ).strip()
+    raw_allowlist = os.getenv("SEARCH_ENABLED_TOOLS", "").strip()
 
     # LSP tool names for easy reference
     lsp_tool_names = {"find_symbol", "search_symbol", "get_type", "list_symbols", "call_graph"}
@@ -442,10 +436,6 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
 
     if raw_allowlist:
         enabled = {t.strip().lower() for t in _split_tool_list(raw_allowlist)}
-        # Backward compatibility: lsp_query is now find_symbol
-        if "lsp_query" in enabled:
-            enabled.discard("lsp_query")
-            enabled.add("find_symbol")
     else:
         # Default: basic exploration tools only
         # bash requires opt-in for security (Unix shell, higher risk)

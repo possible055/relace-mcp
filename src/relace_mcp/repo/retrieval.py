@@ -47,7 +47,7 @@ async def agentic_retrieval_logic(
         query: Natural language query.
 
     Returns:
-        Dict with explanation, files, and metadata (same format as fast_search).
+        Dict with explanation, files, and metadata (same format as agentic_search).
     """
     # Fixed internal parameters
     branch = ""
