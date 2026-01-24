@@ -14,8 +14,8 @@ from .settings import RelaceConfig
 
 logger = logging.getLogger(__name__)
 
-# LLM prompts directory
-_LLM_PROMPTS_DIR = Path(__file__).parent / "llm_prompts"
+# LLM prompts directory (relocated to prompts/)
+_LLM_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 
 def _load_prompt_file(
