@@ -111,26 +111,19 @@ uv pip install -e .
 | `RELACE_API_KEY` | 是* | - | Relace API key |
 | `RELACE_CLOUD_TOOLS` | 否 | `0` | 启用云端搜索工具 |
 | `MCP_SEARCH_RETRIEVAL` | 否 | `0` | 启用两阶段检索 |
-| `RELACE_LOG_LEVEL` | 否 | `INFO` | 日志级别 (DEBUG, INFO, WARNING, ERROR) |
+| `MCP_LOG_LEVEL` | 否 | `WARNING` | 日志级别 (DEBUG, INFO, WARNING, ERROR) |
 
 !!! note "API Key 需求"
-    `fast_apply` 需要 `RELACE_API_KEY`。仅使用本地搜索工具时可选填。
+    默认情况下（Relace provider），需要 `RELACE_API_KEY`。若你通过 `APPLY_PROVIDER` / `SEARCH_PROVIDER` 切换 provider，请改为设置对应 provider 的 API key。
 
 ## 验证安装
 
-重启 MCP 客户端并验证工具可用:
+重启 MCP 客户端并确认 `fast_apply` 与 `agentic_search` 可用。
 
-```python
-# 在 MCP 客户端中应看到以下工具:
-- fast_apply          # 应用代码编辑
-- agentic_search      # 搜索代码库
-- agentic_retrieval   # 两阶段检索(需启用)
-- cloud_sync          # 同步到云端(需 RELACE_CLOUD_TOOLS=1)
-- cloud_search        # 搜索云端仓库(需 RELACE_CLOUD_TOOLS=1)
-- cloud_info          # 云端仓库信息(需 RELACE_CLOUD_TOOLS=1)
-- cloud_list          # 列出云端仓库(需 RELACE_CLOUD_TOOLS=1)
-- cloud_clear         # 清除云端仓库(需 RELACE_CLOUD_TOOLS=1)
-```
+- 若 `RELACE_CLOUD_TOOLS=1`，你也应看到 `cloud_*` 工具。
+- 若 `MCP_SEARCH_RETRIEVAL=1`，你也应看到 `agentic_retrieval`。
+
+完整工具列表与 schema 请参见 [工具总览](../tools/index.md) 与 [工具参考](../tools/reference.md)。
 
 ## 首次使用
 
@@ -184,6 +177,6 @@ uv pip install -e .
 
     1. 安装 `ripgrep` 以加快搜索
     2. 检查网络连接
-    3. 启用 debug 日志:`RELACE_LOG_LEVEL=DEBUG`
+    3. 启用 debug 日志:`MCP_LOG_LEVEL=DEBUG`
 
 需要更多帮助?[打开 issue](https://github.com/possible055/relace-mcp/issues)。

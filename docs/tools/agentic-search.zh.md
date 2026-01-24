@@ -265,7 +265,7 @@ agentic_search(
     1. 让查询更具体
     2. 检查代码是否存在于仓库中
     3. 尝试不同措辞
-    4. 启用 debug 日志:`RELACE_LOG_LEVEL=DEBUG`
+    4. 启用 debug 日志:`MCP_LOG_LEVEL=DEBUG`
 
 ??? question "结果太多?"
 
@@ -283,4 +283,3 @@ agentic_search(
 
 - [Fast Apply](fast-apply.md) - 应用代码变更
 - [Cloud Search](cloud-search.md) - 跨仓库搜索
-- [API 参考](../advanced/api-reference.md) - 完整 API 文档

@@ -265,7 +265,7 @@ agentic_search(
     1. Make query more specific
     2. Check if code exists in repository
     3. Try alternative phrasing
-    4. Enable debug logging: `RELACE_LOG_LEVEL=DEBUG`
+    4. Enable debug logging: `MCP_LOG_LEVEL=DEBUG`
 
 ??? question "Too many results?"
 
@@ -283,4 +283,3 @@ agentic_search(
 
 - [Fast Apply](fast-apply.md) - Apply code changes
 - [Cloud Search](cloud-search.md) - Cross-repo search
-- [API Reference](../advanced/api-reference.md) - Full API docs
