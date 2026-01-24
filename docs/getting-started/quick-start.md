@@ -111,26 +111,19 @@ Configure your MCP client to use Relace MCP.
 | `RELACE_API_KEY` | Yes* | - | Your Relace API key |
 | `RELACE_CLOUD_TOOLS` | No | `0` | Enable cloud search tools |
 | `MCP_SEARCH_RETRIEVAL` | No | `0` | Enable two-stage retrieval |
-| `RELACE_LOG_LEVEL` | No | `INFO` | Log level (DEBUG, INFO, WARNING, ERROR) |
+| `MCP_LOG_LEVEL` | No | `WARNING` | Log level (DEBUG, INFO, WARNING, ERROR) |
 
 !!! note "API Key Requirement"
-    `RELACE_API_KEY` is required for `fast_apply`. Optional if only using local search tools.
+    `RELACE_API_KEY` is required by default (Relace provider). If you switch providers via `APPLY_PROVIDER` / `SEARCH_PROVIDER`, set the corresponding provider API key instead.
 
 ## Verify Installation
 
-Restart your MCP client and verify the tools are available:
+Restart your MCP client and confirm `fast_apply` and `agentic_search` are available.
 
-```python
-# In your MCP client, you should see these tools:
-- fast_apply          # Apply code edits
-- agentic_search      # Search codebase
-- agentic_retrieval   # Two-stage retrieval (if enabled)
-- cloud_sync          # Sync to cloud (if RELACE_CLOUD_TOOLS=1)
-- cloud_search        # Search cloud repos (if RELACE_CLOUD_TOOLS=1)
-- cloud_info          # Cloud repo info (if RELACE_CLOUD_TOOLS=1)
-- cloud_list          # List cloud repos (if RELACE_CLOUD_TOOLS=1)
-- cloud_clear         # Clear cloud repo (if RELACE_CLOUD_TOOLS=1)
-```
+- If `RELACE_CLOUD_TOOLS=1`, you should also see `cloud_*` tools.
+- If `MCP_SEARCH_RETRIEVAL=1`, you should also see `agentic_retrieval`.
+
+For the full tool list and schemas, see [Tools](../tools/index.md) and [Tool Reference](../tools/reference.md).
 
 ## First Steps
 
@@ -184,6 +177,6 @@ If you need cross-repo search:
 
     1. Install `ripgrep` for faster search
     2. Check network connection
-    3. Enable debug logging: `RELACE_LOG_LEVEL=DEBUG`
+    3. Enable debug logging: `MCP_LOG_LEVEL=DEBUG`
 
 Need more help? [Open an issue](https://github.com/possible055/relace-mcp/issues).

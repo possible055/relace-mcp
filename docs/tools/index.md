@@ -2,6 +2,8 @@
 
 Relace MCP provides several powerful tools for AI-assisted code editing and exploration.
 
+For full tool schemas (parameters and return shapes), see [Tool Reference](reference.md).
+
 ## Core Tools
 
 ### Fast Apply

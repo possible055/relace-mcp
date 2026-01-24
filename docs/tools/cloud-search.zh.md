@@ -311,7 +311,7 @@ cloud_search(query="数据库迁移脚本")
     1. 检查 API key 是否设置
     2. 验证网络连接
     3. 检查仓库是否为 git 仓库
-    4. 启用 debug 日志:`RELACE_LOG_LEVEL=DEBUG`
+    4. 启用 debug 日志:`MCP_LOG_LEVEL=DEBUG`
 
 ??? question "搜索找不到结果?"
 

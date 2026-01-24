@@ -7,13 +7,13 @@ Relace MCP 详细安装指南。
 - **Python**: 3.11 或更高版本
 - **uv**: 最新版本 ([安装指南](https://docs.astral.sh/uv/))
 - **git**: 任何近期版本
-- **ripgrep**（可选）：加快代码搜索速度
+- **ripgrep**(可选):加快代码搜索速度
 
 ## 安装方式
 
-### 方式 1：uv tool（推荐）
+### 方式 1:uv tool(推荐)
 
-最简单的安装方式：
+最简单的安装方式:
 
 ```bash
 uv tool install relace-mcp
@@ -21,19 +21,19 @@ uv tool install relace-mcp
 
 这会在隔离环境中安装 `relace-mcp` 并使其全局可用。
 
-**验证安装：**
+**验证安装:**
 
 ```bash
 uv tool list
-# 应显示：relace-mcp v0.2.5
+# 应显示:relace-mcp vX.Y.Z
 ```
 
-### 方式 2：pip
+### 方式 2:pip
 
-使用 pip（系统级或虚拟环境）：
+使用 pip(系统级或虚拟环境):
 
 ```bash
-# 系统级（可能需要 sudo）
+# 系统级(可能需要 sudo)
 pip install relace-mcp
 
 # 在虚拟环境中
@@ -42,9 +42,9 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install relace-mcp
 ```
 
-### 方式 3：开发安装
+### 方式 3:开发安装
 
-用于开发或贡献：
+用于开发或贡献:
 
 ```bash
 # Clone repository
@@ -62,7 +62,7 @@ uv pip install -e .
 
 ### ripgrep
 
-显著提升搜索性能：
+显著提升搜索性能:
 
 === "macOS"
 
@@ -92,7 +92,7 @@ uv pip install -e .
 
 ### 开发工具
 
-用于贡献 Relace MCP：
+用于贡献 Relace MCP:
 
 ```bash
 # Install all additional dependencies
@@ -138,14 +138,14 @@ pip uninstall relace-mcp
 
 ??? question "找不到 uv？"
 
-    先安装 uv：
+    先安装 uv:
     ```bash
     curl -LsSf https://astral.sh/uv/install.sh | sh
     ```
 
 ??? question "Python 版本不符？"
 
-    检查 Python 版本：
+    检查 Python 版本:
     ```bash
     python --version
     ```
