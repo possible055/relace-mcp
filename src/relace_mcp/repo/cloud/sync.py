@@ -8,16 +8,17 @@ from typing import Any
 
 from ...clients.repo import RelaceRepoClient
 from ...config.settings import REPO_SYNC_MAX_FILES
-from ...tools.apply.file_io import decode_text_best_effort, get_project_encoding
-from ._git import get_current_git_info
-from ._logging import _extract_error_fields, log_cloud_event
-from .errors import build_cloud_error_details
-from .state import (
+from ...encoding import decode_text_best_effort, get_project_encoding
+from ..core import (
     SyncState,
+    _extract_error_fields,
+    build_cloud_error_details,
     compute_file_hash,
+    get_current_git_info,
     get_repo_identity,
     get_repo_root,
     load_sync_state,
+    log_cloud_event,
     save_sync_state,
 )
 

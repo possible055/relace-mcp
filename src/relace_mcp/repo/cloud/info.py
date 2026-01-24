@@ -3,10 +3,15 @@ import uuid
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
-from ._git import get_current_git_info, is_git_dirty
-from ._logging import _extract_error_fields, log_cloud_event
-from .errors import build_cloud_error_details
-from .state import get_repo_identity, load_sync_state
+from ..core import (
+    _extract_error_fields,
+    build_cloud_error_details,
+    get_current_git_info,
+    get_repo_identity,
+    is_git_dirty,
+    load_sync_state,
+    log_cloud_event,
+)
 
 logger = logging.getLogger(__name__)
 

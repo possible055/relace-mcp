@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from relace_mcp.tools.repo._local_backend import (
+from relace_mcp.repo.local.backend import (
     _parse_chunkhound_results,
     chunkhound_search,
 )
@@ -80,7 +80,7 @@ class TestParseResults:
 
 
 class TestChunkhoundSearch:
-    @patch("relace_mcp.tools.repo._local_backend.subprocess.run")
+    @patch("relace_mcp.repo.local.backend.subprocess.run")
     def test_successful_search(self, mock_run: MagicMock):
         mock_run.return_value = MagicMock(
             returncode=0,
@@ -102,7 +102,7 @@ class TestChunkhoundSearch:
         call_args = mock_run.call_args
         assert call_args[1]["cwd"] == "/project"
 
-    @patch("relace_mcp.tools.repo._local_backend.subprocess.run")
+    @patch("relace_mcp.repo.local.backend.subprocess.run")
     def test_empty_output_returns_empty_list(self, mock_run: MagicMock):
         mock_run.return_value = MagicMock(
             returncode=0,
@@ -113,7 +113,7 @@ class TestChunkhoundSearch:
         results = chunkhound_search("query", base_dir="/project")
         assert results == []
 
-    @patch("relace_mcp.tools.repo._local_backend.subprocess.run")
+    @patch("relace_mcp.repo.local.backend.subprocess.run")
     def test_cli_not_found_raises_error(self, mock_run: MagicMock):
         mock_run.side_effect = FileNotFoundError("chunkhound not found")
 
@@ -122,7 +122,7 @@ class TestChunkhoundSearch:
 
         assert "not found" in str(exc_info.value).lower()
 
-    @patch("relace_mcp.tools.repo._local_backend.subprocess.run")
+    @patch("relace_mcp.repo.local.backend.subprocess.run")
     def test_cli_timeout_raises_error(self, mock_run: MagicMock):
         import subprocess
 
@@ -133,7 +133,7 @@ class TestChunkhoundSearch:
 
         assert "timeout" in str(exc_info.value).lower()
 
-    @patch("relace_mcp.tools.repo._local_backend.subprocess.run")
+    @patch("relace_mcp.repo.local.backend.subprocess.run")
     def test_json_parse_error_raises_error(self, mock_run: MagicMock):
         mock_run.return_value = MagicMock(
             returncode=0,
@@ -146,8 +146,8 @@ class TestChunkhoundSearch:
 
         assert "json" in str(exc_info.value).lower()
 
-    @patch("relace_mcp.tools.repo._local_backend._ensure_chunkhound_index")
-    @patch("relace_mcp.tools.repo._local_backend.subprocess.run")
+    @patch("relace_mcp.repo.local.backend._ensure_chunkhound_index")
+    @patch("relace_mcp.repo.local.backend.subprocess.run")
     def test_auto_index_on_not_indexed_error(
         self, mock_run: MagicMock, mock_ensure_chunkhound_index: MagicMock
     ):

@@ -1,4 +1,4 @@
-from ...encoding import (
+from .codec import (
     atomic_write,
     decode_text_best_effort,
     decode_text_with_fallback,
@@ -7,7 +7,7 @@ from ...encoding import (
     read_text_with_fallback,
     set_project_encoding,
 )
-from ...encoding.exceptions import EncodingDetectionError
+from .exceptions import EncodingDetectionError
 
 __all__ = [
     "EncodingDetectionError",

@@ -14,15 +14,15 @@ from ..clients import RelaceRepoClient, SearchLLMClient
 from ..clients.apply import ApplyLLMClient
 from ..config import RelaceConfig, resolve_base_dir
 from ..config.settings import MCP_SEARCH_MODE, RELACE_CLOUD_TOOLS, RETRIEVAL_BACKEND
-from .apply import apply_file_logic
-from .repo import (
+from ..repo import (
     agentic_retrieval_logic,
     cloud_info_logic,
     cloud_list_logic,
     cloud_search_logic,
     cloud_sync_logic,
+    load_sync_state,
 )
-from .repo.state import load_sync_state
+from .apply import apply_file_logic
 from .search import FastAgenticSearchHarness
 
 __all__ = ["register_tools"]
@@ -244,7 +244,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
             Returns: {status: "deleted"} on success, {status: "cancelled"} if confirm=false.
             """
-            from .repo.clear import cloud_clear_logic
+            from ..repo import cloud_clear_logic
 
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
             return cloud_clear_logic(repo_client, base_dir, confirm=confirm, repo_id=repo_id)
@@ -428,7 +428,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     "message": "Set MCP_BASE_DIR or use MCP Roots to enable cloud status",
                 }
 
-            from .repo.state import get_repo_identity
+            from ..repo import get_repo_identity
 
             local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(base_dir)
             if not local_repo_name or not cloud_repo_name:

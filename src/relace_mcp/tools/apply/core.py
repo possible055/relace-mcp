@@ -11,6 +11,7 @@ import openai
 
 from ...clients.apply import ApplyLLMClient, ApplyRequest, ApplyResponse
 from ...config.settings import APPLY_SEMANTIC_CHECK, MAX_FILE_SIZE_BYTES
+from ...encoding.exceptions import EncodingDetectionError as BaseEncodingDetectionError
 from ...utils import validate_file_path
 from . import errors, file_io, snippet
 from . import logging as apply_logging
@@ -352,16 +353,18 @@ async def apply_file_logic(
                 ctx.elapsed_ms(),
             )
 
-        if isinstance(exc, ApplyError):
+        if isinstance(exc, (ApplyError, BaseEncodingDetectionError)):
+            error_code = getattr(exc, "error_code", "ENCODING_ERROR")
+            message = getattr(exc, "message", str(exc))
             logger.warning(
                 "[%s] Apply error (%s) for %s: %s",
                 ctx.trace_id,
-                exc.error_code,
+                error_code,
                 file_path,
-                exc.message,
+                message,
             )
             return errors.recoverable_error(
-                exc.error_code, exc.message, file_path, instruction, ctx.trace_id, ctx.elapsed_ms()
+                error_code, message, file_path, instruction, ctx.trace_id, ctx.elapsed_ms()
             )
 
         if isinstance(exc, PermissionError):

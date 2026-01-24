@@ -7,15 +7,7 @@ import pytest
 
 from relace_mcp.clients.repo import RelaceRepoClient
 from relace_mcp.config import RelaceConfig
-from relace_mcp.tools.apply.file_io import set_project_encoding
-from relace_mcp.tools.repo._git import get_current_git_info
-from relace_mcp.tools.repo.state import (
-    SyncState,
-    compute_file_hash,
-    load_sync_state,
-    save_sync_state,
-)
-from relace_mcp.tools.repo.sync import (
+from relace_mcp.repo.cloud.sync import (
     CODE_EXTENSIONS,
     SPECIAL_FILENAMES,
     _compute_diff_operations,
@@ -25,6 +17,14 @@ from relace_mcp.tools.repo.sync import (
     _scan_directory,
     cloud_sync_logic,
 )
+from relace_mcp.repo.core.git import get_current_git_info
+from relace_mcp.repo.core.state import (
+    SyncState,
+    compute_file_hash,
+    load_sync_state,
+    save_sync_state,
+)
+from relace_mcp.tools.apply.file_io import set_project_encoding
 
 
 @pytest.fixture
@@ -416,9 +416,9 @@ class TestCloudSyncLogic:
         (tmp_path / "main.py").write_text("print('hello')")
         (tmp_path / "utils.py").write_text("def helper(): pass")
 
-        with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
-            with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=None):
-                with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+        with patch("relace_mcp.repo.cloud.sync._get_git_tracked_files", return_value=None):
+            with patch("relace_mcp.repo.cloud.sync.load_sync_state", return_value=None):
+                with patch("relace_mcp.repo.cloud.sync.save_sync_state"):
                     result = cloud_sync_logic(mock_repo_client, str(tmp_path))
 
         assert result["repo_id"] == "test-repo-id"
@@ -441,9 +441,9 @@ class TestCloudSyncLogic:
             files={},  # Empty = all files are new
         )
 
-        with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
-            with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=cached):
-                with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+        with patch("relace_mcp.repo.cloud.sync._get_git_tracked_files", return_value=None):
+            with patch("relace_mcp.repo.cloud.sync.load_sync_state", return_value=cached):
+                with patch("relace_mcp.repo.cloud.sync.save_sync_state"):
                     result = cloud_sync_logic(mock_repo_client, str(tmp_path))
 
         assert result["is_incremental"] is True
@@ -461,9 +461,9 @@ class TestCloudSyncLogic:
             files=hashes.copy(),
         )
 
-        with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
-            with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=cached):
-                with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+        with patch("relace_mcp.repo.cloud.sync._get_git_tracked_files", return_value=None):
+            with patch("relace_mcp.repo.cloud.sync.load_sync_state", return_value=cached):
+                with patch("relace_mcp.repo.cloud.sync.save_sync_state"):
                     result = cloud_sync_logic(mock_repo_client, str(tmp_path))
 
         assert result["files_unchanged"] == 1
@@ -484,9 +484,9 @@ class TestCloudSyncLogic:
             files=hashes.copy(),
         )
 
-        with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
-            with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=cached):
-                with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+        with patch("relace_mcp.repo.cloud.sync._get_git_tracked_files", return_value=None):
+            with patch("relace_mcp.repo.cloud.sync.load_sync_state", return_value=cached):
+                with patch("relace_mcp.repo.cloud.sync.save_sync_state"):
                     result = cloud_sync_logic(mock_repo_client, str(tmp_path), force=True)
 
         assert result["is_incremental"] is False
@@ -518,8 +518,8 @@ class TestCloudSyncLogic:
         exc.__cause__ = httpx.RequestError("network down")
         mock_repo_client.update_repo.side_effect = exc
 
-        with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
-            with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=None):
+        with patch("relace_mcp.repo.cloud.sync._get_git_tracked_files", return_value=None):
+            with patch("relace_mcp.repo.cloud.sync.load_sync_state", return_value=None):
                 result = cloud_sync_logic(mock_repo_client, str(tmp_path))
 
         assert result["repo_id"] is None
@@ -545,10 +545,10 @@ class TestCloudSyncLogic:
         for i in range(10):
             (tmp_path / f"file{i}.py").write_text(f"# File {i}")
 
-        with patch("relace_mcp.tools.repo.sync.REPO_SYNC_MAX_FILES", 5):
-            with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
-                with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=None):
-                    with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+        with patch("relace_mcp.repo.cloud.sync.REPO_SYNC_MAX_FILES", 5):
+            with patch("relace_mcp.repo.cloud.sync._get_git_tracked_files", return_value=None):
+                with patch("relace_mcp.repo.cloud.sync.load_sync_state", return_value=None):
+                    with patch("relace_mcp.repo.cloud.sync.save_sync_state"):
                         result = cloud_sync_logic(mock_repo_client, str(tmp_path))
 
         # Should only process 5 files
@@ -578,9 +578,9 @@ class TestCloudSyncLogic:
             files=hashes.copy(),
         )
 
-        with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=file_list):
-            with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=cached):
-                with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+        with patch("relace_mcp.repo.cloud.sync._get_git_tracked_files", return_value=file_list):
+            with patch("relace_mcp.repo.cloud.sync.load_sync_state", return_value=cached):
+                with patch("relace_mcp.repo.cloud.sync.save_sync_state"):
                     result = cloud_sync_logic(mock_repo_client, str(subdir))
 
         assert result["files_deleted"] == 0
@@ -645,7 +645,7 @@ class TestSyncState:
         repo_dir.mkdir()
 
         # Override XDG state dir for test
-        with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
+        with patch("relace_mcp.repo.core.state._STATE_DIR", tmp_path):
             state = SyncState(
                 repo_id="test-id",
                 repo_head="abc123",
@@ -662,7 +662,7 @@ class TestSyncState:
 
     def test_load_sync_state_missing(self, tmp_path: Path) -> None:
         """Should return None for missing state."""
-        with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
+        with patch("relace_mcp.repo.core.state._STATE_DIR", tmp_path):
             loaded = load_sync_state(str(tmp_path / "nonexistent-project"))
 
         assert loaded is None
@@ -751,7 +751,7 @@ class TestSyncStateCollisionDetection:
         repo_a.mkdir()
         repo_b.mkdir()
 
-        with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
+        with patch("relace_mcp.repo.core.state._STATE_DIR", tmp_path):
             state_a = SyncState(repo_id="project-a-id", repo_head="abc", last_sync="", files={})
             state_b = SyncState(repo_id="project-b-id", repo_head="def", last_sync="", files={})
             save_sync_state(str(repo_a), state_a)
@@ -770,7 +770,7 @@ class TestSyncStateCollisionDetection:
         repo_dir = tmp_path / "my-project"
         repo_dir.mkdir()
 
-        with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
+        with patch("relace_mcp.repo.core.state._STATE_DIR", tmp_path):
             state = SyncState(
                 repo_id="project-id",
                 repo_head="abc",
@@ -790,12 +790,12 @@ class TestSyncStateCollisionDetection:
         """Should accept old state files without repo_name for backward compat."""
         import json
 
-        from relace_mcp.tools.repo import state as state_module
+        from relace_mcp.repo.core import state as state_module
 
         repo_dir = tmp_path / "my_project"
         repo_dir.mkdir()
 
-        with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
+        with patch("relace_mcp.repo.core.state._STATE_DIR", tmp_path):
             repo_name, _cloud_repo_name, fingerprint = state_module.get_repo_identity(str(repo_dir))
             safe_name = state_module._sanitize_repo_name(repo_name)
             state_file = tmp_path / f"{safe_name}__{fingerprint}.json"
@@ -823,7 +823,7 @@ class TestSyncStateCollisionDetection:
         repo_dir = tmp_path / "my-project"
         repo_dir.mkdir()
 
-        with patch("relace_mcp.tools.repo.state._STATE_DIR", tmp_path):
+        with patch("relace_mcp.repo.core.state._STATE_DIR", tmp_path):
             state = SyncState(
                 repo_id="test-id",
                 repo_head="abc",
@@ -912,11 +912,11 @@ class TestRefChangedDetection:
         )
 
         # Mock git returning a different HEAD
-        with patch("relace_mcp.tools.repo.sync.get_current_git_info") as mock_git:
+        with patch("relace_mcp.repo.cloud.sync.get_current_git_info") as mock_git:
             mock_git.return_value = ("main", "new_head_sha_987654321098765432109876")
-            with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
-                with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=cached):
-                    with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+            with patch("relace_mcp.repo.cloud.sync._get_git_tracked_files", return_value=None):
+                with patch("relace_mcp.repo.cloud.sync.load_sync_state", return_value=cached):
+                    with patch("relace_mcp.repo.cloud.sync.save_sync_state"):
                         result = cloud_sync_logic(mock_repo_client, str(tmp_path))
 
         assert result["ref_changed"] is True
@@ -950,11 +950,11 @@ class TestSafeSyncMode:
         )
 
         # Mock git returning a different HEAD → triggers safe_full with ref_changed
-        with patch("relace_mcp.tools.repo.sync.get_current_git_info") as mock_git:
+        with patch("relace_mcp.repo.cloud.sync.get_current_git_info") as mock_git:
             mock_git.return_value = ("feature", "new_head_sha_987654321098765432109876")
-            with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
-                with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=cached):
-                    with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+            with patch("relace_mcp.repo.cloud.sync._get_git_tracked_files", return_value=None):
+                with patch("relace_mcp.repo.cloud.sync.load_sync_state", return_value=cached):
+                    with patch("relace_mcp.repo.cloud.sync.save_sync_state"):
                         result = cloud_sync_logic(mock_repo_client, str(tmp_path))
 
         assert result["sync_mode"] == "safe_full"
@@ -983,11 +983,11 @@ class TestSafeSyncMode:
 
         # force=True bypasses cache loading, so diff_state will be None
         # This means no delete operations will be computed
-        with patch("relace_mcp.tools.repo.sync.get_current_git_info") as mock_git:
+        with patch("relace_mcp.repo.cloud.sync.get_current_git_info") as mock_git:
             mock_git.return_value = ("main", "head_sha_12345678901234567890123456")
-            with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
-                with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=None):
-                    with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+            with patch("relace_mcp.repo.cloud.sync._get_git_tracked_files", return_value=None):
+                with patch("relace_mcp.repo.cloud.sync.load_sync_state", return_value=None):
+                    with patch("relace_mcp.repo.cloud.sync.save_sync_state"):
                         result = cloud_sync_logic(mock_repo_client, str(tmp_path), force=True)
 
         assert result["sync_mode"] == "safe_full"
@@ -1009,11 +1009,11 @@ class TestMirrorSyncMode:
 
         mock_repo_client.update_repo_files.return_value = {"repo_head": "new_head_123"}
 
-        with patch("relace_mcp.tools.repo.sync.get_current_git_info") as mock_git:
+        with patch("relace_mcp.repo.cloud.sync.get_current_git_info") as mock_git:
             mock_git.return_value = ("main", "head_sha_123456789012345678901234567890")
-            with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
-                with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=None):
-                    with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+            with patch("relace_mcp.repo.cloud.sync._get_git_tracked_files", return_value=None):
+                with patch("relace_mcp.repo.cloud.sync.load_sync_state", return_value=None):
+                    with patch("relace_mcp.repo.cloud.sync.save_sync_state"):
                         result = cloud_sync_logic(
                             mock_repo_client, str(tmp_path), force=True, mirror=True
                         )
@@ -1027,11 +1027,11 @@ class TestMirrorSyncMode:
         """Mirror mode should only activate when force=True."""
         (tmp_path / "main.py").write_text("print('hello')")
 
-        with patch("relace_mcp.tools.repo.sync.get_current_git_info") as mock_git:
+        with patch("relace_mcp.repo.cloud.sync.get_current_git_info") as mock_git:
             mock_git.return_value = ("main", "head_sha_123456789012345678901234567890")
-            with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
-                with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=None):
-                    with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+            with patch("relace_mcp.repo.cloud.sync._get_git_tracked_files", return_value=None):
+                with patch("relace_mcp.repo.cloud.sync.load_sync_state", return_value=None):
+                    with patch("relace_mcp.repo.cloud.sync.save_sync_state"):
                         # mirror=True but force=False → should NOT be mirror_full
                         result = cloud_sync_logic(
                             mock_repo_client, str(tmp_path), force=False, mirror=True
@@ -1048,11 +1048,11 @@ class TestSyncDebugFields:
         """Should return local git info in result."""
         (tmp_path / "main.py").write_text("print('hello')")
 
-        with patch("relace_mcp.tools.repo.sync.get_current_git_info") as mock_git:
+        with patch("relace_mcp.repo.cloud.sync.get_current_git_info") as mock_git:
             mock_git.return_value = ("feature-x", "abc123def456789012345678901234567890")
-            with patch("relace_mcp.tools.repo.sync._get_git_tracked_files", return_value=None):
-                with patch("relace_mcp.tools.repo.sync.load_sync_state", return_value=None):
-                    with patch("relace_mcp.tools.repo.sync.save_sync_state"):
+            with patch("relace_mcp.repo.cloud.sync._get_git_tracked_files", return_value=None):
+                with patch("relace_mcp.repo.cloud.sync.load_sync_state", return_value=None):
+                    with patch("relace_mcp.repo.cloud.sync.save_sync_state"):
                         result = cloud_sync_logic(mock_repo_client, str(tmp_path))
 
         assert result["local_git_branch"] == "feature-x"
