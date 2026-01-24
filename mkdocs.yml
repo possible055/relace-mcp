@@ -21,6 +21,10 @@ theme:
     - navigation.path
     - navigation.top
     - navigation.indexes
+    - navigation.footer
+    - navigation.prune
+    # Header
+    - header.autohide
     # Search
     - search.suggest
     - search.highlight
@@ -33,6 +37,11 @@ theme:
     - toc.follow
     - toc.integrate
   palette:
+    # Auto mode
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
     # Light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -50,8 +59,8 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
   font:
-    text: Roboto
-    code: Roboto Mono
+    text: Inter
+    code: JetBrains Mono
   icon:
     repo: fontawesome/brands/github
     edit: material/pencil
@@ -98,6 +107,7 @@ markdown_extensions:
   - pymdownx.betterem:
       smart_enable: all
   - pymdownx.caret
+  - pymdownx.critic
   - pymdownx.details
   - pymdownx.emoji:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
@@ -108,8 +118,10 @@ markdown_extensions:
       pygments_lang_class: true
   - pymdownx.inlinehilite
   - pymdownx.keys
+  - pymdownx.magiclink
   - pymdownx.mark
   - pymdownx.smartsymbols
+  - pymdownx.snippets
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
@@ -129,6 +141,7 @@ nav:
       - Configuration: getting-started/configuration.md
   - Tools:
       - tools/index.md
+      - Tool Reference: tools/reference.md
       - Fast Apply: tools/fast-apply.md
       - Agentic Search: tools/agentic-search.md
       - Cloud Search: tools/cloud-search.md
@@ -151,13 +164,6 @@ extra:
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/relace-mcp/
       name: PyPI
-  alternate:
-    - name: English
-      link: /
-      lang: en
-    - name: 简体中文
-      link: /zh/
-      lang: zh
 
 extra_css:
   - stylesheets/extra.css
@@ -165,4 +171,4 @@ extra_css:
 extra_javascript:
   - javascripts/extra.js
 
-copyright: Copyright &copy; 2024 possible055. Licensed under MIT.
+copyright: Copyright &copy; 2026 possible055. Licensed under MIT.

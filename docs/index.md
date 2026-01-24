@@ -1,6 +1,6 @@
 # Relace MCP
 
-<div align="center">
+<div align="center" markdown>
 
 [![PyPI](https://img.shields.io/pypi/v/relace-mcp.svg)](https://pypi.org/project/relace-mcp/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)

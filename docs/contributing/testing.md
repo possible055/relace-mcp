@@ -381,4 +381,3 @@ def test_edge_cases(value):
 ## Next Steps
 
 - [Development Guide](development.md) - Development workflow
-- [API Reference](../advanced/api-reference.md) - API documentation

@@ -4,16 +4,16 @@
 
 ## 目录
 
-- [环境变量参考](#环境变量参考)
-- [使用 .env 文件](#使用-env-文件)
-- [同步模式](#同步模式)
-- [日志](#日志)
-- [替代提供商](#替代提供商)
-- [远程部署 (Streamable HTTP)](#远程部署-streamable-http)
+- [环境变量参考](#environment-variables-reference)
+- [使用 .env 文件](#using-a-env-file)
+- [同步模式](#sync-modes)
+- [日志](#logging)
+- [替代提供商](#alternative-providers)
+- [远程部署 (Streamable HTTP)](#remote-deployment-streamable-http)
 
 ---
 
-## 环境变量参考
+## 环境变量参考 {#environment-variables-reference}
 
 所有环境变量可在 shell 中设置，或在 MCP 配置的 `env` 部分中设置。
 
@@ -91,7 +91,7 @@
 | `OPENROUTER_API_KEY` | `*_PROVIDER=openrouter` 且未设置 `*_API_KEY` |
 | `CEREBRAS_API_KEY` | `*_PROVIDER=cerebras` 且未设置 `*_API_KEY` |
 
-## 使用 .env 文件
+## 使用 .env 文件 {#using-a-env-file}
 
 可以使用集中的 `.env` 文件代替在 MCP 配置中设置多个环境变量：
 
@@ -130,7 +130,7 @@ SEARCH_MAX_TURNS=6
 
 ---
 
-## 同步模式
+## 同步模式 {#sync-modes}
 
 `cloud_sync` 工具支持三种同步模式：
 
@@ -144,7 +144,7 @@ SEARCH_MAX_TURNS=6
 
 ---
 
-## 日志
+## 日志 {#logging}
 
 文件日志为可选功能。设置 `MCP_LOGGING=safe`（启用并遮蔽敏感内容）或 `MCP_LOGGING=full`（启用不遮蔽）。
 
@@ -205,7 +205,7 @@ SEARCH_MAX_TURNS=6
 
 ---
 
-## 替代提供商
+## 替代提供商 {#alternative-providers}
 
 `fast_apply` 和 `agentic_search` 都可以使用 OpenAI 兼容提供商替代 Relace。
 
@@ -272,7 +272,7 @@ export SEARCH_PARALLEL_TOOL_CALLS=1
 
 ---
 
-## 远程部署 (Streamable HTTP)
+## 远程部署 (Streamable HTTP) {#remote-deployment-streamable-http}
 
 > **安全提示：** 本服务可读写文件。请勿直接暴露到公网。使用 `stdio`，或在 HTTP 前增加鉴权/VPN。
 

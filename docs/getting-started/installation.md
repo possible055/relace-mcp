@@ -25,7 +25,7 @@ This installs `relace-mcp` in an isolated environment and makes it available glo
 
 ```bash
 uv tool list
-# Should show: relace-mcp v0.2.5
+# Should show: relace-mcp vX.Y.Z
 ```
 
 ### Method 2: pip

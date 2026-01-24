@@ -240,4 +240,3 @@ Installed with `uv run pre-commit install`:
 ## Next Steps
 
 - [Testing Guide](testing.md) - Testing details
-- [API Reference](../advanced/api-reference.md) - API docs

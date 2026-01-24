@@ -311,7 +311,7 @@ Typical search latency:
     1. Check API key is set
     2. Verify network connection
     3. Check repository is a git repo
-    4. Enable debug logging: `RELACE_LOG_LEVEL=DEBUG`
+    4. Enable debug logging: `MCP_LOG_LEVEL=DEBUG`
 
 ??? question "Search not finding results?"
 

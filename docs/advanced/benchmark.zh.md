@@ -8,7 +8,7 @@
 
 **前置要求**: Python 3.11+、`git`、网络连接
 
-**环境配置**（在项目根目录创建 `.env`）:
+**环境配置**(在项目根目录创建 `.env`):
 ```bash
 SEARCH_PROVIDER=relace          # 或: openai, openrouter
 RELACE_API_KEY=your-key-here    # 或: OPENAI_API_KEY, OPENROUTER_API_KEY
@@ -16,7 +16,7 @@ RELACE_API_KEY=your-key-here    # 或: OPENAI_API_KEY, OPENROUTER_API_KEY
 
 **数据集**:
 
-通过 Hugging Face datasets-server 构建 Loc-Bench（无需 LocAgent）:
+通过 Hugging Face datasets-server 构建 Loc-Bench(无需 LocAgent):
 ```bash
 uv run python -m benchmark.cli.build_locbench \
   --output artifacts/data/raw/locbench_v1.jsonl
@@ -28,7 +28,7 @@ uv run python -m benchmark.cli.build_locbench \
 # 基本运行
 uv run python -m benchmark.cli.run --dataset artifacts/data/processed/elite_50.jsonl --limit 20
 
-# 在 Loc-Bench 上运行（先执行 build_locbench）
+# 在 Loc-Bench 上运行(先执行 build_locbench)
 uv run python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.jsonl --limit 20
 
 # 带参数覆盖
