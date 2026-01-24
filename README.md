@@ -26,8 +26,8 @@ MCP server providing AI-powered code editing and intelligent codebase exploratio
 ## Features
 
 - **Fast Apply** — Apply code edits at 10,000+ tokens/sec via Relace API
-- **Agentic Search** — Agentic codebase exploration with natural language queries (`fast_search` is deprecated alias, will be removed in 0.2.5)
-- **Agentic Retrieval** — Two-stage semantic + agentic code retrieval (requires `RELACE_CLOUD_TOOLS=1` and `MCP_SEARCH_MODE=indexed` or `both`)
+- **Agentic Search** — Agentic codebase exploration with natural language queries
+- **Agentic Retrieval** — Two-stage semantic + agentic code retrieval (requires `MCP_SEARCH_RETRIEVAL=1`)
 - **Cloud Sync** — Upload local codebase to Relace Cloud for semantic search
 - **Cloud Search** — Semantic code search over cloud-synced repositories
 - **Dashboard** — Real-time terminal UI for monitoring operations
@@ -142,10 +142,10 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 |----------|----------|-------------|
 | `RELACE_API_KEY` | ✅* | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
 | `RELACE_CLOUD_TOOLS` | ❌ | Set to `1` to enable cloud tools |
-| `MCP_SEARCH_MODE` | ❌ | Search mode: `agentic` (default), `indexed`, or `both` |
+| `MCP_SEARCH_RETRIEVAL` | ❌ | Set to `1` to enable `agentic_retrieval` tool |
 | `SEARCH_LSP_TOOLS` | ❌ | LSP tools: `1` (all on), `auto` (detect installed servers), `0` (off, default) |
 | `MCP_BASE_DIR` | ❌ | Project root (auto-detected via MCP Roots → Git → CWD) |
-| `MCP_LOGGING` | ❌ | Set to `1` to enable file logging |
+| `MCP_LOGGING` | ❌ | File logging: `off` (default), `safe`, `full` |
 | `MCP_DOTENV_PATH` | ❌ | Path to `.env` file for centralized config |
 
 `*` Optional if **both**: (1) `APPLY_PROVIDER` and `SEARCH_PROVIDER` are non-Relace providers, and (2) `RELACE_CLOUD_TOOLS=false`.
@@ -154,7 +154,7 @@ For `.env` usage, encoding settings, custom LLM providers, and more, see [docs/a
 
 ## Tools
 
-Core tools (`fast_apply`, `agentic_search`) are always available. `fast_search` is a deprecated alias for `agentic_search` (will be removed in 0.2.5). Cloud tools require `RELACE_CLOUD_TOOLS=1`. `agentic_retrieval` requires both `RELACE_CLOUD_TOOLS=1` and `MCP_SEARCH_MODE=indexed` or `both`.
+Core tools (`fast_apply`, `agentic_search`) are always available. Cloud tools require `RELACE_CLOUD_TOOLS=1`. `agentic_retrieval` requires `MCP_SEARCH_RETRIEVAL=1`.
 
 For detailed parameters, see [docs/tools.md](docs/tools.md).
 

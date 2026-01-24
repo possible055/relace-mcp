@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.5] - TBD
 
+### Changed
+
+- **`MCP_LOGGING` unified** — Now accepts `off` (default), `safe` (with redaction), or `full` (no redaction). Replaces separate `MCP_LOGGING` and `MCP_LOG_REDACT` variables.
+
 ### Removed
 
 - **`fast_search` tool** — Use `agentic_search` instead.
@@ -43,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Tools
 
 - **`agentic_search`** — New primary tool for agentic codebase search. Replaces `fast_search`.
-- **`agentic_retrieval`** — Two-stage semantic + agentic code retrieval (requires `RELACE_CLOUD_TOOLS=true` and `MCP_SEARCH_MODE=indexed|both`).
+- **`agentic_retrieval`** — Two-stage semantic + agentic code retrieval (requires `MCP_SEARCH_RETRIEVAL=1`).
 
 #### LSP Integration
 
@@ -52,7 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Configuration
 
-- **`MCP_SEARCH_MODE`** — Control search mode: `agentic` (default), `indexed`, or `both`.
+- **`MCP_SEARCH_RETRIEVAL`** — Set to `1` to enable `agentic_retrieval` tool.
 - **`SEARCH_LSP_TOOLS`** — Gatekeeper for LSP tool enablement (`true`, `false`, `auto`).
 - **`SEARCH_TOP_P`** — Optional sampling control for providers requiring explicit top_p (e.g., Mistral).
 - **Third-party provider support** — Relaxed API key requirements; auto-derive keys from `{PROVIDER}_API_KEY`.

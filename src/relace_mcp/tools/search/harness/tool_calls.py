@@ -13,11 +13,11 @@ from .._impl import (
     SearchSymbolParams,
     bash_handler,
     call_graph_handler,
+    find_symbol_handler,
     get_type_handler,
     glob_handler,
     grep_search_handler,
     list_symbols_handler,
-    lsp_query_handler,
     report_back_handler,
     search_symbol_handler,
     view_directory_handler,
@@ -324,7 +324,7 @@ class ToolCallsMixin:
                 line=args.get("line", 0),
                 column=args.get("column", 0),
             )
-            return lsp_query_handler(lsp_params, base_dir)
+            return find_symbol_handler(lsp_params, base_dir)
         elif name == "search_symbol":
             search_params = SearchSymbolParams(query=args.get("query", ""))
             return search_symbol_handler(search_params, base_dir)

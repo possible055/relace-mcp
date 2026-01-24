@@ -61,14 +61,6 @@
 
 ---
 
-## `fast_search`
-
-> **已弃用**：请使用 `agentic_search`。此别名将于 0.2.5 移除。
-
-`agentic_search` 的别名。返回相同结果，但会额外包含 `_deprecated` 字段。
-
----
-
 ## `cloud_sync`
 
 > **注意：** 所有 `cloud_*` 工具的响应都会包含 `trace_id`。失败时响应还可能包含 `status_code`、`error_code`、`retryable`、`recommended_action`。

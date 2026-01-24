@@ -1,4 +1,4 @@
-# Benchmark Module for fast_search Evaluation
+# Benchmark Module for agentic_search Evaluation
 #
 # Sub-modules:
 #   cli/        - CLI entry points (run, filter, validate, analyze)

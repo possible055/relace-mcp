@@ -23,14 +23,11 @@ All environment variables can be set in your shell or in the `env` section of yo
 |----------|---------|-------------|
 | `RELACE_API_KEY` | — | **Required.** Your Relace API key |
 | `MCP_BASE_DIR` | cwd | Restrict file access to this directory |
-| `RELACE_BASE_DIR` | — | Deprecated alias for `MCP_BASE_DIR` |
 | `MCP_DOTENV_PATH` | — | Path to a `.env` file to load at startup |
-| `RELACE_DOTENV_PATH` | — | Deprecated alias for `MCP_DOTENV_PATH` |
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
-| `MCP_LOGGING` | `0` | Set to `1` to enable file logging (**preferred**; `RELACE_LOGGING` is deprecated) |
-| `RELACE_LOGGING` | `0` | Deprecated alias for `MCP_LOGGING` |
+| `MCP_LOGGING` | `off` | File logging: `off`, `safe` (with redaction), `full` (no redaction) |
 | `RELACE_CLOUD_TOOLS` | `0` | Set to `1` to enable cloud tools (cloud_sync, cloud_search, etc.) |
-| `MCP_SEARCH_MODE` | `agentic` | Search tool mode: `agentic` (agentic_search), `indexed` (agentic_retrieval), `both` |
+| `MCP_SEARCH_RETRIEVAL` | `0` | Set to `1` to enable `agentic_retrieval` tool |
 
 > **Note:** `RELACE_API_KEY` can be omitted if **both**: (1) using non-Relace providers for `APPLY_PROVIDER` and `SEARCH_PROVIDER`, and (2) `RELACE_CLOUD_TOOLS=false`. Otherwise it is required.
 
@@ -46,9 +43,6 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `APPLY_TIMEOUT_SECONDS` | `60` | Request timeout |
 | `APPLY_TEMPERATURE` | `0.0` | LLM sampling temperature (0.0-2.0) |
 | `APPLY_SEMANTIC_CHECK` | `0` | Post-merge semantic validation (may increase failures) |
-| `APPLY_POST_CHECK` | `0` | Deprecated alias for `APPLY_SEMANTIC_CHECK` |
-
-> **Note:** `RELACE_APPLY_*` and `RELACE_TIMEOUT_SECONDS` are deprecated but still supported with warnings.
 
 ### Agentic Search
 
@@ -68,8 +62,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls |
 | `SEARCH_TOOL_STRICT` | `1` | Include `strict` field in tool schemas |
 | `SEARCH_LSP_TIMEOUT_SECONDS` | `15.0` | LSP startup/request timeout |
-
-> **Note:** `RELACE_SEARCH_*`, `RELACE_LSP_TIMEOUT_SECONDS` variants are deprecated but still supported with warnings.
+| `SEARCH_LSP_MAX_CLIENTS` | `2` | Maximum concurrent LSP clients |
 
 #### Progress & Timeouts
 
@@ -113,7 +106,7 @@ SEARCH_MODEL=gpt-4o
 SEARCH_API_KEY=sk-xxx
 
 # Logging
-MCP_LOGGING=1
+MCP_LOGGING=safe
 ```
 
 Then set `MCP_DOTENV_PATH` in your MCP client configuration:
@@ -152,7 +145,7 @@ When git HEAD changes since last sync (e.g., branch switch, rebase), Safe Full m
 
 ## Logging
 
-File logging is opt-in. Enable with `MCP_LOGGING=1` (`RELACE_LOGGING=1` still works but is deprecated).
+File logging is opt-in. Set `MCP_LOGGING=safe` (with redaction) or `MCP_LOGGING=full` (no redaction).
 
 ### Log Location
 

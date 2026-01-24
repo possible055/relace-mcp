@@ -13,7 +13,7 @@ from fastmcp.server.context import Context
 from ..clients import RelaceRepoClient, SearchLLMClient
 from ..clients.apply import ApplyLLMClient
 from ..config import RelaceConfig, resolve_base_dir
-from ..config.settings import MCP_SEARCH_MODE, RELACE_CLOUD_TOOLS, RETRIEVAL_BACKEND
+from ..config.settings import AGENTIC_RETRIEVAL_ENABLED, RELACE_CLOUD_TOOLS, RETRIEVAL_BACKEND
 from ..repo import (
     agentic_retrieval_logic,
     cloud_info_logic,
@@ -100,53 +100,51 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 with suppress(asyncio.CancelledError):
                     await progress_task
 
-    # Register agentic_search when MCP_SEARCH_MODE is 'agentic' or 'both'
-    if MCP_SEARCH_MODE in ("agentic", "both"):
+    # Register agentic_search (always enabled)
+    @mcp.tool(
+        annotations={
+            "readOnlyHint": True,  # Does not modify environment
+            "destructiveHint": False,  # Read-only = non-destructive
+            "idempotentHint": True,  # Same query = same results
+            "openWorldHint": False,  # Only local codebase
+        }
+    )
+    async def agentic_search(query: str, ctx: Context) -> dict[str, Any]:
+        """Search codebase and return relevant file locations.
 
-        @mcp.tool(
-            annotations={
-                "readOnlyHint": True,  # Does not modify environment
-                "destructiveHint": False,  # Read-only = non-destructive
-                "idempotentHint": True,  # Same query = same results
-                "openWorldHint": False,  # Only local codebase
-            }
+        Use when: exploring code structure, finding entrypoints, tracing call chains.
+        Do NOT use when: you need semantic/conceptual search—use agentic_retrieval.
+
+        Args:
+            query: What to find. Natural language (e.g., "where is auth handled")
+                   or specific patterns (e.g., "UserService class").
+
+        Returns: {files: {path: [[start, end], ...]}, explanation: str, partial: bool}
+        """
+        await ctx.info(f"Searching: {query[:100]}")
+        progress_task = asyncio.create_task(
+            _progress_heartbeat(ctx, message="agentic_search in progress")
         )
-        async def agentic_search(query: str, ctx: Context) -> dict[str, Any]:
-            """Search codebase and return relevant file locations.
+        try:
+            # Resolve base_dir dynamically from MCP Roots if not configured
+            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
 
-            Use when: exploring code structure, finding entrypoints, tracing call chains.
-            Do NOT use when: you need semantic/conceptual search—use agentic_retrieval.
+            # Get cached LSP languages (auto-detects on first call per base_dir)
+            from ..lsp.languages import get_lsp_languages
 
-            Args:
-                query: What to find. Natural language (e.g., "where is auth handled")
-                       or specific patterns (e.g., "UserService class").
+            lsp_languages = get_lsp_languages(Path(base_dir))
 
-            Returns: {files: {path: [[start, end], ...]}, explanation: str, partial: bool}
-            """
-            await ctx.info(f"Searching: {query[:100]}")
-            progress_task = asyncio.create_task(
-                _progress_heartbeat(ctx, message="agentic_search in progress")
-            )
-            try:
-                # Resolve base_dir dynamically from MCP Roots if not configured
-                base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-
-                # Get cached LSP languages (auto-detects on first call per base_dir)
-                from ..lsp.languages import get_lsp_languages
-
-                lsp_languages = get_lsp_languages(Path(base_dir))
-
-                effective_config = replace(config, base_dir=base_dir)
-                result = await FastAgenticSearchHarness(
-                    effective_config, search_client, lsp_languages=lsp_languages
-                ).run_async(query=query)
-                files_found = len(result.get("files", {}))
-                await ctx.debug(f"Search found {files_found} files")
-                return result
-            finally:
-                progress_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await progress_task
+            effective_config = replace(config, base_dir=base_dir)
+            result = await FastAgenticSearchHarness(
+                effective_config, search_client, lsp_languages=lsp_languages
+            ).run_async(query=query)
+            files_found = len(result.get("files", {}))
+            await ctx.debug(f"Search found {files_found} files")
+            return result
+        finally:
+            progress_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await progress_task
 
     repo_client: RelaceRepoClient | None = None
 
@@ -284,7 +282,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
             return cloud_info_logic(repo_client, base_dir)
 
-    if MCP_SEARCH_MODE in ("indexed", "both") and RETRIEVAL_BACKEND != "none":
+    if AGENTIC_RETRIEVAL_ENABLED and RETRIEVAL_BACKEND != "none":
 
         @mcp.tool(
             annotations={
@@ -350,15 +348,15 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 "enabled": True,
             },
         ]
-        if MCP_SEARCH_MODE in ("agentic", "both"):
-            tools.append(
-                {
-                    "id": "agentic_search",
-                    "name": "Agentic Search",
-                    "description": "Agentic search over local codebase",
-                    "enabled": True,
-                }
-            )
+        # agentic_search is always enabled
+        tools.append(
+            {
+                "id": "agentic_search",
+                "name": "Agentic Search",
+                "description": "Agentic search over local codebase",
+                "enabled": True,
+            }
+        )
         if RELACE_CLOUD_TOOLS:
             tools.extend(
                 [
@@ -394,7 +392,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     },
                 ]
             )
-        if MCP_SEARCH_MODE in ("indexed", "both") and RETRIEVAL_BACKEND != "none":
+        if AGENTIC_RETRIEVAL_ENABLED and RETRIEVAL_BACKEND != "none":
             tools.append(
                 {
                     "id": "agentic_retrieval",

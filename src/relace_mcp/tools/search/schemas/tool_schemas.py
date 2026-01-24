@@ -436,10 +436,6 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
 
     if raw_allowlist:
         enabled = {t.strip().lower() for t in _split_tool_list(raw_allowlist)}
-        # Backward compatibility: lsp_query is now find_symbol
-        if "lsp_query" in enabled:
-            enabled.discard("lsp_query")
-            enabled.add("find_symbol")
     else:
         # Default: basic exploration tools only
         # bash requires opt-in for security (Unix shell, higher risk)

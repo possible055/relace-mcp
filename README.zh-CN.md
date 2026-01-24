@@ -26,7 +26,7 @@
 ## 功能特性
 
 - **快速应用** — 通过 Relace API 以 10,000+ tokens/秒的速度应用代码编辑
-- **智能搜索** — 使用自然语言查询进行智能代码库探索（`fast_search` 为已弃用别名，将于 0.2.5 移除）
+- **智能搜索** — 使用自然语言查询进行智能代码库探索
 - **智能检索** — 两阶段语义 + 智能代码检索（需设置 `RELACE_CLOUD_TOOLS=1` 及 `MCP_SEARCH_MODE=indexed` 或 `both`）
 - **云端同步** — 将本地代码库上传到 Relace Cloud 进行语义搜索
 - **云端搜索** — 对云端同步的仓库进行语义代码搜索
@@ -145,7 +145,7 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 | `MCP_SEARCH_MODE` | ❌ | 搜索模式：`agentic`（默认）、`indexed` 或 `both` |
 | `SEARCH_LSP_TOOLS` | ❌ | LSP 工具：`1`（全开）、`auto`（检测已安装服务器）、`0`（关，默认） |
 | `MCP_BASE_DIR` | ❌ | 项目根目录（自动检测：MCP Roots → Git → CWD） |
-| `MCP_LOGGING` | ❌ | 设为 `1` 启用文件日志 |
+| `MCP_LOGGING` | ❌ | 文件日志：`off`（默认）、`safe`、`full` |
 | `MCP_DOTENV_PATH` | ❌ | `.env` 文件路径，用于集中配置 |
 
 `*` 仅当**同时满足**：(1) `APPLY_PROVIDER` 与 `SEARCH_PROVIDER` 均为非 Relace 提供商，且 (2) `RELACE_CLOUD_TOOLS=false` 时可省略。
@@ -154,7 +154,7 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 
 ## 工具
 
-核心工具（`fast_apply`、`agentic_search`）始终可用。`fast_search` 为 `agentic_search` 的已弃用别名（将于 0.2.5 移除）。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`agentic_retrieval` 需同时设置 `RELACE_CLOUD_TOOLS=1` 及 `MCP_SEARCH_MODE=indexed` 或 `both`。
+核心工具（`fast_apply`、`agentic_search`）始终可用。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`agentic_retrieval` 需同时设置 `RELACE_CLOUD_TOOLS=1` 及 `MCP_SEARCH_MODE=indexed` 或 `both`。
 
 详细参数请参见 [docs/tools.zh-CN.md](docs/tools.zh-CN.md)。
 

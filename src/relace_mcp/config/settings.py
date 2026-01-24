@@ -77,23 +77,19 @@ ENCODING_DETECTION_SAMPLE_LIMIT = 30
 # Semantic check (validates new/delete intent correctness, disabled by default)
 APPLY_SEMANTIC_CHECK = env_bool("APPLY_SEMANTIC_CHECK", default=False)
 
-# Local file logging (disabled by default)
-MCP_LOGGING = env_bool("MCP_LOGGING", default=False)
+# Local file logging mode (default: off)
+# Options: off (disabled), safe (enabled with redaction), full (enabled without redaction)
+_MCP_LOGGING_RAW = os.getenv("MCP_LOGGING", "off").strip().lower()
+MCP_LOGGING = _MCP_LOGGING_RAW in ("safe", "full", "1", "true", "yes")
+MCP_LOG_REDACT = _MCP_LOGGING_RAW != "full"
 
 # Cloud tools (disabled by default)
 RELACE_CLOUD_TOOLS = env_bool("RELACE_CLOUD_TOOLS", default=False)
 RETRIEVAL_BACKEND = os.getenv("MCP_RETRIEVAL_BACKEND", "relace").strip().lower()
 
 
-# Search mode: 'agentic' (agentic_search), 'indexed' (agentic_retrieval), 'both'
-def _get_search_mode() -> str:
-    raw = os.environ.get("MCP_SEARCH_MODE", "").strip().lower()
-    if raw in {"indexed", "both"}:
-        return raw
-    return "agentic"
-
-
-MCP_SEARCH_MODE = _get_search_mode()
+# Enable agentic_retrieval tool (requires cloud sync or local backend)
+AGENTIC_RETRIEVAL_ENABLED = env_bool("MCP_SEARCH_RETRIEVAL", default=False)
 
 
 # LSP tools mode: 'false' (disabled), 'true' (all enabled), or 'auto' (detect installed servers)
