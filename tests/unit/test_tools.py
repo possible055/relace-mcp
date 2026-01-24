@@ -8,8 +8,8 @@ import pytest
 from relace_mcp.clients.apply import ApplyResponse
 from relace_mcp.config import RelaceConfig
 from relace_mcp.config.settings import MAX_FILE_SIZE_BYTES
+from relace_mcp.encoding import set_project_encoding
 from relace_mcp.tools.apply import apply_file_logic
-from relace_mcp.tools.apply.file_io import set_project_encoding
 from relace_mcp.tools.apply.logging import log_event
 from relace_mcp.utils import validate_file_path
 
@@ -812,7 +812,7 @@ class TestApplyFileLogicRecoverableErrors:
         test_file.write_bytes(b"def existing_function():\n    return 42\n")
 
         with patch(
-            "relace_mcp.tools.apply.core.file_io.read_text_with_fallback",
+            "relace_mcp.tools.apply.core.read_text_with_fallback",
             side_effect=PermissionError("Permission denied"),
         ):
             result = await apply_file_logic(
@@ -837,7 +837,7 @@ class TestApplyFileLogicRecoverableErrors:
         new_file = tmp_path / "new_file.py"
 
         with patch(
-            "relace_mcp.tools.apply.core.file_io.atomic_write",
+            "relace_mcp.tools.apply.core.atomic_write",
             side_effect=OSError("Disk full"),
         ):
             result = await apply_file_logic(

@@ -7,6 +7,7 @@ import pytest
 
 from relace_mcp.clients.repo import RelaceRepoClient
 from relace_mcp.config import RelaceConfig
+from relace_mcp.encoding import set_project_encoding
 from relace_mcp.repo.cloud.sync import (
     CODE_EXTENSIONS,
     SPECIAL_FILENAMES,
@@ -24,7 +25,6 @@ from relace_mcp.repo.core.state import (
     load_sync_state,
     save_sync_state,
 )
-from relace_mcp.tools.apply.file_io import set_project_encoding
 
 
 @pytest.fixture

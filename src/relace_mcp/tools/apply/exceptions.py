@@ -1,6 +1,3 @@
-from ...encoding.exceptions import EncodingDetectionError as _EncodingDetectionError
-
-
 class ApplyError(Exception):
     """Base exception class for fast_apply tool."""
 
@@ -20,17 +17,6 @@ class FileTooLargeError(ApplyError):
         self.file_size = file_size
         self.max_size = max_size
         super().__init__(f"File too large ({file_size} bytes). Maximum allowed: {max_size} bytes")
-
-
-class EncodingDetectionError(ApplyError, _EncodingDetectionError):
-    """Cannot detect file encoding."""
-
-    error_code = "ENCODING_ERROR"
-
-    def __init__(self, path: str) -> None:
-        self.path = path
-        self.message = f"Cannot detect encoding for file: {path}"
-        Exception.__init__(self, self.message)
 
 
 class ApiInvalidResponseError(ApplyError):
