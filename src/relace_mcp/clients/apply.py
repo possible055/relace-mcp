@@ -40,9 +40,6 @@ class ApplyLLMClient:
         APPLY_ENDPOINT: API base URL
         APPLY_MODEL: Model name
         APPLY_API_KEY: API key (or use provider-specific key)
-
-    Deprecated (still supported with warning):
-        RELACE_APPLY_* variants are deprecated, use APPLY_* instead.
     """
 
     def __init__(self, config: RelaceConfig) -> None:

@@ -227,7 +227,7 @@ def _find_symbol_columns(line_content: str, keywords: frozenset[str] | None = No
     return columns
 
 
-def lsp_query_handler(params: LSPQueryParams, base_dir: str) -> str:
+def find_symbol_handler(params: LSPQueryParams, base_dir: str) -> str:
     """LSP query handler using language server inferred from file type.
 
     Thread-safe through LSPClientManager's internal locking.

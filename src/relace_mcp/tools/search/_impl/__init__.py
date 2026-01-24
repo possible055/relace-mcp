@@ -34,9 +34,9 @@ from .lsp import (
     LSPQueryParams,
     SearchSymbolParams,
     call_graph_handler,
+    find_symbol_handler,
     get_type_handler,
     list_symbols_handler,
-    lsp_query_handler,
     search_symbol_handler,
 )
 from .paths import map_repo_path
@@ -71,6 +71,7 @@ __all__ = [
     "MAX_VIEW_FILE_CHARS",
     "SearchSymbolParams",
     "call_graph_handler",
+    "find_symbol_handler",
     "is_blocked_command",
     "bash_handler",
     "estimate_context_size",
@@ -78,7 +79,6 @@ __all__ = [
     "grep_search_handler",
     "get_type_handler",
     "list_symbols_handler",
-    "lsp_query_handler",
     "map_repo_path",
     "report_back_handler",
     "search_symbol_handler",

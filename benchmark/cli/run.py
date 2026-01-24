@@ -25,15 +25,9 @@ def _load_dotenv_from_env_path() -> None:
 
     Priority:
     1. MCP_DOTENV_PATH environment variable (explicit path)
-    2. RELACE_DOTENV_PATH environment variable (deprecated alias)
-    3. Default dotenv search (current directory and parents)
+    2. Default dotenv search (current directory and parents)
     """
     dotenv_path = os.getenv("MCP_DOTENV_PATH", "").strip()
-    if not dotenv_path:
-        legacy_path = os.getenv("RELACE_DOTENV_PATH", "").strip()
-        if legacy_path:
-            logger.warning("RELACE_DOTENV_PATH is deprecated; use MCP_DOTENV_PATH instead")
-            dotenv_path = legacy_path
     if dotenv_path:
         path = Path(dotenv_path).expanduser()
         if path.exists():
@@ -56,10 +50,9 @@ def _load_benchmark_config():
     providers, SearchLLMClient will use SEARCH_API_KEY / OPENAI_API_KEY / etc.
     """
     from relace_mcp.config import RelaceConfig
-    from relace_mcp.config.compat import getenv_with_fallback
     from relace_mcp.config.settings import RELACE_DEFAULT_ENCODING
 
-    search_provider = getenv_with_fallback("SEARCH_PROVIDER", "RELACE_SEARCH_PROVIDER").strip()
+    search_provider = os.getenv("SEARCH_PROVIDER", "").strip()
     search_provider = (search_provider or "relace").lower()
 
     relace_api_key = os.getenv("RELACE_API_KEY", "").strip()
@@ -101,7 +94,7 @@ def _load_benchmark_config():
     "--search-mode",
     type=click.Choice(["agentic", "indexed"]),
     default="agentic",
-    help="Search mode: agentic (fast_search) or indexed (agentic_retrieval)",
+    help="Search mode: agentic (agentic_search) or indexed (agentic_retrieval)",
 )
 @click.option(
     "--lsp-tools",
@@ -133,7 +126,7 @@ def main(
     lsp_tools: str | None,
     enabled_tools: str | None,
 ) -> None:
-    """Run benchmark on fast_search or agentic_retrieval.
+    """Run benchmark on agentic_search or agentic_retrieval.
 
     Large repos are automatically excluded via EXCLUDED_REPOS in config.
     """

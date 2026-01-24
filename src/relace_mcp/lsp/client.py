@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any
 
 import psutil
 
-from relace_mcp.config.compat import getenv_with_fallback
 from relace_mcp.lsp.languages.base import LanguageServerConfig
 from relace_mcp.lsp.protocol import MessageBuffer, encode_message
 from relace_mcp.lsp.types import (
@@ -79,8 +78,8 @@ def _deep_update_dict(target: dict[str, Any], updates: dict[str, Any]) -> dict[s
     return target
 
 
-def _parse_nonnegative_int_env_with_fallback(new_name: str, old_name: str, default: int) -> int:
-    raw = getenv_with_fallback(new_name, old_name).strip()
+def _parse_nonnegative_int_env(name: str, default: int) -> int:
+    raw = os.getenv(name, "").strip()
     if not raw:
         return default
     try:
@@ -1344,9 +1343,7 @@ class LSPClientManager:
         self._lease_counts: dict[
             tuple[str, str], int
         ] = {}  # (workspace, language_id) -> active sessions
-        self._max_clients = _parse_nonnegative_int_env_with_fallback(
-            "SEARCH_LSP_MAX_CLIENTS", "RELACE_LSP_MAX_CLIENTS", 2
-        )
+        self._max_clients = _parse_nonnegative_int_env("SEARCH_LSP_MAX_CLIENTS", 2)
         atexit.register(self._cleanup_all)
 
     @classmethod

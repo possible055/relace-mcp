@@ -6,7 +6,7 @@ from typing import Any
 
 from ..config import settings
 from .context import get_trace_id, tool_name
-from .settings import MCP_LOG_REDACT, should_sample
+from .settings import MCP_LOG_REDACT
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ def redact_value(value: str, max_len: int = 200) -> str:
     if not value:
         return value
     if not MCP_LOG_REDACT:
-        return value[:max_len] if len(value) > max_len else value
+        return value
     if len(value) <= max_len:
         return value
     suffix = f"... [truncated, len={len(value)}]"
@@ -54,8 +54,6 @@ def log_event(event: dict[str, Any]) -> None:
         event: Event data to log. Will be enriched with timestamp, trace_id, tool, level.
     """
     if not settings.MCP_LOGGING:
-        return
-    if not should_sample():
         return
 
     event = dict(event)

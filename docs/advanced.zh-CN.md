@@ -23,14 +23,11 @@
 |------|--------|------|
 | `RELACE_API_KEY` | — | **必需。** 你的 Relace API key |
 | `MCP_BASE_DIR` | 当前目录 | 限制文件访问范围 |
-| `RELACE_BASE_DIR` | — | `MCP_BASE_DIR` 的弃用别名 |
 | `MCP_DOTENV_PATH` | — | 启动时加载的 `.env` 文件路径（集中配置） |
-| `RELACE_DOTENV_PATH` | — | `MCP_DOTENV_PATH` 的弃用别名 |
 | `RELACE_DEFAULT_ENCODING` | — | 强制项目文件编码（如 `gbk`、`big5`） |
-| `MCP_LOGGING` | `0` | 设为 `1` 启用文件日志（推荐；`RELACE_LOGGING` 已弃用） |
-| `RELACE_LOGGING` | `0` | `MCP_LOGGING` 的弃用别名 |
+| `MCP_LOGGING` | `off` | 文件日志：`off`、`safe`（启用并遮蔽）、`full`（启用不遮蔽） |
 | `RELACE_CLOUD_TOOLS` | `0` | 设为 `1` 启用云工具（cloud_sync、cloud_search 等） |
-| `MCP_SEARCH_MODE` | `agentic` | 搜索工具模式：`agentic`（agentic_search）、`indexed`（agentic_retrieval）、`both` |
+| `MCP_SEARCH_RETRIEVAL` | `0` | 设为 `1` 启用 `agentic_retrieval` 工具 |
 
 > **注意：** 仅当**同时满足**以下条件时可省略 `RELACE_API_KEY`：(1) `APPLY_PROVIDER` 和 `SEARCH_PROVIDER` 均使用非 Relace 提供商，且 (2) `RELACE_CLOUD_TOOLS=false`。否则必须设置。
 
@@ -46,9 +43,6 @@
 | `APPLY_TIMEOUT_SECONDS` | `60` | 请求超时 |
 | `APPLY_TEMPERATURE` | `0.0` | 采样温度（0.0-2.0） |
 | `APPLY_SEMANTIC_CHECK` | `0` | 合并后语义验证（可能增加失败率） |
-| `APPLY_POST_CHECK` | `0` | `APPLY_SEMANTIC_CHECK` 的弃用别名 |
-
-> **注意：** `RELACE_APPLY_*`、`RELACE_TIMEOUT_SECONDS` 变体已弃用，但仍支持（会显示警告）。
 
 ### Agentic Search
 
@@ -68,8 +62,7 @@
 | `SEARCH_PARALLEL_TOOL_CALLS` | `1` | 启用并行工具调用 |
 | `SEARCH_TOOL_STRICT` | `1` | 在 tool schema 中包含 `strict` 字段 |
 | `SEARCH_LSP_TIMEOUT_SECONDS` | `15.0` | LSP 启动/请求超时 |
-
-> **注意：** `RELACE_SEARCH_*`、`RELACE_LSP_TIMEOUT_SECONDS` 变体已弃用，但仍支持（会显示警告）。
+| `SEARCH_LSP_MAX_CLIENTS` | `2` | 最大并发 LSP 客户端数 |
 
 #### 进度与超时
 
@@ -113,7 +106,7 @@ SEARCH_MODEL=gpt-4o
 SEARCH_API_KEY=sk-xxx
 
 # 其他设置
-MCP_LOGGING=1
+MCP_LOGGING=safe
 SEARCH_MAX_TURNS=6
 ```
 
@@ -153,7 +146,7 @@ SEARCH_MAX_TURNS=6
 
 ## 日志
 
-文件日志为可选功能。使用 `MCP_LOGGING=1` 启用（`RELACE_LOGGING=1` 仍可用但已弃用）。
+文件日志为可选功能。设置 `MCP_LOGGING=safe`（启用并遮蔽敏感内容）或 `MCP_LOGGING=full`（启用不遮蔽）。
 
 ### 日志位置
 
