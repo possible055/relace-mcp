@@ -29,7 +29,8 @@ class EncodingDetectionError(ApplyError, _EncodingDetectionError):
 
     def __init__(self, path: str) -> None:
         self.path = path
-        ApplyError.__init__(self, f"Cannot detect encoding for file: {path}")
+        self.message = f"Cannot detect encoding for file: {path}"
+        Exception.__init__(self, self.message)
 
 
 class ApiInvalidResponseError(ApplyError):
