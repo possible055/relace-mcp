@@ -298,11 +298,11 @@ class RelaceRepoClient:
                     name,
                 )
 
-            logger.info("[%s] Found existing repo '%s' with id=%s", trace_id, name, repo_id)
+            logger.debug("[%s] Found existing repo '%s' with id=%s", trace_id, name, repo_id)
             return str(repo_id)
 
         # Create new repo
-        logger.info("[%s] Creating new repo '%s'", trace_id, name)
+        logger.debug("[%s] Creating new repo '%s'", trace_id, name)
         result = self.create_repo(name, trace_id=trace_id)
         repo_id_val = result.get("repo_id") or result.get("id") or ""
         if not repo_id_val:
@@ -328,7 +328,7 @@ class RelaceRepoClient:
                 trace_id=trace_id,
                 headers=self._get_headers(),
             )
-            logger.info("[%s] Deleted repo '%s'", trace_id, repo_id)
+            logger.debug("[%s] Deleted repo '%s'", trace_id, repo_id)
 
             # Clear cached IDs if we just deleted them
             self._cached_repo_ids = {
@@ -342,7 +342,7 @@ class RelaceRepoClient:
             # the original `RelaceAPIError` as `__cause__`.
             cause = exc.__cause__
             if isinstance(cause, RelaceAPIError) and cause.status_code == 404:
-                logger.info("[%s] Repo '%s' already deleted (404)", trace_id, repo_id)
+                logger.debug("[%s] Repo '%s' already deleted (404)", trace_id, repo_id)
                 self._cached_repo_ids = {
                     name: rid for name, rid in self._cached_repo_ids.items() if rid != repo_id
                 }

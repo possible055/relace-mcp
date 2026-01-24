@@ -74,7 +74,7 @@ def chunkhound_search(
                 raise RuntimeError(
                     "ChunkHound index creation failed or index still not found"
                 ) from exc
-            logger.info("ChunkHound index not found, attempting to create...")
+            logger.debug("ChunkHound index not found, attempting to create...")
             _ensure_chunkhound_index(base_dir, env)
             return chunkhound_search(
                 query, base_dir=base_dir, limit=limit, threshold=threshold, _retry=True
@@ -102,7 +102,7 @@ def _ensure_chunkhound_index(base_dir: str, env: dict[str, str]) -> None:
         if result.returncode != 0:
             stderr = (result.stderr or "").strip()
             raise RuntimeError(f"chunkhound index failed: {stderr}")
-        logger.info("ChunkHound index created successfully")
+        logger.debug("ChunkHound index created successfully")
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"chunkhound index timeout: {exc}") from exc
 

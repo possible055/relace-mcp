@@ -58,7 +58,7 @@ async def agentic_retrieval_logic(
     token_limit = 10000
 
     trace_id = str(uuid.uuid4())[:8]
-    logger.info("[%s] Starting agentic retrieval", trace_id)
+    logger.debug("[%s] Starting agentic retrieval", trace_id)
 
     warnings_list: list[str] = []
     cloud_results: list[dict[str, Any]] = []
@@ -68,13 +68,13 @@ async def agentic_retrieval_logic(
         try:
             info = cloud_info_logic(repo_client, base_dir)
             if info.get("status", {}).get("needs_sync"):
-                logger.info("[%s] Auto-sync triggered (needs_sync=True)", trace_id)
+                logger.debug("[%s] Auto-sync triggered (needs_sync=True)", trace_id)
                 sync_result = cloud_sync_logic(repo_client, base_dir)
                 if sync_result.get("error"):
                     warnings_list.append(f"Auto-sync failed: {sync_result['error']}")
                     logger.warning("[%s] Auto-sync failed, see warnings", trace_id)
                 else:
-                    logger.info("[%s] Auto-sync completed successfully", trace_id)
+                    logger.debug("[%s] Auto-sync completed successfully", trace_id)
         except Exception as exc:
             warnings_list.append(f"Auto-sync error: {exc}")
             logger.warning("[%s] Auto-sync exception occurred, see warnings", trace_id)
@@ -93,7 +93,7 @@ async def agentic_retrieval_logic(
             if not cloud_results:
                 warnings_list.append("Codanna returned no results. Proceeding without hints.")
             else:
-                logger.info(
+                logger.debug(
                     "[%s] Codanna returned %d results, using top %d as hints",
                     trace_id,
                     len(cloud_results),
@@ -113,7 +113,7 @@ async def agentic_retrieval_logic(
             if not cloud_results:
                 warnings_list.append("ChunkHound returned no results. Proceeding without hints.")
             else:
-                logger.info(
+                logger.debug(
                     "[%s] ChunkHound returned %d results, using top %d as hints",
                     trace_id,
                     len(cloud_results),
@@ -150,7 +150,7 @@ async def agentic_retrieval_logic(
                             "Cloud search returned no results. Proceeding without hints."
                         )
                     else:
-                        logger.info(
+                        logger.debug(
                             "[%s] Cloud search returned %d results, using top %d as hints",
                             trace_id,
                             len(cloud_results),

@@ -376,12 +376,12 @@ def cloud_sync_logic(
         - error: Error message if failed (optional)
     """
     trace_id = str(uuid.uuid4())[:8]
-    logger.info("[%s] Starting cloud sync", trace_id)
+    logger.debug("[%s] Starting cloud sync", trace_id)
 
     original_base_dir = base_dir
     base_dir = get_repo_root(base_dir)
     if base_dir != original_base_dir:
-        logger.info(
+        logger.debug(
             "[%s] Normalized base_dir to git root",
             trace_id,
         )
@@ -435,7 +435,7 @@ def cloud_sync_logic(
     try:
         # Ensure repo exists
         repo_id = client.ensure_repo(cloud_repo_name, trace_id=trace_id)
-        logger.info("[%s] Cloud repo resolved", trace_id)
+        logger.debug("[%s] Cloud repo resolved", trace_id)
 
         # Load cached sync state (unless force)
         cached_state: SyncState | None = None
@@ -473,13 +473,13 @@ def cloud_sync_logic(
         else:
             sync_mode = "incremental"
 
-        logger.info("[%s] Sync mode: %s", trace_id, sync_mode)
+        logger.debug("[%s] Sync mode: %s", trace_id, sync_mode)
         is_incremental = sync_mode == "incremental"
 
         # Get file list (prefer git, fallback to directory scan)
         files = _get_git_tracked_files(base_dir)
         if files is None:
-            logger.info("[%s] Git not available, using directory scan", trace_id)
+            logger.debug("[%s] Git not available, using directory scan", trace_id)
             files = _scan_directory(base_dir)
         else:
             # Filter git files by extension or special filename
@@ -490,7 +490,7 @@ def cloud_sync_logic(
                 or Path(f).name.lower() in SPECIAL_FILENAMES
             ]
 
-        logger.info("[%s] Found %d files to process", trace_id, len(files))
+        logger.debug("[%s] Found %d files to process", trace_id, len(files))
 
         files.sort()
         files_found = len(files)
@@ -509,7 +509,7 @@ def cloud_sync_logic(
         files_selected = len(files)
 
         # Compute file hashes
-        logger.info("[%s] Computing file hashes...", trace_id)
+        logger.debug("[%s] Computing file hashes...", trace_id)
         current_hashes = _compute_file_hashes(base_dir, files)
 
         # Compute diff operations (use diff_state to include deletes even in safe_full mode)
@@ -527,7 +527,7 @@ def cloud_sync_logic(
         if sync_mode == "safe_full" and deletes:
             if ref_changed:
                 # Branch switch detected: execute deletes to clean zombie files
-                logger.info(
+                logger.debug(
                     "[%s] Branch switch detected: cleaning %d zombie files from cloud",
                     trace_id,
                     len(deletes),
@@ -553,7 +553,7 @@ def cloud_sync_logic(
         # Unchanged = total tracked - writes - skipped (skipped files are tracked but not uploaded)
         files_unchanged = len(new_hashes) - len(writes) - files_skipped
 
-        logger.info(
+        logger.debug(
             "[%s] Diff computed: %d created, %d updated, %d deleted, %d unchanged, %d skipped",
             trace_id,
             files_created,
@@ -567,7 +567,7 @@ def cloud_sync_logic(
         repo_head = ""
         if sync_mode == "mirror_full":
             # Mirror mode: use type="files" to completely overwrite
-            logger.info("[%s] Mirror full sync: uploading %d files...", trace_id, len(writes))
+            logger.debug("[%s] Mirror full sync: uploading %d files...", trace_id, len(writes))
             file_contents = [
                 {"filename": op["filename"], "content": op["content"]} for op in writes
             ]
@@ -580,22 +580,22 @@ def cloud_sync_logic(
                     "[%s] Mirror sync with empty file list - cloud repo cleared",
                     trace_id,
                 )
-            logger.info(
+            logger.debug(
                 "[%s] Mirror sync completed, new head=%s",
                 trace_id,
                 repo_head[:8] if repo_head else "none",
             )
         elif operations:
-            logger.info("[%s] Applying %d operations via update API...", trace_id, len(operations))
+            logger.debug("[%s] Applying %d operations via update API...", trace_id, len(operations))
             result = client.update_repo(repo_id, operations, trace_id=trace_id)
             repo_head = str(result.get("repo_head", ""))
-            logger.info(
+            logger.debug(
                 "[%s] Update completed, new head=%s",
                 trace_id,
                 repo_head[:8] if repo_head else "none",
             )
         else:
-            logger.info("[%s] No changes detected, skipping update", trace_id)
+            logger.debug("[%s] No changes detected, skipping update", trace_id)
             repo_head = cached_state.repo_head if cached_state else ""
 
         # Save new sync state with git info

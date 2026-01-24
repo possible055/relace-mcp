@@ -1,6 +1,6 @@
 from typing import Any
 
-from ..apply.logging import log_event
+from ...observability import log_event
 
 __all__ = ["log_cloud_event", "_extract_error_fields"]
 

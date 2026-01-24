@@ -1,6 +1,6 @@
 # MCP Dashboard (仪表盘)
 
-实时终端日志查看器，用于监控 `fast_apply` 和 `fast_search` 操作。
+实时终端日志查看器，用于监控 `fast_apply` 和 `agentic_search` 操作。
 
 当 `MCP_LOGGING=1` 时，Cloud 工具事件（`cloud_*`）也会出现在 **All** 与 **Errors** 视图中。
 
@@ -154,11 +154,11 @@ Turn 2 [████████████████████████
 | `create_success` | 新文件已创建 | `fast_apply` |
 | `apply_success` | 文件编辑成功 | `fast_apply` |
 | `apply_error` | 文件编辑失败 | `fast_apply` |
-| `search_start` | 搜索会话开始 | `fast_search` |
-| `search_turn` | LLM 轮次完成 | `fast_search` |
-| `tool_call` | 搜索期间执行的工具 | `fast_search` |
-| `search_complete` | 搜索会话完成 | `fast_search` |
-| `search_error` | 搜索会话失败 | `fast_search` |
+| `search_start` | 搜索会话开始 | `agentic_search` |
+| `search_turn` | LLM 轮次完成 | `agentic_search` |
+| `tool_call` | 搜索期间执行的工具 | `agentic_search` |
+| `search_complete` | 搜索会话完成 | `agentic_search` |
+| `search_error` | 搜索会话失败 | `agentic_search` |
 
 ### Cloud 事件
 
@@ -195,7 +195,7 @@ Install with: pip install relace-mcp[tools]
 
 ### 没有显示日志
 
-1. 确保你至少执行过一次 `fast_apply` 或 `fast_search`
+1. 确保你至少执行过一次 `fast_apply` 或 `agentic_search`
 2. 检查日志文件是否存在于预期位置
 3. 尝试将时间范围筛选器调整为「All」
 

@@ -249,7 +249,9 @@ def _build_ripgrep_command(params: GrepSearchParams) -> list[str]:
     Returns:
         ripgrep command list.
     """
-    cmd = ["rg", "--line-number", "--no-heading", "--color=never"]
+    # Use NUL as field separator (via escape sequence) to handle filenames containing colons
+    # ripgrep interprets \x00 as a literal NUL byte
+    cmd = ["rg", "--line-number", "--no-heading", "--color=never", r"--field-match-separator=\x00"]
 
     if not params.case_sensitive:
         cmd.append("-i")
@@ -271,6 +273,8 @@ def _build_ripgrep_command(params: GrepSearchParams) -> list[str]:
 def _process_ripgrep_output(stdout: str) -> str:
     """Process ripgrep output and truncate to limit.
 
+    Converts NUL-separated fields back to colon-separated for display.
+
     Args:
         stdout: ripgrep stdout output.
 
@@ -281,11 +285,22 @@ def _process_ripgrep_output(stdout: str) -> str:
     if not output:
         return "No matches found."
 
-    lines = output.split("\n")
+    # Convert NUL separators back to colons for display (first two NUL per line)
+    # Format: path\x00line\x00content -> path:line:content
+    lines = []
+    for line in output.split("\n"):
+        parts = line.split("\x00", 2)
+        if len(parts) == 3:
+            lines.append(f"{parts[0]}:{parts[1]}:{parts[2]}")
+        else:
+            lines.append(line)  # Fallback for unexpected format
+
     if len(lines) > MAX_GREP_MATCHES:
         lines = lines[:MAX_GREP_MATCHES]
         output = "\n".join(lines)
         output += f"\n... output capped at {MAX_GREP_MATCHES} matches ..."
+    else:
+        output = "\n".join(lines)
 
     return output
 
@@ -312,17 +327,20 @@ def _try_ripgrep(params: GrepSearchParams) -> str:
         # For ASCII queries, allow searching through non-UTF-8 files safely.
         cmd.insert(1, "--text")
 
+    # Use text=False to handle NUL bytes in field separator
     result = subprocess.run(  # nosec B603
         cmd,
         cwd=params.base_dir,
         capture_output=True,
-        text=True,
+        text=False,
         timeout=GREP_TIMEOUT_SECONDS,
         check=False,
     )
 
     if result.returncode == 0:
-        return _process_ripgrep_output(result.stdout)
+        # Decode stdout, handling NUL bytes properly
+        stdout = result.stdout.decode("utf-8", errors="replace")
+        return _process_ripgrep_output(stdout)
     elif result.returncode == 1:
         return "No matches found."
     else:
@@ -335,7 +353,7 @@ def grep_search_handler(params: GrepSearchParams) -> str:
         # Non-ASCII patterns cannot be reliably matched across unknown legacy encodings via rg.
         # Fall back to per-file decoding to support GBK/Big5 mixed repos.
         if get_project_encoding() is None and not params.query.isascii():
-            logger.info(
+            logger.debug(
                 "Non-ASCII query detected without RELACE_DEFAULT_ENCODING; falling back to robust Python search"
             )
             return _grep_search_python_fallback(params)

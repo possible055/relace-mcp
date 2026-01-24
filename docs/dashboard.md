@@ -1,6 +1,6 @@
 # MCP Dashboard
 
-A real-time terminal-based log viewer for monitoring `fast_apply` and `fast_search` operations.
+A real-time terminal-based log viewer for monitoring `fast_apply` and `agentic_search` operations.
 
 Cloud tool events (`cloud_*`) also appear in the **All** and **Errors** views when `MCP_LOGGING=1`.
 
@@ -154,11 +154,11 @@ Logs are stored using `platformdirs`:
 | `create_success` | New file created | `fast_apply` |
 | `apply_success` | File edited successfully | `fast_apply` |
 | `apply_error` | File edit failed | `fast_apply` |
-| `search_start` | Search session started | `fast_search` |
-| `search_turn` | LLM turn completed | `fast_search` |
-| `tool_call` | Tool executed during search | `fast_search` |
-| `search_complete` | Search session completed | `fast_search` |
-| `search_error` | Search session failed | `fast_search` |
+| `search_start` | Search session started | `agentic_search` |
+| `search_turn` | LLM turn completed | `agentic_search` |
+| `tool_call` | Tool executed during search | `agentic_search` |
+| `search_complete` | Search session completed | `agentic_search` |
+| `search_error` | Search session failed | `agentic_search` |
 
 ### Cloud Events
 
@@ -195,7 +195,7 @@ Install with: pip install relace-mcp[tools]
 
 ### No Logs Displayed
 
-1. Ensure you have run `fast_apply` or `fast_search` at least once
+1. Ensure you have run `fast_apply` or `agentic_search` at least once
 2. Check that the log file exists at the expected location
 3. Try adjusting the time range filter to "All"
 

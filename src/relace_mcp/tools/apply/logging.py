@@ -1,73 +1,11 @@
-import json
 import logging
-import threading
-import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ...config import settings
+from ...observability import get_trace_id, log_event, redact_value
 
 logger = logging.getLogger(__name__)
-
-# Log rotation: maximum number of old logs to keep
-MAX_ROTATED_LOGS = 5
-_LOG_LOCK = threading.Lock()
-
-
-def rotate_log_if_needed() -> None:
-    """Rotate log file if it exceeds size limit and clean up old files."""
-    try:
-        if (
-            settings.LOG_PATH.exists()
-            and settings.LOG_PATH.stat().st_size > settings.MAX_LOG_SIZE_BYTES
-        ):
-            rotated_path = settings.LOG_PATH.with_suffix(
-                f".{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.log"
-            )
-            settings.LOG_PATH.rename(rotated_path)
-            logger.info("Rotated log file to %s", rotated_path)
-
-            # Clean up old log files exceeding limit
-            rotated_logs = sorted(settings.LOG_PATH.parent.glob("relace.*.log"), reverse=True)
-            for old_log in rotated_logs[MAX_ROTATED_LOGS:]:
-                old_log.unlink(missing_ok=True)
-                logger.debug("Cleaned up old log file: %s", old_log)
-    except Exception as exc:
-        logger.warning("Failed to rotate log file: %s", exc)
-
-
-def log_event(event: dict[str, Any]) -> None:
-    """Write a single JSON event to local log, failures don't affect main flow.
-
-    Args:
-        event: Event data to log.
-    """
-    if not settings.MCP_LOGGING:
-        return
-
-    event = dict(event)
-    try:
-        if "timestamp" not in event:
-            event["timestamp"] = datetime.now(UTC).isoformat()
-        if "trace_id" not in event:
-            event["trace_id"] = str(uuid.uuid4())[:8]
-        if "level" not in event:
-            kind = str(event.get("kind", "")).lower()
-            event["level"] = "error" if kind.endswith("error") else "info"
-
-        with _LOG_LOCK:
-            if settings.LOG_PATH.is_dir():
-                logger.warning("Log path is a directory, skipping log write")
-                return
-            settings.LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-
-            rotate_log_if_needed()
-
-            with open(settings.LOG_PATH, "a", encoding="utf-8") as f:
-                f.write(json.dumps(event, ensure_ascii=False) + "\n")
-    except Exception as exc:
-        logger.warning("Failed to write Relace log: %s", exc)
 
 
 def log_create_success(
@@ -88,8 +26,8 @@ def log_create_success(
             "trace_id": trace_id,
             "file_path": str(resolved_path),
             "file_size_bytes": resolved_path.stat().st_size,
-            "instruction": instruction,
-            "edit_snippet_preview": edit_snippet[:200],
+            "instruction": redact_value(instruction, 200) if instruction else None,
+            "edit_snippet_preview": redact_value(edit_snippet, 200),
         }
     )
 
@@ -124,8 +62,8 @@ def log_apply_success(
             "latency_ms": latency_ms,
             "file_path": str(resolved_path),
             "file_size_bytes": file_size,
-            "instruction": instruction,
-            "edit_snippet_preview": edit_snippet[:200],
+            "instruction": redact_value(instruction, 200) if instruction else None,
+            "edit_snippet_preview": redact_value(edit_snippet, 200),
             "usage": usage,
         }
     )
@@ -158,8 +96,12 @@ def log_apply_error(
             "started_at": started_at.isoformat(),
             "latency_ms": latency_ms,
             "file_path": file_path,
-            "instruction": instruction,
-            "edit_snippet_preview": (edit_snippet or "")[:200],
+            "instruction": redact_value(instruction, 200) if instruction else None,
+            "edit_snippet_preview": redact_value(edit_snippet or "", 200),
             "error": str(exc),
         }
     )
+
+
+def generate_trace_id() -> str:
+    return get_trace_id()

@@ -61,6 +61,7 @@
 | `SEARCH_PROMPT_FILE` | — | 覆盖 search prompt YAML 路径 |
 | `SEARCH_TIMEOUT_SECONDS` | `120` | 请求超时（同时作为 `agentic_search` 的总耗时预算；超时会返回 `partial=true`） |
 | `SEARCH_TEMPERATURE` | `1.0` | 采样温度（0.0-2.0） |
+| `SEARCH_TOP_P` | — | 可选的 top_p 采样（如需显式设置 top_p 的提供商如 Mistral，可设为 `1`） |
 | `SEARCH_MAX_TURNS` | `6` | 最大 agent 循环轮数 |
 | `SEARCH_LSP_TOOLS` | `false` | LSP 工具模式：`false`（禁用）、`true`（全部启用）、`auto`（检测已安装的服务器） |
 | `SEARCH_ENABLED_TOOLS` | (仅基础工具) | 工具允许列表（逗号/空格分隔）。未设置时仅启用基础工具。当 `SEARCH_LSP_TOOLS=true/auto` 时，此变量也可过滤启用哪些 LSP 工具。`bash` 需要显式加入。 |
@@ -213,19 +214,19 @@ SEARCH_MAX_TURNS=6
 
 ## 替代提供商
 
-`fast_apply` 和 `fast_search` 都可以使用 OpenAI 兼容提供商替代 Relace。
+`fast_apply` 和 `agentic_search` 都可以使用 OpenAI 兼容提供商替代 Relace。
 
 ### 配置模式
 
 ```bash
 # For fast_apply
 export APPLY_PROVIDER=openrouter
-export APPLY_API_KEY=sk-or-v1-xxx
+export APPLY_API_KEY=[REDACTED:api-key]
 export APPLY_MODEL=anthropic/claude-3.5-sonnet
 
-# For fast_search
+# For agentic_search
 export SEARCH_PROVIDER=openai
-export SEARCH_API_KEY=sk-xxx
+export SEARCH_API_KEY=[REDACTED:api-key]
 export SEARCH_MODEL=gpt-4o
 ```
 

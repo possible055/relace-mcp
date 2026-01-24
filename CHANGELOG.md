@@ -40,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### LSP Integration
 
-- **Multi-language LSP support** — Extended toolset with `find_symbol`, `find_references`, `get_hover` for Python, TypeScript, Go, and Rust.
+- **Multi-language LSP support** — Extended toolset with `find_symbol`, `search_symbol`, `get_type`, `list_symbols`, `call_graph` for Python, TypeScript, Go, and Rust.
 - **Session-based LSP lifecycle** — Improved state isolation and fingerprint-based caching.
 
 #### Configuration

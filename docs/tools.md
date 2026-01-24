@@ -114,7 +114,9 @@ List all repositories in your Relace Cloud account.
 
 ### Parameters
 
-None
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `reason` | ❌ | Brief explanation for LLM chain-of-thought (ignored by tool) |
 
 ---
 
@@ -124,7 +126,9 @@ Get detailed sync status for the current repository. Use before `cloud_sync` to 
 
 ### Parameters
 
-None
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `reason` | ❌ | Brief explanation for LLM chain-of-thought (ignored by tool) |
 
 ---
 

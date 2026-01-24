@@ -122,7 +122,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         """
         trace_id = str(uuid.uuid4())[:8]
         # Safe query truncation (avoid cutting in middle of multi-byte characters)
-        logger.info("[%s] Starting Fast Agentic Search (query_len=%d)", trace_id, len(query))
+        logger.debug("[%s] Starting Fast Agentic Search (query_len=%d)", trace_id, len(query))
         log_search_start(trace_id, query)
         start_time = time.perf_counter()
 
@@ -165,7 +165,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         query_preview = query[:100] if len(query) <= 100 else query[:97] + "..."
         # Sanitize preview for log injection safety (remove newlines and control chars)
         query_preview = query_preview.replace("\n", " ").replace("\r", " ")
-        logger.info(
+        logger.debug(
             "[%s] Starting Fast Agentic Search async (query_len=%d, preview=%s)",
             trace_id,
             len(query),
@@ -321,7 +321,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
 
             # After processing all tool calls, if report_back was called, return
             if report_back_result is not None:
-                logger.info(
+                logger.debug(
                     "[%s] Search completed in %d turns, found %d files",
                     trace_id,
                     turn + 1,
@@ -481,7 +481,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
 
                 # After processing all tool calls, if report_back was called, return
                 if report_back_result is not None:
-                    logger.info(
+                    logger.debug(
                         "[%s] Search completed in %d turns, found %d files",
                         trace_id,
                         turn + 1,

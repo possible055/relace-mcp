@@ -81,13 +81,19 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             )
         try:
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-            return await apply_file_logic(
+            if ctx is not None:
+                await ctx.info(f"Applying edit to {path}")
+            result = await apply_file_logic(
                 backend=apply_backend,
                 file_path=path,
                 edit_snippet=edit_snippet,
                 instruction=instruction or None,  # Convert empty string to None internally
                 base_dir=base_dir,
             )
+            if ctx is not None and result and result.get("status") == "ok":
+                diff_preview = (result.get("diff") or "")[:200]
+                await ctx.debug(f"Edit applied: {diff_preview}...")
+            return result
         finally:
             if progress_task is not None:
                 progress_task.cancel()
@@ -100,6 +106,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         async def _agentic_search_impl(query: str, ctx: Context) -> dict[str, Any]:
             """Internal implementation for agentic search."""
+            await ctx.info(f"Searching: {query[:100]}")
             progress_task = asyncio.create_task(
                 _progress_heartbeat(ctx, message="agentic_search in progress")
             )
@@ -113,9 +120,12 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 lsp_languages = get_lsp_languages(Path(base_dir))
 
                 effective_config = replace(config, base_dir=base_dir)
-                return await FastAgenticSearchHarness(
+                result = await FastAgenticSearchHarness(
                     effective_config, search_client, lsp_languages=lsp_languages
                 ).run_async(query=query)
+                files_found = len(result.get("files", {}))
+                await ctx.debug(f"Search found {files_found} files")
+                return result
             finally:
                 progress_task.cancel()
                 with suppress(asyncio.CancelledError):
@@ -296,18 +306,23 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             """
             progress_task = None
             if ctx is not None:
+                await ctx.info(f"Retrieval: {query[:100]}")
                 progress_task = asyncio.create_task(
                     _progress_heartbeat(ctx, message="agentic_retrieval in progress")
                 )
             try:
                 base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-                return await agentic_retrieval_logic(
+                result = await agentic_retrieval_logic(
                     repo_client,
                     search_client,
                     config,
                     base_dir,
                     query,
                 )
+                if ctx is not None:
+                    files_found = len(result.get("files", {}))
+                    await ctx.debug(f"Retrieval found {files_found} files")
+                return result
             finally:
                 if progress_task is not None:
                     progress_task.cancel()

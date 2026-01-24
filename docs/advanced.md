@@ -59,8 +59,9 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `SEARCH_MODEL` | `relace-search` | Override model name |
 | `SEARCH_API_KEY` | — | API key for non-Relace providers |
 | `SEARCH_PROMPT_FILE` | — | Override search prompt YAML path |
-| `SEARCH_TIMEOUT_SECONDS` | `120` | Request timeout (also used as `fast_search` wall-clock budget; returns `partial=true` on timeout) |
+| `SEARCH_TIMEOUT_SECONDS` | `120` | Request timeout (also used as `agentic_search` wall-clock budget; returns `partial=true` on timeout) |
 | `SEARCH_TEMPERATURE` | `1.0` | LLM sampling temperature (0.0-2.0) |
+| `SEARCH_TOP_P` | — | Optional top_p sampling (e.g., set to `1` for providers requiring explicit top_p like Mistral) |
 | `SEARCH_MAX_TURNS` | `6` | Maximum agent loop turns |
 | `SEARCH_LSP_TOOLS` | `false` | LSP tool mode: `false` (disabled), `true` (all enabled), `auto` (detect installed servers) |
 | `SEARCH_ENABLED_TOOLS` | (basic only) | Tool allowlist (comma/space-separated). If unset, only basic tools are enabled. When `SEARCH_LSP_TOOLS=true/auto`, this also filters which LSP tools are enabled. `bash` requires explicit opt-in. |
@@ -72,7 +73,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 
 #### Progress & Timeouts
 
-- `fast_search` sends periodic progress notifications to avoid idle client timeouts.
+- `agentic_search` sends periodic progress notifications to avoid idle client timeouts.
 - If you still hit a hard client/host timeout, reduce `SEARCH_MAX_TURNS` or increase `SEARCH_TIMEOUT_SECONDS`.
 
 ### Cloud Sync
@@ -212,19 +213,19 @@ Logs are written in JSON Lines (JSONL) format:
 
 ## Alternative Providers
 
-Both `fast_apply` and `fast_search` can use OpenAI-compatible providers instead of Relace.
+Both `fast_apply` and `agentic_search` can use OpenAI-compatible providers instead of Relace.
 
 ### Configuration Pattern
 
 ```bash
 # For fast_apply
 export APPLY_PROVIDER=openrouter
-export APPLY_API_KEY=sk-or-v1-xxx
+export APPLY_API_KEY=[REDACTED:api-key]
 export APPLY_MODEL=anthropic/claude-3.5-sonnet
 
-# For fast_search
+# For agentic_search
 export SEARCH_PROVIDER=openai
-export SEARCH_API_KEY=sk-xxx
+export SEARCH_API_KEY=[REDACTED:api-key]
 export SEARCH_MODEL=gpt-4o
 ```
 

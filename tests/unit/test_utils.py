@@ -130,3 +130,50 @@ class TestResolveRepoPathEdgeCases:
         # On Windows, Path.resolve() adds drive letter prefix
         expected = str(Path("/REPO/src").resolve())
         assert result == expected  # Passed through as absolute path
+
+
+class TestResolveRepoPathSymlinks:
+    """Symlink handling tests for resolve_repo_path."""
+
+    def test_symlink_within_base_dir_allowed(self, tmp_path: Path) -> None:
+        """Test symlink pointing within base_dir is allowed."""
+        # Create real directory and file
+        real_dir = tmp_path / "real"
+        real_dir.mkdir()
+        real_file = real_dir / "file.txt"
+        real_file.write_text("content")
+
+        # Create symlink within base_dir
+        link = tmp_path / "link"
+        link.symlink_to(real_dir)
+
+        # Access via symlink should work
+        result = resolve_repo_path("/repo/link/file.txt", str(tmp_path))
+        assert "file.txt" in result
+
+    def test_symlink_escaping_base_dir_blocked(self, tmp_path: Path) -> None:
+        """Test symlink pointing outside base_dir is blocked."""
+        import tempfile
+
+        # Create directory outside base_dir
+        with tempfile.TemporaryDirectory() as outside_dir:
+            outside_file = Path(outside_dir) / "secret.txt"
+            outside_file.write_text("secret")
+
+            # Create symlink inside base_dir pointing outside
+            link = tmp_path / "escape_link"
+            link.symlink_to(outside_dir)
+
+            # Access via symlink should be blocked
+            with pytest.raises(ValueError, match="Path escapes base_dir"):
+                resolve_repo_path("/repo/escape_link/secret.txt", str(tmp_path))
+
+    def test_existing_path_uses_samefile(self, tmp_path: Path) -> None:
+        """Test that existing paths use os.path.samefile for comparison."""
+        # Create a file
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("content")
+
+        # Access should work for existing files
+        result = resolve_repo_path("/repo/test.txt", str(tmp_path))
+        assert result == str(test_file.resolve())
