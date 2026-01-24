@@ -20,27 +20,36 @@ class ObservedFilesMixin:
 
         Grep output format: path:line:content
         Note: grep output paths are relative to base_dir, converted to absolute paths.
-        """
-        # Parse grep output, extract path:line
-        pattern = r"^([^:]+):(\d+):"
-        for line in grep_output.split("\n"):
-            match = re.match(pattern, line)
-            if match:
-                rel_path = match.group(1)
-                # Normalize path format: remove ./ prefix
-                if rel_path.startswith("./"):
-                    rel_path = rel_path[2:]
-                # Convert to absolute path
-                abs_path = self._to_absolute_path(rel_path)
-                if not abs_path:
-                    # Defense-in-depth: ignore any path that escapes base_dir.
-                    continue
-                line_num = int(match.group(2))
 
-                if abs_path not in self._observed_files:
-                    self._observed_files[abs_path] = []
-                # Record single-line range
-                self._observed_files[abs_path].append([line_num, line_num])
+        We intentionally parse the FIRST ":<digits>:" delimiter from the left.
+        This avoids mis-parsing the line number when the matched content contains
+        ":<digits>:" sequences (e.g., "foo:12:bar:34:baz").
+        """
+        for line in grep_output.split("\n"):
+            if not line:
+                continue
+
+            m = re.search(r":(\d+):", line)
+            if not m:
+                continue
+
+            rel_path = line[: m.start()]
+            line_num = int(m.group(1))
+
+            # Normalize path format: remove ./ prefix
+            if rel_path.startswith("./"):
+                rel_path = rel_path[2:]
+
+            # Convert to absolute path
+            abs_path = self._to_absolute_path(rel_path)
+            if not abs_path:
+                # Defense-in-depth: ignore any path that escapes base_dir.
+                continue
+
+            if abs_path not in self._observed_files:
+                self._observed_files[abs_path] = []
+            # Record single-line range
+            self._observed_files[abs_path].append([line_num, line_num])
 
     def _merge_observed_ranges(self) -> dict[str, list[list[int]]]:
         """Merge and deduplicate ranges in observed_files.

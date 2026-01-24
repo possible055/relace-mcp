@@ -323,7 +323,7 @@ class LSPClient:
         )
 
     def _restart_language_server(self, reason: str) -> None:
-        logger.info("Restarting language server")
+        logger.debug("Restarting language server")
         self._fs_snapshot.clear()
         self._fs_snapshot_initialized = False
         self._fs_last_sync = 0.0
@@ -854,7 +854,7 @@ class LSPClient:
                     return
 
                 command = self._resolve_command(self._config.command)
-                logger.info("Starting language server: %s", " ".join(command))
+                logger.debug("Starting language server: %s", " ".join(command))
 
                 self._stop_event.clear()
                 try:

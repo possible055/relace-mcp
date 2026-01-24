@@ -1,4 +1,6 @@
+import os
 from dataclasses import dataclass
+from pathlib import Path, PureWindowsPath
 from urllib.parse import unquote, urlparse
 
 
@@ -38,6 +40,47 @@ class Location:
 
         return path
 
+    def _looks_like_windows_path(self, path: str) -> bool:
+        """Heuristic check for Windows-style paths (drive letter or UNC)."""
+        normalized = path.replace("\\", "/")
+        if normalized.startswith("//"):
+            return True
+        if len(normalized) >= 3 and normalized[1] == ":" and normalized[0].isalpha():
+            return normalized[2] in {"/", "\\"}
+        return False
+
+    def _is_path_within_base(self, path: str, base_dir: str) -> bool:
+        """Check if path is within base_dir (handles symlinks and case-insensitivity).
+
+        Args:
+            path: Path to check.
+            base_dir: Base directory.
+
+        Returns:
+            True if path is within base_dir.
+        """
+        try:
+            resolved = Path(path).resolve()
+            base_resolved = Path(base_dir).resolve()
+
+            # For existing paths, use samefile to handle symlinks and case-insensitive FS
+            if resolved.exists() and base_resolved.exists():
+                current = resolved
+                while current != current.parent:
+                    try:
+                        if os.path.samefile(current, base_resolved):
+                            return True
+                    except OSError:
+                        break
+                    current = current.parent
+                return False
+
+            # For non-existing paths, use relative_to
+            resolved.relative_to(base_resolved)
+            return True
+        except (ValueError, OSError):
+            return False
+
     def to_grep_format(self, base_dir: str, *, filter_external: bool = True) -> str | None:
         """Format as grep-like output: path:line:col
 
@@ -48,21 +91,65 @@ class Location:
         Returns:
             Formatted string, or None if path is external and filter_external=True.
         """
-        path = self._uri_to_path().replace("\\", "/")
-        # Convert to repo-relative path
-        base_dir_norm = base_dir.replace("\\", "/")
-        base_prefix = base_dir_norm if base_dir_norm.endswith("/") else base_dir_norm + "/"
+        raw_path = self._uri_to_path()
+        path = raw_path.replace("\\", "/")
 
-        path_cmp = path
-        base_prefix_cmp = base_prefix
-        if (len(base_prefix) >= 3 and base_prefix[1:3] == ":/") or base_prefix.startswith("//"):
-            path_cmp = path.lower()
-            base_prefix_cmp = base_prefix.lower()
+        # On non-Windows platforms, pathlib.Path treats "C:/..." and "C:\\..." as relative paths.
+        # Use PureWindowsPath so Windows URIs can still be compared deterministically.
+        if os.name != "nt":
+            base_norm = base_dir.replace("\\", "/")
+            if self._looks_like_windows_path(path) or self._looks_like_windows_path(base_norm):
+                if not (
+                    self._looks_like_windows_path(path) and self._looks_like_windows_path(base_norm)
+                ):
+                    return (
+                        None if filter_external else f"{path}:{self.line + 1}:{self.character + 1}"
+                    )
+                try:
+                    rel = PureWindowsPath(path).relative_to(PureWindowsPath(base_norm))
+                except ValueError:
+                    return (
+                        None if filter_external else f"{path}:{self.line + 1}:{self.character + 1}"
+                    )
+                repo_path = "/repo/" + rel.as_posix().lstrip("/")
+                return f"{repo_path}:{self.line + 1}:{self.character + 1}"
 
-        if path_cmp.startswith(base_prefix_cmp):
-            path = "/repo/" + path[len(base_prefix) :]
+        # Resolve both paths to handle symlinks and case-insensitivity
+        try:
+            resolved_path = Path(path).resolve()
+            base_resolved = Path(base_dir).resolve()
+        except (OSError, ValueError):
+            if filter_external:
+                return None
+            return f"{path}:{self.line + 1}:{self.character + 1}"
+
+        # Check if path is within base_dir
+        if self._is_path_within_base(path, base_dir):
+            # Convert to repo-relative path
+            try:
+                rel_path = resolved_path.relative_to(base_resolved)
+                path = "/repo/" + str(rel_path).replace("\\", "/")
+            except ValueError:
+                # Fallback to string comparison for non-existing paths
+                base_dir_norm = str(base_resolved).replace("\\", "/")
+                base_prefix = base_dir_norm if base_dir_norm.endswith("/") else base_dir_norm + "/"
+                path_str = str(resolved_path).replace("\\", "/")
+
+                path_cmp = path_str
+                base_prefix_cmp = base_prefix
+                if (len(base_prefix) >= 3 and base_prefix[1:3] == ":/") or base_prefix.startswith(
+                    "//"
+                ):
+                    path_cmp = path_str.lower()
+                    base_prefix_cmp = base_prefix.lower()
+
+                if path_cmp.startswith(base_prefix_cmp):
+                    path = "/repo/" + path_str[len(base_prefix) :]
+                elif filter_external:
+                    return None
         elif filter_external:
             return None  # External path (stdlib, site-packages, etc.)
+
         # Line and column are 1-indexed in output (standard grep format)
         return f"{path}:{self.line + 1}:{self.character + 1}"
 

@@ -120,10 +120,10 @@ def detect_project_encoding(
             continue
 
     if not encoding_counts:
-        logger.info("No files sampled for encoding detection")
+        logger.debug("No files sampled for encoding detection")
         return None
 
-    logger.info(
+    logger.debug(
         "Encoding detection sampled %d files: %s",
         files_sampled,
         dict(encoding_counts.most_common(5)),
@@ -135,12 +135,12 @@ def detect_project_encoding(
             # If non-UTF-8 encoding appears in at least 30% of sampled files
             ratio = count / files_sampled
             if ratio >= 0.3:
-                logger.info(
+                logger.debug(
                     "Detected project encoding: %s (%.1f%% of sampled files)",
                     enc,
                     ratio * 100,
                 )
                 return enc
 
-    logger.info("Project appears to use UTF-8 (no dominant regional encoding)")
+    logger.debug("Project appears to use UTF-8 (no dominant regional encoding)")
     return None

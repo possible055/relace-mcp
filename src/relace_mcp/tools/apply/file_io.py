@@ -29,7 +29,7 @@ def set_project_encoding(encoding: str | None) -> None:
     global _project_encoding
     _project_encoding = encoding.lower() if encoding else None
     if _project_encoding:
-        logger.info("Project encoding set to: %s", _project_encoding)
+        logger.debug("Project encoding set to: %s", _project_encoding)
 
 
 def get_project_encoding() -> str | None:

@@ -5,7 +5,7 @@ from typing import Any
 
 import yaml
 
-from .base_dir import resolve_base_dir
+from .base_dir import invalidate_roots_cache, resolve_base_dir
 from .compat import getenv_with_fallback
 from .provider import ProviderConfig, create_provider_config
 
@@ -14,8 +14,8 @@ from .settings import RelaceConfig
 
 logger = logging.getLogger(__name__)
 
-# LLM prompts directory
-_LLM_PROMPTS_DIR = Path(__file__).parent / "llm_prompts"
+# LLM prompts directory (relocated to prompts/)
+_LLM_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 
 def _load_prompt_file(
@@ -30,7 +30,7 @@ def _load_prompt_file(
     if custom_path:
         custom_path_obj = Path(custom_path).expanduser()
         if custom_path_obj.exists():
-            logger.info("Loading custom prompt from %s (via %s)", custom_path_obj, env_var)
+            logger.debug("Loading custom prompt from %s (via %s)", custom_path_obj, env_var)
             with custom_path_obj.open(encoding="utf-8") as f:
                 result = yaml.safe_load(f)
             if result is None:
@@ -109,6 +109,7 @@ __all__ = [
     "ProviderConfig",
     "create_provider_config",
     "resolve_base_dir",
+    "invalidate_roots_cache",
     # Prompts - Relace native (for internal submodule use)
     "SEARCH_SYSTEM_PROMPT",
     "SEARCH_USER_PROMPT_TEMPLATE",

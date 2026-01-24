@@ -34,7 +34,7 @@ def cloud_info_logic(
     """
     trace_id = str(uuid.uuid4())[:8]
     local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(base_dir)
-    logger.info("[%s] Getting cloud info for repository", trace_id)
+    logger.debug("[%s] Getting cloud info for repository", trace_id)
 
     try:
         if not local_repo_name or not cloud_repo_name:
@@ -184,7 +184,7 @@ def cloud_info_logic(
             if git_dirty:
                 warnings.append("Local git working tree has uncommitted changes.")
 
-        logger.info(
+        logger.debug(
             "[%s] Info retrieved: synced=%s, cloud=%s, ref_changed=%s",
             trace_id,
             synced_info is not None,
