@@ -330,4 +330,4 @@ Typical search latency:
 
 - [Agentic Search](agentic-search.md) - Local search
 - [Fast Apply](fast-apply.md) - Apply changes
-- [Configuration](../getting-started/configuration.md) - Advanced config
+- [Configuration](../setup/configuration.md) - Advanced config

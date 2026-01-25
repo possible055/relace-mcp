@@ -1,52 +1,689 @@
-/* Custom styles for Relace MCP documentation */
+/* ============================================================================
+   Relace MCP Documentation - Custom Styles
+   VitePress-inspired design for Material for MkDocs
 
-:root {
-  --md-primary-fg-color: #4f46e5;
+   Strategy: Absolute px units + Strong selectors + !important where needed
+   ============================================================================ */
+
+/* --------------------------------------------------------------------------
+   1. FONTS - Import from Google Fonts
+   -------------------------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+/* --------------------------------------------------------------------------
+   2. CSS VARIABLES
+   -------------------------------------------------------------------------- */
+:root,
+:root > * {
+  /* Brand Colors */
+  /* Brand Colors */
+  --relace-brand-color: #4f46e5;
+  --relace-brand-color--light: #6366f1;
+  --relace-brand-color--dark: #4338ca;
+
   --md-accent-fg-color: #6366f1;
+  --md-accent-fg-color--transparent: rgba(99, 102, 241, 0.12);
+
+  /* Fix: Override white primary causing white text on tabs */
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: #ffffff;
+
+  /* Ensure default foreground colors are used for text */
+  --md-default-fg-color: rgba(0, 0, 0, 0.87);
+  --md-default-fg-color--light: rgba(0, 0, 0, 0.54);
+  --md-default-fg-color--lighter: rgba(0, 0, 0, 0.32);
+  --md-default-fg-color--lightest: rgba(0, 0, 0, 0.07);
+
+  /* Border Radius */
+  --relace-radius-sm: 6px;
+  --relace-radius-md: 8px;
+  --relace-radius-lg: 12px;
+
+  /* Border Colors */
+  --relace-border-color: var(--md-default-fg-color--lightest);
+
+  /* Shadows - VitePress Style */
+  --relace-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --relace-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --relace-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+  /* Fonts */
+  --vp-font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+  --vp-font-family-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, 'Courier New', monospace;
 }
 
-/* Card grid styling */
+/* Dark Mode Adjustments */
+body[data-md-color-scheme="slate"] {
+  --relace-border-color: rgba(255, 255, 255, 0.1);
+  --relace-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --relace-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --relace-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+}
+
+/* --------------------------------------------------------------------------
+   3. BASE TYPOGRAPHY - Main Content Area (16px standard)
+   -------------------------------------------------------------------------- */
+.md-typeset {
+  font-family: var(--vp-font-family-base) !important;
+  font-size: 16px !important;
+  line-height: 1.6 !important;
+  font-weight: 400 !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* --------------------------------------------------------------------------
+   4. HEADINGS - Fixed px sizes to prevent cascade issues
+   -------------------------------------------------------------------------- */
+
+/* H1 - Page Title (32px) */
+.md-typeset h1 {
+  font-family: var(--vp-font-family-base) !important;
+  font-size: 32px !important;
+  line-height: 1.2 !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+  margin: 0 0 16px !important;
+  color: var(--md-default-fg-color);
+}
+
+/* H2 - Section Title (24px) */
+.md-typeset h2 {
+  font-family: var(--vp-font-family-base) !important;
+  font-size: 24px !important;
+  line-height: 1.3 !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.015em !important;
+  margin: 32px 0 12px !important;
+  padding-bottom: 6px !important;
+  border-bottom: 1px solid var(--relace-border-color);
+}
+
+/* H3 - Subsection Title (20px) */
+.md-typeset h3 {
+  font-family: var(--vp-font-family-base) !important;
+  font-size: 20px !important;
+  line-height: 1.4 !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  margin: 28px 0 12px !important;
+}
+
+/* H4 - Minor Title (16px) */
+.md-typeset h4 {
+  font-family: var(--vp-font-family-base) !important;
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+  font-weight: 600 !important;
+  margin: 24px 0 8px !important;
+}
+
+/* H5, H6 */
+.md-typeset h5,
+.md-typeset h6 {
+  font-family: var(--vp-font-family-base) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  margin: 20px 0 8px !important;
+}
+
+/* --------------------------------------------------------------------------
+   5. CODE & INLINE CODE (14px) - Enhanced Contrast
+   -------------------------------------------------------------------------- */
+
+/* Inline Code - Stronger background for better visibility */
+.md-typeset code {
+  font-family: var(--vp-font-family-mono) !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  padding: 2px 6px !important;
+  background: rgba(175, 184, 193, 0.2) !important;
+  border: 1px solid rgba(175, 184, 193, 0.3) !important;
+  border-radius: var(--relace-radius-sm) !important;
+  color: var(--md-code-fg-color) !important;
+}
+
+/* Dark mode inline code */
+body[data-md-color-scheme="slate"] .md-typeset code {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Code Blocks - Use Material defaults for syntax highlighting */
+.md-typeset pre code {
+  font-family: var(--vp-font-family-mono) !important;
+  font-size: 14px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+.md-typeset pre {
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  /* Remove custom styling - let Material handle it */
+}
+
+/* --------------------------------------------------------------------------
+   6. SIDEBAR NAVIGATION (14px - Strong Selectors)
+   -------------------------------------------------------------------------- */
+
+/* Primary Sidebar Container */
+.md-sidebar--primary .md-sidebar__scrollwrap,
+.md-sidebar--primary .md-sidebar__inner {
+  font-size: 15px !important;
+}
+
+/* All Navigation Links in Sidebar - FORCE 15px */
+.md-sidebar--primary .md-nav__list .md-nav__link,
+.md-sidebar--primary .md-nav__item .md-nav__link,
+.md-nav--primary .md-nav__link,
+.md-sidebar .md-nav__link {
+  font-family: var(--vp-font-family-base) !important;
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  padding: 6px 12px !important;
+}
+
+/* Active/Current Page Link */
+.md-sidebar--primary .md-nav__link--active,
+.md-nav--primary .md-nav__link--active {
+  font-weight: 600 !important;
+  color: var(--md-accent-fg-color) !important;
+  font-size: 15px !important;
+}
+
+/* Sidebar Section Titles */
+.md-sidebar--primary .md-nav__title,
+.md-nav--primary .md-nav__title {
+  font-family: var(--vp-font-family-base) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  padding: 6px 12px !important;
+}
+
+/* Nested Navigation (Secondary Level) */
+.md-sidebar--primary .md-nav--secondary .md-nav__link {
+  font-size: 13px !important;
+  padding: 5px 12px 5px 24px !important;
+}
+
+/* Override any inherited font-size */
+.md-sidebar--primary * {
+  font-size: inherit !important;
+}
+
+/* --------------------------------------------------------------------------
+   7. TABS & TAB LABELS
+   -------------------------------------------------------------------------- */
+.md-typeset .tabbed-labels > label,
+.md-typeset .tabbed-set > label {
+  font-family: var(--vp-font-family-base) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+}
+
+/* --------------------------------------------------------------------------
+   8. BUTTONS
+   -------------------------------------------------------------------------- */
+/* Base button - Flat modern style */
+.md-typeset .md-button {
+  font-family: var(--vp-font-family-base) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  padding: 10px 20px !important;
+  border-radius: var(--relace-radius-md);
+  border: 1.5px solid rgba(99, 102, 241, 0.3);
+  background: transparent;
+  color: var(--md-accent-fg-color);
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.md-typeset .md-button:hover {
+  border-color: var(--md-accent-fg-color);
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--md-accent-fg-color);
+}
+
+.md-typeset .md-button:focus,
+.md-typeset .md-button:active {
+  color: var(--md-accent-fg-color) !important;
+  border-color: var(--md-accent-fg-color);
+  background: rgba(99, 102, 241, 0.12);
+  outline: none;
+}
+
+.md-typeset .md-button:focus-visible {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: 2px;
+}
+
+/* Primary button - Solid color */
+.md-typeset .md-button--primary {
+  background: var(--md-accent-fg-color);
+  border-color: var(--md-accent-fg-color);
+  color: white !important;
+}
+
+.md-typeset .md-button--primary:hover {
+  background: var(--relace-brand-color);
+  border-color: var(--relace-brand-color);
+  color: white !important;
+}
+
+.md-typeset .md-button--primary:focus,
+.md-typeset .md-button--primary:active {
+  background: var(--relace-brand-color--dark) !important;
+  border-color: var(--relace-brand-color--dark) !important;
+  color: white !important;
+  outline: none;
+}
+
+.md-typeset .md-button--primary:focus-visible {
+  outline: 2px solid var(--relace-brand-color);
+  outline-offset: 2px;
+}
+
+/* Dark mode adjustments */
+body[data-md-color-scheme="slate"] .md-typeset .md-button {
+  border-color: rgba(129, 140, 248, 0.4);
+  color: #a5b4fc;
+}
+
+body[data-md-color-scheme="slate"] .md-typeset .md-button:hover,
+body[data-md-color-scheme="slate"] .md-typeset .md-button:focus,
+body[data-md-color-scheme="slate"] .md-typeset .md-button:active {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: #818cf8;
+  color: #a5b4fc !important;
+}
+
+/* --------------------------------------------------------------------------
+   9. SEARCH
+   -------------------------------------------------------------------------- */
+.md-search__inner {
+  padding: 16px;
+}
+
+.md-search__form {
+  border-radius: var(--relace-radius-lg);
+  border: 1px solid var(--relace-border-color);
+  background: var(--md-default-bg-color);
+  box-shadow: var(--relace-shadow-sm);
+}
+
+.md-search__input {
+  font-family: var(--vp-font-family-base) !important;
+  font-size: 14px !important;
+}
+
+.md-search__options .md-search__icon {
+  border-radius: var(--relace-radius-sm);
+}
+
+.md-search__options .md-search__icon:hover {
+  background: var(--md-accent-fg-color--transparent);
+}
+
+/* --------------------------------------------------------------------------
+   10. LANGUAGE MENU
+   -------------------------------------------------------------------------- */
+.md-select__inner {
+  border-radius: var(--relace-radius-lg);
+  border: 1px solid var(--relace-border-color);
+  background: var(--md-default-bg-color);
+  box-shadow: var(--relace-shadow-md);
+  padding: 4px;
+}
+
+.md-select__link {
+  font-family: var(--vp-font-family-base) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  padding: 8px 12px !important;
+  border-radius: var(--relace-radius-md);
+}
+
+.md-select__link:hover {
+  background: var(--md-accent-fg-color--transparent);
+  color: var(--md-accent-fg-color);
+}
+
+/* --------------------------------------------------------------------------
+   11. HEADER ICONS
+   -------------------------------------------------------------------------- */
+.md-header__button.md-icon {
+  border-radius: var(--relace-radius-md);
+  color: var(--md-accent-fg-color) !important;
+}
+
+body[data-md-color-scheme="default"] .md-header__button.md-icon:hover {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+body[data-md-color-scheme="slate"] .md-header__button.md-icon:hover {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+/* --------------------------------------------------------------------------
+   12. CARDS & GRIDS
+   -------------------------------------------------------------------------- */
 .grid.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1rem;
-  margin: 2rem 0;
+  gap: 16px;
+  margin: 24px 0;
 }
 
-.grid.cards > div {
-  border: 1px solid var(--md-default-fg-color--lightest);
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  transition: transform 0.2s, box-shadow 0.2s;
+.md-typeset .grid.cards > ol > li,
+.md-typeset .grid.cards > ul > li,
+.md-typeset .grid > .card {
+  border: 1px solid var(--relace-border-color);
+  border-radius: var(--relace-radius-lg);
+  padding: 24px;
+  transition: all 0.2s ease;
+  background: var(--md-default-bg-color);
 }
 
-.grid.cards > div:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+.md-typeset .grid.cards > ol > li:hover,
+.md-typeset .grid.cards > ul > li:hover,
+.md-typeset .grid > .card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--relace-shadow-lg);
+  border-color: var(--md-accent-fg-color);
 }
 
-/* Code block enhancements */
+/* --------------------------------------------------------------------------
+   13. CODE BLOCKS
+   -------------------------------------------------------------------------- */
 .highlight {
-  border-radius: 0.5rem;
+  border-radius: var(--relace-radius-lg);
+  box-shadow: var(--relace-shadow-sm);
+  margin: 16px 0;
 }
 
-/* Admonition styling */
+/* Code block container - ensure proper background */
+.highlight pre {
+  margin: 0 !important;
+  padding: 16px !important;
+  overflow-x: auto;
+}
+
+/* Dark mode code blocks */
+body[data-md-color-scheme="slate"] .highlight pre {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Light mode code blocks */
+body[data-md-color-scheme="default"] .highlight pre {
+  background-color: #f6f8fa !important;
+}
+
+/* --------------------------------------------------------------------------
+   14. ADMONITIONS
+   -------------------------------------------------------------------------- */
 .admonition {
-  border-radius: 0.5rem;
+  border-radius: var(--relace-radius-lg);
+  box-shadow: var(--relace-shadow-sm);
 }
 
-/* Table styling */
-table {
-  border-radius: 0.5rem;
+/* --------------------------------------------------------------------------
+   15. TABLES
+   -------------------------------------------------------------------------- */
+.md-typeset table {
+  font-size: 14px !important;
+  border-radius: var(--relace-radius-lg);
   overflow: hidden;
+  box-shadow: var(--relace-shadow-sm);
 }
 
-/* Button styling */
-.md-button {
-  border-radius: 0.375rem;
+.md-typeset table th,
+.md-typeset table td {
+  font-size: 14px !important;
 }
 
-/* Logo styling */
+/* --------------------------------------------------------------------------
+   16. PARAGRAPH & TEXT SPACING
+   -------------------------------------------------------------------------- */
+.md-typeset p {
+  margin: 16px 0;
+}
+
+/* --------------------------------------------------------------------------
+   17. LINKS - Use CSS Variables + scoped selectors (no !important abuse)
+   -------------------------------------------------------------------------- */
+
+/* Override Material's link color variable */
+:root {
+  --md-typeset-a-color: var(--md-accent-fg-color);
+}
+
+/* Content links only (paragraphs, lists, tables) */
+.md-typeset p a,
+.md-typeset li a,
+.md-typeset td a,
+.md-typeset dd a {
+  color: var(--md-typeset-a-color) !important;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.md-typeset p a:hover,
+.md-typeset li a:hover,
+.md-typeset td a:hover,
+.md-typeset dd a:hover {
+  color: var(--relace-brand-color) !important;
+  text-decoration: underline;
+}
+
+/* Fix: Prevent white text on click/active state */
+.md-typeset p a:active,
+.md-typeset li a:active,
+.md-typeset td a:active,
+.md-typeset dd a:active {
+  color: var(--relace-brand-color) !important;
+}
+
+/* --------------------------------------------------------------------------
+   18. TABBED LABELS - Fix click/active state text color
+   -------------------------------------------------------------------------- */
+
+/* Prevent white flash on click - cover all interaction states */
+.md-typeset .tabbed-labels > label,
+.md-typeset .tabbed-labels > label:hover,
+.md-typeset .tabbed-labels > label:focus,
+.md-typeset .tabbed-labels > label:active {
+  color: var(--md-default-fg-color--light);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Active/checked tab */
+.md-typeset .tabbed-set > input:checked ~ .tabbed-labels > label,
+.js .md-typeset .tabbed-set > input:first-child:checked ~ .tabbed-labels > :first-child,
+.js .md-typeset .tabbed-set > input:nth-child(2):checked ~ .tabbed-labels > :nth-child(2),
+.js .md-typeset .tabbed-set > input:nth-child(3):checked ~ .tabbed-labels > :nth-child(3),
+.js .md-typeset .tabbed-set > input:nth-child(4):checked ~ .tabbed-labels > :nth-child(4),
+.js .md-typeset .tabbed-set > input:nth-child(5):checked ~ .tabbed-labels > :nth-child(5) {
+  color: var(--md-accent-fg-color) !important;
+}
+
+/* Hover state for inactive tabs */
+.md-typeset .tabbed-labels > label:hover {
+  color: var(--md-default-fg-color);
+}
+
+/* --------------------------------------------------------------------------
+   19. LISTS
+   -------------------------------------------------------------------------- */
+.md-typeset ul,
+.md-typeset ol {
+  margin: 16px 0;
+  padding-left: 12px;
+}
+
+.md-typeset li {
+  margin: 8px 0;
+}
+
+/* Nested lists */
+.md-typeset li > ul,
+.md-typeset li > ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+/* --------------------------------------------------------------------------
+   20. BLOCKQUOTES
+   -------------------------------------------------------------------------- */
+.md-typeset blockquote {
+  border-left: 4px solid var(--md-accent-fg-color);
+  padding-left: 16px;
+  margin: 24px 0;
+  font-style: italic;
+  color: var(--md-default-fg-color--light);
+}
+
+/* --------------------------------------------------------------------------
+   21. TOP NAVIGATION TABS (Header Tabs) - FORCE 16px (Larger for better visual consistency)
+   -------------------------------------------------------------------------- */
+
+/* Tabs container - match header style */
+.md-tabs {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Dark mode tabs */
+body[data-md-color-scheme="slate"] .md-tabs {
+  background-color: rgba(30, 30, 30, 0.85) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Top Navigation Tabs - Increase from 14px to 16px */
+.md-tabs,
+.md-tabs__list {
+  font-size: 16px !important;
+}
+
+.md-tabs__link {
+  font-family: var(--vp-font-family-base) !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  padding: 0.6em 0.8em !important;
+  opacity: 1 !important;
+  color: var(--md-default-fg-color) !important;
+  transition: all 0.15s ease;
+}
+
+.md-tabs__link:hover {
+  color: var(--relace-brand-color) !important;
+  background-color: rgba(99, 102, 241, 0.08); /* Light purple bg on hover */
+  border-radius: var(--relace-radius-md);
+}
+
+.md-tabs__link--active {
+  opacity: 1;
+  color: var(--md-accent-fg-color) !important;
+}
+
+.md-tabs__item {
+  height: auto !important;
+  padding: 8px 4px !important;
+  font-size: 16px !important;
+}
+
+/* Override Material defaults */
+.md-tabs__link,
+.md-tabs .md-tabs__link {
+  font-size: 16px !important;
+}
+
+/* --------------------------------------------------------------------------
+   22. HEADER - Logo and Title
+   -------------------------------------------------------------------------- */
+
+/* Header container - VitePress style blur effect */
+.md-header {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Dark mode header */
+body[data-md-color-scheme="slate"] .md-header {
+  background-color: rgba(30, 30, 30, 0.85) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Header Title - Brand color */
 .md-header__title {
-  font-weight: 600;
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  font-family: var(--vp-font-family-base) !important;
+  color: var(--md-accent-fg-color) !important;
+}
+
+/* Header Site Name */
+.md-header__topic {
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  font-family: var(--vp-font-family-base) !important;
+  color: var(--md-accent-fg-color) !important;
+}
+
+/* Logo with brand color */
+.md-logo img,
+.md-logo svg {
+  filter: brightness(0) saturate(100%) invert(32%) sepia(95%) saturate(2642%) hue-rotate(236deg) brightness(93%) contrast(92%);
+}
+
+body[data-md-color-scheme="slate"] .md-logo img,
+body[data-md-color-scheme="slate"] .md-logo svg {
+  filter: none;
+}
+
+/* Selection color fix */
+.md-header__title::selection,
+.md-header__topic::selection {
+  background: rgba(99, 102, 241, 0.3);
+  color: var(--md-accent-fg-color);
+  -webkit-text-fill-color: initial;
+}
+
+/* --------------------------------------------------------------------------
+   23. SIDEBAR - Increase from 14px to 15px for better readability
+   -------------------------------------------------------------------------- */
+
+/* Update from previous 14px to 15px */
+.md-sidebar--primary .md-sidebar__scrollwrap,
+.md-sidebar--primary .md-sidebar__inner {
+  font-size: 15px !important;
+}
+
+/* All Navigation Links in Sidebar - Update to 15px */
+.md-sidebar--primary .md-nav__list .md-nav__link,
+.md-sidebar--primary .md-nav__item .md-nav__link,
+.md-nav--primary .md-nav__link,
+.md-sidebar .md-nav__link {
+  font-family: var(--vp-font-family-base) !important;
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  padding: 6px 12px !important;
+}
+
+/* Active/Current Page Link */
+.md-sidebar--primary .md-nav__link--active,
+.md-nav--primary .md-nav__link--active {
+  font-weight: 600 !important;
+  color: var(--md-accent-fg-color) !important;
+  font-size: 15px !important;
 }
