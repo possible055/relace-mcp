@@ -1,16 +1,7 @@
 # Relace MCP
 
-<div align="center" markdown>
-
-[![PyPI](https://img.shields.io/pypi/v/relace-mcp.svg)](https://pypi.org/project/relace-mcp/)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/possible055/relace-mcp/blob/main/LICENSE)
-![100% AI-Generated](https://img.shields.io/badge/100%25%20AI-Generated-ff69b4.svg)
-
-</div>
-
 !!! warning "非官方项目"
-    这是一个**个人项目**，与 Relace 无关联。
+    这是一个<strong>个人项目</strong>，与 Relace 无关联。
 
 !!! info "AI 构建"
     完全由 AI 辅助开发（Antigravity、Codex、Cursor、Github Copilot、Windsurf）。
@@ -45,7 +36,7 @@ MCP 服务器提供 AI 驱动的代码编辑和智能代码库探索工具。
 
 ## 对比
 
-| 没有 MCP | 使用 `agentic_search` + `fast_apply` |
+| 没有 MCP | 使用 `fast_apply` + `agentic_search` |
 |:---------|:-------------------------------------|
 | 手动 grep，漏掉相关文件 | 自然提问，精确定位 |
 | 编辑破坏其他导入 | 追踪导入和调用链 |
@@ -110,7 +101,6 @@ MCP 服务器提供 AI 驱动的代码编辑和智能代码库探索工具。
 ## 社区
 
 - **Issues**: [GitHub Issues](https://github.com/possible055/relace-mcp/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/possible055/relace-mcp/discussions)
 - **PyPI**: [relace-mcp](https://pypi.org/project/relace-mcp/)
 
 ## 许可证
