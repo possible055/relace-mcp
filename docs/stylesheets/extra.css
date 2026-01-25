@@ -241,12 +241,14 @@ body[data-md-color-scheme="slate"] .md-typeset code {
   color: var(--md-accent-fg-color);
   transition: all 0.15s ease;
   -webkit-tap-highlight-color: transparent;
+  text-decoration: none !important;
 }
 
 .md-typeset .md-button:hover {
   border-color: var(--md-accent-fg-color);
   background: rgba(99, 102, 241, 0.08);
   color: var(--md-accent-fg-color);
+  text-decoration: none !important;
 }
 
 .md-typeset .md-button:focus,
@@ -662,6 +664,14 @@ body[data-md-color-scheme="slate"] .md-logo svg {
 /* --------------------------------------------------------------------------
    23. SIDEBAR - Increase from 14px to 15px for better readability
    -------------------------------------------------------------------------- */
+
+/* Separator line for professional look - Desktop only */
+@media screen and (min-width: 76.25em) {
+  .md-content {
+    border-left: 1px solid var(--relace-border-color);
+    padding-left: 32px;
+  }
+}
 
 /* Update from previous 14px to 15px */
 .md-sidebar--primary .md-sidebar__scrollwrap,
