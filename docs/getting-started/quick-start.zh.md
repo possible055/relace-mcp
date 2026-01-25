@@ -108,7 +108,7 @@
         - `MCP_BASE_DIR` = `/path/to/your/project`
 
 !!! tip "进阶配置"
-    如需启用云端工具、调试模式或自定义 provider，请参见 [环境变量](../setup/environment-variables.md)。
+    如需启用云端工具、调试模式或自定义 provider，请参见 [环境变量](../advanced/environment-variables.md)。
 
 ## 验证安装
 
@@ -117,7 +117,7 @@
 - `fast_apply` - 快速代码编辑
 - `agentic_search` - 语义代码搜索
 
-完整工具列表与 schema 请参见 [工具总览](../tools/index.md) 与 [工具参考](../tools/reference.md)。
+完整工具列表与 schema 请参见 [工具总览](../tools/overview.md) 与 [工具参考](../tools/reference.md)。
 
 ## 故障排除
 
@@ -144,7 +144,6 @@
 
 ## 下一步
 
-- **详细安装**: 查看 [安装](../setup/installation.md) 了解其他安装方式
-- **配置指南**: 查看 [配置](../setup/configuration.md) 了解客户端专属设置
-- **环境变量**: 查看 [环境变量](../setup/environment-variables.md) 了解所有选项
-- **工具总览**: 探索 [工具总览](../tools/index.md) 了解 Relace MCP 的功能
+- **配置指南**: 查看 [配置](../configuration/overview.md) 了解自定义 Provider 與功能开关
+- **环境变量**: 查看 [环境变量](../advanced/environment-variables.md) 了解所有选项
+- **工具总览**: 探索 [工具总览](../tools/overview.md) 了解 Relace MCP 的功能

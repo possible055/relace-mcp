@@ -108,7 +108,7 @@ Set up your MCP client to use Relace MCP.
         - `MCP_BASE_DIR` = `/path/to/your/project`
 
 !!! tip "Advanced Configuration"
-    For additional environment variables (cloud tools, debugging, custom providers), see [Environment Variables](../setup/environment-variables.md).
+    For additional environment variables (cloud tools, debugging, custom providers), see [Environment Variables](../advanced/environment-variables.md).
 
 ## Verify Installation
 
@@ -117,7 +117,7 @@ Once configured, restart your MCP client. You should see these tools available:
 - `fast_apply` - Fast code editing
 - `agentic_search` - Semantic code search
 
-For a complete list of tools and their schemas, see [Tools Overview](../tools/index.md) and [Tool Reference](../tools/reference.md).
+For a complete list of tools and their schemas, see [Tools Overview](../tools/overview.md) and [Tool Reference](../tools/reference.md).
 
 ## Troubleshooting
 
@@ -144,7 +144,6 @@ Need more help? [Open an issue](https://github.com/possible055/relace-mcp/issues
 
 ## Next Steps
 
-- **Detailed Setup**: See [Installation](../setup/installation.md) for alternative install methods
-- **Configuration**: See [Configuration](../setup/configuration.md) for client-specific setup
-- **Environment Variables**: See [Environment Variables](../setup/environment-variables.md) for all options
-- **Tools**: Explore [Tools Overview](../tools/index.md) to learn what Relace MCP can do
+- **Configuration**: See [Configuration](../configuration/overview.md) for custom providers and features
+- **Environment Variables**: See [Environment Variables](../advanced/environment-variables.md) for all options
+- **Tools**: Explore [Tools Overview](../tools/overview.md) to learn what Relace MCP can do

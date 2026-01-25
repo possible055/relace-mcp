@@ -2,7 +2,7 @@
 
 > **注意**: 此模块正在开发中，API 和指标可能会变更。
 
-使用 Loc-Bench 数据集（源自 [LocAgent](https://github.com/IvanaXu/LocAgent)）评估 `agentic_search` 性能。
+使用 Loc-Bench 数据集（源自 [LocAgent](https://github.com/gersteinlab/LocAgent)）评估 `agentic_search` 性能。
 
 ## 1. 准备
 

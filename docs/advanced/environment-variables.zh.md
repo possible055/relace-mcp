@@ -96,5 +96,5 @@ export SEARCH_PROVIDER="openai"
 ## 参见
 
 - [快速入门](../getting-started/quick-start.md) - 基本设置
-- [配置](configuration.md) - MCP 客户端配置
-- [高级](../advanced/index.md) - 高级用法
+- [配置](../configuration/overview.md) - MCP 客户端配置
+- [高级](overview.md) - 高级用法

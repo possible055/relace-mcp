@@ -1,4 +1,4 @@
-# Contributing
+# Overview
 
 We welcome contributions! This guide will help you get started.
 
