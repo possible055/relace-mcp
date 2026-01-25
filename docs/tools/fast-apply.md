@@ -5,7 +5,7 @@
 ## Requirements
 
 - Default provider (`APPLY_PROVIDER=relace`): set `RELACE_API_KEY`
-- Alternative providers: configure `APPLY_PROVIDER` and the corresponding `*_API_KEY` (see [Advanced](../advanced/index.md))
+- Alternative providers: configure `APPLY_PROVIDER` and the corresponding `*_API_KEY` (see [Advanced](../advanced/overview.md))
 
 ## Parameters
 

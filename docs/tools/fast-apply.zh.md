@@ -5,7 +5,7 @@
 ## 前置要求
 
 - 默认提供商（`APPLY_PROVIDER=relace`）：设置 `RELACE_API_KEY`
-- 替代提供商：配置 `APPLY_PROVIDER` 与对应 `*_API_KEY`（参见 [Advanced](../advanced/index.md)）
+- 替代提供商：配置 `APPLY_PROVIDER` 与对应 `*_API_KEY`（参见 [Advanced](../advanced/overview.md)）
 
 ## 参数
 

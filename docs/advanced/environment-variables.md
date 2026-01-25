@@ -96,5 +96,5 @@ export SEARCH_PROVIDER="openai"
 ## See Also
 
 - [Quick Start](../getting-started/quick-start.md) - Basic setup
-- [Configuration](configuration.md) - MCP client configs
-- [Advanced](../advanced/index.md) - Advanced usage
+- [Configuration](../configuration/overview.md) - MCP client configs
+- [Advanced](overview.md) - Advanced usage

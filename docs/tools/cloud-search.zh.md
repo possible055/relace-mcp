@@ -330,4 +330,4 @@ cloud_search(query="数据库迁移脚本")
 
 - [Agentic Search](agentic-search.md) - 本地搜索
 - [Fast Apply](fast-apply.md) - 应用变更
-- [配置](../setup/configuration.md) - 高级配置
+- [配置](../configuration/overview.md) - 高级配置

@@ -34,13 +34,42 @@ View coverage report: `open htmlcov/index.html`
 
 ```
 tests/
-├── __init__.py
 ├── conftest.py           # Shared fixtures
-├── test_tools.py         # Tool tests
-├── test_server.py        # Server tests
-└── fixtures/
-    └── sample_repo/      # Test repository
+├── smoke/                # Basic startup tests (CI gate)
+├── unit/                 # Unit tests (fast, no external deps)
+├── integration/          # Integration tests (Server + Client)
+└── contract/             # MCP protocol compliance tests ⭐
 ```
+
+## MCP Health Check (Pre-release Gate)
+
+Before pushing to PyPI, run the contract tests to verify MCP is fully functional:
+
+```bash
+# Quick health check (~3 seconds)
+uv run pytest tests/contract/ -v
+
+# Full health check only
+uv run pytest tests/contract/test_health_indicators.py::TestFullHealthCheck -v
+```
+
+### Health Check Indicators
+
+| Indicator | Description |
+|-----------|-------------|
+| `server_builds` | Server can be built with valid config |
+| `tools_registered` | Core tools are registered |
+| `schemas_valid` | Tool schemas have required fields |
+| `tool_callable` | Tools can be invoked without crash |
+| `response_format` | Tool responses follow expected format |
+
+### Contract Tests Coverage
+
+- **Core Tools**: `fast_apply`, `agentic_search`
+- **Cloud Tools**: `cloud_sync`, `cloud_search`, `cloud_clear`, `cloud_list`, `cloud_info`
+- **Schema Validation**: All tool parameters and types
+- **MCP Annotations**: `readOnlyHint`, `destructiveHint`, etc.
+- **Response Contracts**: Status codes, error formats
 
 ## Writing Tests
 
