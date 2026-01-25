@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    // Custom logic to handle hover-to-switch tabs
+    // Inlined for better compatibility with static hosting (avoids file:// blocking)
+    document$.subscribe(function() {
+      var tabs = document.querySelectorAll('.tabbed-labels > label');
+      tabs.forEach(function(tab) {
+        tab.addEventListener('mouseenter', function() {
+          var self = this;
+          // Debounce 50ms to prevent accidental triggering
+          this.clickTimer = setTimeout(function() {
+            self.click();
+          }, 50);
+        });
+
+        tab.addEventListener('mouseleave', function() {
+          if (this.clickTimer) {
+            clearTimeout(this.clickTimer);
+          }
+        });
+      });
+    });
+  </script>
+{% endblock %}
