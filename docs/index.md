@@ -6,7 +6,7 @@
 !!! info "Built with AI"
     Developed entirely with AI assistance (Antigravity, Codex, Cursor, Github Copilot, Windsurf).
 
-MCP server providing AI-powered code editing and intelligent codebase exploration tools.
+Providing AI-powered code editing and intelligent codebase exploration tools.
 
 ## Key Features
 
@@ -24,7 +24,6 @@ MCP server providing AI-powered code editing and intelligent codebase exploratio
 
     - Ask questions in plain language
     - Get precise code locations
-    - Trace imports and dependencies
 
 === "Cloud Search"
 
@@ -33,6 +32,14 @@ MCP server providing AI-powered code editing and intelligent codebase exploratio
     - Sync multiple repositories
     - Cross-repo search
     - Fast semantic indexing
+
+=== "Agentic Retrieval"
+
+    Two-stage semantic + agentic code retrieval.
+
+    - Ask questions in plain language
+    - Use the semantic index to retrieve relevant files, then perform a deeper search to locate the exact code positions.
+
 
 ## Comparison
 
@@ -43,7 +50,7 @@ MCP server providing AI-powered code editing and intelligent codebase exploratio
 | Full rewrites burn tokens | Describe changes, no line numbers |
 | Line number errors corrupt code | 10,000+ tokens/sec merging |
 
-## Quick Start
+## Getting Started
 
 Get started in 5 minutes:
 
@@ -51,7 +58,7 @@ Get started in 5 minutes:
 2. **Configure**: Add to your MCP client (Cursor, Claude Desktop, etc.)
 3. **Use**: Start using AI-powered code tools
 
-[Get Started](getting-started/quick-start.md){ .md-button .md-button--primary }
+[Quick Start](getting-started/quick-start.md){ .md-button .md-button--primary }
 [View on GitHub](https://github.com/possible055/relace-mcp){ .md-button }
 
 ## Documentation Structure
@@ -91,12 +98,6 @@ Get started in 5 minutes:
     [:octicons-arrow-right-24: Contribute](contributing/index.md)
 
 </div>
-
-## Prerequisites
-
-- [uv](https://docs.astral.sh/uv/) - Python package installer
-- [git](https://git-scm.com/) - Version control
-- [ripgrep](https://github.com/BurntSushi/ripgrep) (recommended) - Fast search
 
 ## Community
 

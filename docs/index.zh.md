@@ -6,7 +6,7 @@
 !!! info "AI 构建"
     完全由 AI 辅助开发（Antigravity、Codex、Cursor、Github Copilot、Windsurf）。
 
-MCP 服务器提供 AI 驱动的代码编辑和智能代码库探索工具。
+提供 AI 驱动的代码编辑和智能代码库探索工具。
 
 ## 核心功能
 
@@ -24,7 +24,6 @@ MCP 服务器提供 AI 驱动的代码编辑和智能代码库探索工具。
 
     - 使用自然语言提问
     - 获得精确代码位置
-    - 追踪导入和依赖
 
 === "Cloud Search"
 
@@ -33,6 +32,13 @@ MCP 服务器提供 AI 驱动的代码编辑和智能代码库探索工具。
     - 同步多个仓库
     - 跨仓库搜索
     - 快速语义索引
+
+=== "Agentic Retrieval"
+
+    两阶段语义 + 智能代码检索。
+
+    - 使用自然语言提问
+    - 结合语义索引取得相关档案，进一步搜索获得精确代码位置
 
 ## 对比
 
@@ -43,22 +49,36 @@ MCP 服务器提供 AI 驱动的代码编辑和智能代码库探索工具。
 | 完整重写浪费 tokens | 描述变更，无需行号 |
 | 行号错误破坏代码 | 10,000+ tokens/秒 合并 |
 
-## 快速开始
+## 开始
 
 5 分钟上手：
 
-1. **安装**: `uv tool install relace-mcp`
+1. **安装**:
+    ```json
+    {
+      "mcpServers": {
+        "relace": {
+          "command": "uv",
+          "args": ["tool", "run", "relace-mcp"],
+          "env": {
+            "RELACE_API_KEY": "your-api-key-here",
+            "MCP_BASE_DIR": "/path/to/your/project"
+          }
+        }
+      }
+    }
+    ```
 2. **配置**: 添加到 MCP 客户端（Cursor、Claude Desktop 等）
 3. **使用**: 开始使用 AI 驱动的代码工具
 
-[快速开始](getting-started/quick-start.md){ .md-button .md-button--primary }
+[快速入门](getting-started/quick-start.md){ .md-button .md-button--primary }
 [GitHub 仓库](https://github.com/possible055/relace-mcp){ .md-button }
 
 ## 文档结构
 
 <div class="grid cards" markdown>
 
--   :material-clock-fast:{ .lg .middle } __快速开始__
+-   :material-clock-fast:{ .lg .middle } __开始__
 
     ---
 
@@ -74,7 +94,7 @@ MCP 服务器提供 AI 驱动的代码编辑和智能代码库探索工具。
 
     [:octicons-arrow-right-24: 工具总览](tools/index.md)
 
--   :material-rocket-launch:{ .lg .middle } __高级用法__
+-   :material-rocket-launch:{ .lg .middle } __高级__
 
     ---
 
@@ -91,12 +111,6 @@ MCP 服务器提供 AI 驱动的代码编辑和智能代码库探索工具。
     [:octicons-arrow-right-24: 贡献指南](contributing/index.md)
 
 </div>
-
-## 前置需求
-
-- [uv](https://docs.astral.sh/uv/) - Python 包安装工具
-- [git](https://git-scm.com/) - 版本控制
-- [ripgrep](https://github.com/BurntSushi/ripgrep)（推荐）- 快速搜索
 
 ## 社区
 
