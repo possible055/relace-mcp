@@ -92,7 +92,7 @@
 
     每个 MCP 工具的详细文档
 
-    [:octicons-arrow-right-24: 工具总览](tools/index.md)
+    [:octicons-arrow-right-24: 工具总览](tools/overview.md)
 
 -   :material-rocket-launch:{ .lg .middle } __高级__
 
@@ -100,7 +100,7 @@
 
     仪表盘、基准测试和 API 参考
 
-    [:octicons-arrow-right-24: 高级主题](advanced/index.md)
+    [:octicons-arrow-right-24: 高级主题](advanced/overview.md)
 
 -   :material-account-group:{ .lg .middle } __贡献__
 
@@ -108,7 +108,7 @@
 
     开发指南和贡献准则
 
-    [:octicons-arrow-right-24: 贡献指南](contributing/index.md)
+    [:octicons-arrow-right-24: 贡献指南](contributing/overview.md)
 
 </div>
 

@@ -79,7 +79,7 @@ Get started in 5 minutes:
 
     Detailed documentation for each MCP tool
 
-    [:octicons-arrow-right-24: Tools Overview](tools/index.md)
+    [:octicons-arrow-right-24: Tools Overview](tools/overview.md)
 
 -   :material-rocket-launch:{ .lg .middle } __Advanced__
 
@@ -87,7 +87,7 @@ Get started in 5 minutes:
 
     Dashboard, benchmarks, and API reference
 
-    [:octicons-arrow-right-24: Advanced Topics](advanced/index.md)
+    [:octicons-arrow-right-24: Advanced Topics](advanced/overview.md)
 
 -   :material-account-group:{ .lg .middle } __Contributing__
 
@@ -95,7 +95,7 @@ Get started in 5 minutes:
 
     Development guide and contribution guidelines
 
-    [:octicons-arrow-right-24: Contribute](contributing/index.md)
+    [:octicons-arrow-right-24: Contribute](contributing/overview.md)
 
 </div>
 

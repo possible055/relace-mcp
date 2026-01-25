@@ -11,11 +11,13 @@ theme:
   name: material
   language: en
   custom_dir: docs/overrides
+  favicon: assets/favicon.svg
   features:
     # Navigation
     # - navigation.instant  # Disabled: incompatible with i18n language switcher
     - navigation.tracking
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.expand
     - navigation.path
@@ -42,7 +44,7 @@ theme:
     - media: "(prefers-color-scheme: light)"
       scheme: default
       primary: white
-      accent: indigo
+      accent: deep-orange
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
@@ -50,7 +52,7 @@ theme:
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: black
-      accent: indigo
+      accent: deep-orange
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
@@ -75,11 +77,14 @@ plugins:
             Home: 首页
             Getting Started: 开始
             Quick Start: 快速入门
-            Setup: 配置
-            Installation: 安装
             Configuration: 配置
-            Environment Variables: 环境变量
+            Overview: 概览
+            Retrieval Backends: 检索后端
+            Codanna: Codanna
+            ChunkHound: ChunkHound
             Tools: 工具
+            Environment Variables: 环境变量
+            Benchmark: 基准测试
             Advanced: 高级
             Contributing: 贡献
 
@@ -128,24 +133,24 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting Started:
-      - Quick Start: getting-started/quick-start.md
-  - Setup:
-      - Installation: setup/installation.md
-      - Configuration: setup/configuration.md
-      - Environment Variables: setup/environment-variables.md
+  - Getting Started: getting-started/quick-start.md
+  - Configuration:
+      - Overview: configuration/overview.md
+      - Codanna: configuration/codanna.md
+      - ChunkHound: configuration/chunkhound.md
   - Tools:
-      - tools/index.md
-      - Tool Reference: tools/reference.md
-      - Fast Apply: tools/fast-apply.md
+      - Overview: tools/overview.md
       - Agentic Search: tools/agentic-search.md
       - Cloud Search: tools/cloud-search.md
+      - Fast Apply: tools/fast-apply.md
+      - Reference: tools/reference.md
+  - Benchmark: advanced/benchmark.md
   - Advanced:
-      - advanced/index.md
+      - Overview: advanced/overview.md
+      - Environment Variables: advanced/environment-variables.md
       - Dashboard: advanced/dashboard.md
-      - Benchmark: advanced/benchmark.md
   - Contributing:
-      - contributing/index.md
+      - Overview: contributing/overview.md
       - Development: contributing/development.md
       - Testing: contributing/testing.md
 
@@ -162,8 +167,5 @@ extra:
 
 extra_css:
   - stylesheets/extra.css
-
-extra_javascript:
-  - javascripts/extra.js
 
 copyright: Copyright &copy; 2026 possible055. Licensed under MIT.

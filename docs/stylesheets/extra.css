@@ -10,20 +10,20 @@
    -------------------------------------------------------------------------- */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
 
 /* --------------------------------------------------------------------------
    2. CSS VARIABLES
    -------------------------------------------------------------------------- */
 :root,
 :root > * {
-  /* Brand Colors */
-  /* Brand Colors */
-  --relace-brand-color: #4f46e5;
-  --relace-brand-color--light: #6366f1;
-  --relace-brand-color--dark: #4338ca;
+  /* Brand Colors - Lalamove Orange */
+  --relace-brand-color: #F26722;
+  --relace-brand-color--light: #F58442;
+  --relace-brand-color--dark: #D85A1B;
 
-  --md-accent-fg-color: #6366f1;
-  --md-accent-fg-color--transparent: rgba(99, 102, 241, 0.12);
+  --md-accent-fg-color: #F26722;
+  --md-accent-fg-color--transparent: rgba(242, 103, 34, 0.12);
 
   /* Fix: Override white primary causing white text on tabs */
   --md-primary-bg-color: #ffffff;
@@ -49,7 +49,7 @@
   --relace-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 
   /* Fonts */
-  --vp-font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+  --vp-font-family-base: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
   --vp-font-family-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, 'Courier New', monospace;
 }
 
@@ -59,6 +59,16 @@ body[data-md-color-scheme="slate"] {
   --relace-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --relace-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
   --relace-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+
+  /* Fix: Override text colors for dark mode */
+  --md-default-fg-color: rgba(255, 255, 255, 0.87);
+  --md-default-fg-color--light: rgba(255, 255, 255, 0.54);
+  --md-default-fg-color--lighter: rgba(255, 255, 255, 0.32);
+  --md-default-fg-color--lightest: rgba(255, 255, 255, 0.07);
+
+  /* Fix: Override background colors for dark mode */
+  --md-primary-bg-color: #1e1e1e;
+  --md-primary-bg-color--light: #2c2c2c;
 }
 
 /* --------------------------------------------------------------------------
@@ -148,6 +158,12 @@ body[data-md-color-scheme="slate"] {
 body[data-md-color-scheme="slate"] .md-typeset code {
   background: rgba(255, 255, 255, 0.1) !important;
   border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Fix: Reset background for code blocks in dark mode (specificity override) */
+body[data-md-color-scheme="slate"] .md-typeset pre code {
+  background: transparent !important;
+  border: none !important;
 }
 
 /* Code Blocks - Use Material defaults for syntax highlighting */
@@ -659,6 +675,29 @@ body[data-md-color-scheme="slate"] .md-logo svg {
   background: rgba(99, 102, 241, 0.3);
   color: var(--md-accent-fg-color);
   -webkit-text-fill-color: initial;
+}
+
+/* Repository Link - Fix visibility */
+.md-header__source {
+  /* Ensure it's not hidden by other styles */
+  display: block !important;
+}
+
+.md-source__icon {
+  color: var(--md-default-fg-color) !important;
+  transition: color 0.25s;
+}
+
+.md-source__repository {
+  color: var(--md-default-fg-color) !important;
+  font-weight: 600 !important;
+  font-family: var(--vp-font-family-base) !important;
+  transition: color 0.25s;
+}
+
+.md-source:hover .md-source__icon,
+.md-source:hover .md-source__repository {
+  color: var(--md-default-fg-color--light) !important;
 }
 
 /* --------------------------------------------------------------------------

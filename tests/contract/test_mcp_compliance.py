@@ -138,7 +138,6 @@ class TestMCPToolSchemas:
                     desc = (param_schema.get("description") or "").strip()
                     assert desc, f"Tool '{tool.name}' param '{param_name}' has no description"
 
-
 class TestMCPToolAnnotations:
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("clean_env")

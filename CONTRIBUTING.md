@@ -69,6 +69,28 @@ We use `pytest` for testing.
 2.  Bug fixes must include a regression test.
 3.  All existing tests must pass.
 
+## Documentation
+
+We use MkDocs with Material theme for documentation.
+
+*   **Build documentation**:
+    ```bash
+    python scripts/docs.py build
+    ```
+*   **Serve documentation locally** (with auto-reload):
+    ```bash
+    python scripts/docs.py serve
+    ```
+*   **Deploy to GitHub Pages**:
+    ```bash
+    python scripts/docs.py deploy
+    ```
+
+**Requirements:**
+1.  All new features must include documentation updates.
+2.  Documentation must be available in both English and Chinese.
+3.  All documentation changes must be tested locally before submission.
+
 ## Submission Guidelines
 
 1.  Fork the repository and create your branch from `main`.
