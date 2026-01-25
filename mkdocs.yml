@@ -25,10 +25,6 @@ theme:
     - navigation.prune
     # Header
     - header.autohide
-    # Search
-    - search.suggest
-    - search.highlight
-    - search.share
     # Content
     - content.code.copy
     - content.code.annotate
@@ -45,7 +41,7 @@ theme:
     # Light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: indigo
+      primary: white
       accent: indigo
       toggle:
         icon: material/brightness-7
@@ -67,28 +63,25 @@ theme:
     view: material/eye
 
 plugins:
-  - search:
-      lang:
-        - en
-        - zh
   - i18n:
       docs_structure: suffix
-      fallback_to_default: true
-      reconfigure_material: true
-      reconfigure_search: true
       languages:
         - locale: en
           default: true
           name: English
-          build: true
         - locale: zh
           name: 简体中文
-          build: true
-          theme:
-            language: zh
-  - git-revision-date-localized:
-      enable_creation_date: true
-      type: timeago
+          nav_translations:
+            Home: 首页
+            Getting Started: 开始
+            Quick Start: 快速入门
+            Setup: 配置
+            Installation: 安装
+            Configuration: 配置
+            Environment Variables: 环境变量
+            Tools: 工具
+            Advanced: 高级
+            Contributing: 贡献
 
 markdown_extensions:
   # Python Markdown
@@ -137,8 +130,10 @@ nav:
   - Home: index.md
   - Getting Started:
       - Quick Start: getting-started/quick-start.md
-      - Installation: getting-started/installation.md
-      - Configuration: getting-started/configuration.md
+  - Setup:
+      - Installation: setup/installation.md
+      - Configuration: setup/configuration.md
+      - Environment Variables: setup/environment-variables.md
   - Tools:
       - tools/index.md
       - Tool Reference: tools/reference.md

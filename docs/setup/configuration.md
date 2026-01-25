@@ -112,6 +112,6 @@ Add to `.vscode/settings.json`:
 
 ## Next Steps
 
-- [Quick Start](quick-start.md) - Get started in 5 minutes
+- [Quick Start](../getting-started/quick-start.md) - Get started in 5 minutes
 - [Tools Overview](../tools/index.md) - Learn about available tools
 - [Advanced](../advanced/index.md) - Full configuration reference

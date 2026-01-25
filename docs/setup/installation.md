@@ -158,5 +158,5 @@ pip uninstall relace-mcp
 
 ## Next Steps
 
-- [Quick Start](quick-start.md) - Get started in 5 minutes
+- [Quick Start](../getting-started/quick-start.md) - Get started in 5 minutes
 - [Configuration](configuration.md) - Configure your MCP client

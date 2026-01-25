@@ -112,6 +112,6 @@
 
 ## 下一步
 
-- [快速开始](quick-start.md) - 5 分钟上手
+- [快速开始](../getting-started/quick-start.md) - 5 分钟上手
 - [工具总览](../tools/index.md) - 了解可用工具
 - [Advanced](../advanced/index.md) - 完整配置参考

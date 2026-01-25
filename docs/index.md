@@ -1,14 +1,5 @@
 # Relace MCP
 
-<div align="center" markdown>
-
-[![PyPI](https://img.shields.io/pypi/v/relace-mcp.svg)](https://pypi.org/project/relace-mcp/)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/possible055/relace-mcp/blob/main/LICENSE)
-![100% AI-Generated](https://img.shields.io/badge/100%25%20AI-Generated-ff69b4.svg)
-
-</div>
-
 !!! warning "Unofficial Project"
     This is a **personal project** and is not affiliated with Relace.
 
@@ -45,7 +36,7 @@ MCP server providing AI-powered code editing and intelligent codebase exploratio
 
 ## Comparison
 
-| Without MCP | With `agentic_search` + `fast_apply` |
+| Without MCP | With `fast_apply` + `agentic_search` |
 |:------------|:-------------------------------------|
 | Manual grep, misses related files | Ask naturally, get precise locations |
 | Edits break imports elsewhere | Traces imports and call chains |
@@ -110,7 +101,6 @@ Get started in 5 minutes:
 ## Community
 
 - **Issues**: [GitHub Issues](https://github.com/possible055/relace-mcp/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/possible055/relace-mcp/discussions)
 - **PyPI**: [relace-mcp](https://pypi.org/project/relace-mcp/)
 
 ## License
