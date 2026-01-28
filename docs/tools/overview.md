@@ -1,4 +1,4 @@
-# Overview Overview
+# Tools Overview
 
 Relace MCP provides several powerful tools for AI-assisted code editing and exploration.
 
@@ -35,7 +35,7 @@ agentic_search(
 ## Cloud Tools
 
 !!! info "Enable Cloud Tools"
-    Set `RELACE_CLOUD_TOOLS=1` to enable cloud-based tools.
+    Set `RELACE_CLOUD_TOOLS=1` to enable cloud-based tools. `RELACE_API_KEY` is required when cloud tools are enabled.
 
 ### Cloud Sync
 
@@ -47,7 +47,7 @@ cloud_sync(force=False, mirror=False)
 
 ### Cloud Search
 
-Semantic search over cloud-synced repositories.
+Semantic search over a cloud-synced repository.
 
 ```python
 cloud_search(query="authentication logic")
@@ -76,7 +76,7 @@ agentic_retrieval(
 |------|-------|----------|----------|
 | `fast_apply` | ⚡⚡⚡ | High | Code editing |
 | `agentic_search` | ⚡⚡ | Very High | Local search |
-| `cloud_search` | ⚡ | High | Cross-repo search |
+| `cloud_search` | ⚡ | High | Cloud semantic search |
 | `agentic_retrieval` | ⚡ | Very High | Complex queries |
 
 ## Next Steps

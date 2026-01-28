@@ -35,7 +35,7 @@ agentic_search(
 ## 云端工具
 
 !!! info "启用云端工具"
-    设置 `RELACE_CLOUD_TOOLS=1` 启用云端工具。
+    设置 `RELACE_CLOUD_TOOLS=1` 启用云端工具。启用云端工具时必须设置 `RELACE_API_KEY`。
 
 ### Cloud Sync
 
@@ -76,7 +76,7 @@ agentic_retrieval(
 |------|------|--------|----------|
 | `fast_apply` | ⚡⚡⚡ | 高 | 代码编辑 |
 | `agentic_search` | ⚡⚡ | 非常高 | 本地搜索 |
-| `cloud_search` | ⚡ | 高 | 跨仓库搜索 |
+| `cloud_search` | ⚡ | 高 | 云端语义搜索 |
 | `agentic_retrieval` | ⚡ | 非常高 | 复杂查询 |
 
 ## 下一步

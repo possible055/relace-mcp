@@ -163,15 +163,17 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         async def cloud_sync(
             force: bool = False, mirror: bool = False, ctx: Context | None = None
         ) -> dict[str, Any]:
-            """Upload codebase to Relace Cloud for semantic search.
+            """Sync codebase to Relace Cloud for semantic search.
 
             Args:
                 force: Ignore cache, upload all files (default: false).
                 mirror: With force=True, delete cloud files not in local (default: false).
 
-            Run once per session before cloud_search. Incremental by default.
-            Returns: {status, files_uploaded, files_skipped} on success.
-            Fails if: not a git repo, no API key, network error.
+            Run before cloud_search. Prefers git-tracked files; falls back to directory scan.
+
+            Returns:
+                Sync summary dict (includes `trace_id`, `repo_id`, `repo_head`, `sync_mode`,
+                file counters, and optional `warnings`/`error`).
             """
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
             return cloud_sync_logic(repo_client, base_dir, force=force, mirror=mirror)
@@ -191,14 +193,16 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         ) -> dict[str, Any]:
             """Semantic code search using AI embeddings. Requires cloud_sync first.
 
-            Use when: local agentic_search insufficient, need cross-repo semantic understanding.
-            Do NOT use when: haven't run cloud_sync, or query is structural—use agentic_search.
+            Use when: agentic_search is insufficient or you want semantic matches.
+            Do NOT use when: query is structural—use agentic_search.
 
             Args:
                 query: Natural language search query.
                 branch: Branch to search (empty = default branch).
 
-            Returns: {results: [{path, score, snippet}, ...], total_matches}.
+            Returns:
+                Search result dict (includes `trace_id`, `results`, `result_count`,
+                and optional `warnings`/`error`).
             """
             # Fixed internal parameters (not exposed to LLM)
             score_threshold = 0.3
@@ -235,7 +239,9 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 repo_id: Optional repo ID to delete directly (use cloud_list to find).
                          If not provided, deletes the repo associated with current directory.
 
-            Returns: {status: "deleted"} on success, {status: "cancelled"} if confirm=false.
+            Returns:
+                Result dict with `status` (`cancelled`, `deleted`, `not_found`, or `error`)
+                and a human-readable `message`.
             """
             from ..repo import cloud_clear_logic
 
@@ -256,8 +262,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             Args:
                 reason: Brief explanation of why you are calling this tool.
 
-            Returns: [{repo_id, name, auto_index}, ...]. Max 10000 repos.
-            Returns empty list if no repositories exist.
+            Returns:
+                Summary dict with `count`, `repos` (repo summaries), `has_more`, and `trace_id`.
             """
             del reason  # LLM chain-of-thought only
             return cloud_list_logic(repo_client)
@@ -273,9 +279,9 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 reason: Brief explanation of why you are calling this tool.
 
             Returns:
-            - local: Current git branch and HEAD commit
-            - synced: Last sync state (git ref, tracked files count)
-            - cloud: Cloud repo info (if exists)
+            - local: Current local git state (branch/head/dirty)
+            - synced: Last sync state (if any)
+            - cloud: Cloud repo info (if found)
             - status: Whether sync is needed and recommended action
             """
             del reason  # LLM chain-of-thought only
