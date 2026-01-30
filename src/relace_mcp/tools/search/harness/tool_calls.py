@@ -235,7 +235,7 @@ class ToolCallsMixin:
         self, name: str, args: dict[str, Any], trace_id: str, turn: int | None = None
     ) -> str | dict[str, Any]:
         """Dispatch tool call with timing and logging."""
-        if not settings.MCP_LOGGING:
+        if not settings.MCP_LOGGING_ENABLED:
             return self._dispatch_tool(name, args)
 
         start = time.perf_counter()

@@ -151,6 +151,8 @@ def mock_log_path(tmp_path: Path) -> Generator[Path, None, None]:
     log_file = tmp_path / "test.log"
     with (
         patch("relace_mcp.config.settings.MCP_LOGGING", True),
+        patch("relace_mcp.config.settings.MCP_LOGGING_ENABLED", True),
+        patch("relace_mcp.config.settings.MCP_LOG_LEVEL", 20),  # INFO
         patch("relace_mcp.config.settings.LOG_PATH", log_file),
     ):
         yield log_file

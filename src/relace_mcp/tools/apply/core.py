@@ -2,6 +2,7 @@ import difflib
 import logging
 import os
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,6 +27,15 @@ from .exceptions import (
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class _ErrorHandler:
+    """Error handler configuration."""
+
+    code: str | Callable[[Exception], str]
+    message_fn: Callable[[Exception], str]
+    log_level: int = logging.WARNING
+
+
 @dataclass
 class ApplyContext:
     trace_id: str
@@ -35,6 +45,106 @@ class ApplyContext:
 
     def elapsed_ms(self) -> int:
         return int((datetime.now(UTC) - self.started_at).total_seconds() * 1000)
+
+
+def _format_os_error(e: Exception) -> str:
+    """Format OSError with optional errno and strerror."""
+    errno_val = getattr(e, "errno", None)
+    strerror_val = getattr(e, "strerror", None)
+    errno_str = f", errno={errno_val}" if errno_val else ""
+    strerror_str = strerror_val or str(e)
+    return f"Filesystem error ({type(e).__name__}{errno_str}): {strerror_str}"
+
+
+# Mapping from exception types to error handlers
+_ERROR_HANDLERS: dict[type[Exception], _ErrorHandler] = {
+    openai.APIError: _ErrorHandler(
+        code="API_ERROR",
+        message_fn=str,
+    ),
+    ValueError: _ErrorHandler(
+        code="API_INVALID_RESPONSE",
+        message_fn=str,
+    ),
+    ApplyError: _ErrorHandler(
+        code=lambda e: getattr(e, "error_code", "APPLY_ERROR"),
+        message_fn=lambda e: getattr(e, "message", str(e)),
+    ),
+    BaseEncodingDetectionError: _ErrorHandler(
+        code=lambda e: getattr(e, "error_code", "ENCODING_ERROR"),
+        message_fn=lambda e: getattr(e, "message", str(e)),
+    ),
+    PermissionError: _ErrorHandler(
+        code="PERMISSION_ERROR",
+        message_fn=lambda e: f"Permission denied: {e}",
+    ),
+    OSError: _ErrorHandler(
+        code="FS_ERROR",
+        message_fn=lambda e: _format_os_error(e),
+    ),
+}
+
+
+def _handle_apply_error(
+    exc: Exception,
+    ctx: ApplyContext,
+    file_path: str,
+    edit_snippet: str,
+    instruction: str | None,
+) -> dict[str, Any]:
+    """Unified handler for exceptions during apply operations.
+
+    Looks up the appropriate error handler based on exception type
+    and generates a standardized error response.
+
+    Args:
+        exc: The caught exception.
+        ctx: Apply context.
+        file_path: Target file path.
+        edit_snippet: Edit snippet being applied.
+        instruction: Optional instruction.
+
+    Returns:
+        Standardized error response dictionary.
+    """
+    apply_logging.log_apply_error(
+        ctx.trace_id, ctx.started_at, file_path, edit_snippet, instruction, exc
+    )
+
+    # Check for a dedicated error handler
+    for exc_type, handler in _ERROR_HANDLERS.items():
+        if isinstance(exc, exc_type):
+            code = handler.code(exc) if callable(handler.code) else handler.code
+            message = handler.message_fn(exc)
+
+            if handler.log_level == logging.WARNING:
+                logger.warning(
+                    "[%s] Apply error (%s) for %s: %s",
+                    ctx.trace_id,
+                    code,
+                    file_path,
+                    message,
+                )
+
+            return errors.recoverable_error(
+                code,
+                message,
+                file_path,
+                instruction,
+                ctx.trace_id,
+                ctx.elapsed_ms(),
+            )
+
+    # Unmatched exceptions use default handling
+    logger.error("[%s] Apply failed for %s: %s", ctx.trace_id, file_path, exc)
+    return errors.recoverable_error(
+        "INTERNAL_ERROR",
+        f"Unexpected error ({type(exc).__name__}): {exc}",
+        file_path,
+        instruction,
+        ctx.trace_id,
+        ctx.elapsed_ms(),
+    )
 
 
 def _ok_result(
@@ -323,81 +433,4 @@ async def apply_file_logic(
             return _create_new_file(ctx, resolved_path, edit_snippet)
         return await _apply_to_existing_file(ctx, backend, resolved_path, edit_snippet, file_size)
     except Exception as exc:
-        apply_logging.log_apply_error(
-            ctx.trace_id, ctx.started_at, file_path, edit_snippet, instruction, exc
-        )
-
-        if isinstance(exc, openai.APIError):
-            logger.warning(
-                "[%s] Apply API error for %s: %s",
-                ctx.trace_id,
-                file_path,
-                exc,
-            )
-            return errors.openai_error_to_recoverable(
-                exc, file_path, instruction, ctx.trace_id, ctx.elapsed_ms()
-            )
-
-        if isinstance(exc, ValueError):
-            logger.warning(
-                "[%s] API response parsing error for %s: %s",
-                ctx.trace_id,
-                file_path,
-                exc,
-            )
-            return errors.recoverable_error(
-                "API_INVALID_RESPONSE",
-                str(exc),
-                file_path,
-                instruction,
-                ctx.trace_id,
-                ctx.elapsed_ms(),
-            )
-
-        if isinstance(exc, (ApplyError, BaseEncodingDetectionError)):
-            error_code = getattr(exc, "error_code", "ENCODING_ERROR")
-            message = getattr(exc, "message", str(exc))
-            logger.warning(
-                "[%s] Apply error (%s) for %s: %s",
-                ctx.trace_id,
-                error_code,
-                file_path,
-                message,
-            )
-            return errors.recoverable_error(
-                error_code, message, file_path, instruction, ctx.trace_id, ctx.elapsed_ms()
-            )
-
-        if isinstance(exc, PermissionError):
-            logger.warning("[%s] Permission error for %s: %s", ctx.trace_id, file_path, exc)
-            return errors.recoverable_error(
-                "PERMISSION_ERROR",
-                f"Permission denied: {exc}",
-                file_path,
-                instruction,
-                ctx.trace_id,
-                ctx.elapsed_ms(),
-            )
-
-        if isinstance(exc, OSError):
-            errno_info = f"errno={exc.errno}" if exc.errno else ""
-            strerror = exc.strerror or str(exc)
-            logger.warning("[%s] Filesystem error for %s: %s", ctx.trace_id, file_path, exc)
-            return errors.recoverable_error(
-                "FS_ERROR",
-                f"Filesystem error ({type(exc).__name__}, {errno_info}): {strerror}",
-                file_path,
-                instruction,
-                ctx.trace_id,
-                ctx.elapsed_ms(),
-            )
-
-        logger.error("[%s] Apply failed for %s: %s", ctx.trace_id, file_path, exc)
-        return errors.recoverable_error(
-            "INTERNAL_ERROR",
-            f"Unexpected error ({type(exc).__name__}): {exc}",
-            file_path,
-            instruction,
-            ctx.trace_id,
-            ctx.elapsed_ms(),
-        )
+        return _handle_apply_error(exc, ctx, file_path, edit_snippet, instruction)

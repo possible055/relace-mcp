@@ -16,7 +16,12 @@ from dotenv import load_dotenv
 from fastmcp import FastMCP
 
 from .config import RelaceConfig
-from .config.settings import ENCODING_DETECTION_SAMPLE_LIMIT, LOG_PATH, MCP_LOGGING
+from .config.settings import (
+    ENCODING_DETECTION_SAMPLE_LIMIT,
+    LOG_PATH,
+    MCP_LOG_LEVEL,
+    MCP_LOGGING_ENABLED,
+)
 from .encoding import set_project_encoding
 from .middleware import RootsMiddleware, ToolTracingMiddleware
 from .tools import register_tools
@@ -32,10 +37,11 @@ def _configure_logging_for_stdio() -> None:
     All logging must go to stderr or file.
 
     Set MCP_LOG_LEVEL environment variable to control log verbosity:
-    - DEBUG: Full diagnostic output (for troubleshooting)
-    - INFO: Informational messages
-    - WARNING: Only warnings and errors (default)
-    - ERROR: Only errors
+    - OFF: No logging
+    - ERROR: Errors only
+    - WARNING: Warnings and errors (default)
+    - INFO: Standard operational info
+    - DEBUG: Full diagnostic output
     """
     # Redirect all warnings to stderr (not stdout)
     warnings.filterwarnings("default")
@@ -53,10 +59,8 @@ def _configure_logging_for_stdio() -> None:
     )
     root.addHandler(stderr_handler)
 
-    # Allow user to override log level via environment variable
-    level_str = os.getenv("MCP_LOG_LEVEL", "WARNING").upper()
-    level = getattr(logging, level_str, logging.WARNING)
-    root.setLevel(level)
+    # Use MCP_LOG_LEVEL (already parsed in settings)
+    root.setLevel(MCP_LOG_LEVEL)
 
 
 def _load_dotenv_from_path() -> None:
@@ -113,7 +117,7 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
     else:
         results["base_dir"] = "deferred (will resolve from MCP Roots)"
 
-    if MCP_LOGGING:
+    if MCP_LOGGING_ENABLED:
         log_dir = LOG_PATH.parent
         try:
             log_dir.mkdir(parents=True, exist_ok=True)

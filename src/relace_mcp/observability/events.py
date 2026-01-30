@@ -13,6 +13,19 @@ logger = logging.getLogger(__name__)
 MAX_ROTATED_LOGS = 5
 _LOG_LOCK = threading.Lock()
 
+# Log level mapping for event filtering
+_EVENT_LEVEL_MAP = {
+    "error": 40,  # logging.ERROR
+    "info": 20,  # logging.INFO
+    "debug": 10,  # logging.DEBUG
+}
+
+
+def _should_log_event(event_level: str) -> bool:
+    """Check if event should be logged based on MCP_LOG_LEVEL."""
+    event_numeric = _EVENT_LEVEL_MAP.get(event_level, 20)
+    return event_numeric >= settings.MCP_LOG_LEVEL
+
 
 def redact_value(value: str, max_len: int = 200) -> str:
     if not value:
@@ -53,7 +66,7 @@ def log_event(event: dict[str, Any]) -> None:
     Args:
         event: Event data to log. Will be enriched with timestamp, trace_id, tool, level.
     """
-    if not settings.MCP_LOGGING:
+    if not settings.MCP_LOGGING_ENABLED:
         return
 
     event = dict(event)
@@ -69,6 +82,10 @@ def log_event(event: dict[str, Any]) -> None:
         if "level" not in event:
             kind = str(event.get("kind", "")).lower()
             event["level"] = "error" if kind.endswith("error") else "info"
+
+        # Filter by MCP_LOG_MODE
+        if not _should_log_event(event.get("level", "info")):
+            return
 
         with _LOG_LOCK:
             if settings.LOG_PATH.is_dir():

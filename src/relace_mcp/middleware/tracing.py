@@ -8,6 +8,8 @@ from ..observability import (
     log_tool_complete,
     log_tool_error,
     log_tool_start,
+    pop_call_frame,
+    push_call_frame,
     set_tool_context,
 )
 
@@ -28,6 +30,7 @@ class ToolTracingMiddleware(Middleware):
         params = getattr(context.message, "arguments", None)
 
         set_tool_context(tool_name)
+        push_call_frame(f"tool:{tool_name}")
         log_tool_start(tool_name, params)
 
         start = time.perf_counter()
@@ -48,6 +51,7 @@ class ToolTracingMiddleware(Middleware):
             )
             raise
         finally:
+            pop_call_frame()
             clear_context()
 
     async def _log_to_client(
