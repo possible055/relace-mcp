@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from relace_mcp.lsp.languages import detect_available_lsp_servers
@@ -30,10 +31,14 @@ class ToolConfigResolver:
         env: dict[str, str] | None = None,
         lsp_languages: frozenset[str] | None = None,
         bash_available: bool = True,
+        detect_available_lsp_servers_fn: Callable[
+            [], frozenset[str]
+        ] = detect_available_lsp_servers,
     ) -> None:
         self._env = env
         self._lsp_languages = lsp_languages
         self._bash_available = bash_available
+        self._detect_available_lsp_servers_fn = detect_available_lsp_servers_fn
 
     def resolve(self) -> ToolConfig:
         """Resolve and return tool configuration."""
@@ -56,7 +61,7 @@ class ToolConfigResolver:
     def _detect_lsp_servers(self) -> frozenset[str] | None:
         """Auto-detect available LSP servers."""
         if self._env is not None and "SEARCH_LSP_TOOLS" in self._env:
-            available = detect_available_lsp_servers()
+            available = self._detect_available_lsp_servers_fn()
             return available if available else None
         return None
 

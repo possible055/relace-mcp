@@ -981,6 +981,72 @@ class TestApplyFileLogicRecoverableErrors:
         assert result["detail"]["status_code"] == 400
 
     @pytest.mark.asyncio
+    async def test_api_rate_limit_returns_rate_limit(
+        self,
+        _mock_config: RelaceConfig,
+        mock_backend: AsyncMock,
+        tmp_path: Path,
+    ) -> None:
+        """Should return RATE_LIMIT for 429 API errors."""
+        import openai
+
+        test_file = tmp_path / "test.py"
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(b"def authenticate_user():\n    return validate_credentials()\n")
+
+        mock_backend.apply.side_effect = openai.RateLimitError(
+            message="Rate limit exceeded",
+            response=MagicMock(status_code=429),
+            body=None,
+        )
+
+        result = await apply_file_logic(
+            backend=mock_backend,
+            file_path=str(test_file),
+            edit_snippet="def authenticate_user():\n    return validate_credentials()\n",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
+
+        assert result["status"] == "error"
+        assert result["code"] == "RATE_LIMIT"
+        assert "Rate limit exceeded" in result["message"]
+        assert result["detail"]["status_code"] == 429
+
+    @pytest.mark.asyncio
+    async def test_api_server_error_returns_server_error(
+        self,
+        _mock_config: RelaceConfig,
+        mock_backend: AsyncMock,
+        tmp_path: Path,
+    ) -> None:
+        """Should return SERVER_ERROR for 5xx API errors."""
+        import openai
+
+        test_file = tmp_path / "test.py"
+        # Use binary write to avoid Windows newline conversion
+        test_file.write_bytes(b"def authenticate_user():\n    return validate_credentials()\n")
+
+        mock_backend.apply.side_effect = openai.InternalServerError(
+            message="Internal error",
+            response=MagicMock(status_code=500),
+            body=None,
+        )
+
+        result = await apply_file_logic(
+            backend=mock_backend,
+            file_path=str(test_file),
+            edit_snippet="def authenticate_user():\n    return validate_credentials()\n",
+            instruction=None,
+            base_dir=str(tmp_path),
+        )
+
+        assert result["status"] == "error"
+        assert result["code"] == "SERVER_ERROR"
+        assert "API server error" in result["message"]
+        assert result["detail"]["status_code"] == 500
+
+    @pytest.mark.asyncio
     async def test_network_error_returns_network_error(
         self,
         _mock_config: RelaceConfig,

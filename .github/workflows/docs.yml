@@ -1,0 +1,40 @@
+name: Documentation Check
+
+on:
+  pull_request:
+    paths:
+      - '**.md'
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+      - '.markdown-link-check.json'
+
+jobs:
+  check-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check markdown links
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          use-quiet-mode: 'yes'
+          config-file: '.markdown-link-check.json'
+
+      - name: Check Chinese translation sync
+        run: |
+          # Check if English and Chinese documentation line counts are similar
+          EN_LINES=$(wc -l < README.md)
+          ZH_LINES=$(wc -l < README.zh-CN.md)
+          DIFF=$((EN_LINES - ZH_LINES))
+          ABS_DIFF=${DIFF#-}
+
+          echo "README.md: $EN_LINES lines"
+          echo "README.zh-CN.md: $ZH_LINES lines"
+          echo "Difference: $DIFF lines"
+
+          if [ $ABS_DIFF -gt 30 ]; then
+            echo "::warning::README.md and README.zh-CN.md differ by $DIFF lines (threshold: 30)"
+            echo "::warning::Consider updating the translation to keep documentation in sync"
+          else
+            echo "✓ Documentation sync looks good"
+          fi

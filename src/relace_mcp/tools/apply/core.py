@@ -58,10 +58,6 @@ def _format_os_error(e: Exception) -> str:
 
 # Mapping from exception types to error handlers
 _ERROR_HANDLERS: dict[type[Exception], _ErrorHandler] = {
-    openai.APIError: _ErrorHandler(
-        code="API_ERROR",
-        message_fn=str,
-    ),
     ValueError: _ErrorHandler(
         code="API_INVALID_RESPONSE",
         message_fn=str,
@@ -110,6 +106,17 @@ def _handle_apply_error(
     apply_logging.log_apply_error(
         ctx.trace_id, ctx.started_at, file_path, edit_snippet, instruction, exc
     )
+
+    if isinstance(exc, openai.APIError):
+        logger.warning(
+            "[%s] Apply API error for %s: %s",
+            ctx.trace_id,
+            file_path,
+            exc,
+        )
+        return errors.openai_error_to_recoverable(
+            exc, file_path, instruction, ctx.trace_id, ctx.elapsed_ms()
+        )
 
     # Check for a dedicated error handler
     for exc_type, handler in _ERROR_HANDLERS.items():

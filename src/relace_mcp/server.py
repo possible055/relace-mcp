@@ -44,7 +44,7 @@ def _configure_logging_for_stdio() -> None:
     - DEBUG: Full diagnostic output
     """
     # Redirect all warnings to stderr (not stdout)
-    warnings.filterwarnings("default")
+    warnings.filterwarnings("default" if MCP_LOGGING_ENABLED else "ignore")
 
     # Configure root logger to stderr only
     root = logging.getLogger()
@@ -57,6 +57,7 @@ def _configure_logging_for_stdio() -> None:
     stderr_handler.setFormatter(
         logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     )
+    stderr_handler.setLevel(MCP_LOG_LEVEL)
     root.addHandler(stderr_handler)
 
     # Use MCP_LOG_LEVEL (already parsed in settings)

@@ -104,7 +104,19 @@ ignore_errors = true
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-
+addopts = "-ra -q --strict-markers --strict-config"
+markers = [
+    "linux: Linux-specific tests",
+    "windows: Windows-specific tests",
+    "macos: macOS-specific tests",
+    "unix: Unix-like (Linux/macOS) tests",
+    "slow: Slow tests (network, subprocess)",
+    "integration: Integration tests with external deps",
+    "no_windows: Skip on Windows",
+    "no_macos: Skip on macOS",
+    "requires_bash: Requires bash shell",
+    "requires_ripgrep: Requires ripgrep (rg) installed",
+]
 
 [tool.interrogate]
 ignore-init-method = true

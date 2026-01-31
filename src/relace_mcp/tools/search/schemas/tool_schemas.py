@@ -8,6 +8,14 @@ from .tool_config import ToolConfigResolver
 from .tool_schemas_data import _ALL_TOOL_SCHEMAS
 
 
+def detect_available_lsp_servers() -> frozenset[str]:
+    from relace_mcp.lsp.languages import (
+        detect_available_lsp_servers as _detect_available_lsp_servers,
+    )
+
+    return _detect_available_lsp_servers()
+
+
 def normalize_tool_schemas(
     schemas: list[dict[str, Any]], *, include_strict: bool
 ) -> list[dict[str, Any]]:
@@ -47,6 +55,7 @@ def get_tool_schemas(
         env=effective_env,
         lsp_languages=lsp_languages,
         bash_available=bash_available,
+        detect_available_lsp_servers_fn=detect_available_lsp_servers,
     )
     config = resolver.resolve()
 

@@ -52,7 +52,13 @@ def _looks_like_binary(data: bytes, sample_size: int = 8192) -> bool:
 
     sample = data[:sample_size]
 
-    if b"\x00" in sample:
+    # Check for BOM markers (UTF-16/UTF-32 are text files)
+    if sample.startswith((b"\xff\xfe", b"\xfe\xff", b"\xff\xfe\x00\x00", b"\x00\x00\xfe\xff")):
+        return False
+
+    # Check null byte ratio instead of absolute presence
+    null_count = sample.count(b"\x00")
+    if null_count > len(sample) * 0.3:  # More than 30% null bytes
         return True
 
     non_text_count = 0
@@ -130,6 +136,12 @@ def decode_text_with_fallback(
             return "gb"
         if "big5" in e or e in {"cp950"}:
             return "big5"
+        # Japanese encoding family
+        if e in {"shift_jis", "cp932", "euc_jp", "euc_jis_2004", "iso-2022-jp"}:
+            return "japanese"
+        # Korean encoding family
+        if e in {"euc_kr", "cp949", "johab"}:
+            return "korean"
         return "other"
 
     preferred_text: str | None = None

@@ -11,6 +11,9 @@ dist/
 # Testing / Coverage
 .pytest_cache/
 .uv-cache
+coverage.json
+htmlcov/
+.coverage
 
 # Linter / formatter cache
 .pylint.d/
@@ -23,7 +26,9 @@ ruff_cache/
 .kilocode/
 .kiro/
 .gemini/
+.claude/
 AGENTS.md
+CLAUDE.md
 
 # Logs / Env
 *.log

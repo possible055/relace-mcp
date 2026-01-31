@@ -1,3 +1,5 @@
+import platform
+import shutil
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -7,6 +9,37 @@ import pytest
 
 from relace_mcp.clients import ApplyLLMClient
 from relace_mcp.config import RelaceConfig
+
+
+# Platform detection fixtures
+@pytest.fixture
+def is_windows() -> bool:
+    return platform.system() == "Windows"
+
+
+@pytest.fixture
+def is_linux() -> bool:
+    return platform.system() == "Linux"
+
+
+@pytest.fixture
+def is_macos() -> bool:
+    return platform.system() == "Darwin"
+
+
+@pytest.fixture
+def has_bash() -> bool:
+    return shutil.which("bash") is not None
+
+
+@pytest.fixture
+def has_ripgrep() -> bool:
+    return shutil.which("rg") is not None
+
+
+@pytest.fixture
+def platform_system() -> str:
+    return platform.system()
 
 
 @pytest.fixture
@@ -72,7 +105,8 @@ def temp_large_file(tmp_path: Path) -> Path:
 @pytest.fixture
 def temp_binary_file(tmp_path: Path) -> Path:
     binary_file = tmp_path / "binary_file.bin"
-    binary_file.write_bytes(b"\xfe\xff\x00\x80\xff\xfe\x81\x40")
+    # Use actual binary data (not UTF-16 BOM) - PNG header-like bytes
+    binary_file.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00")
     return binary_file
 
 

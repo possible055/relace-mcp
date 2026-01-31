@@ -85,7 +85,10 @@ APPLY_SEMANTIC_CHECK = env_bool("APPLY_SEMANTIC_CHECK", default=False)
 # - INFO: Standard operational info
 # - DEBUG: Full debug with tool call tracing
 _log_level_str = os.getenv("MCP_LOG_LEVEL", "WARNING").strip().upper()
-MCP_LOG_LEVEL = getattr(logging, _log_level_str, logging.WARNING)
+if _log_level_str == "OFF":
+    MCP_LOG_LEVEL = logging.CRITICAL + 1
+else:
+    MCP_LOG_LEVEL = getattr(logging, _log_level_str, logging.WARNING)
 
 # Derived flags for convenience
 MCP_LOGGING_ENABLED = MCP_LOG_LEVEL != logging.NOTSET and _log_level_str != "OFF"
@@ -93,8 +96,11 @@ MCP_DEBUG_MODE = MCP_LOG_LEVEL == logging.DEBUG
 
 # Legacy MCP_LOGGING compatibility
 _MCP_LOGGING_RAW = os.getenv("MCP_LOGGING", "").strip().lower()
-if _MCP_LOGGING_RAW in ("safe", "full", "1", "true", "yes"):
+if _MCP_LOGGING_RAW in ("safe", "full", "1", "true", "yes") and _log_level_str != "OFF":
     MCP_LOGGING_ENABLED = True
+# MCP_LOG_LEVEL=OFF must fully disable logging, regardless of legacy MCP_LOGGING.
+if _log_level_str == "OFF":
+    MCP_LOGGING_ENABLED = False
 MCP_LOGGING = MCP_LOGGING_ENABLED
 MCP_LOG_REDACT = _MCP_LOGGING_RAW != "full"
 

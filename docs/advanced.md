@@ -26,6 +26,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `MCP_DOTENV_PATH` | — | Path to a `.env` file to load at startup |
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
 | `MCP_LOGGING` | `off` | File logging: `off`, `safe` (with redaction), `full` (no redaction) |
+| `MCP_LOG_LEVEL` | `WARNING` | Stderr log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `OFF` |
 | `RELACE_CLOUD_TOOLS` | `0` | Set to `1` to enable cloud tools (cloud_sync, cloud_search, etc.) |
 | `MCP_SEARCH_RETRIEVAL` | `0` | Set to `1` to enable `agentic_retrieval` tool |
 
