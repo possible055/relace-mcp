@@ -115,6 +115,29 @@ class TestMCPToolSchemas:
                 assert tool.description, f"Tool '{tool.name}' has no description"
                 assert len(tool.description) > 10, f"Tool '{tool.name}' description too short"
 
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("clean_env")
+    async def test_all_tool_params_have_descriptions(self, mock_config: RelaceConfig) -> None:
+        """All tool parameters must have non-empty descriptions in inputSchema."""
+        with (
+            patch("relace_mcp.tools.RELACE_CLOUD_TOOLS", True),
+            patch("relace_mcp.tools.AGENTIC_RETRIEVAL_ENABLED", True),
+            patch("relace_mcp.tools.RETRIEVAL_BACKEND", "relace"),
+        ):
+            server = build_server(config=mock_config, run_health_check=False)
+
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            for tool in tools:
+                schema = tool.inputSchema or {}
+                props = schema.get("properties", {})
+                for param_name, param_schema in props.items():
+                    assert isinstance(param_schema, dict), (
+                        f"Tool '{tool.name}' param '{param_name}' schema is not an object"
+                    )
+                    desc = (param_schema.get("description") or "").strip()
+                    assert desc, f"Tool '{tool.name}' param '{param_name}' has no description"
+
 
 class TestMCPToolAnnotations:
     @pytest.mark.asyncio

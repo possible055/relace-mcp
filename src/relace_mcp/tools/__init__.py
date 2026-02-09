@@ -56,7 +56,11 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     )
     async def fast_apply(
         path: Annotated[
-            str, Field(description="File path (absolute or relative to MCP_BASE_DIR).")
+            str,
+            Field(
+                description="File path (absolute or relative to MCP_BASE_DIR; if MCP_BASE_DIR is unset, "
+                "relative paths resolve against MCP Roots)."
+            ),
         ],
         edit_snippet: Annotated[
             str,
@@ -276,7 +280,14 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             del reason  # LLM chain-of-thought only
             return cloud_list_logic(repo_client)
 
-        @mcp.tool
+        @mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
         async def cloud_info(
             reason: Annotated[
                 str, Field(description="Why you need sync status (helps with debugging).")
