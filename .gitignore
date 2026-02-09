@@ -29,6 +29,7 @@ AGENTS.md
 *.log
 .env
 !.env.example
+.coverage
 
 # Benchmark artifacts
 benchmark/artifacts/
