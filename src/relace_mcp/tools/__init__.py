@@ -188,7 +188,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             ] = False,
             ctx: Context | None = None,
         ) -> dict[str, Any]:
-            """Upload codebase to Relace Cloud for semantic search.
+            """Sync codebase to Relace Cloud for semantic search.
 
             Syncs git-tracked files to enable cloud_search. Incremental by default—only
             uploads changed files. Run once per session before using cloud_search.

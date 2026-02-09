@@ -1,10 +1,10 @@
-# Overview Usage
+# Advanced Usage
 
 This document covers advanced configuration options for power users and developers.
 
 ## Table of Contents
 
-- [Environment Variables Reference](#environment-variables-reference)
+- [Environment Variables](environment-variables.md)
 - [Using a .env File](#using-a-env-file)
 - [Sync Modes](#sync-modes)
 - [Logging](#logging)
@@ -12,84 +12,6 @@ This document covers advanced configuration options for power users and develope
 - [Remote Deployment](#remote-deployment-streamable-http)
 
 ---
-
-## Environment Variables Reference
-
-All environment variables can be set in your shell or in the `env` section of your MCP configuration.
-
-### Core
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RELACE_API_KEY` | — | **Required.** Your Relace API key |
-| `MCP_BASE_DIR` | cwd | Restrict file access to this directory |
-| `MCP_DOTENV_PATH` | — | Path to a `.env` file to load at startup |
-| `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
-| `MCP_LOGGING` | `off` | File logging: `off`, `safe` (with redaction), `full` (no redaction) |
-| `RELACE_CLOUD_TOOLS` | `0` | Set to `1` to enable cloud tools (cloud_sync, cloud_search, etc.) |
-| `MCP_SEARCH_RETRIEVAL` | `0` | Set to `1` to enable `agentic_retrieval` tool |
-
-> **Note:** `RELACE_API_KEY` can be omitted if **both**: (1) using non-Relace providers for `APPLY_PROVIDER` and `SEARCH_PROVIDER`, and (2) `RELACE_CLOUD_TOOLS=false`. Otherwise it is required.
-
-### Fast Apply
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `APPLY_PROVIDER` | `relace` | Provider: `relace`, `openai`, `openrouter`, `cerebras`, etc. |
-| `APPLY_ENDPOINT` | (Relace official) | Override base URL |
-| `APPLY_MODEL` | `auto` | Override model name |
-| `APPLY_API_KEY` | — | API key for non-Relace providers |
-| `APPLY_PROMPT_FILE` | — | Override apply prompt YAML path |
-| `APPLY_TIMEOUT_SECONDS` | `60` | Request timeout |
-| `APPLY_TEMPERATURE` | `0.0` | LLM sampling temperature (0.0-2.0) |
-| `APPLY_SEMANTIC_CHECK` | `0` | Post-merge semantic validation (may increase failures) |
-
-### Agentic Search
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SEARCH_PROVIDER` | `relace` | Provider: `relace`, `openai`, `openrouter`, `cerebras`, etc. |
-| `SEARCH_ENDPOINT` | (Relace official) | Override base URL |
-| `SEARCH_MODEL` | `relace-search` | Override model name |
-| `SEARCH_API_KEY` | — | API key for non-Relace providers |
-| `SEARCH_PROMPT_FILE` | — | Override search prompt YAML path |
-| `SEARCH_TIMEOUT_SECONDS` | `120` | Request timeout (also used as `agentic_search` wall-clock budget; returns `partial=true` on timeout) |
-| `SEARCH_TEMPERATURE` | `1.0` | LLM sampling temperature (0.0-2.0) |
-| `SEARCH_TOP_P` | — | Optional top_p sampling (e.g., set to `1` for providers requiring explicit top_p like Mistral) |
-| `SEARCH_MAX_TURNS` | `6` | Maximum agent loop turns |
-| `SEARCH_LSP_TOOLS` | `false` | LSP tool mode: `false` (disabled), `true` (all enabled), `auto` (detect installed servers) |
-| `SEARCH_ENABLED_TOOLS` | (basic only) | Tool allowlist (comma/space-separated). If unset, only basic tools are enabled. When `SEARCH_LSP_TOOLS=true/auto`, this also filters which LSP tools are enabled. `bash` requires explicit opt-in. |
-| `SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls |
-| `SEARCH_TOOL_STRICT` | `1` | Include `strict` field in tool schemas |
-| `SEARCH_LSP_TIMEOUT_SECONDS` | `15.0` | LSP startup/request timeout |
-| `SEARCH_LSP_MAX_CLIENTS` | `2` | Maximum concurrent LSP clients |
-
-#### Progress & Timeouts
-
-- `agentic_search` sends periodic progress notifications to avoid idle client timeouts.
-- If you still hit a hard client/host timeout, reduce `SEARCH_MAX_TURNS` or increase `SEARCH_TIMEOUT_SECONDS`.
-
-### Cloud Sync
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RELACE_API_ENDPOINT` | `https://api.relace.run/v1` | API endpoint for cloud operations |
-| `RELACE_REPO_ID` | — | Pre-configured repo UUID (skip list/create) |
-| `RELACE_REPO_SYNC_TIMEOUT` | `300` | Sync operation timeout |
-| `RELACE_REPO_SYNC_MAX_FILES` | `5000` | Maximum files per sync |
-| `RELACE_REPO_LIST_MAX` | `10000` | Maximum repos to fetch |
-| `RELACE_UPLOAD_MAX_WORKERS` | `8` | Concurrent upload workers |
-| `RELACE_AGENTIC_AUTO_SYNC` | `1` | Auto-sync before agentic retrieval (when cloud tools enabled) |
-
-### Third-Party API Keys
-
-When using alternative providers, set the corresponding API key:
-
-| Variable | Used When |
-|----------|-----------|
-| `OPENAI_API_KEY` | `*_PROVIDER=openai` and no `*_API_KEY` set |
-| `OPENROUTER_API_KEY` | `*_PROVIDER=openrouter` and no `*_API_KEY` set |
-| `CEREBRAS_API_KEY` | `*_PROVIDER=cerebras` and no `*_API_KEY` set |
 
 ## Using a .env File
 

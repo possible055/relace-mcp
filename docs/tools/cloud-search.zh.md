@@ -1,10 +1,12 @@
 # Cloud Search
 
-跨云端同步仓库的语义搜索。
+对云端同步仓库进行语义搜索。
 
 ## 概述
 
-Cloud Search 支持对同步到 Relace Cloud 的多个仓库进行语义代码搜索。适合 monorepo 项目或跨相关代码库搜索。
+Cloud Search 支持对同步到 Relace Cloud 的单个仓库进行语义代码搜索。
+
+该工具会基于当前 base dir（通过 `MCP_BASE_DIR` 或 MCP Roots）推导要操作的仓库。
 
 ## 前置需求
 
@@ -26,13 +28,19 @@ cloud_sync(force=False, mirror=False)
 
 ```json
 {
-  "status": "synced",
-  "files_uploaded": 42,
-  "files_skipped": 108
+  "trace_id": "a1b2c3d4",
+  "repo_id": "r_...",
+  "repo_head": "abc123...",
+  "sync_mode": "incremental",
+  "files_created": 42,
+  "files_updated": 0,
+  "files_deleted": 0,
+  "files_skipped": 108,
+  "warnings": []
 }
 ```
 
-### 2. 跨仓库搜索
+### 2. 搜索仓库
 
 使用自然语言搜索:
 
@@ -44,14 +52,20 @@ cloud_search(query="认证中间件")
 
 ```json
 {
+  "trace_id": "a1b2c3d4",
+  "query": "认证中间件",
+  "branch": "",
+  "hash": "abc123...",
+  "repo_id": "r_...",
+  "result_count": 1,
   "results": [
     {
-      "file": "src/middleware/auth.py",
+      "filename": "src/middleware/auth.py",
       "score": 0.95,
-      "snippet": "class AuthMiddleware...",
-      "line_range": [10, 30]
+      "content": "class AuthMiddleware: ..."
     }
-  ]
+  ],
+  "warnings": []
 }
 ```
 
@@ -86,6 +100,7 @@ cloud_sync(force=True, mirror=True)
 **参数:**
 
 - `query` (str):自然语言搜索查询
+- `branch` (str,可选):要搜索的分支(空字符串使用 API 默认值)
 
 **范例:**
 
@@ -118,19 +133,14 @@ cloud_info(reason="搜索前检查同步状态")
 
 ```json
 {
-  "local": {
-    "branch": "main",
-    "commit": "abc123..."
-  },
-  "synced": {
-    "ref": "main@abc123",
-    "files": 150
-  },
-  "cloud": {
-    "repo_id": "r_...",
-    "name": "my-repo"
-  },
-  "status": "synced"
+  "trace_id": "a1b2c3d4",
+  "repo_name": "my-repo",
+  "cloud_repo_name": "my-repo__fp",
+  "local": { "git_branch": "main", "git_head": "abc12345", "git_dirty": false },
+  "synced": { "repo_id": "r_...", "repo_head": "abc12345", "tracked_files": 150 },
+  "cloud": { "repo_id": "r_...", "name": "my-repo__fp", "auto_index": true },
+  "status": { "needs_sync": false, "ref_changed": false, "recommended_action": null },
+  "warnings": []
 }
 ```
 
@@ -147,18 +157,15 @@ cloud_list(reason="检查可用仓库")
 **返回:**
 
 ```json
-[
-  {
-    "repo_id": "r_...",
-    "name": "my-repo",
-    "auto_index": true
-  },
-  {
-    "repo_id": "r_...",
-    "name": "another-repo",
-    "auto_index": false
-  }
-]
+{
+  "trace_id": "a1b2c3d4",
+  "count": 2,
+  "repos": [
+    { "repo_id": "r_...", "name": "my-repo", "auto_index": true },
+    { "repo_id": "r_...", "name": "another-repo", "auto_index": false }
+  ],
+  "has_more": false
+}
 ```
 
 ### cloud_clear
@@ -252,7 +259,7 @@ cloud_sync()  # 快速,仅上传变更
 
 ```python
 info = cloud_info(reason="每日检查")
-if info["status"] != "synced":
+if info["status"]["needs_sync"]:
     cloud_sync()
 ```
 
@@ -260,13 +267,11 @@ if info["status"] != "synced":
 
 ### 多仓库项目
 
-跨相关仓库搜索:
+跨相关仓库搜索（需要对每个仓库分别同步与搜索）:
 
 ```python
-# 同步所有仓库
-# (切换到每个仓库并执行 cloud_sync)
-
-# 搜索所有仓库
+# 在每个仓库中:
+cloud_sync()
 cloud_search(query="共享认证逻辑")
 ```
 
@@ -288,21 +293,7 @@ cloud_search(query="数据库迁移脚本")
 
 ## 性能
 
-### 同步速度
-
-| 仓库大小 | 初次同步 | 增量 |
-|---------|---------|------|
-| 小(< 100 文件) | ~10s | ~1s |
-| 中(< 1000 文件) | ~1min | ~5s |
-| 大(< 10000 文件) | ~10min | ~30s |
-
-### 搜索速度
-
-典型搜索延迟:
-
-- **简单查询**:100-500ms
-- **复杂查询**:500ms-2s
-- **跨仓库**:1-5s
+性能取决于文件数量、网络状况与 Relace Cloud 负载。初次同步通常明显慢于后续的增量同步。
 
 ## 故障排除
 
