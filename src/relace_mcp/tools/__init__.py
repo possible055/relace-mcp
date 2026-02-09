@@ -5,10 +5,11 @@ import inspect
 from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from fastmcp import FastMCP
 from fastmcp.server.context import Context
+from pydantic import Field
 
 from ..clients import RelaceRepoClient, SearchLLMClient
 from ..clients.apply import ApplyLLMClient
@@ -54,22 +55,32 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         }
     )
     async def fast_apply(
-        path: str,
-        edit_snippet: str,
-        instruction: str = "",
+        path: Annotated[
+            str,
+            Field(
+                description="File path (absolute or relative to MCP_BASE_DIR; if MCP_BASE_DIR is unset, "
+                "relative paths resolve against MCP Roots)."
+            ),
+        ],
+        edit_snippet: Annotated[
+            str,
+            Field(
+                description="New content. Use placeholders for unchanged parts: "
+                "`// ... existing code ...` (C/JS/TS), `# ... existing code ...` (Python/shell)."
+            ),
+        ],
+        instruction: Annotated[
+            str,
+            Field(description="Optional hint when edit is ambiguous (e.g., 'add after imports')."),
+        ] = "",
         ctx: Context | None = None,
     ) -> dict[str, Any]:
-        """Edit or create a file.
+        """Edit or create a file using intelligent merging.
 
-        Args:
-            path: File path (absolute or relative to MCP_BASE_DIR).
-            edit_snippet: New content. Use placeholders for unchanged parts:
-                - `// ... existing code ...` (C/JS/TS)
-                - `# ... existing code ...` (Python/shell)
-            instruction: Optional hint when edit is ambiguous (e.g., "add after imports").
-
-        Returns: {status: "ok", path, diff} on success, {status: "error", message} on failure.
-        On NEEDS_MORE_CONTEXT error: add 1-3 real lines before/after target.
+        For new files: writes content directly.
+        For existing files: merges edit_snippet with current content using anchor lines.
+        If anchors cannot be located, returns NEEDS_MORE_CONTEXT error—provide complete
+        file content to fully overwrite, or add context lines to help locate the edit point.
         """
         # Resolve base_dir dynamically (aligns with other tools).
         # This allows relative paths when MCP_BASE_DIR is not set but MCP Roots are available,
@@ -109,17 +120,22 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             "openWorldHint": False,  # Only local codebase
         }
     )
-    async def agentic_search(query: str, ctx: Context) -> dict[str, Any]:
-        """Search codebase and return relevant file locations.
+    async def agentic_search(
+        query: Annotated[
+            str,
+            Field(
+                description="What to find. Natural language (e.g., 'where is auth handled') "
+                "or specific patterns (e.g., 'UserService class')."
+            ),
+        ],
+        ctx: Context,
+    ) -> dict[str, Any]:
+        """Search codebase for code locations matching a query.
 
-        Use when: exploring code structure, finding entrypoints, tracing call chains.
-        Do NOT use when: you need semantic/conceptual search—use agentic_retrieval.
+        Finds functions, classes, modules, and traces how components connect.
+        Accepts natural language or specific patterns like class/function names.
 
-        Args:
-            query: What to find. Natural language (e.g., "where is auth handled")
-                   or specific patterns (e.g., "UserService class").
-
-        Returns: {files: {path: [[start, end], ...]}, explanation: str, partial: bool}
+        Returns file paths with line ranges and an explanation of findings.
         """
         await ctx.info(f"Searching: {query[:100]}")
         progress_task = asyncio.create_task(
@@ -161,17 +177,23 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             }
         )
         async def cloud_sync(
-            force: bool = False, mirror: bool = False, ctx: Context | None = None
+            force: Annotated[
+                bool, Field(description="Ignore cache, upload all files (default: false).")
+            ] = False,
+            mirror: Annotated[
+                bool,
+                Field(
+                    description="With force=True, delete cloud files not in local (default: false)."
+                ),
+            ] = False,
+            ctx: Context | None = None,
         ) -> dict[str, Any]:
             """Upload codebase to Relace Cloud for semantic search.
 
-            Args:
-                force: Ignore cache, upload all files (default: false).
-                mirror: With force=True, delete cloud files not in local (default: false).
+            Syncs git-tracked files to enable cloud_search. Incremental by default—only
+            uploads changed files. Run once per session before using cloud_search.
 
-            Run once per session before cloud_search. Incremental by default.
-            Returns: {status, files_uploaded, files_skipped} on success.
-            Fails if: not a git repo, no API key, network error.
+            Fails if not in a git repository or RELACE_API_KEY is not set.
             """
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
             return cloud_sync_logic(repo_client, base_dir, force=force, mirror=mirror)
@@ -185,20 +207,15 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             }
         )
         async def cloud_search(
-            query: str,
-            branch: str = "",
+            query: Annotated[str, Field(description="Natural language search query.")],
+            branch: Annotated[
+                str, Field(description="Branch to search (empty = default branch).")
+            ] = "",
             ctx: Context | None = None,
         ) -> dict[str, Any]:
             """Semantic code search using AI embeddings. Requires cloud_sync first.
 
-            Use when: local agentic_search insufficient, need cross-repo semantic understanding.
-            Do NOT use when: haven't run cloud_sync, or query is structural—use agentic_search.
-
-            Args:
-                query: Natural language search query.
-                branch: Branch to search (empty = default branch).
-
-            Returns: {results: [{path, score, snippet}, ...], total_matches}.
+            Finds code by meaning, not just keywords. Returns ranked results with relevance scores.
             """
             # Fixed internal parameters (not exposed to LLM)
             score_threshold = 0.3
@@ -224,18 +241,19 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             }
         )
         async def cloud_clear(
-            confirm: bool = False,
-            repo_id: str | None = None,
+            confirm: Annotated[bool, Field(description="Must be True to proceed.")] = False,
+            repo_id: Annotated[
+                str | None,
+                Field(
+                    description="Optional repo ID to delete directly (use cloud_list to find). "
+                    "If not provided, deletes the repo associated with current directory."
+                ),
+            ] = None,
             ctx: Context | None = None,
         ) -> dict[str, Any]:
             """Delete cloud repository and local sync state. IRREVERSIBLE.
 
-            Args:
-                confirm: Must be True to proceed.
-                repo_id: Optional repo ID to delete directly (use cloud_list to find).
-                         If not provided, deletes the repo associated with current directory.
-
-            Returns: {status: "deleted"} on success, {status: "cancelled"} if confirm=false.
+            Removes all indexed data from Relace Cloud. Use cloud_list to find repo IDs.
             """
             from ..repo import cloud_clear_logic
 
@@ -250,33 +268,36 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 "openWorldHint": True,
             }
         )
-        def cloud_list(reason: str = "") -> dict[str, Any]:
+        def cloud_list(
+            reason: Annotated[
+                str, Field(description="Why you need this list (helps with debugging).")
+            ] = "",
+        ) -> dict[str, Any]:
             """List all repositories in your Relace Cloud account.
 
-            Args:
-                reason: Brief explanation of why you are calling this tool.
-
-            Returns: [{repo_id, name, auto_index}, ...]. Max 10000 repos.
-            Returns empty list if no repositories exist.
+            Returns repository IDs, names, and indexing status. Use to find repo_id for cloud_clear.
             """
             del reason  # LLM chain-of-thought only
             return cloud_list_logic(repo_client)
 
-        @mcp.tool
-        async def cloud_info(reason: str = "", ctx: Context | None = None) -> dict[str, Any]:
-            """Get detailed sync status for the current repository.
+        @mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
+        async def cloud_info(
+            reason: Annotated[
+                str, Field(description="Why you need sync status (helps with debugging).")
+            ] = "",
+            ctx: Context | None = None,
+        ) -> dict[str, Any]:
+            """Check sync status before running cloud_sync.
 
-            Use when: checking if cloud_sync is needed, diagnosing sync issues.
-            Do NOT use when: not using cloud features.
-
-            Args:
-                reason: Brief explanation of why you are calling this tool.
-
-            Returns:
-            - local: Current git branch and HEAD commit
-            - synced: Last sync state (git ref, tracked files count)
-            - cloud: Cloud repo info (if exists)
-            - status: Whether sync is needed and recommended action
+            Shows local git state, last sync info, and whether re-sync is needed.
+            Helps decide if cloud_sync should be called.
             """
             del reason  # LLM chain-of-thought only
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
@@ -293,18 +314,22 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             }
         )
         async def agentic_retrieval(
-            query: str,
+            query: Annotated[
+                str,
+                Field(
+                    description="Be SPECIFIC. Examples: "
+                    "❌ 'auth logic' "
+                    "✅ 'function that validates JWT tokens and extracts user ID' "
+                    "❌ 'error handling' "
+                    "✅ 'where HTTP 4xx errors are caught and transformed to user messages'"
+                ),
+            ],
             ctx: Context | None = None,
         ) -> dict[str, Any]:
-            """Find code by semantic query. Returns {files: {path: [[start, end], ...]}, explanation}.
+            """Find code by semantic similarity. Best for conceptual queries.
 
-            Args:
-                query: Be SPECIFIC—name concrete artifacts (function, class, API, data type)
-                    and describe behavior, not abstract concepts. Examples:
-                    ❌ "auth logic"
-                    ✅ "function that validates JWT tokens and extracts user ID"
-                    ❌ "error handling"
-                    ✅ "where HTTP 4xx errors are caught and transformed to user messages"
+            When you know what behavior you're looking for but not the exact names or keywords.
+            Returns file paths with line ranges and relevance-ranked results.
             """
             progress_task = None
             if ctx is not None:
