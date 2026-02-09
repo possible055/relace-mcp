@@ -1,4 +1,4 @@
-# MCP Dashboard (仪表盘)
+# MCP 仪表盘
 
 实时终端日志查看器,用于监控 `fast_apply` 和 `agentic_search` 操作。
 
@@ -139,48 +139,11 @@ Turn 2 [████████████████████████
 
 ## 日志文件位置
 
-日志使用 `platformdirs` 存储:
-
-| 平台 | 位置 |
-|------|------|
-| Linux | `~/.local/state/relace/relace.log` |
-| macOS | `~/Library/Application Support/relace/relace.log` |
-| Windows | `%LOCALAPPDATA%\relace\relace.log` |
+请参阅[日志](logging.md#log-location)了解各平台的日志文件路径。
 
 ## 事件类型
 
-| 类型 | 说明 | 来源 |
-|------|------|------|
-| `create_success` | 新文件已创建 | `fast_apply` |
-| `apply_success` | 文件编辑成功 | `fast_apply` |
-| `apply_error` | 文件编辑失败 | `fast_apply` |
-| `search_start` | 搜索会话开始 | `agentic_search` |
-| `search_turn` | LLM 轮次完成 | `agentic_search` |
-| `tool_call` | 搜索期间执行的工具 | `agentic_search` |
-| `search_complete` | 搜索会话完成 | `agentic_search` |
-| `search_error` | 搜索会话失败 | `agentic_search` |
-
-### Cloud 事件
-
-Cloud 操作会记录结构化事件:
-
-| 类型 | 说明 | 来源 |
-|------|------|------|
-| `cloud_sync_start` | Cloud 同步开始 | `cloud_sync` |
-| `cloud_sync_complete` | Cloud 同步完成 | `cloud_sync` |
-| `cloud_sync_error` | Cloud 同步失败 | `cloud_sync` |
-| `cloud_search_start` | Cloud 搜索开始 | `cloud_search` |
-| `cloud_search_complete` | Cloud 搜索完成 | `cloud_search` |
-| `cloud_search_error` | Cloud 搜索失败 | `cloud_search` |
-| `cloud_info_start` | Cloud 信息查询开始 | `cloud_info` |
-| `cloud_info_complete` | Cloud 信息查询完成 | `cloud_info` |
-| `cloud_info_error` | Cloud 信息查询失败 | `cloud_info` |
-| `cloud_list_start` | Cloud 列表开始 | `cloud_list` |
-| `cloud_list_complete` | Cloud 列表完成 | `cloud_list` |
-| `cloud_list_error` | Cloud 列表失败 | `cloud_list` |
-| `cloud_clear_start` | Cloud 清理开始 | `cloud_clear` |
-| `cloud_clear_complete` | Cloud 清理完成 | `cloud_clear` |
-| `cloud_clear_error` | Cloud 清理失败 | `cloud_clear` |
+请参阅[日志](logging.md#event-types)了解完整的事件类型参考。
 
 ## 常见问题
 

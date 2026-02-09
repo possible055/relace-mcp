@@ -79,11 +79,9 @@ plugins:
             Quick Start: 快速入门
             Configuration: 配置
             Overview: 概览
-            Retrieval Backends: 检索后端
-            Codanna: Codanna
-            ChunkHound: ChunkHound
             Tools: 工具
             Environment Variables: 环境变量
+            Logging: 日志
             Benchmark: 基准测试
             Advanced: 高级
             Contributing: 贡献
@@ -136,18 +134,12 @@ nav:
   - Getting Started: getting-started/quick-start.md
   - Configuration:
       - Overview: configuration/overview.md
-      - Codanna: configuration/codanna.md
-      - ChunkHound: configuration/chunkhound.md
-  - Tools:
-      - Overview: tools/overview.md
-      - Agentic Search: tools/agentic-search.md
-      - Cloud Search: tools/cloud-search.md
-      - Fast Apply: tools/fast-apply.md
-      - Reference: tools/reference.md
-  - Benchmark: advanced/benchmark.md
+  - Tools: tools/overview.md
+  - Benchmark: benchmark/overview.md
   - Advanced:
       - Overview: advanced/overview.md
       - Environment Variables: advanced/environment-variables.md
+      - Logging: advanced/logging.md
       - Dashboard: advanced/dashboard.md
   - Contributing:
       - Overview: contributing/overview.md
@@ -166,4 +158,4 @@ extra:
 extra_css:
   - stylesheets/extra.css
 
-copyright: Copyright &copy; 2026 possible055. Licensed under MIT.
+copyright: Copyright &copy; 2026 apparition. Licensed under MIT.

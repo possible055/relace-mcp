@@ -117,7 +117,7 @@ Once configured, restart your MCP client. You should see these tools available:
 - `fast_apply` - Fast code editing
 - `agentic_search` - Semantic code search
 
-For a complete list of tools and their schemas, see [Tools Overview](../tools/overview.md) and [Tool Reference](../tools/reference.md).
+For a complete list of tools, see [Tools Overview](../tools/overview.md).
 
 ## Troubleshooting
 
