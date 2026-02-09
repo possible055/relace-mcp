@@ -4,7 +4,7 @@
 
 ## 约定
 
-- `path` 可以是绝对路径，或相对 `MCP_BASE_DIR` 的相对路径。
+- `path` 可以是绝对路径，或相对解析得到的 base dir（`MCP_BASE_DIR` 或 MCP Roots）的相对路径。
 - `edit_snippet` 支持截断占位符，如 `// ... existing code ...`、`# ... existing code ...`。
 
 ---
@@ -23,7 +23,10 @@
 
 ### 返回
 
-更改的 UDiff，或新文件的确认信息。
+结构化结果 dict：
+
+- 成功：`status="ok"`，包含 `path`、`diff`（UDiff；新文件为 `null`）、`message`、`trace_id`、`timing_ms`。
+- 失败：`status="error"`，包含 `code`、`message`、`path`、`trace_id`、`timing_ms`。
 
 ---
 
@@ -97,6 +100,14 @@
 | `force` | ❌ | `false` | 强制完整同步，忽略缓存状态 |
 | `mirror` | ❌ | `false` | 配合 `force=True` 使用，删除本地不存在的云端文件 |
 
+### 返回
+
+同步摘要 dict（字段可能包含）：
+
+- `trace_id`、`repo_id`、`repo_head`、`sync_mode`
+- `files_created`、`files_updated`、`files_deleted`、`files_unchanged`、`files_skipped`
+- `warnings`（可选）、`error`（可选）
+
 ---
 
 ## `cloud_search`
@@ -110,6 +121,14 @@
 | `query` | ✅ | 自然语言搜索查询 |
 | `branch` | ❌ | 要搜索的分支（空值使用 API 默认值） |
 
+### 返回
+
+搜索结果 dict（字段可能包含）：
+
+- `trace_id`、`query`、`branch`、`hash`、`repo_id`、`result_count`
+- `results`（匹配列表；通常包含 `filename`、`score`、`content`）
+- `warnings`（可选）、`error`（可选）
+
 ---
 
 ## `cloud_list`
@@ -122,6 +141,13 @@
 |------|------|------|
 | `reason` | ❌ | LLM 链式思维的简要说明（工具会忽略） |
 
+### 返回
+
+摘要 dict：
+
+- `trace_id`、`count`、`repos`（仓库摘要列表）、`has_more`
+- `error`（可选）
+
 ---
 
 ## `cloud_info`
@@ -133,6 +159,14 @@
 | 参数 | 必需 | 说明 |
 |------|------|------|
 | `reason` | ❌ | LLM 链式思维的简要说明（工具会忽略） |
+
+### 返回
+
+状态 dict：
+
+- `trace_id`、`repo_name`、`cloud_repo_name`
+- `local`、`synced`、`cloud`、`status`
+- `warnings`（可选）、`error`（可选）
 
 ---
 
@@ -148,3 +182,11 @@
 |------|------|--------|------|
 | `confirm` | ✅ | `false` | 必须为 `true` 才能继续（安全保护） |
 | `repo_id` | ❌ | — | 可选：直接删除指定 repo |
+
+### 返回
+
+结果 dict：
+
+- `trace_id`、`status`（`cancelled`、`deleted`、`not_found`、`error`）、`message`
+- `repo_id`（可选）
+- `error`（可选）

@@ -230,7 +230,7 @@ agentic_search(
 | `grep` | ⚡⚡⚡ | Low | Exact text match |
 | `agentic_search` | ⚡⚡ | High | Natural language |
 | `agentic_retrieval` | ⚡ | Very High | Complex queries |
-| `cloud_search` | ⚡ | High | Cross-repo |
+| `cloud_search` | ⚡ | High | Cloud semantic search |
 
 ## Examples
 
@@ -282,4 +282,4 @@ agentic_search(
 ## Next Steps
 
 - [Fast Apply](fast-apply.md) - Apply code changes
-- [Cloud Search](cloud-search.md) - Cross-repo search
+- [Cloud Search](cloud-search.md) - Cloud semantic search

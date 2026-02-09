@@ -4,7 +4,7 @@ This page describes the MCP tool schemas exposed by Relace MCP.
 
 ## Conventions
 
-- `path` can be absolute or relative to `MCP_BASE_DIR`.
+- `path` can be absolute, or relative to the resolved base dir (`MCP_BASE_DIR` or MCP Roots).
 - `edit_snippet` supports truncation placeholders like `// ... existing code ...` and `# ... existing code ...`.
 
 ---
@@ -23,7 +23,10 @@ Apply edits to a file (or create a new file).
 
 ### Returns
 
-UDiff of changes, or confirmation for new files.
+Structured result dict:
+
+- On success: `status="ok"` with `path`, `diff` (UDiff or `null` for new files), `message`, `trace_id`, `timing_ms`.
+- On error: `status="error"` with `code`, `message`, `path`, `trace_id`, `timing_ms`.
 
 ---
 
@@ -97,6 +100,14 @@ Synchronize local codebase to Relace Cloud for semantic search.
 | `force` | ❌ | `false` | Force full sync, ignoring cached state |
 | `mirror` | ❌ | `false` | With `force=True`, delete cloud files not in local |
 
+### Returns
+
+Sync summary dict (fields may include):
+
+- `trace_id`, `repo_id`, `repo_head`, `sync_mode`
+- `files_created`, `files_updated`, `files_deleted`, `files_unchanged`, `files_skipped`
+- `warnings` (optional), `error` (optional)
+
 ---
 
 ## `cloud_search`
@@ -110,6 +121,14 @@ Semantic code search over the cloud-synced repository. Requires running `cloud_s
 | `query` | ✅ | Natural language search query |
 | `branch` | ❌ | Branch to search (empty uses API default) |
 
+### Returns
+
+Search result dict (fields may include):
+
+- `trace_id`, `query`, `branch`, `hash`, `repo_id`, `result_count`
+- `results` (list of matches; typically includes `filename`, `score`, and `content`)
+- `warnings` (optional), `error` (optional)
+
 ---
 
 ## `cloud_list`
@@ -122,6 +141,13 @@ List all repositories in your Relace Cloud account.
 |-----------|----------|-------------|
 | `reason` | ❌ | Brief explanation for LLM chain-of-thought (ignored by tool) |
 
+### Returns
+
+Summary dict:
+
+- `trace_id`, `count`, `repos` (list of repo summaries), `has_more`
+- `error` (optional)
+
 ---
 
 ## `cloud_info`
@@ -133,6 +159,14 @@ Get detailed sync status for the current repository. Use before `cloud_sync` to 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `reason` | ❌ | Brief explanation for LLM chain-of-thought (ignored by tool) |
+
+### Returns
+
+Status dict:
+
+- `trace_id`, `repo_name`, `cloud_repo_name`
+- `local`, `synced`, `cloud`, `status`
+- `warnings` (optional), `error` (optional)
 
 ---
 
@@ -148,3 +182,11 @@ If `confirm=false`, returns `status="cancelled"` and does nothing.
 |-----------|----------|---------|-------------|
 | `confirm` | ✅ | `false` | Must be `true` to proceed (safety guard) |
 | `repo_id` | ❌ | — | Optional repo ID to delete directly |
+
+### Returns
+
+Result dict:
+
+- `trace_id`, `status` (`cancelled`, `deleted`, `not_found`, or `error`), `message`
+- `repo_id` (optional)
+- `error` (optional)

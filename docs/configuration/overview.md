@@ -11,7 +11,7 @@ Enable experimental or optional features using environment variables.
 | **Retrieval** | `MCP_SEARCH_RETRIEVAL` | Set to `1` to enable two-stage retrieval (RAG). |
 | **LSP Tools** | `SEARCH_LSP_TOOLS` | Set to `1` to enable LSP-based navigation (Go to Definition). |
 | **Cloud Tools** | `RELACE_CLOUD_TOOLS` | Set to `1` to enable Relace Cloud tools. |
-| **Backend** | `MCP_RETRIEVAL_BACKEND` | `relace` (default), `codanna` (local), or `chunkhound`. |
+| **Backend** | `MCP_RETRIEVAL_BACKEND` | `relace` (default), `codanna` (local), `chunkhound` (local), or `none` (disable). |
 
 ## Custom Providers
 
@@ -20,7 +20,8 @@ Use your own API keys for model inference.
 | Provider | Variable | API Key Variable |
 |---|---|---|
 | **OpenAI** | `APPLY_PROVIDER=openai` | `OPENAI_API_KEY` |
-| **Anthropic** | `APPLY_PROVIDER=anthropic` | `ANTHROPIC_API_KEY` |
+| **OpenRouter** | `APPLY_PROVIDER=openrouter` | `OPENROUTER_API_KEY` |
+| **Cerebras** | `APPLY_PROVIDER=cerebras` | `CEREBRAS_API_KEY` |
 
 ## Examples
 
@@ -48,7 +49,7 @@ MCP_RETRIEVAL_BACKEND = "codanna"
 
 ### Cursor (JSON)
 
-Example configuration for Cursor using Anthropic provider and enabling Retrieval.
+Example configuration for Cursor using OpenAI provider and enabling Retrieval.
 
 ```json
 {
@@ -57,9 +58,9 @@ Example configuration for Cursor using Anthropic provider and enabling Retrieval
       "command": "uv",
       "args": ["tool", "run", "relace-mcp"],
       "env": {
-        "RELACE_API_KEY": "your-api-key-here",
-        "APPLY_PROVIDER": "anthropic",
-        "ANTHROPIC_API_KEY": "sk-ant-...",
+        "APPLY_PROVIDER": "openai",
+        "SEARCH_PROVIDER": "openai",
+        "OPENAI_API_KEY": "sk-...",
         "MCP_SEARCH_RETRIEVAL": "1"
       }
     }

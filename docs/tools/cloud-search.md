@@ -1,10 +1,12 @@
 # Cloud Search
 
-Semantic search across cloud-synced repositories.
+Semantic search over a cloud-synced repository.
 
 ## Overview
 
-Cloud Search enables semantic code search across multiple repositories synced to Relace Cloud. Perfect for monorepo projects or searching across related codebases.
+Cloud Search enables semantic code search over a repository synced to Relace Cloud.
+
+This tool operates on the repository derived from your current base directory (via `MCP_BASE_DIR` or MCP Roots).
 
 ## Prerequisites
 
@@ -26,13 +28,19 @@ cloud_sync(force=False, mirror=False)
 
 ```json
 {
-  "status": "synced",
-  "files_uploaded": 42,
-  "files_skipped": 108
+  "trace_id": "a1b2c3d4",
+  "repo_id": "r_...",
+  "repo_head": "abc123...",
+  "sync_mode": "incremental",
+  "files_created": 42,
+  "files_updated": 0,
+  "files_deleted": 0,
+  "files_skipped": 108,
+  "warnings": []
 }
 ```
 
-### 2. Search Across Repos
+### 2. Search Your Repository
 
 Search using natural language:
 
@@ -44,14 +52,20 @@ cloud_search(query="authentication middleware")
 
 ```json
 {
+  "trace_id": "a1b2c3d4",
+  "query": "authentication middleware",
+  "branch": "",
+  "hash": "abc123...",
+  "repo_id": "r_...",
+  "result_count": 1,
   "results": [
     {
-      "file": "src/middleware/auth.py",
+      "filename": "src/middleware/auth.py",
       "score": 0.95,
-      "snippet": "class AuthMiddleware...",
-      "line_range": [10, 30]
+      "content": "class AuthMiddleware: ..."
     }
-  ]
+  ],
+  "warnings": []
 }
 ```
 
@@ -81,11 +95,12 @@ cloud_sync(force=True, mirror=True)
 
 ### cloud_search
 
-Search across synced repositories.
+Search within the synced repository.
 
 **Parameters:**
 
 - `query` (str): Natural language search query
+- `branch` (str, optional): Branch to search (empty string uses API default)
 
 **Examples:**
 
@@ -118,19 +133,14 @@ cloud_info(reason="checking sync status before search")
 
 ```json
 {
-  "local": {
-    "branch": "main",
-    "commit": "abc123..."
-  },
-  "synced": {
-    "ref": "main@abc123",
-    "files": 150
-  },
-  "cloud": {
-    "repo_id": "r_...",
-    "name": "my-repo"
-  },
-  "status": "synced"
+  "trace_id": "a1b2c3d4",
+  "repo_name": "my-repo",
+  "cloud_repo_name": "my-repo__fp",
+  "local": { "git_branch": "main", "git_head": "abc12345", "git_dirty": false },
+  "synced": { "repo_id": "r_...", "repo_head": "abc12345", "tracked_files": 150 },
+  "cloud": { "repo_id": "r_...", "name": "my-repo__fp", "auto_index": true },
+  "status": { "needs_sync": false, "ref_changed": false, "recommended_action": null },
+  "warnings": []
 }
 ```
 
@@ -147,18 +157,15 @@ cloud_list(reason="checking available repos")
 **Returns:**
 
 ```json
-[
-  {
-    "repo_id": "r_...",
-    "name": "my-repo",
-    "auto_index": true
-  },
-  {
-    "repo_id": "r_...",
-    "name": "another-repo",
-    "auto_index": false
-  }
-]
+{
+  "trace_id": "a1b2c3d4",
+  "count": 2,
+  "repos": [
+    { "repo_id": "r_...", "name": "my-repo", "auto_index": true },
+    { "repo_id": "r_...", "name": "another-repo", "auto_index": false }
+  ],
+  "has_more": false
+}
 ```
 
 ### cloud_clear
@@ -252,7 +259,7 @@ Check sync status regularly:
 
 ```python
 info = cloud_info(reason="daily check")
-if info["status"] != "synced":
+if info["status"]["needs_sync"]:
     cloud_sync()
 ```
 
@@ -260,13 +267,11 @@ if info["status"] != "synced":
 
 ### Multi-Repo Projects
 
-Search across related repositories:
+Search across related repositories by syncing and searching each repository independently:
 
 ```python
-# Sync all repos
-# (switch to each repo and run cloud_sync)
-
-# Search all repos
+# In each repo:
+cloud_sync()
 cloud_search(query="shared authentication logic")
 ```
 
@@ -288,21 +293,7 @@ cloud_search(query="database migration scripts")
 
 ## Performance
 
-### Sync Speed
-
-| Repository Size | Initial Sync | Incremental |
-|-----------------|--------------|-------------|
-| Small (< 100 files) | ~10s | ~1s |
-| Medium (< 1000 files) | ~1min | ~5s |
-| Large (< 10000 files) | ~10min | ~30s |
-
-### Search Speed
-
-Typical search latency:
-
-- **Simple queries**: 100-500ms
-- **Complex queries**: 500ms-2s
-- **Cross-repo**: 1-5s
+Performance depends on file count, network, and Relace Cloud load. Initial sync is typically much slower than incremental syncs.
 
 ## Troubleshooting
 

@@ -230,7 +230,7 @@ agentic_search(
 | `grep` | ⚡⚡⚡ | 低 | 精确文字匹配 |
 | `agentic_search` | ⚡⚡ | 高 | 自然语言 |
 | `agentic_retrieval` | ⚡ | 非常高 | 复杂查询 |
-| `cloud_search` | ⚡ | 高 | 跨仓库 |
+| `cloud_search` | ⚡ | 高 | 云端语义搜索 |
 
 ## 范例
 
@@ -282,4 +282,4 @@ agentic_search(
 ## 下一步
 
 - [Fast Apply](fast-apply.md) - 应用代码变更
-- [Cloud Search](cloud-search.md) - 跨仓库搜索
+- [Cloud Search](cloud-search.md) - 云端语义搜索

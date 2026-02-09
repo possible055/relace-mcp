@@ -11,7 +11,7 @@
 | **检索增强 (Retrieval)** | `MCP_SEARCH_RETRIEVAL` | 设置为 `1` 启用两阶段检索 (RAG)。 |
 | **LSP 工具** | `SEARCH_LSP_TOOLS` | 设置为 `1` 启用基于 LSP 的导航（跳转定义）。 |
 | **云端工具** | `RELACE_CLOUD_TOOLS` | 设置为 `1` 启用 Relace Cloud 工具。 |
-| **检索后端** | `MCP_RETRIEVAL_BACKEND` | `relace` (默认), `codanna` (本地), 或 `chunkhound`。 |
+| **检索后端** | `MCP_RETRIEVAL_BACKEND` | `relace` (默认), `codanna` (本地), `chunkhound` (本地), 或 `none` (禁用)。 |
 
 ## 自定义 Provider
 
@@ -20,7 +20,8 @@
 | Provider | 变量 | API Key 变量 |
 |---|---|---|
 | **OpenAI** | `APPLY_PROVIDER=openai` | `OPENAI_API_KEY` |
-| **Anthropic** | `APPLY_PROVIDER=anthropic` | `ANTHROPIC_API_KEY` |
+| **OpenRouter** | `APPLY_PROVIDER=openrouter` | `OPENROUTER_API_KEY` |
+| **Cerebras** | `APPLY_PROVIDER=cerebras` | `CEREBRAS_API_KEY` |
 
 ## 配置示例
 
@@ -48,7 +49,7 @@ MCP_RETRIEVAL_BACKEND = "codanna"
 
 ### Cursor (JSON)
 
-使用 Anthropic Provider 并启用 Retrieval 的 Cursor 配置示例。
+使用 OpenAI Provider 并启用 Retrieval 的 Cursor 配置示例。
 
 ```json
 {
@@ -57,9 +58,9 @@ MCP_RETRIEVAL_BACKEND = "codanna"
       "command": "uv",
       "args": ["tool", "run", "relace-mcp"],
       "env": {
-        "RELACE_API_KEY": "your-api-key-here",
-        "APPLY_PROVIDER": "anthropic",
-        "ANTHROPIC_API_KEY": "sk-ant-...",
+        "APPLY_PROVIDER": "openai",
+        "SEARCH_PROVIDER": "openai",
+        "OPENAI_API_KEY": "sk-...",
         "MCP_SEARCH_RETRIEVAL": "1"
       }
     }

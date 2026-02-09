@@ -4,7 +4,7 @@
 
 ## 目录
 
-- [环境变量参考](#environment-variables-reference)
+- [环境变量](environment-variables.md)
 - [使用 .env 文件](#using-a-env-file)
 - [同步模式](#sync-modes)
 - [日志](#logging)
@@ -12,84 +12,6 @@
 - [远程部署 (Streamable HTTP)](#remote-deployment-streamable-http)
 
 ---
-
-## 环境变量参考 {#environment-variables-reference}
-
-所有环境变量可在 shell 中设置，或在 MCP 配置的 `env` 部分中设置。
-
-### 核心
-
-| 变量 | 默认值 | 描述 |
-|------|--------|------|
-| `RELACE_API_KEY` | — | **必需。** 你的 Relace API key |
-| `MCP_BASE_DIR` | 当前目录 | 限制文件访问范围 |
-| `MCP_DOTENV_PATH` | — | 启动时加载的 `.env` 文件路径（集中配置） |
-| `RELACE_DEFAULT_ENCODING` | — | 强制项目文件编码（如 `gbk`、`big5`） |
-| `MCP_LOGGING` | `off` | 文件日志：`off`、`safe`（启用并遮蔽）、`full`（启用不遮蔽） |
-| `RELACE_CLOUD_TOOLS` | `0` | 设为 `1` 启用云工具（cloud_sync、cloud_search 等） |
-| `MCP_SEARCH_RETRIEVAL` | `0` | 设为 `1` 启用 `agentic_retrieval` 工具 |
-
-> **注意：** 仅当**同时满足**以下条件时可省略 `RELACE_API_KEY`：(1) `APPLY_PROVIDER` 和 `SEARCH_PROVIDER` 均使用非 Relace 提供商，且 (2) `RELACE_CLOUD_TOOLS=false`。否则必须设置。
-
-### Fast Apply
-
-| 变量 | 默认值 | 描述 |
-|------|--------|------|
-| `APPLY_PROVIDER` | `relace` | 提供商：`relace`、`openai`、`openrouter`、`cerebras` 等 |
-| `APPLY_ENDPOINT` | (Relace 官方) | 覆盖 base URL |
-| `APPLY_MODEL` | `auto` | 覆盖模型名称 |
-| `APPLY_API_KEY` | — | 非 Relace 提供商的 API key |
-| `APPLY_PROMPT_FILE` | — | 覆盖 apply prompt YAML 路径 |
-| `APPLY_TIMEOUT_SECONDS` | `60` | 请求超时 |
-| `APPLY_TEMPERATURE` | `0.0` | 采样温度（0.0-2.0） |
-| `APPLY_SEMANTIC_CHECK` | `0` | 合并后语义验证（可能增加失败率） |
-
-### Agentic Search
-
-| 变量 | 默认值 | 描述 |
-|------|--------|------|
-| `SEARCH_PROVIDER` | `relace` | 提供商：`relace`、`openai`、`openrouter`、`cerebras` 等 |
-| `SEARCH_ENDPOINT` | (Relace 官方) | 覆盖 base URL |
-| `SEARCH_MODEL` | `relace-search` | 覆盖模型名称 |
-| `SEARCH_API_KEY` | — | 非 Relace 提供商的 API key |
-| `SEARCH_PROMPT_FILE` | — | 覆盖 search prompt YAML 路径 |
-| `SEARCH_TIMEOUT_SECONDS` | `120` | 请求超时（同时作为 `agentic_search` 的总耗时预算；超时会返回 `partial=true`） |
-| `SEARCH_TEMPERATURE` | `1.0` | 采样温度（0.0-2.0） |
-| `SEARCH_TOP_P` | — | 可选的 top_p 采样（如需显式设置 top_p 的提供商如 Mistral，可设为 `1`） |
-| `SEARCH_MAX_TURNS` | `6` | 最大 agent 循环轮数 |
-| `SEARCH_LSP_TOOLS` | `false` | LSP 工具模式：`false`（禁用）、`true`（全部启用）、`auto`（检测已安装的服务器） |
-| `SEARCH_ENABLED_TOOLS` | (仅基础工具) | 工具允许列表（逗号/空格分隔）。未设置时仅启用基础工具。当 `SEARCH_LSP_TOOLS=true/auto` 时，此变量也可过滤启用哪些 LSP 工具。`bash` 需要显式加入。 |
-| `SEARCH_PARALLEL_TOOL_CALLS` | `1` | 启用并行工具调用 |
-| `SEARCH_TOOL_STRICT` | `1` | 在 tool schema 中包含 `strict` 字段 |
-| `SEARCH_LSP_TIMEOUT_SECONDS` | `15.0` | LSP 启动/请求超时 |
-| `SEARCH_LSP_MAX_CLIENTS` | `2` | 最大并发 LSP 客户端数 |
-
-#### 进度与超时
-
-- `agentic_search` 会周期性发送 progress 通知，避免客户端空闲超时。
-- 若仍遇到客户端/host 硬超时，建议降低 `SEARCH_MAX_TURNS` 或提高 `SEARCH_TIMEOUT_SECONDS`。
-
-### Cloud Sync
-
-| 变量 | 默认值 | 描述 |
-|------|--------|------|
-| `RELACE_API_ENDPOINT` | `https://api.relace.run/v1` | 云操作 API 端点 |
-| `RELACE_REPO_ID` | — | 预配置的 repo UUID（跳过 list/create） |
-| `RELACE_REPO_SYNC_TIMEOUT` | `300` | 同步操作超时 |
-| `RELACE_REPO_SYNC_MAX_FILES` | `5000` | 每次同步最大文件数 |
-| `RELACE_REPO_LIST_MAX` | `10000` | 最大获取仓库数 |
-| `RELACE_UPLOAD_MAX_WORKERS` | `8` | 并发上传工作线程数 |
-| `RELACE_AGENTIC_AUTO_SYNC` | `1` | 在 agentic retrieval 前自动同步（启用 cloud tools 时） |
-
-### 第三方 API Keys
-
-使用替代提供商时，设置对应的 API key：
-
-| 变量 | 使用场景 |
-|------|----------|
-| `OPENAI_API_KEY` | `*_PROVIDER=openai` 且未设置 `*_API_KEY` |
-| `OPENROUTER_API_KEY` | `*_PROVIDER=openrouter` 且未设置 `*_API_KEY` |
-| `CEREBRAS_API_KEY` | `*_PROVIDER=cerebras` 且未设置 `*_API_KEY` |
 
 ## 使用 .env 文件 {#using-a-env-file}
 
