@@ -89,4 +89,4 @@ When using non-Relace providers, you can set provider-specific API keys:
 ## See Also
 
 - [Advanced Usage](overview.md) - Advanced topics
-- [Tool Reference](../tools/reference.md) - Tool schemas and return shapes
+- [Tools Overview](../tools/overview.md) - Available tools and usage

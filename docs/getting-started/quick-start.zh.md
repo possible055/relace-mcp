@@ -117,7 +117,7 @@
 - `fast_apply` - 快速代码编辑
 - `agentic_search` - 语义代码搜索
 
-完整工具列表与 schema 请参见 [工具总览](../tools/overview.md) 与 [工具参考](../tools/reference.md)。
+完整工具列表请参见 [工具总览](../tools/overview.md)。
 
 ## 故障排除
 

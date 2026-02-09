@@ -89,4 +89,4 @@ Relace MCP 通过环境变量进行配置的完整参考。
 ## 参见
 
 - [高级用法](overview.md) - 高级主题
-- [工具参考](../tools/reference.md) - tool schema 与回传格式
+- [工具总览](../tools/overview.md) - 可用工具与用法

@@ -4,40 +4,7 @@ Relace MCP supports custom model providers and RAG chunked code indexing service
 
 ## Environment Variables
 
-Use environment variables to enable optional or experimental features. See [Advanced - Environment Variables](../advanced/environment-variables.md) for full details.
-
-### Feature Flags
-
-| Variable | Description |
-|---|---|
-| `RELACE_CLOUD_TOOLS` | Set to `1` to enable Relace Cloud tools. |
-| `SEARCH_LSP_TOOLS` | Set to `1` to enable LSP tools. |
-| `MCP_BASE_DIR` | Restrict file operations to this directory. If unset, resolved from MCP Roots. |
-| `MCP_LOGGING` | Local JSONL logging: `off` (default), `safe` (redacted), `full` (complete). |
-| `MCP_SEARCH_RETRIEVAL` | Set to `1` to enable two-stage retrieval (RAG). |
-| `MCP_RETRIEVAL_BACKEND` | `relace` (default), `codanna` (local), `chunkhound` (local), or `none` (disable). |
-
-### Custom Models
-
-In addition to the official Relace service, you can use other models as proxies for agentic search and fast apply.
-
-**Fast Apply**
-
-| Variable | Description |
-|---|---|
-| `APPLY_PROVIDER` | Provider name, e.g. `openai`, `openrouter`, `cerebras`. |
-| `APPLY_ENDPOINT` | Provider OpenAI-compatible endpoint. |
-| `APPLY_API_KEY` | Provider API key. |
-| `APPLY_MODEL` | Model for fast apply, default `auto`. |
-
-**Agentic Search**
-
-| Variable | Description |
-|---|---|
-| `SEARCH_PROVIDER` | Provider name, e.g. `openai`, `mistral`. |
-| `SEARCH_ENDPOINT` | Provider OpenAI-compatible endpoint, e.g. `https://api.openai.com/v1`. |
-| `SEARCH_API_KEY` | Provider API key (or use `OPENAI_API_KEY` / `MISTRAL_API_KEY`). |
-| `SEARCH_MODEL` | Model for agentic search, e.g. `gpt-4o`, `devstral-small-2505`. |
+Use environment variables to configure features and custom providers. See [Environment Variables](../advanced/environment-variables.md) for the complete reference.
 
 ## Examples
 
