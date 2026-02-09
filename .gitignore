@@ -11,6 +11,7 @@ dist/
 # Testing / Coverage
 .pytest_cache/
 .uv-cache
+artifacts/
 
 # Linter / formatter cache
 .pylint.d/

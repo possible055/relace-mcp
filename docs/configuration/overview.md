@@ -1,72 +1,170 @@
 # Overview
 
-Customize Relace MCP with advanced features and providers.
+Relace MCP supports custom model providers and RAG chunked code indexing services, not limited to a single commercial service.
 
-## Feature Flags
+## Environment Variables
 
-Enable experimental or optional features using environment variables.
+Use environment variables to enable optional or experimental features. See [Advanced - Environment Variables](../advanced/environment-variables.md) for full details.
 
-| Feature | Variable | Description |
-|---|---|---|
-| **Retrieval** | `MCP_SEARCH_RETRIEVAL` | Set to `1` to enable two-stage retrieval (RAG). |
-| **LSP Tools** | `SEARCH_LSP_TOOLS` | Set to `1` to enable LSP-based navigation (Go to Definition). |
-| **Cloud Tools** | `RELACE_CLOUD_TOOLS` | Set to `1` to enable Relace Cloud tools. |
-| **Backend** | `MCP_RETRIEVAL_BACKEND` | `relace` (default), `codanna` (local), `chunkhound` (local), or `none` (disable). |
+### Feature Flags
 
-## Custom Providers
+| Variable | Description |
+|---|---|
+| `RELACE_CLOUD_TOOLS` | Set to `1` to enable Relace Cloud tools. |
+| `SEARCH_LSP_TOOLS` | Set to `1` to enable LSP tools. |
+| `MCP_BASE_DIR` | Restrict file operations to this directory. If unset, resolved from MCP Roots. |
+| `MCP_LOGGING` | Local JSONL logging: `off` (default), `safe` (redacted), `full` (complete). |
+| `MCP_SEARCH_RETRIEVAL` | Set to `1` to enable two-stage retrieval (RAG). |
+| `MCP_RETRIEVAL_BACKEND` | `relace` (default), `codanna` (local), `chunkhound` (local), or `none` (disable). |
 
-Use your own API keys for model inference.
+### Custom Models
 
-| Provider | Variable | API Key Variable |
-|---|---|---|
-| **OpenAI** | `APPLY_PROVIDER=openai` | `OPENAI_API_KEY` |
-| **OpenRouter** | `APPLY_PROVIDER=openrouter` | `OPENROUTER_API_KEY` |
-| **Cerebras** | `APPLY_PROVIDER=cerebras` | `CEREBRAS_API_KEY` |
+In addition to the official Relace service, you can use other models as proxies for agentic search and fast apply.
+
+**Fast Apply**
+
+| Variable | Description |
+|---|---|
+| `APPLY_PROVIDER` | Provider name, e.g. `openai`, `openrouter`, `cerebras`. |
+| `APPLY_ENDPOINT` | Provider OpenAI-compatible endpoint. |
+| `APPLY_API_KEY` | Provider API key. |
+| `APPLY_MODEL` | Model for fast apply, default `auto`. |
+
+**Agentic Search**
+
+| Variable | Description |
+|---|---|
+| `SEARCH_PROVIDER` | Provider name, e.g. `openai`, `mistral`. |
+| `SEARCH_ENDPOINT` | Provider OpenAI-compatible endpoint, e.g. `https://api.openai.com/v1`. |
+| `SEARCH_API_KEY` | Provider API key (or use `OPENAI_API_KEY` / `MISTRAL_API_KEY`). |
+| `SEARCH_MODEL` | Model for agentic search, e.g. `gpt-4o`, `devstral-small-2505`. |
 
 ## Examples
 
-How to apply these settings in your client.
+Configuration examples for different clients.
 
-### Codex (TOML)
+### Codex
 
-Example configuration for Codex using OpenAI provider and enabling LSP tools.
+???+ example "Default Relace config + LSP tools + retrieval"
+    ```toml
+    [mcp_servers.relace]
+    command = "uv"
+    args = ["tool", "run", "relace-mcp"]
 
-```toml
-[mcp_servers.relace]
-command = "uv"
-args = ["tool", "run", "relace-mcp"]
+    [mcp_servers.relace.env]
+    RELACE_API_KEY = "your_relace_api_key"
+    RELACE_CLOUD_TOOLS = "1"
 
-[mcp_servers.relace.env]
-# Provider Settings
-APPLY_PROVIDER = "openai"
-SEARCH_PROVIDER = "openai"
-OPENAI_API_KEY = "sk-..."
+    # Agentic search settings
+    SEARCH_LSP_TOOLS = "1"
 
-# Feature Flags
-SEARCH_LSP_TOOLS = "1"
-MCP_RETRIEVAL_BACKEND = "codanna"
-```
+    # Hybrid search settings
+    MCP_SEARCH_MODE = "both"
+    ```
 
-### Cursor (JSON)
+??? example "Agentic search using OpenAI provider"
+    ```toml
+    [mcp_servers.relace]
+    command = "uv"
+    args = ["tool", "run", "relace-mcp"]
 
-Example configuration for Cursor using OpenAI provider and enabling Retrieval.
+    [mcp_servers.relace.env]
+    RELACE_API_KEY = "your_relace_api_key"
+    RELACE_CLOUD_TOOLS = "1"
 
-```json
-{
-  "mcpServers": {
-    "relace": {
-      "command": "uv",
-      "args": ["tool", "run", "relace-mcp"],
-      "env": {
-        "APPLY_PROVIDER": "openai",
-        "SEARCH_PROVIDER": "openai",
-        "OPENAI_API_KEY": "sk-...",
-        "MCP_SEARCH_RETRIEVAL": "1"
+    # Agentic search settings
+    SEARCH_PROVIDER = "openai"
+    SEARCH_ENDPOINT = "https://api.openai.com/v1"
+    OPENAI_API_KEY = "your_api_key"
+    SEARCH_MODEL = "gpt-4o"
+    SEARCH_LSP_TOOLS = "1"
+
+    # Hybrid search settings
+    MCP_SEARCH_MODE = "both"
+    ```
+
+??? example "Agentic search using OpenAI, retrieval using codanna"
+    ```toml
+    [mcp_servers.relace]
+    command = "uv"
+    args = ["tool", "run", "relace-mcp"]
+
+    [mcp_servers.relace.env]
+    RELACE_API_KEY = "your_relace_api_key"
+
+    # Agentic search settings
+    SEARCH_PROVIDER = "openai"
+    SEARCH_ENDPOINT = "https://api.openai.com/v1"
+    OPENAI_API_KEY = "your_openai_api_key"
+    SEARCH_MODEL = "gpt-4o"
+    SEARCH_LSP_TOOLS = "1"
+
+    # Hybrid search settings
+    MCP_SEARCH_MODE = "both"
+    MCP_RETRIEVAL_BACKEND = "codanna"
+    ```
+
+### Cursor
+
+???+ example "Default Relace config + LSP tools + retrieval"
+    ```json
+    {
+      "mcpServers": {
+        "relace": {
+          "command": "uv",
+          "args": ["tool", "run", "relace-mcp"],
+          "env": {
+            "RELACE_API_KEY": "your_relace_api_key",
+            "RELACE_CLOUD_TOOLS": "1",
+            "SEARCH_LSP_TOOLS": "1",
+            "MCP_SEARCH_MODE": "both"
+          }
+        }
       }
     }
-  }
-}
-```
+    ```
+
+??? example "Agentic search using OpenAI provider"
+    ```json
+    {
+      "mcpServers": {
+        "relace": {
+          "command": "uv",
+          "args": ["tool", "run", "relace-mcp"],
+          "env": {
+            "RELACE_API_KEY": "your_relace_api_key",
+            "RELACE_CLOUD_TOOLS": "1",
+            "SEARCH_PROVIDER": "openai",
+            "OPENAI_API_KEY": "your_openai_api_key",
+            "SEARCH_MODEL": "gpt-4o",
+            "SEARCH_LSP_TOOLS": "1",
+            "MCP_SEARCH_MODE": "both"
+          }
+        }
+      }
+    }
+    ```
+
+??? example "Agentic search using OpenAI, retrieval using codanna"
+    ```json
+    {
+      "mcpServers": {
+        "relace": {
+          "command": "uv",
+          "args": ["tool", "run", "relace-mcp"],
+          "env": {
+            "RELACE_API_KEY": "your_relace_api_key",
+            "SEARCH_PROVIDER": "openai",
+            "OPENAI_API_KEY": "your_openai_api_key",
+            "SEARCH_MODEL": "gpt-4o",
+            "SEARCH_LSP_TOOLS": "1",
+            "MCP_SEARCH_MODE": "both",
+            "MCP_RETRIEVAL_BACKEND": "codanna"
+          }
+        }
+      }
+    }
+    ```
 
 ## See Also
 

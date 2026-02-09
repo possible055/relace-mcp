@@ -1,73 +1,167 @@
-# 配置
+# 概览
 
-使用高级功能和自定义 Provider 定制 Relace MCP。
+Relace MCP 支持使用自定义模型提供商与 RAG 分块代码索引服务，不会受到单一商业服务局限。
 
-## 功能开关 (Feature Flags)
+## 环境变量
 
-使用环境变量启用实验性或可选功能。
+使用环境变量启用可选或实验性功能。详细变量说明与调整可于[高级-环境变量](../advanced/environment-variables.md)中查阅。
 
-| 功能 | 变量 | 说明 |
-|---|---|---|
-| **检索增强 (Retrieval)** | `MCP_SEARCH_RETRIEVAL` | 设置为 `1` 启用两阶段检索 (RAG)。 |
-| **LSP 工具** | `SEARCH_LSP_TOOLS` | 设置为 `1` 启用基于 LSP 的导航（跳转定义）。 |
-| **云端工具** | `RELACE_CLOUD_TOOLS` | 设置为 `1` 启用 Relace Cloud 工具。 |
-| **检索后端** | `MCP_RETRIEVAL_BACKEND` | `relace` (默认), `codanna` (本地), `chunkhound` (本地), 或 `none` (禁用)。 |
+### 功能开关
 
-## 自定义 Provider
+| 变量 | 说明 |
+|---|---|
+| `RELACE_CLOUD_TOOLS` | 设置为 `1` 启用 Relace Cloud 工具。 |
+| `SEARCH_LSP_TOOLS` | 设置为 `1` 启用 LSP 工具。 |
+| `MCP_BASE_DIR` | 限制文件操作的根目录。未设置时，服务器从 MCP Roots 解析。 |
+| `MCP_LOGGING` | 本地 JSONL 日志：`off` (默认), `safe` (脱敏), `full` (完整)。 |
+| `MCP_SEARCH_RETRIEVAL` | 设置为 `1` 启用两阶段检索。 |
+| `MCP_RETRIEVAL_BACKEND` | `relace` (默认), `codanna` (本地), `chunkhound` (本地), 或 `none` (禁用)。 |
 
-使用您自己的 API Key 进行模型推理。
+### 自定义模型
 
-| Provider | 变量 | API Key 变量 |
-|---|---|---|
-| **OpenAI** | `APPLY_PROVIDER=openai` | `OPENAI_API_KEY` |
-| **OpenRouter** | `APPLY_PROVIDER=openrouter` | `OPENROUTER_API_KEY` |
-| **Cerebras** | `APPLY_PROVIDER=cerebras` | `CEREBRAS_API_KEY` |
+除了 Relace 官方服务，也可以采用其他模型作为代理搜寻与快速应用的代理模型。
+
+**快速应用**
+
+| 变量 | 说明 |
+|---|---|
+| `APPLY_PROVIDER` | 提供商名称，如 `openai`、`openrouter`、`cerebras` 等。 |
+| `APPLY_ENDPOINT` | 提供商 OpenAI 兼容端点。 |
+| `APPLY_API_KEY` | 提供商 API 密钥。 |
+| `APPLY_MODEL` | 快速应用使用的模型，默认 `auto`。 |
+
+**代理搜寻**
+
+| 变量 | 说明 |
+|---|---|
+| `SEARCH_PROVIDER` | 提供商名称，如 `openai`、`mistral` 等。 |
+| `SEARCH_ENDPOINT` | 提供商 OpenAI 兼容端点，如 `https://api.openai.com/v1`。 |
+| `SEARCH_API_KEY` | 提供商 API 密钥（或使用 `OPENAI_API_KEY` / `MISTRAL_API_KEY`）。 |
+| `SEARCH_MODEL` | 语意搜寻使用的模型，如 `gpt-4o`、`devstral-small-2505`。 |
 
 ## 配置示例
 
-如何在您的客户端应用这些设置。
+以下展示不同客户端的配置范例。
 
-### Codex (TOML)
+### Codex
 
-使用 OpenAI Provider 并启用 LSP 工具的 Codex 配置示例。
+???+ example "默认 Relace 配置 + 启用 LSP 工具 + 启用检索增强服务"
+    ```toml
+    [mcp_servers.relace]
+    command = "uv"
+    args = ["tool", "run", "relace-mcp"]
 
-```toml
-[mcp_servers.relace]
-command = "uv"
-args = ["tool", "run", "relace-mcp"]
+    [mcp_servers.relace.env]
+    RELACE_API_KEY = "your_relace_api_key"
+    RELACE_CLOUD_TOOLS = "1"
 
-[mcp_servers.relace.env]
-# Provider Settings
-APPLY_PROVIDER = "openai"
-SEARCH_PROVIDER = "openai"
-OPENAI_API_KEY = "sk-..."
+    # 代理搜寻相关设置
+    SEARCH_LSP_TOOLS = "1"
 
-# Feature Flags
-SEARCH_LSP_TOOLS = "1"
-MCP_RETRIEVAL_BACKEND = "codanna"
-```
+    # 混合搜寻相关设置
+    MCP_SEARCH_RETRIEVAL = "1"
+    ```
 
-### Cursor (JSON)
+??? example "代理搜寻采用 OpenAI 提供商模型"
+    ```toml
+    [mcp_servers.relace]
+    command = "uv"
+    args = ["tool", "run", "relace-mcp"]
 
-使用 OpenAI Provider 并启用 Retrieval 的 Cursor 配置示例。
+    [mcp_servers.relace.env]
+    RELACE_API_KEY = "rlc-lB7ljkzOg051PN0av4HjaG-OC9aDcgA2Pbvt8g"
+    RELACE_CLOUD_TOOLS = "1"
 
-```json
-{
-  "mcpServers": {
-    "relace": {
-      "command": "uv",
-      "args": ["tool", "run", "relace-mcp"],
-      "env": {
-        "APPLY_PROVIDER": "openai",
-        "SEARCH_PROVIDER": "openai",
-        "OPENAI_API_KEY": "sk-...",
-        "MCP_SEARCH_RETRIEVAL": "1"
+    # 代理搜寻相关设置
+    SEARCH_PROVIDER = "openai"
+    SEARCH_ENDPOINT = "https://api.openai.com/v1"
+    OPENAI_API_KEY = "your_api_key"
+    SEARCH_MODEL = "gpt-5.2"
+    SEARCH_LSP_TOOLS = "1"
+
+    # 混合搜寻相关设置
+    MCP_SEARCH_RETRIEVAL = "1"
+    ```
+
+??? example "代理搜寻采用 OpenAI 提供商模型，检索增强采用 codanna 项目"
+    ```toml
+    [mcp_servers.relace]
+    command = "uv"
+    args = ["tool", "run", "relace-mcp"]
+
+    [mcp_servers.relace.env]
+    RELACE_API_KEY = "rlc-lB7ljkzOg051PN0av4HjaG-OC9aDcgA2Pbvt8g"
+
+    # 代理搜寻相关设置
+    SEARCH_PROVIDER = "openai"
+    SEARCH_ENDPOINT = "https://api.openai.com/v1"
+    OPENAI_API_KEY = "your_openai_api_key"
+    SEARCH_MODEL = "gpt-5.2"
+    SEARCH_LSP_TOOLS = "1"
+
+    # 混合搜寻相关设置
+    MCP_SEARCH_RETRIEVAL = "1"
+    MCP_RETRIEVAL_BACKEND = "codanna"
+    ```
+
+### Cursor
+
+???+ example "默认 Relace 配置 + 启用 LSP 工具 + 启用检索增强服务"
+    ```json
+    {
+      "mcpServers": {
+        "relace": {
+          "command": "uv",
+          "args": ["tool", "run", "relace-mcp"],
+          "env": {
+            "RELACE_API_KEY": "your_relace_api_key"
+            "RELACE_CLOUD_TOOLS": "1"
+            "SEARCH_LSP_TOOLS": "1"
+            "MCP_SEARCH_RETRIEVAL": "1"
+          }
+        }
       }
     }
-  }
-}
-```
+    ```
 
-## 参见
+??? example "代理搜寻采用 OpenAI 提供商模型"
+    ```json
+    {
+      "mcpServers": {
+        "relace": {
+          "command": "uv",
+          "args": ["tool", "run", "relace-mcp"],
+          "env": {
+            "RELACE_API_KEY": "your_relace_api_key"
+            "RELACE_CLOUD_TOOLS": "1"
+            "SEARCH_PROVIDER": "openai",
+            "OPENAI_API_KEY": "your_openai_api_key",
+            "SEARCH_MODEL": "gpt-5.2"
+            "SEARCH_LSP_TOOLS": "1"
+            "MCP_SEARCH_RETRIEVAL": "1"
+          }
+        }
+      }
+    }
+    ```
 
-- [环境变量](../advanced/environment-variables.md) - 完整参考指南
+??? example "代理搜寻采用 OpenAI 提供商模型，检索增强采用 codanna 项目"
+    ```json
+    {
+      "mcpServers": {
+        "relace": {
+          "command": "uv",
+          "args": ["tool", "run", "relace-mcp"],
+          "env": {
+            "RELACE_API_KEY": "your_relace_api_key"
+            "SEARCH_PROVIDER": "openai",
+            "OPENAI_API_KEY": "your_openai_api_key",
+            "SEARCH_MODEL": "gpt-5.2"
+            "SEARCH_LSP_TOOLS": "1"
+            "MCP_SEARCH_RETRIEVAL": "1"
+            "MCP_RETRIEVAL_BACKEND": "codanna"
+          }
+        }
+      }
+    }
+    ```
