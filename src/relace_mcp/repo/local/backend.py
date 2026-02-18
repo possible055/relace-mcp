@@ -254,20 +254,39 @@ def chunkhound_search(
         error_text = str(exc)
         lowered = error_text.lower()
         if "cli not found" in lowered:
-            raise RuntimeError(
-                "chunkhound CLI not found. Install with: pip install chunkhound"
+            raise ExternalCLIError(
+                backend="chunkhound",
+                kind="cli_not_found",
+                message="chunkhound CLI not found. Install with: pip install chunkhound",
+                command=command,
             ) from exc
         if _is_chunkhound_index_missing_error(error_text):
             if _retry:
-                raise RuntimeError(
-                    "ChunkHound index creation failed or index still not found"
+                raise ExternalCLIError(
+                    backend="chunkhound",
+                    kind="index_missing",
+                    message="ChunkHound index creation failed or index still not found",
+                    command=command,
                 ) from exc
             logger.debug("ChunkHound index not found, attempting to create...")
-            _ensure_chunkhound_index(base_dir, env)
+            try:
+                _ensure_chunkhound_index(base_dir, env)
+            except RuntimeError as reindex_exc:
+                raise ExternalCLIError(
+                    backend="chunkhound",
+                    kind="index_missing",
+                    message=f"ChunkHound auto-index failed: {reindex_exc}",
+                    command=["chunkhound", "index"],
+                ) from reindex_exc
             return chunkhound_search(
                 query, base_dir=base_dir, limit=limit, threshold=threshold, _retry=True
             )
-        raise
+        raise ExternalCLIError(
+            backend="chunkhound",
+            kind="nonzero_exit",
+            message=error_text,
+            command=command,
+        ) from exc
 
     if not output:
         return []
@@ -280,7 +299,7 @@ _CHUNKHOUND_HEAD_FILE = ".chunkhound/last_indexed_head"
 
 def _get_git_head(base_dir: str) -> str | None:
     try:
-        result = subprocess.run(  # nosec B603
+        result = subprocess.run(  # nosec B603 B607
             ["git", "rev-parse", "HEAD"],
             cwd=base_dir,
             capture_output=True,
@@ -428,7 +447,34 @@ def codanna_search(
         "--json",
     ]
 
-    data = _run_cli_json(command, base_dir, timeout=60)
+    try:
+        data = _run_cli_json(command, base_dir, timeout=60)
+    except RuntimeError as exc:
+        msg = str(exc)
+        lowered = msg.lower()
+        if "cli not found" in lowered:
+            raise ExternalCLIError(
+                backend="codanna",
+                kind="cli_not_found",
+                message="codanna CLI not found. Install with: pip install codanna",
+                command=command,
+            ) from exc
+        if "index" in lowered and (
+            "missing" in lowered or "not found" in lowered or "not built" in lowered
+        ):
+            raise ExternalCLIError(
+                backend="codanna",
+                kind="index_missing",
+                message="Codanna index not available. Run `codanna init` + `codanna index`.",
+                command=command,
+            ) from exc
+        raise ExternalCLIError(
+            backend="codanna",
+            kind="nonzero_exit",
+            message=msg,
+            command=command,
+        ) from exc
+
     if data is None:
         return []
 

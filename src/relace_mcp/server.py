@@ -143,6 +143,8 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
                 results["retrieval_backend"] = f"{RETRIEVAL_BACKEND}: index_missing (deferred)"
             else:
                 errors.append(f"{exc.backend} backend: {exc} ({exc.kind})")
+    elif AGENTIC_RETRIEVAL_ENABLED and RETRIEVAL_BACKEND == "auto":
+        results["retrieval_backend"] = "auto: deferred (resolved at query time)"
     else:
         results["retrieval_backend"] = f"{RETRIEVAL_BACKEND}: ok"
 

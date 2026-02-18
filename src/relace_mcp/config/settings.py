@@ -97,7 +97,7 @@ def _parse_retrieval_backend() -> str:
             f"Expected one of: {sorted(_ALLOWED_RETRIEVAL_BACKENDS)}"
         )
     if raw == "auto":
-        return _detect_retrieval_backend()
+        return "auto"
     return raw
 
 

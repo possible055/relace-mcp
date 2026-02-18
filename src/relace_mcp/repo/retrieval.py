@@ -9,6 +9,7 @@ from ..tools.search import FastAgenticSearchHarness
 from .cloud import cloud_info_logic, cloud_search_logic, cloud_sync_logic
 from .local import (
     ExternalCLIError,
+    check_backend_health,
     chunkhound_auto_reindex,
     chunkhound_search,
     codanna_search,
@@ -17,6 +18,38 @@ from .local import (
 )
 
 logger = logging.getLogger(__name__)
+
+_auto_backend_cache: dict[str, str] = {}
+
+
+def _resolve_auto_backend(base_dir: str) -> str:
+    cached = _auto_backend_cache.get(base_dir)
+    if cached is not None:
+        return cached
+
+    import shutil
+
+    if shutil.which("codanna") and not is_backend_disabled("codanna"):
+        try:
+            check_backend_health("codanna", base_dir)
+            logger.info("Auto-detected retrieval backend: codanna")
+            _auto_backend_cache[base_dir] = "codanna"
+            return "codanna"
+        except ExternalCLIError:
+            logger.info("codanna found but unusable, trying chunkhound")
+
+    if shutil.which("chunkhound") and not is_backend_disabled("chunkhound"):
+        try:
+            check_backend_health("chunkhound", base_dir)
+            logger.info("Auto-detected retrieval backend: chunkhound")
+            _auto_backend_cache[base_dir] = "chunkhound"
+            return "chunkhound"
+        except ExternalCLIError:
+            logger.info("chunkhound found but unusable, falling back to relace")
+
+    logger.info("No usable local retrieval backend found, using relace")
+    _auto_backend_cache[base_dir] = "relace"
+    return "relace"
 
 
 def build_semantic_hints_section(cloud_results: list[dict[str, Any]], max_hints: int = 8) -> str:
@@ -65,11 +98,14 @@ async def agentic_retrieval_logic(
     trace_id = str(uuid.uuid4())[:8]
     logger.debug("[%s] Starting agentic retrieval", trace_id)
 
+    # Resolve "auto" backend now that base_dir is known
+    backend = _resolve_auto_backend(base_dir) if RETRIEVAL_BACKEND == "auto" else RETRIEVAL_BACKEND
+
     warnings_list: list[str] = []
     cloud_results: list[dict[str, Any]] = []
 
     # Stage 0a: Auto-sync if enabled and needed (Relace backend only)
-    if AGENTIC_AUTO_SYNC and RETRIEVAL_BACKEND == "relace" and repo_client is not None:
+    if AGENTIC_AUTO_SYNC and backend == "relace" and repo_client is not None:
         try:
             info = cloud_info_logic(repo_client, base_dir)
             if info.get("status", {}).get("needs_sync"):
@@ -85,7 +121,7 @@ async def agentic_retrieval_logic(
             logger.warning("[%s] Auto-sync exception occurred, see warnings", trace_id)
 
     # Stage 0b: Auto-reindex if needed (ChunkHound backend only)
-    if RETRIEVAL_BACKEND == "chunkhound" and not is_backend_disabled("chunkhound"):
+    if backend == "chunkhound" and not is_backend_disabled("chunkhound"):
         try:
             reindex = chunkhound_auto_reindex(base_dir)
             if reindex["action"] == "reindexed":
@@ -102,15 +138,15 @@ async def agentic_retrieval_logic(
             logger.warning("[%s] ChunkHound auto-reindex exception: %s", trace_id, exc)
 
     # Stage 1: Semantic retrieval (Relace, Codanna, or ChunkHound)
-    if RETRIEVAL_BACKEND == "none":
+    if backend == "none":
         warnings_list.append("Semantic retrieval disabled (MCP_RETRIEVAL_BACKEND=none).")
-    elif RETRIEVAL_BACKEND in ("codanna", "chunkhound"):
-        if is_backend_disabled(RETRIEVAL_BACKEND):
+    elif backend in ("codanna", "chunkhound"):
+        if is_backend_disabled(backend):
             warnings_list.append(
-                f"{RETRIEVAL_BACKEND} backend disabled for this session. Proceeding without hints."
+                f"{backend} backend disabled for this session. Proceeding without hints."
             )
         else:
-            search_fn = chunkhound_search if RETRIEVAL_BACKEND == "chunkhound" else codanna_search
+            search_fn = chunkhound_search if backend == "chunkhound" else codanna_search
             try:
                 cloud_results = search_fn(
                     query,
@@ -120,13 +156,13 @@ async def agentic_retrieval_logic(
                 )
                 if not cloud_results:
                     warnings_list.append(
-                        f"{RETRIEVAL_BACKEND} returned no results. Proceeding without hints."
+                        f"{backend} returned no results. Proceeding without hints."
                     )
                 else:
                     logger.debug(
                         "[%s] %s returned %d results, using top %d as hints",
                         trace_id,
-                        RETRIEVAL_BACKEND,
+                        backend,
                         len(cloud_results),
                         min(len(cloud_results), max_hints),
                     )
@@ -138,10 +174,8 @@ async def agentic_retrieval_logic(
                     "[%s] %s backend error (%s): %s", trace_id, exc.backend, exc.kind, exc
                 )
             except Exception as exc:
-                warnings_list.append(
-                    f"{RETRIEVAL_BACKEND} search crashed: {exc}. Proceeding without hints."
-                )
-                logger.exception("[%s] %s unexpected exception", trace_id, RETRIEVAL_BACKEND)
+                warnings_list.append(f"{backend} search crashed: {exc}. Proceeding without hints.")
+                logger.exception("[%s] %s unexpected exception", trace_id, backend)
     else:
         if repo_client is None:
             warnings_list.append(

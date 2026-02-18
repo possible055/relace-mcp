@@ -18,7 +18,7 @@ dist/
 .pylint.d/
 .ruff_cache/
 .mypy_cache/
-artifacts/
+.dmypy.json
 
 # IDE / Editor / AI agent
 .vscode/
