@@ -432,7 +432,8 @@ def codanna_search(
     if data is None:
         return []
 
-    items = data.get("results") if isinstance(data, dict) else None
+    # Codanna envelope schema: results are in "data" array, not "results"
+    items = data.get("data") if isinstance(data, dict) else None
     if not isinstance(items, list):
         return []
 
@@ -440,7 +441,15 @@ def codanna_search(
     for item in items:
         if not isinstance(item, dict):
             continue
-        filename = item.get("filename") or item.get("path") or item.get("file")
+        # Codanna schema: filename lives in item["symbol"]["file_path"]
+        # or item["context"]["file_path"]
+        symbol = item.get("symbol")
+        context = item.get("context")
+        filename = None
+        if isinstance(symbol, dict):
+            filename = symbol.get("file_path")
+        if not filename and isinstance(context, dict):
+            filename = context.get("file_path")
         score = item.get("score")
         if not filename:
             continue

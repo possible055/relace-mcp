@@ -33,6 +33,9 @@ CLAUDE.md
 # Project-specific
 .chunkhound/
 .chunkhound.json
+.codanna/
+.codannaignore
+.fastembed_cache
 benchmark/artifacts/
 sonar-project.properties
 site/
