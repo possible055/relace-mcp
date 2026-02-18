@@ -357,7 +357,7 @@ def chunkhound_auto_reindex(base_dir: str) -> dict[str, Any]:
         _write_indexed_head(base_dir, head)
         logger.info("ChunkHound auto-reindex completed")
         return {"action": "reindexed", "old_head": last_head, "new_head": head}
-    except RuntimeError as exc:
+    except (RuntimeError, OSError) as exc:
         logger.warning("ChunkHound auto-reindex failed: %s", exc)
         return {"action": "error", "message": str(exc)}
 

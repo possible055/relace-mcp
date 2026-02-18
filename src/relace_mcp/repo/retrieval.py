@@ -24,7 +24,7 @@ _auto_backend_cache: dict[str, str] = {}
 
 def _resolve_auto_backend(base_dir: str) -> str:
     cached = _auto_backend_cache.get(base_dir)
-    if cached is not None:
+    if cached and not is_backend_disabled(cached):
         return cached
 
     import shutil
