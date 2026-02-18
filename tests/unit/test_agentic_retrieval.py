@@ -44,6 +44,12 @@ class TestBuildSemanticHintsSection:
         assert "src/utils.py (score: 0.65)" in section
 
 
+@pytest.fixture(autouse=True)
+def _force_relace_backend():
+    with patch("relace_mcp.repo.retrieval.RETRIEVAL_BACKEND", "relace"):
+        yield
+
+
 class TestAgenticRetrievalLogic:
     @pytest.fixture
     def mock_config(self, tmp_path: Path) -> RelaceConfig:
