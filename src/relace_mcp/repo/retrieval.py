@@ -7,9 +7,49 @@ from ..config import RETRIEVAL_USER_PROMPT_TEMPLATE, RelaceConfig
 from ..config.settings import AGENTIC_AUTO_SYNC, RETRIEVAL_BACKEND
 from ..tools.search import FastAgenticSearchHarness
 from .cloud import cloud_info_logic, cloud_search_logic, cloud_sync_logic
-from .local import chunkhound_search, codanna_search
+from .local import (
+    ExternalCLIError,
+    check_backend_health,
+    chunkhound_auto_reindex,
+    chunkhound_search,
+    codanna_search,
+    disable_backend,
+    is_backend_disabled,
+)
 
 logger = logging.getLogger(__name__)
+
+_auto_backend_cache: dict[str, str] = {}
+
+
+def _resolve_auto_backend(base_dir: str) -> str:
+    cached = _auto_backend_cache.get(base_dir)
+    if cached and not is_backend_disabled(cached):
+        return cached
+
+    import shutil
+
+    if shutil.which("codanna") and not is_backend_disabled("codanna"):
+        try:
+            check_backend_health("codanna", base_dir)
+            logger.info("Auto-detected retrieval backend: codanna")
+            _auto_backend_cache[base_dir] = "codanna"
+            return "codanna"
+        except ExternalCLIError:
+            logger.info("codanna found but unusable, trying chunkhound")
+
+    if shutil.which("chunkhound") and not is_backend_disabled("chunkhound"):
+        try:
+            check_backend_health("chunkhound", base_dir)
+            logger.info("Auto-detected retrieval backend: chunkhound")
+            _auto_backend_cache[base_dir] = "chunkhound"
+            return "chunkhound"
+        except ExternalCLIError:
+            logger.info("chunkhound found but unusable, falling back to relace")
+
+    logger.info("No usable local retrieval backend found, using relace")
+    _auto_backend_cache[base_dir] = "relace"
+    return "relace"
 
 
 def build_semantic_hints_section(cloud_results: list[dict[str, Any]], max_hints: int = 8) -> str:
@@ -58,11 +98,14 @@ async def agentic_retrieval_logic(
     trace_id = str(uuid.uuid4())[:8]
     logger.debug("[%s] Starting agentic retrieval", trace_id)
 
+    # Resolve "auto" backend now that base_dir is known
+    backend = _resolve_auto_backend(base_dir) if RETRIEVAL_BACKEND == "auto" else RETRIEVAL_BACKEND
+
     warnings_list: list[str] = []
     cloud_results: list[dict[str, Any]] = []
 
-    # Stage 0: Auto-sync if enabled and needed (Relace backend only)
-    if AGENTIC_AUTO_SYNC and RETRIEVAL_BACKEND == "relace" and repo_client is not None:
+    # Stage 0a: Auto-sync if enabled and needed (Relace backend only)
+    if AGENTIC_AUTO_SYNC and backend == "relace" and repo_client is not None:
         try:
             info = cloud_info_logic(repo_client, base_dir)
             if info.get("status", {}).get("needs_sync"):
@@ -77,49 +120,62 @@ async def agentic_retrieval_logic(
             warnings_list.append(f"Auto-sync error: {exc}")
             logger.warning("[%s] Auto-sync exception occurred, see warnings", trace_id)
 
+    # Stage 0b: Auto-reindex if needed (ChunkHound backend only)
+    if backend == "chunkhound" and not is_backend_disabled("chunkhound"):
+        try:
+            reindex = chunkhound_auto_reindex(base_dir)
+            if reindex["action"] == "reindexed":
+                logger.debug(
+                    "[%s] ChunkHound auto-reindex: %s -> %s",
+                    trace_id,
+                    reindex.get("old_head", "none"),
+                    reindex["new_head"],
+                )
+            elif reindex["action"] == "error":
+                warnings_list.append(f"ChunkHound auto-reindex failed: {reindex['message']}")
+        except Exception as exc:
+            warnings_list.append(f"ChunkHound auto-reindex error: {exc}")
+            logger.warning("[%s] ChunkHound auto-reindex exception: %s", trace_id, exc)
+
     # Stage 1: Semantic retrieval (Relace, Codanna, or ChunkHound)
-    if RETRIEVAL_BACKEND == "none":
+    if backend == "none":
         warnings_list.append("Semantic retrieval disabled (MCP_RETRIEVAL_BACKEND=none).")
-    elif RETRIEVAL_BACKEND == "codanna":
-        try:
-            cloud_results = codanna_search(
-                query,
-                base_dir=base_dir,
-                limit=max_hints,
-                threshold=score_threshold,
+    elif backend in ("codanna", "chunkhound"):
+        if is_backend_disabled(backend):
+            warnings_list.append(
+                f"{backend} backend disabled for this session. Proceeding without hints."
             )
-            if not cloud_results:
-                warnings_list.append("Codanna returned no results. Proceeding without hints.")
-            else:
-                logger.debug(
-                    "[%s] Codanna returned %d results, using top %d as hints",
-                    trace_id,
-                    len(cloud_results),
-                    min(len(cloud_results), max_hints),
+        else:
+            search_fn = chunkhound_search if backend == "chunkhound" else codanna_search
+            try:
+                cloud_results = search_fn(
+                    query,
+                    base_dir=base_dir,
+                    limit=max_hints,
+                    threshold=score_threshold,
                 )
-        except Exception as exc:
-            warnings_list.append(f"Codanna search error: {exc}. Proceeding without hints.")
-            logger.warning("[%s] Codanna search exception: %s", trace_id, exc)
-    elif RETRIEVAL_BACKEND == "chunkhound":
-        try:
-            cloud_results = chunkhound_search(
-                query,
-                base_dir=base_dir,
-                limit=max_hints,
-                threshold=score_threshold,
-            )
-            if not cloud_results:
-                warnings_list.append("ChunkHound returned no results. Proceeding without hints.")
-            else:
-                logger.debug(
-                    "[%s] ChunkHound returned %d results, using top %d as hints",
-                    trace_id,
-                    len(cloud_results),
-                    min(len(cloud_results), max_hints),
+                if not cloud_results:
+                    warnings_list.append(
+                        f"{backend} returned no results. Proceeding without hints."
+                    )
+                else:
+                    logger.debug(
+                        "[%s] %s returned %d results, using top %d as hints",
+                        trace_id,
+                        backend,
+                        len(cloud_results),
+                        min(len(cloud_results), max_hints),
+                    )
+            except ExternalCLIError as exc:
+                if exc.kind in ("cli_not_found", "index_missing"):
+                    disable_backend(exc.backend, f"{exc.kind}: {exc}")
+                warnings_list.append(f"{exc.backend} retrieval unavailable ({exc.kind}): {exc}")
+                logger.warning(
+                    "[%s] %s backend error (%s): %s", trace_id, exc.backend, exc.kind, exc
                 )
-        except Exception as exc:
-            warnings_list.append(f"ChunkHound search error: {exc}. Proceeding without hints.")
-            logger.warning("[%s] ChunkHound search exception: %s", trace_id, exc)
+            except Exception as exc:
+                warnings_list.append(f"{backend} search crashed: {exc}. Proceeding without hints.")
+                logger.exception("[%s] %s unexpected exception", trace_id, backend)
     else:
         if repo_client is None:
             warnings_list.append(

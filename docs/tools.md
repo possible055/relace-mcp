@@ -155,32 +155,62 @@ If `confirm=false`, returns `status="cancelled"` and does nothing.
 
 Two-stage semantic + agentic code retrieval. Combines semantic hints with local agentic exploration for precise results.
 
-### Behavior
+### How It Works
 
-1. **Stage 1**: Loads semantic hints based on `MCP_RETRIEVAL_BACKEND`
-   - `relace`: run `cloud_search`
-   - `codanna`: run `codanna mcp semantic_search_with_context --json`
-   - `chunkhound`: run `chunkhound search --json` (install separately: `pip install chunkhound`)
-   - `none`: skip hints
-2. **Stage 2**: Uses hints to guide agentic exploration (grep, view, etc.)
+1. **Stage 1 — Semantic hints**: Retrieves relevant file/symbol hints from the configured backend
+2. **Stage 2 — Agentic exploration**: Uses those hints to guide local grep/view exploration
 
 ### Backend Configuration
 
-#### ChunkHound (Recommended for local semantic search)
+Set `MCP_RETRIEVAL_BACKEND` to choose a backend. Default: `relace`.
+
+| Value | Requires | Description |
+|-------|----------|-------------|
+| `auto` | — | Auto-detect: prefers Codanna → ChunkHound → Relace |
+| `codanna` | `codanna` CLI | Symbol-level semantic search (local, no API key needed) |
+| `chunkhound` | `chunkhound` CLI + embedding API key | Chunk-level semantic search (local) |
+| `relace` | `RELACE_API_KEY` | Cloud-based semantic search |
+| `none` | — | Skip semantic hints, agentic-only |
+
+#### Codanna
+
+Symbol-level indexing — embeds function signatures and docstrings. Higher precision on implementation-level queries.
 
 ```bash
-# Install chunkhound separately
-pip install chunkhound
+# Install
+curl -fsSL --proto '=https' --tlsv1.2 https://install.codanna.sh | sh
+# Or: cargo install codanna --locked
+# Or: brew install codanna
 
-# Configure via environment variables
-export MCP_RETRIEVAL_BACKEND=chunkhound
-export CHUNKHOUND_EMBEDDING__PROVIDER=openai  # or voyageai, openai-compatible
-export OPENAI_API_KEY=sk-xxx  # or VOYAGE_API_KEY
+# Initialize and index
+cd your-project
+codanna init
+codanna index src
 
-# Or configure via .chunkhound.json in project root
+# Enable
+export MCP_RETRIEVAL_BACKEND=codanna
 ```
 
-Example `.chunkhound.json`:
+> Add `.codanna/` and `.codannaignore` to your `.gitignore`.
+
+#### ChunkHound
+
+Chunk-level indexing — embeds raw code blocks. Requires an external embedding provider.
+
+```bash
+# Install
+pip install chunkhound
+
+# Index
+cd your-project
+chunkhound index
+
+# Enable
+export MCP_RETRIEVAL_BACKEND=chunkhound
+```
+
+Embedding provider configuration (`.chunkhound.json` in project root):
+
 ```json
 {
   "embedding": {
@@ -191,7 +221,8 @@ Example `.chunkhound.json`:
 }
 ```
 
-For local Ollama:
+For local Ollama (no API key needed):
+
 ```json
 {
   "embedding": {
@@ -202,9 +233,7 @@ For local Ollama:
 }
 ```
 
-#### Codanna
-
-Set `MCP_RETRIEVAL_BACKEND=codanna` to use a local codanna index (run `codanna init` + `codanna index <dir>`).
+> Add `.chunkhound/` and `.chunkhound.json` to your `.gitignore`.
 
 ### Parameters
 

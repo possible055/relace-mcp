@@ -85,7 +85,36 @@ MCP_LOG_REDACT = _MCP_LOGGING_RAW != "full"
 
 # Cloud tools (disabled by default)
 RELACE_CLOUD_TOOLS = env_bool("RELACE_CLOUD_TOOLS", default=False)
-RETRIEVAL_BACKEND = os.getenv("MCP_RETRIEVAL_BACKEND", "relace").strip().lower()
+
+_ALLOWED_RETRIEVAL_BACKENDS = {"relace", "codanna", "chunkhound", "none", "auto"}
+
+
+def _parse_retrieval_backend() -> str:
+    raw = os.getenv("MCP_RETRIEVAL_BACKEND", "relace").strip().lower()
+    if raw not in _ALLOWED_RETRIEVAL_BACKENDS:
+        raise RuntimeError(
+            f"Invalid MCP_RETRIEVAL_BACKEND={raw!r}. "
+            f"Expected one of: {sorted(_ALLOWED_RETRIEVAL_BACKENDS)}"
+        )
+    if raw == "auto":
+        return "auto"
+    return raw
+
+
+def _detect_retrieval_backend() -> str:
+    import shutil
+
+    if shutil.which("codanna"):
+        logger.info("Auto-detected retrieval backend: codanna")
+        return "codanna"
+    if shutil.which("chunkhound"):
+        logger.info("Auto-detected retrieval backend: chunkhound")
+        return "chunkhound"
+    logger.info("No local retrieval backend found, using relace")
+    return "relace"
+
+
+RETRIEVAL_BACKEND = _parse_retrieval_backend()
 
 
 # Enable agentic_retrieval tool (requires cloud sync or local backend)

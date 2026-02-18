@@ -2,24 +2,52 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      - id: check-yaml
       - id: check-toml
       - id: check-json
+      - id: check-ast
+      - id: debug-statements
       - id: end-of-file-fixer
-        exclude: '\.py$'
       - id: trailing-whitespace
-        exclude: '\.py$'
       - id: mixed-line-ending
-        exclude: '\.py$'
       - id: check-added-large-files
-        args: ["--maxkb=1000"]
+        args: ["--maxkb=1500"]
       - id: check-merge-conflict
       - id: check-case-conflict
       - id: detect-private-key
 
-  # Ruff - linting & formatting
+  # Ruff — format first, then lint
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.10
+    rev: v0.15.1
     hooks:
+      - id: ruff-format
+        types: [python]
       - id: ruff-check
         args: ["--fix"]
-      - id: ruff-format
+        types: [python]
+
+  - repo: local
+    hooks:
+      # uv lockfile sync — ensure uv.lock matches pyproject.toml
+      - id: uv-lock-check
+        name: uv lock check
+        entry: uv lock --locked
+        language: system
+        files: '(pyproject\.toml|uv\.lock)$'
+        pass_filenames: false
+
+      # Python type check — dmypy daemon (~0.3s warm, ~8s cold start)
+      - id: mypy
+        name: mypy (daemon)
+        entry: uv run -- dmypy run -- src/
+        language: system
+        files: '\.py$'
+        pass_filenames: false
+
+      # Python security scan (~1.3s)
+      - id: bandit
+        name: bandit
+        entry: uv run -- bandit -r src/ -c pyproject.toml
+        language: system
+        files: '\.py$'
+        pass_filenames: false

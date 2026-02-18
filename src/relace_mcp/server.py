@@ -16,7 +16,13 @@ from dotenv import load_dotenv
 from fastmcp import FastMCP
 
 from .config import RelaceConfig
-from .config.settings import ENCODING_DETECTION_SAMPLE_LIMIT, LOG_PATH, MCP_LOGGING
+from .config.settings import (
+    AGENTIC_RETRIEVAL_ENABLED,
+    ENCODING_DETECTION_SAMPLE_LIMIT,
+    LOG_PATH,
+    MCP_LOGGING,
+    RETRIEVAL_BACKEND,
+)
 from .encoding import set_project_encoding
 from .middleware import RootsMiddleware, ToolTracingMiddleware
 from .tools import register_tools
@@ -123,6 +129,24 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
                 results["log_path"] = "ok"
         except OSError as exc:
             errors.append(f"cannot create log directory: {exc}")
+
+    # Retrieval backend health check
+    if AGENTIC_RETRIEVAL_ENABLED and RETRIEVAL_BACKEND in ("chunkhound", "codanna"):
+        from .repo.local.backend import ExternalCLIError, check_backend_health
+
+        try:
+            status = check_backend_health(RETRIEVAL_BACKEND, config.base_dir)
+            results["retrieval_backend"] = f"{RETRIEVAL_BACKEND}: {status}"
+        except ExternalCLIError as exc:
+            if exc.kind == "index_missing" and exc.backend == "chunkhound":
+                logger.warning("%s backend: %s — will auto-index on first query", exc.backend, exc)
+                results["retrieval_backend"] = f"{RETRIEVAL_BACKEND}: index_missing (deferred)"
+            else:
+                errors.append(f"{exc.backend} backend: {exc} ({exc.kind})")
+    elif AGENTIC_RETRIEVAL_ENABLED and RETRIEVAL_BACKEND == "auto":
+        results["retrieval_backend"] = "auto: deferred (resolved at query time)"
+    else:
+        results["retrieval_backend"] = f"{RETRIEVAL_BACKEND}: ok"
 
     if errors:
         raise RuntimeError("; ".join(errors))

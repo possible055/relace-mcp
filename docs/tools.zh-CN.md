@@ -155,32 +155,62 @@
 
 两阶段语义 + 智能代码检索。结合语义提示与本地智能探索以获取精确结果。
 
-### 行为
+### 运作方式
 
-1. **阶段 1**：根据 `MCP_RETRIEVAL_BACKEND` 加载语义提示
-   - `relace`：运行 `cloud_search`
-   - `codanna`：运行 `codanna mcp semantic_search_with_context --json`
-   - `chunkhound`：运行 `chunkhound search --json`（需单独安装：`pip install chunkhound`）
-   - `none`：跳过提示
-2. **阶段 2**：使用提示引导智能探索（grep、view 等）
+1. **阶段 1 — 语义提示**：从配置的 backend 检索相关文件/符号提示
+2. **阶段 2 — 智能探索**：利用提示引导本地 grep/view 探索
 
 ### Backend 配置
 
-#### ChunkHound（推荐用于本地语义搜索）
+设置 `MCP_RETRIEVAL_BACKEND` 选择 backend。默认值：`relace`。
+
+| 值 | 依赖 | 说明 |
+|----|------|------|
+| `auto` | — | 自动检测：优先 Codanna → ChunkHound → Relace |
+| `codanna` | `codanna` CLI | 符号级语义搜索（本地，无需 API key） |
+| `chunkhound` | `chunkhound` CLI + embedding API key | 代码块级语义搜索（本地） |
+| `relace` | `RELACE_API_KEY` | 云端语义搜索 |
+| `none` | — | 跳过语义提示，仅使用智能探索 |
+
+#### Codanna
+
+符号级索引 — 嵌入函数签名和文档字符串。在实现级查询上精度更高。
 
 ```bash
-# 单独安装 chunkhound
-pip install chunkhound
+# 安装
+curl -fsSL --proto '=https' --tlsv1.2 https://install.codanna.sh | sh
+# 或: cargo install codanna --locked
+# 或: brew install codanna
 
-# 通过环境变量配置
-export MCP_RETRIEVAL_BACKEND=chunkhound
-export CHUNKHOUND_EMBEDDING__PROVIDER=openai  # 或 voyageai, openai-compatible
-export OPENAI_API_KEY=sk-xxx  # 或 VOYAGE_API_KEY
+# 初始化并索引
+cd your-project
+codanna init
+codanna index src
 
-# 或在项目根目录创建 .chunkhound.json 配置
+# 启用
+export MCP_RETRIEVAL_BACKEND=codanna
 ```
 
-示例 `.chunkhound.json`：
+> 将 `.codanna/` 和 `.codannaignore` 添加到 `.gitignore`。
+
+#### ChunkHound
+
+代码块级索引 — 嵌入原始代码块。需要外部 embedding 服务。
+
+```bash
+# 安装
+pip install chunkhound
+
+# 索引
+cd your-project
+chunkhound index
+
+# 启用
+export MCP_RETRIEVAL_BACKEND=chunkhound
+```
+
+Embedding 服务配置（项目根目录 `.chunkhound.json`）：
+
 ```json
 {
   "embedding": {
@@ -191,7 +221,8 @@ export OPENAI_API_KEY=sk-xxx  # 或 VOYAGE_API_KEY
 }
 ```
 
-使用本地 Ollama：
+使用本地 Ollama（无需 API key）：
+
 ```json
 {
   "embedding": {
@@ -202,9 +233,7 @@ export OPENAI_API_KEY=sk-xxx  # 或 VOYAGE_API_KEY
 }
 ```
 
-#### Codanna
-
-设置 `MCP_RETRIEVAL_BACKEND=codanna` 使用本地 codanna 索引（先执行 `codanna init` + `codanna index <dir>`）。
+> 将 `.chunkhound/` 和 `.chunkhound.json` 添加到 `.gitignore`。
 
 ### 参数
 
