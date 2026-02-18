@@ -1,82 +1,113 @@
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from relace_mcp.repo.local.backend import (
-    _parse_chunkhound_results,
+    ExternalCLIError,
+    _parse_chunkhound_text,
+    check_backend_health,
     chunkhound_search,
 )
 
+SAMPLE_OUTPUT = """\
+=== Semantic Search Results ===
 
-class TestParseResults:
-    def test_parses_results_list_format(self):
-        data = {
-            "results": [
-                {"file_path": "src/main.py", "similarity_score": 0.85},
-                {"file_path": "src/utils.py", "similarity_score": 0.72},
-            ]
-        }
-        results = _parse_chunkhound_results(data, threshold=0.3)
+[INFO] Query: 'authentication'
+[INFO] Results: 3 of 50 (showing 1-3)
+
+[1] src/auth.py
+[INFO] Score: 0.880
+[INFO] Lines 10-30
+```
+def authenticate(user):
+    pass
+```
+
+[2] src/login.py
+[INFO] Score: 0.720
+[INFO] Lines 5-15
+```
+def login():
+    pass
+```
+
+[3] src/utils.py
+[INFO] Score: 0.250
+[INFO] Lines 1-5
+```
+def helper():
+    pass
+```
+"""
+
+SAMPLE_OUTPUT_NO_INFO = """\
+=== Semantic Search Results ===
+
+Query: 'test query'
+Results: 2 of 10 (showing 1-2)
+
+[1] src/main.py
+Score: 0.900
+Lines 1-20
+```
+code here
+```
+
+[2] src/other.py
+Score: 0.600
+Lines 5-10
+```
+more code
+```
+"""
+
+
+class TestParseChunkhoundText:
+    def test_parses_multiple_results(self):
+        results = _parse_chunkhound_text(SAMPLE_OUTPUT, threshold=0.3)
         assert len(results) == 2
-        assert results[0] == {"filename": "src/main.py", "score": 0.85}
-        assert results[1] == {"filename": "src/utils.py", "score": 0.72}
-
-    def test_parses_chunks_format(self):
-        data = {
-            "chunks": [
-                {"path": "lib/auth.py", "score": 0.90},
-            ]
-        }
-        results = _parse_chunkhound_results(data, threshold=0.3)
-        assert len(results) == 1
-        assert results[0] == {"filename": "lib/auth.py", "score": 0.90}
-
-    def test_parses_list_directly(self):
-        data = [
-            {"filename": "test.py", "score": 0.60},
-        ]
-        results = _parse_chunkhound_results(data, threshold=0.3)
-        assert len(results) == 1
-        assert results[0] == {"filename": "test.py", "score": 0.60}
+        assert results[0] == {"filename": "src/auth.py", "score": 0.880}
+        assert results[1] == {"filename": "src/login.py", "score": 0.720}
 
     def test_filters_by_threshold(self):
-        data = {
-            "results": [
-                {"file_path": "high.py", "similarity_score": 0.80},
-                {"file_path": "low.py", "similarity_score": 0.20},
-            ]
-        }
-        results = _parse_chunkhound_results(data, threshold=0.5)
+        results = _parse_chunkhound_text(SAMPLE_OUTPUT, threshold=0.8)
         assert len(results) == 1
-        assert results[0]["filename"] == "high.py"
+        assert results[0]["filename"] == "src/auth.py"
 
-    def test_handles_missing_fields(self):
-        data = {
-            "results": [
-                {"file_path": "valid.py", "similarity_score": 0.70},
-                {"other_field": "no_path"},
-                {},
-            ]
-        }
-        results = _parse_chunkhound_results(data, threshold=0.3)
+    def test_parses_output_without_info_prefix(self):
+        results = _parse_chunkhound_text(SAMPLE_OUTPUT_NO_INFO, threshold=0.3)
+        assert len(results) == 2
+        assert results[0] == {"filename": "src/main.py", "score": 0.900}
+        assert results[1] == {"filename": "src/other.py", "score": 0.600}
+
+    def test_empty_output_returns_empty(self):
+        assert _parse_chunkhound_text("", threshold=0.3) == []
+
+    def test_no_results_message_returns_empty(self):
+        output = "=== Semantic Search Results ===\nResults: 0 of 0\nNo results found."
+        assert _parse_chunkhound_text(output, threshold=0.3) == []
+
+    def test_zero_of_message_returns_empty(self):
+        output = "Results: 0 of 0 (showing 0-0)"
+        assert _parse_chunkhound_text(output, threshold=0.3) == []
+
+    def test_incompatible_format_raises_error(self):
+        output = "[1] src/file.py\nWeirdField: something\n[2] src/other.py\nWeirdField: else\n"
+        with pytest.raises(RuntimeError, match="incompatible"):
+            _parse_chunkhound_text(output, threshold=0.3)
+
+    def test_partial_score_missing_does_not_raise(self):
+        output = (
+            "[1] src/a.py\nScore: 0.800\n```\ncode\n```\n"
+            "[2] src/b.py\nNoScore: here\n```\ncode\n```\n"
+        )
+        results = _parse_chunkhound_text(output, threshold=0.3)
         assert len(results) == 1
-        assert results[0]["filename"] == "valid.py"
+        assert results[0] == {"filename": "src/a.py", "score": 0.800}
 
-    def test_handles_invalid_score(self):
-        data = {
-            "results": [
-                {"file_path": "test.py", "similarity_score": "invalid"},
-            ]
-        }
-        results = _parse_chunkhound_results(data, threshold=0.0)
-        assert len(results) == 1
-        assert results[0]["score"] == 0.0
-
-    def test_empty_data_returns_empty(self):
-        assert _parse_chunkhound_results({}, threshold=0.3) == []
-        assert _parse_chunkhound_results([], threshold=0.3) == []
-        assert _parse_chunkhound_results(None, threshold=0.3) == []
+    def test_all_below_threshold_returns_empty(self):
+        results = _parse_chunkhound_text(SAMPLE_OUTPUT, threshold=0.99)
+        assert results == []
 
 
 class TestChunkhoundSearch:
@@ -84,23 +115,20 @@ class TestChunkhoundSearch:
     def test_successful_search(self, mock_run: MagicMock):
         mock_run.return_value = MagicMock(
             returncode=0,
-            stdout=json.dumps(
-                {
-                    "results": [
-                        {"file_path": "src/auth.py", "similarity_score": 0.88},
-                    ]
-                }
-            ),
+            stdout=SAMPLE_OUTPUT,
             stderr="",
         )
 
         results = chunkhound_search("authentication", base_dir="/project", limit=5)
 
-        assert len(results) == 1
-        assert results[0] == {"filename": "src/auth.py", "score": 0.88}
+        assert len(results) == 2
+        assert results[0] == {"filename": "src/auth.py", "score": 0.880}
         mock_run.assert_called_once()
         call_args = mock_run.call_args
         assert call_args[1]["cwd"] == "/project"
+        cmd = call_args[0][0]
+        assert "--page-size" in cmd
+        assert "5" in cmd
 
     @patch("relace_mcp.repo.local.backend.subprocess.run")
     def test_empty_output_returns_empty_list(self, mock_run: MagicMock):
@@ -133,19 +161,6 @@ class TestChunkhoundSearch:
 
         assert "timeout" in str(exc_info.value).lower()
 
-    @patch("relace_mcp.repo.local.backend.subprocess.run")
-    def test_json_parse_error_raises_error(self, mock_run: MagicMock):
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout="not valid json",
-            stderr="",
-        )
-
-        with pytest.raises(RuntimeError) as exc_info:
-            chunkhound_search("query", base_dir="/project")
-
-        assert "json" in str(exc_info.value).lower()
-
     @patch("relace_mcp.repo.local.backend._ensure_chunkhound_index")
     @patch("relace_mcp.repo.local.backend.subprocess.run")
     def test_auto_index_on_not_indexed_error(
@@ -155,7 +170,7 @@ class TestChunkhoundSearch:
             MagicMock(returncode=1, stdout="", stderr="not indexed"),
             MagicMock(
                 returncode=0,
-                stdout=json.dumps({"results": [{"file_path": "a.py", "similarity_score": 0.5}]}),
+                stdout=SAMPLE_OUTPUT,
                 stderr="",
             ),
         ]
@@ -163,4 +178,47 @@ class TestChunkhoundSearch:
         results = chunkhound_search("query", base_dir="/project")
 
         mock_ensure_chunkhound_index.assert_called_once()
-        assert len(results) == 1
+        assert len(results) == 2
+
+    @patch("relace_mcp.repo.local.backend._ensure_chunkhound_index")
+    @patch("relace_mcp.repo.local.backend.subprocess.run")
+    def test_auto_index_on_database_not_found_output(
+        self, mock_run: MagicMock, mock_ensure_chunkhound_index: MagicMock
+    ):
+        mock_run.side_effect = [
+            MagicMock(
+                returncode=1,
+                stdout=(
+                    "[ERROR] [red][ERROR][/red] Database not found at /project/.chunkhound/db\n"
+                    "[INFO] [blue][INFO][/blue] Run 'chunkhound index' to create the database first"
+                ),
+                stderr="",
+            ),
+            MagicMock(
+                returncode=0,
+                stdout=SAMPLE_OUTPUT,
+                stderr="",
+            ),
+        ]
+
+        results = chunkhound_search("query", base_dir="/project")
+
+        mock_ensure_chunkhound_index.assert_called_once()
+        assert len(results) == 2
+
+
+class TestChunkhoundHealthCheck:
+    @patch("relace_mcp.repo.local.backend._run_cli_text")
+    @patch("relace_mcp.repo.local.backend.shutil.which")
+    def test_database_not_found_is_treated_as_index_missing(
+        self, mock_which: MagicMock, mock_run_cli_text: MagicMock
+    ):
+        mock_which.return_value = "/usr/bin/chunkhound"
+        mock_run_cli_text.side_effect = RuntimeError(
+            "chunkhound error (exit 1): Database not found at /project/.chunkhound/db"
+        )
+
+        with pytest.raises(ExternalCLIError) as exc_info:
+            check_backend_health("chunkhound", "/project")
+
+        assert exc_info.value.kind == "index_missing"

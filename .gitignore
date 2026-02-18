@@ -1,37 +1,46 @@
-# Python Basic
+# Python
 __pycache__/
 *.pyc
+*.egg-info/
+*.egg
+
+# Virtual environment / Package manager
+.venv/
+.uv-cache/
 
 # Build / Distribution
 build/
 dist/
-*.egg-info/
-*.egg
 
-# Testing / Coverage
+# Testing / Coverage / Linter / Type checker
 .pytest_cache/
-.uv-cache
-
-# Linter / formatter cache
+.coverage
 .pylint.d/
-ruff_cache/
+.ruff_cache/
 .mypy_cache/
+.dmypy.json
 
-# IDE editor settings
+# IDE / Editor / AI agent
 .vscode/
 .cursor/
 .kilocode/
 .kiro/
 .gemini/
+.agent/
 AGENTS.md
+CLAUDE.md
+
+# Project-specific
+.chunkhound/
+.chunkhound.json
+.codanna/
+.codannaignore
+.fastembed_cache
+benchmark/artifacts/
+sonar-project.properties
+site/
 
 # Logs / Env
 *.log
 .env
 !.env.example
-
-# Benchmark artifacts
-benchmark/artifacts/
-
-# SonarQube
-sonar-project.properties
