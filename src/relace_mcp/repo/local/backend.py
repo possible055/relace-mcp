@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -17,6 +18,9 @@ _CHUNKHOUND_SCORE_RE = re.compile(
 )
 
 _disabled_backends: set[str] = set()
+_bg_index_tasks: dict[tuple[str, str], asyncio.Task[None]] = {}
+_bg_index_rerun: dict[tuple[str, str], bool] = {}
+_bg_codanna_pending: dict[tuple[str, str], set[str]] = {}
 
 
 class ExternalCLIError(RuntimeError):
@@ -121,6 +125,9 @@ def _chunkhound_health_probe(base_dir: str) -> None:
                     message=f"ChunkHound index not found. Auto-index failed: {reindex_exc}",
                     command=["chunkhound", "search"],
                 ) from reindex_exc
+            head = _get_git_head(base_dir)
+            if head:
+                _write_indexed_head(base_dir, head, _CHUNKHOUND_HEAD_FILE)
             return
         raise ExternalCLIError(
             backend="chunkhound",
@@ -161,6 +168,9 @@ def _codanna_health_probe(base_dir: str) -> None:
                     message=f"Codanna index not available. Auto-index failed: {reindex_exc}",
                     command=["codanna", "mcp"],
                 ) from reindex_exc
+            head = _get_git_head(base_dir)
+            if head:
+                _write_indexed_head(base_dir, head, _CODANNA_HEAD_FILE)
             return
         raise ExternalCLIError(
             backend="codanna",
@@ -301,6 +311,8 @@ def _ensure_codanna_index(base_dir: str, env: dict[str, str]) -> None:
                 raise RuntimeError(f"codanna init failed: {stderr}")
         except subprocess.TimeoutExpired as exc:
             raise RuntimeError(f"codanna init timeout: {exc}") from exc
+        except FileNotFoundError as exc:
+            raise RuntimeError("codanna CLI not found") from exc
 
     try:
         result = subprocess.run(  # nosec B603 B607
@@ -318,10 +330,18 @@ def _ensure_codanna_index(base_dir: str, env: dict[str, str]) -> None:
         logger.debug("Codanna index created successfully")
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"codanna index timeout: {exc}") from exc
+    except FileNotFoundError as exc:
+        raise RuntimeError("codanna CLI not found") from exc
 
 
 def chunkhound_search(
-    query: str, *, base_dir: str, limit: int = 8, threshold: float = 0.3, _retry: bool = False
+    query: str,
+    *,
+    base_dir: str,
+    limit: int = 8,
+    threshold: float = 0.3,
+    _retry: bool = False,
+    allow_auto_index: bool = True,
 ) -> list[dict[str, Any]]:
     env = os.environ.copy()
     env["HOME"] = os.environ.get("HOME", base_dir)
@@ -343,7 +363,7 @@ def chunkhound_search(
                 command=command,
             ) from exc
         if _is_chunkhound_index_missing_error(error_text):
-            if _retry:
+            if not allow_auto_index or _retry:
                 raise ExternalCLIError(
                     backend="chunkhound",
                     kind="index_missing",
@@ -361,7 +381,12 @@ def chunkhound_search(
                     command=["chunkhound", "index"],
                 ) from reindex_exc
             return chunkhound_search(
-                query, base_dir=base_dir, limit=limit, threshold=threshold, _retry=True
+                query,
+                base_dir=base_dir,
+                limit=limit,
+                threshold=threshold,
+                _retry=True,
+                allow_auto_index=allow_auto_index,
             )
         raise ExternalCLIError(
             backend="chunkhound",
@@ -463,6 +488,8 @@ def _ensure_chunkhound_index(base_dir: str, env: dict[str, str]) -> None:
         logger.debug("ChunkHound index created successfully")
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"chunkhound index timeout: {exc}") from exc
+    except FileNotFoundError as exc:
+        raise RuntimeError("chunkhound CLI not found") from exc
 
 
 def _parse_chunkhound_text(output: str, threshold: float) -> list[dict[str, Any]]:
@@ -518,7 +545,13 @@ def _parse_chunkhound_text(output: str, threshold: float) -> list[dict[str, Any]
 
 
 def codanna_search(
-    query: str, *, base_dir: str, limit: int = 8, threshold: float = 0.3, _retry: bool = False
+    query: str,
+    *,
+    base_dir: str,
+    limit: int = 8,
+    threshold: float = 0.3,
+    _retry: bool = False,
+    allow_auto_index: bool = True,
 ) -> list[dict[str, Any]]:
     command = [
         "codanna",
@@ -545,7 +578,7 @@ def codanna_search(
         if "index" in lowered and (
             "missing" in lowered or "not found" in lowered or "not built" in lowered
         ):
-            if _retry:
+            if not allow_auto_index or _retry:
                 raise ExternalCLIError(
                     backend="codanna",
                     kind="index_missing",
@@ -566,7 +599,12 @@ def codanna_search(
                     command=["codanna", "index"],
                 ) from reindex_exc
             return codanna_search(
-                query, base_dir=base_dir, limit=limit, threshold=threshold, _retry=True
+                query,
+                base_dir=base_dir,
+                limit=limit,
+                threshold=threshold,
+                _retry=True,
+                allow_auto_index=allow_auto_index,
             )
         raise ExternalCLIError(
             backend="codanna",
@@ -606,3 +644,191 @@ def codanna_search(
         results.append({"filename": filename, "score": score_val})
 
     return results
+
+
+def chunkhound_index_file(file_path: str, base_dir: str) -> None:
+    """Incrementally update ChunkHound index after a file edit.
+
+    ChunkHound's index command uses xxHash3-64 checksums internally, so it
+    only re-processes files that have actually changed. This is safe to call
+    after every fast_apply edit: unchanged files are skipped automatically.
+
+    Args:
+        file_path: Absolute path of the edited file (used for logging only).
+        base_dir: Repository root to index from.
+    """
+    env = os.environ.copy()
+    env["LANG"] = "C.UTF-8"
+    env["LC_ALL"] = "C.UTF-8"
+    try:
+        _ensure_chunkhound_index(base_dir, env)
+        logger.debug("ChunkHound incremental reindex triggered by edit: %s", file_path)
+    except RuntimeError as exc:
+        kind = "cli_not_found" if isinstance(exc.__cause__, FileNotFoundError) else "nonzero_exit"
+        raise ExternalCLIError(
+            backend="chunkhound",
+            kind=kind,
+            message=str(exc),
+            command=["chunkhound", "index"],
+        ) from exc
+
+
+def codanna_index_file(file_path: str, base_dir: str) -> None:
+    """Incrementally update Codanna index for a single edited file.
+
+    Runs `codanna index <rel_path>` to re-index only the changed file,
+    avoiding a full project reindex. Safe to call after every fast_apply edit.
+
+    Args:
+        file_path: Absolute path of the edited file.
+        base_dir: Repository root (used as cwd and for relative path resolution).
+    """
+    env = os.environ.copy()
+    env["LANG"] = "C.UTF-8"
+    env["LC_ALL"] = "C.UTF-8"
+    try:
+        rel_path = os.path.relpath(file_path, base_dir)
+    except ValueError:
+        rel_path = file_path
+    command = ["codanna", "index", rel_path]
+    try:
+        result = subprocess.run(  # nosec B603 B607
+            command,
+            cwd=base_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+            env=env,
+        )
+        if result.returncode != 0:
+            stderr = (result.stderr or "").strip()
+            raise RuntimeError(f"codanna index failed: {stderr}")
+        logger.debug("Codanna incremental reindex triggered by edit: %s", rel_path)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"codanna index timeout: {exc}") from exc
+    except FileNotFoundError as exc:
+        raise RuntimeError("codanna CLI not found") from exc
+
+
+async def _async_run_chunkhound_index(base_dir: str) -> None:
+    env = os.environ.copy()
+    env["LANG"] = "C.UTF-8"
+    env["LC_ALL"] = "C.UTF-8"
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "chunkhound",
+            "index",
+            cwd=base_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+        )
+    except FileNotFoundError:
+        logger.warning("chunkhound CLI not found in background index; disabling backend")
+        disable_backend("chunkhound", "cli_not_found: chunkhound not in PATH")
+        return
+    try:
+        _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=300)
+    except TimeoutError:
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+        logger.warning("ChunkHound background index timed out for %s", base_dir)
+        return
+    if proc.returncode != 0:
+        stderr = (stderr_bytes or b"").decode("utf-8", errors="replace").strip()
+        logger.warning("ChunkHound background index failed (exit %d): %s", proc.returncode, stderr)
+    else:
+        logger.debug("ChunkHound background index completed for %s", base_dir)
+
+
+async def _async_run_codanna_index(file_path: str, base_dir: str) -> None:
+    env = os.environ.copy()
+    env["LANG"] = "C.UTF-8"
+    env["LC_ALL"] = "C.UTF-8"
+    try:
+        rel_path = os.path.relpath(file_path, base_dir)
+    except ValueError:
+        rel_path = file_path
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "codanna",
+            "index",
+            rel_path,
+            cwd=base_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+        )
+    except FileNotFoundError:
+        logger.warning("codanna CLI not found in background index; disabling backend")
+        disable_backend("codanna", "cli_not_found: codanna not in PATH")
+        return
+    try:
+        _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=120)
+    except TimeoutError:
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+        logger.warning("Codanna background index timed out for %s", rel_path)
+        return
+    if proc.returncode != 0:
+        stderr = (stderr_bytes or b"").decode("utf-8", errors="replace").strip()
+        logger.warning("Codanna background index failed (exit %d): %s", proc.returncode, stderr)
+    else:
+        logger.debug("Codanna background index completed for %s", rel_path)
+
+
+def schedule_bg_chunkhound_index(base_dir: str) -> None:
+    """Schedule a background ChunkHound incremental scan. Sync, fire-and-forget.
+
+    Idempotent: if a scan is already running, sets rerun flag so it restarts
+    after completion, ensuring edits made during a scan are not missed.
+    """
+    task = _bg_index_tasks.get((base_dir, "chunkhound"))
+    if task is not None and not task.done():
+        _bg_index_rerun[(base_dir, "chunkhound")] = True
+        return
+
+    def _on_done(_t: asyncio.Task[None]) -> None:
+        if _bg_index_rerun.pop((base_dir, "chunkhound"), False):
+            schedule_bg_chunkhound_index(base_dir)
+
+    new_task = asyncio.create_task(_async_run_chunkhound_index(base_dir))
+    new_task.add_done_callback(_on_done)
+    _bg_index_tasks[(base_dir, "chunkhound")] = new_task
+
+
+def schedule_bg_codanna_index(file_path: str, base_dir: str) -> None:
+    """Schedule a background Codanna single-file reindex. Sync, fire-and-forget.
+
+    Queues all pending paths while an index is running so intermediate edits
+    are not dropped.
+    """
+    key = (base_dir, "codanna")
+    task = _bg_index_tasks.get(key)
+    if task is not None and not task.done():
+        pending = _bg_codanna_pending.get(key)
+        if pending is None:
+            pending = set()
+            _bg_codanna_pending[key] = pending
+        pending.add(file_path)
+        return
+
+    def _on_done(_t: asyncio.Task[None]) -> None:
+        pending = _bg_codanna_pending.get(key)
+        if not pending:
+            _bg_codanna_pending.pop(key, None)
+            return
+
+        next_path = pending.pop()
+        if not pending:
+            _bg_codanna_pending.pop(key, None)
+        schedule_bg_codanna_index(next_path, base_dir)
+
+    new_task = asyncio.create_task(_async_run_codanna_index(file_path, base_dir))
+    new_task.add_done_callback(_on_done)
+    _bg_index_tasks[key] = new_task

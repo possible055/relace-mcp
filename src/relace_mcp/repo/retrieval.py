@@ -1,4 +1,5 @@
 import logging
+import shutil
 import uuid
 from typing import Any
 
@@ -9,13 +10,12 @@ from ..tools.search import FastAgenticSearchHarness
 from .cloud import cloud_info_logic, cloud_search_logic, cloud_sync_logic
 from .local import (
     ExternalCLIError,
-    check_backend_health,
-    chunkhound_auto_reindex,
     chunkhound_search,
-    codanna_auto_reindex,
     codanna_search,
     disable_backend,
     is_backend_disabled,
+    schedule_bg_chunkhound_index,
+    schedule_bg_codanna_index,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,25 +28,11 @@ def _resolve_auto_backend(base_dir: str) -> str:
     if cached and not is_backend_disabled(cached):
         return cached
 
-    import shutil
-
-    if shutil.which("codanna") and not is_backend_disabled("codanna"):
-        try:
-            check_backend_health("codanna", base_dir)
-            logger.info("Auto-detected retrieval backend: codanna")
-            _auto_backend_cache[base_dir] = "codanna"
-            return "codanna"
-        except ExternalCLIError:
-            logger.info("codanna found but unusable, trying chunkhound")
-
-    if shutil.which("chunkhound") and not is_backend_disabled("chunkhound"):
-        try:
-            check_backend_health("chunkhound", base_dir)
-            logger.info("Auto-detected retrieval backend: chunkhound")
-            _auto_backend_cache[base_dir] = "chunkhound"
-            return "chunkhound"
-        except ExternalCLIError:
-            logger.info("chunkhound found but unusable, falling back to relace")
+    for name in ("codanna", "chunkhound"):
+        if shutil.which(name) and not is_backend_disabled(name):
+            logger.info("Auto-detected retrieval backend: %s", name)
+            _auto_backend_cache[base_dir] = name
+            return name
 
     logger.info("No usable local retrieval backend found, using relace")
     _auto_backend_cache[base_dir] = "relace"
@@ -121,39 +107,17 @@ async def agentic_retrieval_logic(
             warnings_list.append(f"Auto-sync error: {exc}")
             logger.warning("[%s] Auto-sync exception occurred, see warnings", trace_id)
 
-    # Stage 0b: Auto-reindex if needed (ChunkHound backend only)
+    # Stage 0b: Schedule background ChunkHound incremental scan (fire-and-forget).
+    # ChunkHound uses xxHash3-64 checksums; only modified files are re-processed.
+    # Non-blocking: search proceeds immediately with the current index state.
     if backend == "chunkhound" and not is_backend_disabled("chunkhound"):
-        try:
-            reindex = chunkhound_auto_reindex(base_dir)
-            if reindex["action"] == "reindexed":
-                logger.debug(
-                    "[%s] ChunkHound auto-reindex: %s -> %s",
-                    trace_id,
-                    reindex.get("old_head", "none"),
-                    reindex["new_head"],
-                )
-            elif reindex["action"] == "error":
-                warnings_list.append(f"ChunkHound auto-reindex failed: {reindex['message']}")
-        except Exception as exc:
-            warnings_list.append(f"ChunkHound auto-reindex error: {exc}")
-            logger.warning("[%s] ChunkHound auto-reindex exception: %s", trace_id, exc)
+        schedule_bg_chunkhound_index(base_dir)
+        logger.debug("[%s] ChunkHound background index scheduled", trace_id)
 
-    # Stage 0c: Auto-reindex if needed (Codanna backend only)
+    # Stage 0c: Schedule background Codanna reindex (fire-and-forget).
     if backend == "codanna" and not is_backend_disabled("codanna"):
-        try:
-            reindex = codanna_auto_reindex(base_dir)
-            if reindex["action"] == "reindexed":
-                logger.debug(
-                    "[%s] Codanna auto-reindex: %s -> %s",
-                    trace_id,
-                    reindex.get("old_head", "none"),
-                    reindex["new_head"],
-                )
-            elif reindex["action"] == "error":
-                warnings_list.append(f"Codanna auto-reindex failed: {reindex['message']}")
-        except Exception as exc:
-            warnings_list.append(f"Codanna auto-reindex error: {exc}")
-            logger.warning("[%s] Codanna auto-reindex exception: %s", trace_id, exc)
+        schedule_bg_codanna_index(base_dir, base_dir)
+        logger.debug("[%s] Codanna background index scheduled", trace_id)
 
     # Stage 1: Semantic retrieval (Relace, Codanna, or ChunkHound)
     if backend == "none":
@@ -171,6 +135,7 @@ async def agentic_retrieval_logic(
                     base_dir=base_dir,
                     limit=max_hints,
                     threshold=score_threshold,
+                    allow_auto_index=False,
                 )
                 if not cloud_results:
                     warnings_list.append(
@@ -185,8 +150,13 @@ async def agentic_retrieval_logic(
                         min(len(cloud_results), max_hints),
                     )
             except ExternalCLIError as exc:
-                if exc.kind in ("cli_not_found", "index_missing"):
+                if exc.kind == "cli_not_found":
                     disable_backend(exc.backend, f"{exc.kind}: {exc}")
+                elif exc.kind == "index_missing":
+                    if backend == "chunkhound":
+                        schedule_bg_chunkhound_index(base_dir)
+                    else:
+                        schedule_bg_codanna_index(base_dir, base_dir)
                 warnings_list.append(f"{exc.backend} retrieval unavailable ({exc.kind}): {exc}")
                 logger.warning(
                     "[%s] %s backend error (%s): %s", trace_id, exc.backend, exc.kind, exc
