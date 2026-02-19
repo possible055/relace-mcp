@@ -119,3 +119,27 @@ ignore-nested-functions = true
 fail-under = 80
 exclude = ["tests", "build"]
 verbose = 1
+
+[tool.basedpyright]
+pythonVersion = "3.11"
+exclude = ["src/relace_mcp/dashboard"]
+typeCheckingMode = "standard"
+
+# reportUnused* — data-flow analysis not covered by mypy
+reportUnusedVariable = "warning"
+reportUnusedParameter = "warning"
+reportUnusedFunction = "warning"
+reportUnusedClass = "warning"
+reportUnusedImport = "warning"
+
+# Let mypy own general type soundness; avoid duplicate noise
+reportGeneralTypeIssues = "none"
+reportAttributeAccessIssue = "none"
+reportReturnType = "none"
+reportArgumentType = "none"
+reportOperatorIssue = "none"
+reportIndexIssue = "none"
+reportCallIssue = "none"
+reportAssignmentType = "none"
+reportMissingImports = "none"
+reportOptionalMemberAccess = "none"

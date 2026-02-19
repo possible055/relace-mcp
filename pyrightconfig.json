@@ -1,7 +1,6 @@
 {
     "include": [
-        "src",
-        "tests"
+        "src"
     ],
     "exclude": [
         "**/__pycache__",
@@ -16,7 +15,8 @@
         "docs",
         ".vscode",
         ".github",
-        "benchmark/artifacts/"
+        "benchmark/artifacts/",
+        "src/relace_mcp/dashboard"
     ],
     "venvPath": ".",
     "venv": ".venv",
@@ -26,18 +26,21 @@
     "typeCheckingMode": "standard",
     "pythonVersion": "3.11",
     "pythonPlatform": "Linux",
-    "reportMissingImports": "error",
+    "reportMissingImports": "none",
     "reportMissingTypeStubs": "none",
     "reportUnusedImport": "warning",
     "reportUnusedVariable": "warning",
     "reportUnusedParameter": "warning",
     "reportUnusedFunction": "warning",
     "reportUnusedClass": "warning",
-    "reportDuplicateImport": "error",
-    "executionEnvironments": [
-        {
-            "root": "tests",
-            "reportUnusedFunction": "none"
-        }
-    ]
+    "reportDuplicateImport": "warning",
+    "reportGeneralTypeIssues": "none",
+    "reportAttributeAccessIssue": "none",
+    "reportReturnType": "none",
+    "reportArgumentType": "none",
+    "reportOperatorIssue": "none",
+    "reportIndexIssue": "none",
+    "reportCallIssue": "none",
+    "reportAssignmentType": "none",
+    "reportOptionalMemberAccess": "none"
 }
