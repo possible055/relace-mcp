@@ -728,6 +728,9 @@ async def _async_run_chunkhound_index(base_dir: str) -> None:
         logger.warning("chunkhound CLI not found in background index; disabling backend")
         disable_backend("chunkhound", "cli_not_found: chunkhound not in PATH")
         return
+    except OSError as exc:
+        logger.warning("chunkhound background index failed to start: %s", exc)
+        return
     try:
         _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=300)
     except TimeoutError:
@@ -766,6 +769,9 @@ async def _async_run_codanna_index(file_path: str, base_dir: str) -> None:
         logger.warning("codanna CLI not found in background index; disabling backend")
         disable_backend("codanna", "cli_not_found: codanna not in PATH")
         return
+    except OSError as exc:
+        logger.warning("codanna background index failed to start: %s", exc)
+        return
     try:
         _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=120)
     except TimeoutError:
@@ -780,6 +786,40 @@ async def _async_run_codanna_index(file_path: str, base_dir: str) -> None:
         logger.warning("Codanna background index failed (exit %d): %s", proc.returncode, stderr)
     else:
         logger.debug("Codanna background index completed for %s", rel_path)
+
+
+async def _async_run_codanna_full_index(base_dir: str) -> None:
+    """Background full Codanna init+index when the index may not exist yet."""
+    env = os.environ.copy()
+    env["LANG"] = "C.UTF-8"
+    env["LC_ALL"] = "C.UTF-8"
+    try:
+        await asyncio.get_event_loop().run_in_executor(None, _ensure_codanna_index, base_dir, env)
+        logger.debug("Codanna full background init+index completed for %s", base_dir)
+    except (RuntimeError, OSError) as exc:
+        logger.warning("Codanna full background init+index failed: %s", exc)
+
+
+def schedule_bg_codanna_full_index(base_dir: str) -> None:
+    """Schedule a background Codanna full init+index. Sync, fire-and-forget.
+
+    Use this instead of schedule_bg_codanna_index when the .codanna directory
+    may not exist yet (e.g., first run or index_missing recovery). Runs
+    `codanna init` followed by `codanna index` via a thread executor.
+    """
+    key = (base_dir, "codanna")
+    task = _bg_index_tasks.get(key)
+    if task is not None and not task.done():
+        _bg_index_rerun[(base_dir, "codanna")] = True
+        return
+
+    def _on_done(_t: asyncio.Task[None]) -> None:
+        if _bg_index_rerun.pop((base_dir, "codanna"), False):
+            schedule_bg_codanna_full_index(base_dir)
+
+    new_task = asyncio.create_task(_async_run_codanna_full_index(base_dir))
+    new_task.add_done_callback(_on_done)
+    _bg_index_tasks[key] = new_task
 
 
 def schedule_bg_chunkhound_index(base_dir: str) -> None:

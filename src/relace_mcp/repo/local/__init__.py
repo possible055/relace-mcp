@@ -10,6 +10,7 @@ from .backend import (
     disable_backend,
     is_backend_disabled,
     schedule_bg_chunkhound_index,
+    schedule_bg_codanna_full_index,
     schedule_bg_codanna_index,
 )
 
@@ -25,5 +26,6 @@ __all__ = [
     "disable_backend",
     "is_backend_disabled",
     "schedule_bg_chunkhound_index",
+    "schedule_bg_codanna_full_index",
     "schedule_bg_codanna_index",
 ]

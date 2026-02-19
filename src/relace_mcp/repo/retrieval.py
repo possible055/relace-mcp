@@ -15,7 +15,7 @@ from .local import (
     disable_backend,
     is_backend_disabled,
     schedule_bg_chunkhound_index,
-    schedule_bg_codanna_index,
+    schedule_bg_codanna_full_index,
 )
 
 logger = logging.getLogger(__name__)
@@ -114,10 +114,12 @@ async def agentic_retrieval_logic(
         schedule_bg_chunkhound_index(base_dir)
         logger.debug("[%s] ChunkHound background index scheduled", trace_id)
 
-    # Stage 0c: Schedule background Codanna reindex (fire-and-forget).
+    # Stage 0c: Schedule background Codanna full init+index (fire-and-forget).
+    # Uses schedule_bg_codanna_full_index so `codanna init` is run if .codanna
+    # doesn't exist yet, preventing repeated failures when the index is missing.
     if backend == "codanna" and not is_backend_disabled("codanna"):
-        schedule_bg_codanna_index(base_dir, base_dir)
-        logger.debug("[%s] Codanna background index scheduled", trace_id)
+        schedule_bg_codanna_full_index(base_dir)
+        logger.debug("[%s] Codanna background full index scheduled", trace_id)
 
     # Stage 1: Semantic retrieval (Relace, Codanna, or ChunkHound)
     if backend == "none":
@@ -156,7 +158,7 @@ async def agentic_retrieval_logic(
                     if backend == "chunkhound":
                         schedule_bg_chunkhound_index(base_dir)
                     else:
-                        schedule_bg_codanna_index(base_dir, base_dir)
+                        schedule_bg_codanna_full_index(base_dir)
                 warnings_list.append(f"{exc.backend} retrieval unavailable ({exc.kind}): {exc}")
                 logger.warning(
                     "[%s] %s backend error (%s): %s", trace_id, exc.backend, exc.kind, exc
