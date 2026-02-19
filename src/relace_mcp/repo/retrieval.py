@@ -12,6 +12,7 @@ from .local import (
     check_backend_health,
     chunkhound_auto_reindex,
     chunkhound_search,
+    codanna_auto_reindex,
     codanna_search,
     disable_backend,
     is_backend_disabled,
@@ -136,6 +137,23 @@ async def agentic_retrieval_logic(
         except Exception as exc:
             warnings_list.append(f"ChunkHound auto-reindex error: {exc}")
             logger.warning("[%s] ChunkHound auto-reindex exception: %s", trace_id, exc)
+
+    # Stage 0c: Auto-reindex if needed (Codanna backend only)
+    if backend == "codanna" and not is_backend_disabled("codanna"):
+        try:
+            reindex = codanna_auto_reindex(base_dir)
+            if reindex["action"] == "reindexed":
+                logger.debug(
+                    "[%s] Codanna auto-reindex: %s -> %s",
+                    trace_id,
+                    reindex.get("old_head", "none"),
+                    reindex["new_head"],
+                )
+            elif reindex["action"] == "error":
+                warnings_list.append(f"Codanna auto-reindex failed: {reindex['message']}")
+        except Exception as exc:
+            warnings_list.append(f"Codanna auto-reindex error: {exc}")
+            logger.warning("[%s] Codanna auto-reindex exception: %s", trace_id, exc)
 
     # Stage 1: Semantic retrieval (Relace, Codanna, or ChunkHound)
     if backend == "none":

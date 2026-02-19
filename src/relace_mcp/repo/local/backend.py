@@ -111,12 +111,17 @@ def _chunkhound_health_probe(base_dir: str) -> None:
     except RuntimeError as exc:
         msg = str(exc)
         if _is_chunkhound_index_missing_error(msg):
-            raise ExternalCLIError(
-                backend="chunkhound",
-                kind="index_missing",
-                message="ChunkHound index not found. Run `chunkhound index` in the repo.",
-                command=["chunkhound", "search"],
-            ) from exc
+            logger.debug("ChunkHound index not found in health probe, attempting to create...")
+            try:
+                _ensure_chunkhound_index(base_dir, env)
+            except RuntimeError as reindex_exc:
+                raise ExternalCLIError(
+                    backend="chunkhound",
+                    kind="index_missing",
+                    message=f"ChunkHound index not found. Auto-index failed: {reindex_exc}",
+                    command=["chunkhound", "search"],
+                ) from reindex_exc
+            return
         raise ExternalCLIError(
             backend="chunkhound",
             kind="nonzero_exit",
@@ -143,12 +148,20 @@ def _codanna_health_probe(base_dir: str) -> None:
     except RuntimeError as exc:
         msg = str(exc).lower()
         if "index" in msg and ("missing" in msg or "not found" in msg or "not built" in msg):
-            raise ExternalCLIError(
-                backend="codanna",
-                kind="index_missing",
-                message="Codanna index not available. Run `codanna init` + `codanna index`.",
-                command=["codanna", "mcp"],
-            ) from exc
+            logger.debug("Codanna index not found in health probe, attempting to create...")
+            env = os.environ.copy()
+            env["LANG"] = "C.UTF-8"
+            env["LC_ALL"] = "C.UTF-8"
+            try:
+                _ensure_codanna_index(base_dir, env)
+            except RuntimeError as reindex_exc:
+                raise ExternalCLIError(
+                    backend="codanna",
+                    kind="index_missing",
+                    message=f"Codanna index not available. Auto-index failed: {reindex_exc}",
+                    command=["codanna", "mcp"],
+                ) from reindex_exc
+            return
         raise ExternalCLIError(
             backend="codanna",
             kind="nonzero_exit",
@@ -169,7 +182,7 @@ def _run_cli_json(
         }
 
     try:
-        result = subprocess.run(  # nosec B603
+        result = subprocess.run(  # nosec B603 B607
             command,
             cwd=base_dir,
             capture_output=True,
@@ -213,7 +226,7 @@ def _run_cli_text(
         }
 
     try:
-        result = subprocess.run(  # nosec B603
+        result = subprocess.run(  # nosec B603 B607
             command,
             cwd=base_dir,
             capture_output=True,
@@ -236,6 +249,75 @@ def _run_cli_text(
         raise RuntimeError(f"{cmd_name} error (exit {result.returncode}): {detail}")
 
     return (result.stdout or "").strip()
+
+
+def codanna_auto_reindex(base_dir: str) -> dict[str, Any]:
+    """Check if codanna index is stale and reindex if needed.
+
+    Compares current git HEAD with the last indexed HEAD.
+    Returns status dict with "action" key: "skipped", "reindexed", or "error".
+    """
+    head = _get_git_head(base_dir)
+    if not head:
+        return {"action": "skipped", "reason": "not a git repo"}
+
+    last_head = _read_indexed_head(base_dir, _CODANNA_HEAD_FILE)
+    if last_head == head:
+        return {"action": "skipped", "reason": "index up to date"}
+
+    logger.info(
+        "Codanna index stale (HEAD %s -> %s), reindexing...", (last_head or "none")[:8], head[:8]
+    )
+
+    env = os.environ.copy()
+    env["LANG"] = "C.UTF-8"
+    env["LC_ALL"] = "C.UTF-8"
+
+    try:
+        _ensure_codanna_index(base_dir, env)
+        _write_indexed_head(base_dir, head, _CODANNA_HEAD_FILE)
+        logger.info("Codanna auto-reindex completed")
+        return {"action": "reindexed", "old_head": last_head, "new_head": head}
+    except (RuntimeError, OSError) as exc:
+        logger.warning("Codanna auto-reindex failed: %s", exc)
+        return {"action": "error", "message": str(exc)}
+
+
+def _ensure_codanna_index(base_dir: str, env: dict[str, str]) -> None:
+    # If .codanna directory doesn't exist, we must run `codanna init` first.
+    if not os.path.isdir(os.path.join(base_dir, ".codanna")):
+        try:
+            result = subprocess.run(  # nosec B603 B607
+                ["codanna", "init"],
+                cwd=base_dir,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=60,
+                env=env,
+            )
+            if result.returncode != 0:
+                stderr = (result.stderr or "").strip()
+                raise RuntimeError(f"codanna init failed: {stderr}")
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(f"codanna init timeout: {exc}") from exc
+
+    try:
+        result = subprocess.run(  # nosec B603 B607
+            ["codanna", "index"],
+            cwd=base_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=600,
+            env=env,
+        )
+        if result.returncode != 0:
+            stderr = (result.stderr or "").strip()
+            raise RuntimeError(f"codanna index failed: {stderr}")
+        logger.debug("Codanna index created successfully")
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"codanna index timeout: {exc}") from exc
 
 
 def chunkhound_search(
@@ -295,6 +377,7 @@ def chunkhound_search(
 
 
 _CHUNKHOUND_HEAD_FILE = ".chunkhound/last_indexed_head"
+_CODANNA_HEAD_FILE = ".codanna/last_indexed_head"
 
 
 def _get_git_head(base_dir: str) -> str | None:
@@ -314,8 +397,8 @@ def _get_git_head(base_dir: str) -> str | None:
     return None
 
 
-def _read_indexed_head(base_dir: str) -> str | None:
-    path = os.path.join(base_dir, _CHUNKHOUND_HEAD_FILE)
+def _read_indexed_head(base_dir: str, head_file: str) -> str | None:
+    path = os.path.join(base_dir, head_file)
     try:
         with open(path) as f:
             return f.read().strip()
@@ -323,8 +406,8 @@ def _read_indexed_head(base_dir: str) -> str | None:
         return None
 
 
-def _write_indexed_head(base_dir: str, head: str) -> None:
-    path = os.path.join(base_dir, _CHUNKHOUND_HEAD_FILE)
+def _write_indexed_head(base_dir: str, head: str, head_file: str) -> None:
+    path = os.path.join(base_dir, head_file)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         f.write(head)
@@ -340,7 +423,7 @@ def chunkhound_auto_reindex(base_dir: str) -> dict[str, Any]:
     if not head:
         return {"action": "skipped", "reason": "not a git repo"}
 
-    last_head = _read_indexed_head(base_dir)
+    last_head = _read_indexed_head(base_dir, _CHUNKHOUND_HEAD_FILE)
     if last_head == head:
         return {"action": "skipped", "reason": "index up to date"}
 
@@ -354,7 +437,7 @@ def chunkhound_auto_reindex(base_dir: str) -> dict[str, Any]:
 
     try:
         _ensure_chunkhound_index(base_dir, env)
-        _write_indexed_head(base_dir, head)
+        _write_indexed_head(base_dir, head, _CHUNKHOUND_HEAD_FILE)
         logger.info("ChunkHound auto-reindex completed")
         return {"action": "reindexed", "old_head": last_head, "new_head": head}
     except (RuntimeError, OSError) as exc:
@@ -365,7 +448,7 @@ def chunkhound_auto_reindex(base_dir: str) -> dict[str, Any]:
 def _ensure_chunkhound_index(base_dir: str, env: dict[str, str]) -> None:
     command = ["chunkhound", "index"]
     try:
-        result = subprocess.run(  # nosec B603
+        result = subprocess.run(  # nosec B603 B607
             command,
             cwd=base_dir,
             capture_output=True,
@@ -435,7 +518,7 @@ def _parse_chunkhound_text(output: str, threshold: float) -> list[dict[str, Any]
 
 
 def codanna_search(
-    query: str, *, base_dir: str, limit: int = 8, threshold: float = 0.3
+    query: str, *, base_dir: str, limit: int = 8, threshold: float = 0.3, _retry: bool = False
 ) -> list[dict[str, Any]]:
     command = [
         "codanna",
@@ -462,12 +545,29 @@ def codanna_search(
         if "index" in lowered and (
             "missing" in lowered or "not found" in lowered or "not built" in lowered
         ):
-            raise ExternalCLIError(
-                backend="codanna",
-                kind="index_missing",
-                message="Codanna index not available. Run `codanna init` + `codanna index`.",
-                command=command,
-            ) from exc
+            if _retry:
+                raise ExternalCLIError(
+                    backend="codanna",
+                    kind="index_missing",
+                    message="Codanna index creation failed or index still not found",
+                    command=command,
+                ) from exc
+            logger.debug("Codanna index not found, attempting to create...")
+            env = os.environ.copy()
+            env["LANG"] = "C.UTF-8"
+            env["LC_ALL"] = "C.UTF-8"
+            try:
+                _ensure_codanna_index(base_dir, env)
+            except RuntimeError as reindex_exc:
+                raise ExternalCLIError(
+                    backend="codanna",
+                    kind="index_missing",
+                    message=f"Codanna auto-index failed: {reindex_exc}",
+                    command=["codanna", "index"],
+                ) from reindex_exc
+            return codanna_search(
+                query, base_dir=base_dir, limit=limit, threshold=threshold, _retry=True
+            )
         raise ExternalCLIError(
             backend="codanna",
             kind="nonzero_exit",
