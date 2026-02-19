@@ -104,6 +104,19 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             if ctx is not None and result and result.get("status") == "ok":
                 diff_preview = (result.get("diff") or "")[:200]
                 await ctx.debug(f"Edit applied: {diff_preview}...")
+            if result and result.get("status") == "ok":
+                import shutil as _shutil
+
+                from ..repo.local import (
+                    is_backend_disabled,
+                    schedule_bg_chunkhound_index,
+                    schedule_bg_codanna_index,
+                )
+
+                if _shutil.which("chunkhound") and not is_backend_disabled("chunkhound"):
+                    schedule_bg_chunkhound_index(base_dir)
+                if _shutil.which("codanna") and not is_backend_disabled("codanna"):
+                    schedule_bg_codanna_index(result.get("path", path), base_dir)
             return result
         finally:
             if progress_task is not None:

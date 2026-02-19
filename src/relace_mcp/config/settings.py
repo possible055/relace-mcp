@@ -101,19 +101,6 @@ def _parse_retrieval_backend() -> str:
     return raw
 
 
-def _detect_retrieval_backend() -> str:
-    import shutil
-
-    if shutil.which("codanna"):
-        logger.info("Auto-detected retrieval backend: codanna")
-        return "codanna"
-    if shutil.which("chunkhound"):
-        logger.info("Auto-detected retrieval backend: chunkhound")
-        return "chunkhound"
-    logger.info("No local retrieval backend found, using relace")
-    return "relace"
-
-
 RETRIEVAL_BACKEND = _parse_retrieval_backend()
 
 

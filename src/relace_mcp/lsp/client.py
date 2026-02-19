@@ -321,7 +321,7 @@ class LSPClient:
             [p for p in ignore_patterns if isinstance(p, str)],
         )
 
-    def _restart_language_server(self, reason: str) -> None:
+    def _restart_language_server(self, _reason: str) -> None:
         logger.debug("Restarting language server")
         self._fs_snapshot.clear()
         self._fs_snapshot_initialized = False

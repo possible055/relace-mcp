@@ -51,3 +51,11 @@ repos:
         language: system
         files: '\.py$'
         pass_filenames: false
+
+      # Pyright type check — catches Pylance/basedpyright diagnostics
+      - id: basedpyright
+        name: basedpyright
+        entry: uv run -- basedpyright
+        language: system
+        files: '\.py$'
+        pass_filenames: false
