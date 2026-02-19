@@ -814,6 +814,9 @@ def schedule_bg_codanna_full_index(base_dir: str) -> None:
         return
 
     def _on_done(_t: asyncio.Task[None]) -> None:
+        # A full index covers the entire project, so any single-file pending
+        # updates accumulated during the run are already included — discard them.
+        _bg_codanna_pending.pop(key, None)
         if _bg_index_rerun.pop((base_dir, "codanna"), False):
             schedule_bg_codanna_full_index(base_dir)
 
