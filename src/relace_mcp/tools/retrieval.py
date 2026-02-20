@@ -135,7 +135,7 @@ async def agentic_retrieval_logic(
                 logger.info(
                     "[%s] ChunkHound auto-reindex completed (%s)",
                     trace_id,
-                    reindex_result.get("old_head", "?")[:8],
+                    (reindex_result.get("old_head") or "?")[:8],
                 )
             elif action == "error":
                 warnings_list.append(
@@ -163,7 +163,7 @@ async def agentic_retrieval_logic(
                 logger.info(
                     "[%s] Codanna auto-reindex completed (%s)",
                     trace_id,
-                    reindex_result.get("old_head", "?")[:8],
+                    (reindex_result.get("old_head") or "?")[:8],
                 )
             elif action == "error":
                 warnings_list.append(

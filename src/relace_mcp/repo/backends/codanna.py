@@ -112,7 +112,7 @@ def codanna_auto_reindex(base_dir: str) -> dict[str, Any]:
     try:
         _ensure_codanna_index(base_dir, env)
         _write_indexed_head(base_dir, head, _CODANNA_HEAD_FILE)
-        if dirty_trigger:
+        if is_git_dirty(base_dir):
             _write_dirty_ts(base_dir, _CODANNA_DIRTY_TS_FILE)
         logger.info("Codanna auto-reindex completed")
         return {"action": "reindexed", "old_head": last_head, "new_head": head}
