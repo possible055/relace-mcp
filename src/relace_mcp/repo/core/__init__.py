@@ -10,7 +10,6 @@ from .state import (
     clear_sync_state,
     compute_file_hash,
     get_repo_identity,
-    get_repo_root,
     load_sync_state,
     save_sync_state,
 )
@@ -24,7 +23,6 @@ __all__ = [
     "get_current_git_info",
     "get_git_root",
     "get_repo_identity",
-    "get_repo_root",
     "is_git_dirty",
     "load_sync_state",
     "log_cloud_event",

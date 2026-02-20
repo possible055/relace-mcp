@@ -44,10 +44,6 @@ def get_repo_identity(base_dir: str) -> tuple[str, str, str]:
     return local_repo_name, cloud_repo_name, fingerprint
 
 
-def get_repo_root(base_dir: str) -> str:
-    return str(get_git_root(base_dir))
-
-
 @dataclass
 class SyncState:
     """Represents the sync state for a repository."""

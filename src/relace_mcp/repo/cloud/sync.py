@@ -10,8 +10,8 @@ from ..core import (
     build_cloud_error_details,
     extract_error_fields,
     get_current_git_info,
+    get_git_root,
     get_repo_identity,
-    get_repo_root,
     load_sync_state,
     log_cloud_event,
     save_sync_state,
@@ -61,7 +61,7 @@ def cloud_sync_logic(
     logger.debug("[%s] Starting cloud sync", trace_id)
 
     original_base_dir = base_dir
-    base_dir = get_repo_root(base_dir)
+    base_dir = str(get_git_root(base_dir))
     if base_dir != original_base_dir:
         logger.debug("[%s] Normalized base_dir to git root", trace_id)
 
