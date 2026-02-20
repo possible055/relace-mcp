@@ -36,7 +36,7 @@ repos:
         files: '(pyproject\.toml|uv\.lock)$'
         pass_filenames: false
 
-      # Python type check — dmypy daemon (~0.3s warm, ~8s cold start)
+      # Python type check — dmypy daemon
       - id: mypy
         name: mypy (daemon)
         entry: uv run -- dmypy run -- src/
@@ -44,7 +44,7 @@ repos:
         files: '\.py$'
         pass_filenames: false
 
-      # Python security scan (~1.3s)
+      # Python security scan
       - id: bandit
         name: bandit
         entry: uv run -- bandit -r src/ -c pyproject.toml
@@ -52,10 +52,10 @@ repos:
         files: '\.py$'
         pass_filenames: false
 
-      # Pyright type check — catches Pylance/basedpyright diagnostics
-      - id: basedpyright
-        name: basedpyright
-        entry: uv run -- basedpyright
+      # ty type check
+      - id: ty
+        name: ty
+        entry: uv run -- ty check
         language: system
         files: '\.py$'
         pass_filenames: false

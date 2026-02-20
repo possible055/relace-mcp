@@ -1,5 +1,3 @@
-"""Tests for encoding detection and project encoding handling."""
-
 from pathlib import Path
 from unittest.mock import patch
 

@@ -1,4 +1,5 @@
 from collections import deque
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -101,11 +102,17 @@ def _collect_directory_items(
     return items, truncated
 
 
-def view_directory_handler(path: str, include_hidden: bool, base_dir: str) -> str:
+def view_directory_handler(
+    path: str,
+    include_hidden: bool,
+    base_dir: str,
+    *,
+    extra_paths: Sequence[str] = (),
+) -> str:
     """view_directory tool implementation (BFS-like order: list current level first, then recurse)."""
     try:
         fs_path = map_repo_path(path, base_dir)
-        resolved = validate_file_path(fs_path, base_dir, allow_empty=True)
+        resolved = validate_file_path(fs_path, base_dir, extra_paths=extra_paths, allow_empty=True)
 
         if not resolved.exists():
             return f"Error: Directory not found: {path}"

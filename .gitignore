@@ -39,6 +39,7 @@ CLAUDE.md
 benchmark/artifacts/
 sonar-project.properties
 site/
+plans/
 
 # Logs / Env
 *.log

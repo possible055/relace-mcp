@@ -2,6 +2,7 @@ import difflib
 import logging
 import os
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -54,7 +55,11 @@ def _ok_result(
 
 
 def _resolve_path(
-    file_path: str, base_dir: str | None, ctx: ApplyContext
+    file_path: str,
+    base_dir: str | None,
+    ctx: ApplyContext,
+    *,
+    extra_paths: Sequence[str] = (),
 ) -> tuple[Path, bool, int] | dict[str, Any]:
     """Resolve and validate file path, check file status.
 
@@ -62,6 +67,7 @@ def _resolve_path(
         file_path: Target file path (absolute or relative).
         base_dir: Base directory restriction. If None, only absolute paths are accepted.
         ctx: Apply context for error reporting.
+        extra_paths: Additional allowed directories.
 
     Returns:
         On success returns (resolved_path, file_exists, file_size),
@@ -86,7 +92,7 @@ def _resolve_path(
             )
     else:
         try:
-            resolved_path = validate_file_path(file_path, base_dir)
+            resolved_path = validate_file_path(file_path, base_dir, extra_paths=extra_paths)
         except RuntimeError as e:
             return errors.recoverable_error(
                 "INVALID_PATH", str(e), file_path, ctx.instruction, ctx.trace_id, ctx.elapsed_ms()
@@ -283,6 +289,8 @@ async def apply_file_logic(
     edit_snippet: str,
     instruction: str | None,
     base_dir: str | None,
+    *,
+    extra_paths: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Core logic for fast_apply (testable independently).
 
@@ -292,6 +300,7 @@ async def apply_file_logic(
         edit_snippet: Code snippet to apply, using abbreviation comments.
         instruction: Optional natural language instruction forwarded to the apply backend for disambiguation.
         base_dir: Base directory restriction. If None, only absolute paths are accepted.
+        extra_paths: Additional allowed directories.
 
     Returns:
         A structured dict with status, path, trace_id, timing_ms, diff, and message.
@@ -314,7 +323,7 @@ async def apply_file_logic(
         )
 
     try:
-        result = _resolve_path(file_path, base_dir, ctx)
+        result = _resolve_path(file_path, base_dir, ctx, extra_paths=extra_paths)
         if isinstance(result, dict):
             return result
         resolved_path, file_exists, file_size = result

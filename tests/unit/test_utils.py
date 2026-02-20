@@ -1,10 +1,8 @@
-"""Tests for relace_mcp.utils module."""
-
 from pathlib import Path
 
 import pytest
 
-from relace_mcp.utils import resolve_repo_path
+from relace_mcp.utils import resolve_repo_path, validate_file_path
 
 
 class TestResolveRepoPath:
@@ -177,3 +175,88 @@ class TestResolveRepoPathSymlinks:
         # Access should work for existing files
         result = resolve_repo_path("/repo/test.txt", str(tmp_path))
         assert result == str(test_file.resolve())
+
+
+class TestValidateFilePathExtraPaths:
+    """Tests for validate_file_path with extra_paths."""
+
+    def test_path_within_base_dir(self, tmp_path: Path) -> None:
+        """Path inside base_dir passes without extra_paths."""
+        f = tmp_path / "file.txt"
+        f.write_text("ok")
+        result = validate_file_path(str(f), str(tmp_path))
+        assert result == f.resolve()
+
+    def test_path_within_extra_path(self, tmp_path: Path) -> None:
+        """Path outside base_dir but inside extra_paths passes."""
+        base = tmp_path / "project"
+        base.mkdir()
+        extra = tmp_path / "extra"
+        extra.mkdir()
+        f = extra / "config.md"
+        f.write_text("rules")
+
+        result = validate_file_path(str(f), str(base), extra_paths=[str(extra)])
+        assert result == f.resolve()
+
+    def test_path_outside_all_rejected(self, tmp_path: Path) -> None:
+        """Path outside both base_dir and extra_paths is rejected."""
+        base = tmp_path / "project"
+        base.mkdir()
+        extra = tmp_path / "extra"
+        extra.mkdir()
+        outside = tmp_path / "forbidden" / "secret.txt"
+
+        with pytest.raises(RuntimeError, match="Access denied"):
+            validate_file_path(str(outside), str(base), extra_paths=[str(extra)])
+
+    def test_extra_paths_traversal_blocked(self, tmp_path: Path) -> None:
+        """Path traversal out of extra_paths is blocked."""
+        base = tmp_path / "project"
+        base.mkdir()
+        extra = tmp_path / "extra"
+        extra.mkdir()
+
+        # Try to escape both base_dir and extra_paths via ../../
+        traversal = str(extra / ".." / ".." / "etc" / "passwd")
+        with pytest.raises(RuntimeError, match="Access denied"):
+            validate_file_path(traversal, str(base), extra_paths=[str(extra)])
+
+    def test_relative_resolves_to_base_only(self, tmp_path: Path) -> None:
+        """Relative paths always resolve against base_dir, not extra_paths."""
+        base = tmp_path / "project"
+        base.mkdir()
+        extra = tmp_path / "extra"
+        extra.mkdir()
+        (extra / "readme.md").write_text("hi")
+
+        # "readme.md" resolves to base/readme.md (within base_dir), not extra/readme.md
+        result = validate_file_path("readme.md", str(base), extra_paths=[str(extra)])
+        assert result == (base / "readme.md").resolve()
+        assert str(result).startswith(str(base))
+
+    def test_multiple_extra_paths(self, tmp_path: Path) -> None:
+        """Multiple extra_paths are checked in order."""
+        base = tmp_path / "project"
+        base.mkdir()
+        extra1 = tmp_path / "extra1"
+        extra1.mkdir()
+        extra2 = tmp_path / "extra2"
+        extra2.mkdir()
+        f = extra2 / "deep" / "file.txt"
+        f.parent.mkdir(parents=True)
+        f.write_text("ok")
+
+        result = validate_file_path(str(f), str(base), extra_paths=[str(extra1), str(extra2)])
+        assert result == f.resolve()
+
+    def test_empty_extra_paths(self, tmp_path: Path) -> None:
+        """Empty extra_paths behaves identically to original."""
+        f = tmp_path / "file.txt"
+        f.write_text("ok")
+        result = validate_file_path(str(f), str(tmp_path), extra_paths=())
+        assert result == f.resolve()
+
+        outside = tmp_path.parent / "outside.txt"
+        with pytest.raises(RuntimeError, match="Access denied"):
+            validate_file_path(str(outside), str(tmp_path), extra_paths=())

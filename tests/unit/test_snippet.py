@@ -1,5 +1,3 @@
-"""Tests for snippet.py functions."""
-
 import pytest
 
 from relace_mcp.tools.apply.snippet import (

@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from pathlib import Path
 
 from ....config.settings import MAX_FILE_SIZE_BYTES
@@ -70,11 +71,17 @@ def _format_file_lines(lines: list[str], start_idx: int, end_idx: int) -> str:
     return result
 
 
-def view_file_handler(path: str, view_range: list[int], base_dir: str) -> str:
+def view_file_handler(
+    path: str,
+    view_range: list[int],
+    base_dir: str,
+    *,
+    extra_paths: Sequence[str] = (),
+) -> str:
     """view_file tool implementation."""
     try:
         fs_path = map_repo_path(path, base_dir)
-        resolved = validate_file_path(fs_path, base_dir, allow_empty=True)
+        resolved = validate_file_path(fs_path, base_dir, extra_paths=extra_paths, allow_empty=True)
 
         error = _validate_file_for_view(resolved, path)
         if error:

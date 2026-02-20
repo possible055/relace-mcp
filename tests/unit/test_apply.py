@@ -8,6 +8,27 @@ from relace_mcp.clients.apply import ApplyRequest
 from relace_mcp.config import RelaceConfig
 
 
+@pytest.fixture(autouse=True)
+def _no_retry_sleep():  # pyright: ignore[reportUnusedFunction]
+    from relace_mcp.backend.openai_backend import OpenAIChatClient
+
+    async def _instant(*_a: object) -> None:
+        return
+
+    targets = [
+        OpenAIChatClient.chat_completions_async.retry,  # type: ignore[attr-defined]
+        OpenAIChatClient.chat_completions.retry,  # type: ignore[attr-defined]
+    ]
+    originals = [(t, t.sleep) for t in targets]
+    for t in targets:
+        t.sleep = _instant  # type: ignore[assignment]
+    try:
+        yield
+    finally:
+        for t, orig in originals:
+            t.sleep = orig  # type: ignore[assignment]
+
+
 def _mock_chat_response(content: str, usage: dict | None = None) -> MagicMock:
     response = MagicMock()
     response.choices = [MagicMock()]

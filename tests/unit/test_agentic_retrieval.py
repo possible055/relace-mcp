@@ -45,7 +45,7 @@ class TestBuildSemanticHintsSection:
 
 
 @pytest.fixture(autouse=True)
-def _force_relace_backend():
+def _force_relace_backend():  # pyright: ignore[reportUnusedFunction]
     with patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "relace"):
         yield
 
@@ -389,8 +389,8 @@ class TestAutoSync:
             assert result["explanation"] == "Still works"
 
 
-class TestChunkHoundIncrementalSync:
-    """Stage 0b: ChunkHound schedules background scan on every retrieval (fire-and-forget)."""
+class TestChunkHoundAutoReindexSync:
+    """Stage 0b: ChunkHound runs synchronous auto-reindex (HEAD-based staleness check) before search."""
 
     @pytest.fixture
     def mock_config(self, tmp_path: Path) -> RelaceConfig:
@@ -403,12 +403,15 @@ class TestChunkHoundIncrementalSync:
         return client
 
     @pytest.mark.asyncio
-    async def test_bg_schedule_called_on_every_retrieval(
+    async def test_auto_reindex_called_on_retrieval(
         self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
     ) -> None:
         with (
             patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
-            patch("relace_mcp.tools.retrieval.schedule_bg_chunkhound_index") as mock_sched,
+            patch(
+                "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
+                return_value={"action": "skipped", "reason": "index up to date"},
+            ) as mock_reindex,
             patch("relace_mcp.tools.retrieval.chunkhound_search", return_value=[]),
             patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
             patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
@@ -422,16 +425,19 @@ class TestChunkHoundIncrementalSync:
             await agentic_retrieval_logic(
                 None, mock_search_client, mock_config, str(tmp_path), "auth logic"
             )
-            mock_sched.assert_called_once_with(str(tmp_path))
+            mock_reindex.assert_called_once_with(str(tmp_path))
 
     @pytest.mark.asyncio
-    async def test_bg_schedule_called_twice_for_two_retrievals(
+    async def test_auto_reindex_called_on_every_retrieval(
         self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
     ) -> None:
-        """Verifies fire-and-forget fires on every call (no HEAD-based skip)."""
+        """auto_reindex is called on every retrieval (HEAD check is internal)."""
         with (
             patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
-            patch("relace_mcp.tools.retrieval.schedule_bg_chunkhound_index") as mock_sched,
+            patch(
+                "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
+                return_value={"action": "skipped", "reason": "index up to date"},
+            ) as mock_reindex,
             patch("relace_mcp.tools.retrieval.chunkhound_search", return_value=[]),
             patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
             patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
@@ -446,7 +452,61 @@ class TestChunkHoundIncrementalSync:
                 await agentic_retrieval_logic(
                     None, mock_search_client, mock_config, str(tmp_path), "query"
                 )
-            assert mock_sched.call_count == 2
+            assert mock_reindex.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_auto_reindex_failure_does_not_block_search(
+        self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
+    ) -> None:
+        """auto_reindex failure must degrade gracefully (warning only)."""
+        with (
+            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
+            patch(
+                "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
+                side_effect=RuntimeError("disk full"),
+            ),
+            patch("relace_mcp.tools.retrieval.chunkhound_search", return_value=[]),
+            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+        ):
+            mock_harness = MagicMock()
+            mock_harness.run_async = AsyncMock(
+                return_value={"explanation": "still works", "files": {}, "turns_used": 1}
+            )
+            mock_harness_cls.return_value = mock_harness
+
+            result = await agentic_retrieval_logic(
+                None, mock_search_client, mock_config, str(tmp_path), "query"
+            )
+            assert result["explanation"] == "still works"
+            assert any("auto-reindex failed" in w for w in result.get("warnings", []))
+
+    @pytest.mark.asyncio
+    async def test_auto_reindex_error_action_adds_warning(
+        self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
+    ) -> None:
+        """auto_reindex returning action=error (internal catch) must still add a warning."""
+        with (
+            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
+            patch(
+                "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
+                return_value={"action": "error", "message": "CLI timeout"},
+            ),
+            patch("relace_mcp.tools.retrieval.chunkhound_search", return_value=[]),
+            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+        ):
+            mock_harness = MagicMock()
+            mock_harness.run_async = AsyncMock(
+                return_value={"explanation": "ok", "files": {}, "turns_used": 1}
+            )
+            mock_harness_cls.return_value = mock_harness
+
+            result = await agentic_retrieval_logic(
+                None, mock_search_client, mock_config, str(tmp_path), "query"
+            )
+            assert result["explanation"] == "ok"
+            assert any("CLI timeout" in w for w in result.get("warnings", []))
 
     @pytest.mark.asyncio
     async def test_stage1_index_missing_does_not_disable_backend(
@@ -457,7 +517,10 @@ class TestChunkHoundIncrementalSync:
 
         with (
             patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
-            patch("relace_mcp.tools.retrieval.schedule_bg_chunkhound_index"),
+            patch(
+                "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
+                return_value={"action": "skipped", "reason": "index up to date"},
+            ),
             patch(
                 "relace_mcp.tools.retrieval.chunkhound_search",
                 side_effect=ExternalCLIError(
@@ -465,6 +528,7 @@ class TestChunkHoundIncrementalSync:
                 ),
             ),
             patch("relace_mcp.tools.retrieval.disable_backend") as mock_disable,
+            patch("relace_mcp.tools.retrieval.schedule_bg_chunkhound_index"),
             patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
             patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
@@ -490,6 +554,10 @@ class TestChunkHoundIncrementalSync:
 
         with (
             patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
+            patch(
+                "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
+                return_value={"action": "skipped", "reason": "index up to date"},
+            ),
             patch("relace_mcp.tools.retrieval.schedule_bg_chunkhound_index") as mock_sched,
             patch(
                 "relace_mcp.tools.retrieval.chunkhound_search",
@@ -509,8 +577,8 @@ class TestChunkHoundIncrementalSync:
             await agentic_retrieval_logic(
                 None, mock_search_client, mock_config, str(tmp_path), "query"
             )
-            # Called once for Stage 0b + once for Stage 1 index_missing recovery
-            assert mock_sched.call_count == 2
+            # Stage 1 index_missing recovery schedules background re-index
+            mock_sched.assert_called_once_with(str(tmp_path))
 
 
 class TestResolveAutoBackendNoHealthProbe:
@@ -654,7 +722,14 @@ class TestScheduleBgDedup:
             _bg_index_rerun[key] = True
             first_task = _bg_index_tasks[key]
             await first_task
-            await asyncio.sleep(0)  # yield to allow done-callback to fire
+            # Yield multiple times so the done-callback fires and the
+            # re-scheduled second task also completes inside the mock scope.
+            for _ in range(10):
+                await asyncio.sleep(0)
+            # Wait for the second task spawned by the done-callback.
+            second_task = _bg_index_tasks.get(key)
+            if second_task is not None and not second_task.done():
+                await asyncio.wait_for(second_task, timeout=2)
 
         assert call_count == 2, "rerun flag should trigger a second schedule"
 
@@ -692,11 +767,13 @@ class TestScheduleBgCodannaQueue:
             if fp == first_path:
                 await unblock.wait()
 
-        try:
-            with patch(
-                "relace_mcp.repo.backends.codanna._async_run_codanna_index",
-                side_effect=_fake_index,
-            ):
+        # Keep mock active for the entire test (including cleanup) so that
+        # done-callback re-scheduled tasks never escape into real subprocess.
+        with patch(
+            "relace_mcp.repo.backends.codanna._async_run_codanna_index",
+            side_effect=_fake_index,
+        ):
+            try:
                 schedule_bg_codanna_index(first_path, base_dir)
                 await asyncio.sleep(0)  # let first task start
                 schedule_bg_codanna_index(second_path, base_dir)
@@ -708,29 +785,29 @@ class TestScheduleBgCodannaQueue:
                     while len(set(started)) < 3:
                         await asyncio.sleep(0)
 
-                await asyncio.wait_for(_wait_for_all(), timeout=1)
+                await asyncio.wait_for(_wait_for_all(), timeout=2)
 
                 last_task = _bg_index_tasks.get(key)
                 if last_task is not None:
                     await last_task
                     await asyncio.sleep(0)
-        finally:
-            task = _bg_index_tasks.get(key)
-            if task is not None and not task.done():
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-            _bg_index_tasks.pop(key, None)
-            _bg_index_rerun.pop(key, None)
-            _bg_codanna_pending.pop(key, None)
+            finally:
+                task = _bg_index_tasks.get(key)
+                if task is not None and not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+                _bg_index_tasks.pop(key, None)
+                _bg_index_rerun.pop(key, None)
+                _bg_codanna_pending.pop(key, None)
 
         assert set(started) == {first_path, second_path, third_path}
 
 
-class TestCodannaFullIndexSelfHealing:
-    """Codanna retrieval must use schedule_bg_codanna_full_index (init+index)."""
+class TestCodannaAutoReindexSync:
+    """Codanna retrieval must use synchronous codanna_auto_reindex (HEAD-based staleness check)."""
 
     @pytest.fixture
     def mock_config(self, tmp_path: Path) -> RelaceConfig:
@@ -743,12 +820,15 @@ class TestCodannaFullIndexSelfHealing:
         return client
 
     @pytest.mark.asyncio
-    async def test_stage0c_schedules_full_index(
+    async def test_stage0c_calls_auto_reindex(
         self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
     ) -> None:
         with (
             patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "codanna"),
-            patch("relace_mcp.tools.retrieval.schedule_bg_codanna_full_index") as mock_full,
+            patch(
+                "relace_mcp.tools.retrieval.codanna_auto_reindex",
+                return_value={"action": "skipped", "reason": "index up to date"},
+            ) as mock_reindex,
             patch("relace_mcp.tools.retrieval.codanna_search", return_value=[]),
             patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
             patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
@@ -762,7 +842,60 @@ class TestCodannaFullIndexSelfHealing:
             await agentic_retrieval_logic(
                 None, mock_search_client, mock_config, str(tmp_path), "query"
             )
-            mock_full.assert_called_once_with(str(tmp_path))
+            mock_reindex.assert_called_once_with(str(tmp_path))
+
+    @pytest.mark.asyncio
+    async def test_codanna_auto_reindex_failure_does_not_block_search(
+        self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
+    ) -> None:
+        with (
+            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "codanna"),
+            patch(
+                "relace_mcp.tools.retrieval.codanna_auto_reindex",
+                side_effect=RuntimeError("codanna CLI crashed"),
+            ),
+            patch("relace_mcp.tools.retrieval.codanna_search", return_value=[]),
+            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+        ):
+            mock_harness = MagicMock()
+            mock_harness.run_async = AsyncMock(
+                return_value={"explanation": "still works", "files": {}, "turns_used": 1}
+            )
+            mock_harness_cls.return_value = mock_harness
+
+            result = await agentic_retrieval_logic(
+                None, mock_search_client, mock_config, str(tmp_path), "query"
+            )
+            assert result["explanation"] == "still works"
+            assert any("auto-reindex failed" in w for w in result.get("warnings", []))
+
+    @pytest.mark.asyncio
+    async def test_codanna_auto_reindex_error_action_adds_warning(
+        self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
+    ) -> None:
+        """auto_reindex returning action=error (internal catch) must still add a warning."""
+        with (
+            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "codanna"),
+            patch(
+                "relace_mcp.tools.retrieval.codanna_auto_reindex",
+                return_value={"action": "error", "message": "index failed"},
+            ),
+            patch("relace_mcp.tools.retrieval.codanna_search", return_value=[]),
+            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+        ):
+            mock_harness = MagicMock()
+            mock_harness.run_async = AsyncMock(
+                return_value={"explanation": "ok", "files": {}, "turns_used": 1}
+            )
+            mock_harness_cls.return_value = mock_harness
+
+            result = await agentic_retrieval_logic(
+                None, mock_search_client, mock_config, str(tmp_path), "query"
+            )
+            assert result["explanation"] == "ok"
+            assert any("index failed" in w for w in result.get("warnings", []))
 
     @pytest.mark.asyncio
     async def test_codanna_index_missing_schedules_full_index(
@@ -772,6 +905,10 @@ class TestCodannaFullIndexSelfHealing:
 
         with (
             patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "codanna"),
+            patch(
+                "relace_mcp.tools.retrieval.codanna_auto_reindex",
+                return_value={"action": "skipped", "reason": "index up to date"},
+            ),
             patch("relace_mcp.tools.retrieval.schedule_bg_codanna_full_index") as mock_full,
             patch(
                 "relace_mcp.tools.retrieval.codanna_search",
@@ -791,6 +928,42 @@ class TestCodannaFullIndexSelfHealing:
             result = await agentic_retrieval_logic(
                 None, mock_search_client, mock_config, str(tmp_path), "query"
             )
-            # Stage 0c + Stage 1 recovery = 2 calls
-            assert mock_full.call_count == 2
+            # Stage 1 recovery schedules background full-index
+            mock_full.assert_called_once_with(str(tmp_path))
             assert "warnings" in result
+
+    @pytest.mark.asyncio
+    async def test_auto_reindex_detects_branch_switch(
+        self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
+    ) -> None:
+        """When auto_reindex returns 'reindexed', search uses updated index."""
+        with (
+            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "codanna"),
+            patch(
+                "relace_mcp.tools.retrieval.codanna_auto_reindex",
+                return_value={"action": "reindexed", "old_head": "aaa", "new_head": "bbb"},
+            ) as mock_reindex,
+            patch(
+                "relace_mcp.tools.retrieval.codanna_search",
+                return_value=[{"filename": "new_branch_file.py", "score": 0.9}],
+            ),
+            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+        ):
+            mock_harness = MagicMock()
+            mock_harness.run_async = AsyncMock(
+                return_value={
+                    "explanation": "found it",
+                    "files": {"new_branch_file.py": [[1, 10]]},
+                    "turns_used": 1,
+                }
+            )
+            mock_harness_cls.return_value = mock_harness
+
+            result = await agentic_retrieval_logic(
+                None, mock_search_client, mock_config, str(tmp_path), "query"
+            )
+            mock_reindex.assert_called_once_with(str(tmp_path))
+            assert result["cloud_hints_used"] == 1
+            # No warnings expected since auto_reindex succeeded
+            assert not result.get("warnings", [])

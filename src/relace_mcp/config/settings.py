@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -124,12 +125,46 @@ MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024
 # File size limit (10MB) to prevent memory exhaustion on file read/write operations
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
+_LINUX_DEFAULT_EXTRA_PATHS: tuple[str, ...] = (
+    "~/.cursor/plans",
+    "~/.windsurf/plans",
+    "~/.gemini/antigravity/brain",
+    "~/.kiro/steering",
+)
+
+
+def _parse_extra_paths() -> tuple[str, ...]:
+    raw = os.getenv("MCP_EXTRA_PATHS", "").strip()
+    user_paths: list[str] = []
+    if raw:
+        for item in raw.split(","):
+            item = item.strip()
+            if not item:
+                continue
+            expanded = str(Path(item).expanduser().resolve())
+            if expanded in ("/", "/home", "/tmp", "/etc", "/var", "/usr"):  # nosec B108
+                logger.warning("MCP_EXTRA_PATHS: ignoring unsafe path: %s", item)
+                continue
+            user_paths.append(expanded)
+
+    # Merge Linux defaults (only existing directories)
+    if sys.platform == "linux":
+        for p in _LINUX_DEFAULT_EXTRA_PATHS:
+            expanded = str(Path(p).expanduser().resolve())
+            if expanded not in user_paths and Path(expanded).is_dir():
+                user_paths.append(expanded)
+
+    if user_paths:
+        logger.debug("Extra allowed paths: %s", user_paths)
+    return tuple(user_paths)
+
 
 @dataclass(frozen=True)
 class RelaceConfig:
     api_key: str | None = None  # Optional; required only when using Relace services
     base_dir: str | None = None  # Optional; resolved dynamically from MCP Roots if not set
     default_encoding: str | None = None  # Project-level encoding (detected or env-specified)
+    extra_paths: tuple[str, ...] = ()  # Additional allowed paths for file operations
 
     @classmethod
     def from_env(cls) -> "RelaceConfig":
@@ -151,4 +186,11 @@ class RelaceConfig:
         # default_encoding from env (will be overridden by detection if None)
         default_encoding = RELACE_DEFAULT_ENCODING
 
-        return cls(api_key=api_key, base_dir=base_dir, default_encoding=default_encoding)
+        extra_paths = _parse_extra_paths()
+
+        return cls(
+            api_key=api_key,
+            base_dir=base_dir,
+            default_encoding=default_encoding,
+            extra_paths=extra_paths,
+        )

@@ -17,3 +17,8 @@ def is_backend_disabled(name: str) -> bool:
 def disable_backend(name: str, reason: str) -> None:
     _disabled_backends.add(name)
     logger.warning("Backend %r disabled for this session: %s", name, reason)
+
+
+def is_bg_index_running(base_dir: str, backend: str) -> bool:
+    t = _bg_index_tasks.get((base_dir, backend))
+    return t is not None and not t.done()

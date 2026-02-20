@@ -1,5 +1,6 @@
 import fnmatch
 import os
+from collections.abc import Sequence
 from functools import lru_cache
 from pathlib import Path
 
@@ -76,6 +77,8 @@ def glob_handler(
     include_hidden: bool,
     max_results: int,
     base_dir: str,
+    *,
+    extra_paths: Sequence[str] = (),
 ) -> str:
     """glob tool implementation (recursive file/directory matching)."""
     try:
@@ -86,7 +89,7 @@ def glob_handler(
             )
 
         fs_path = map_repo_path(path, base_dir)
-        resolved = validate_file_path(fs_path, base_dir, allow_empty=True)
+        resolved = validate_file_path(fs_path, base_dir, extra_paths=extra_paths, allow_empty=True)
 
         if not resolved.exists():
             return f"Error: Directory not found: {path}"

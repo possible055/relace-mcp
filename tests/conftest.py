@@ -18,7 +18,7 @@ def mock_config(tmp_path: Path) -> RelaceConfig:
 
 
 @pytest.fixture
-def _mock_config(mock_config: RelaceConfig) -> RelaceConfig:
+def _mock_config(mock_config: RelaceConfig) -> RelaceConfig:  # pyright: ignore[reportUnusedFunction]
     return mock_config
 
 

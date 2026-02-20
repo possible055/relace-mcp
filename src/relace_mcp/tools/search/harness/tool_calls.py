@@ -281,6 +281,8 @@ class ToolCallsMixin:
         if base_dir is None:
             return "Error: base_dir is not configured. Set MCP_BASE_DIR or ensure MCP Roots are available."
 
+        extra_paths = self._config.extra_paths
+
         if name == "view_file":
             path = args.get("path", "")
             view_range = args.get("view_range", [1, 100])
@@ -288,12 +290,14 @@ class ToolCallsMixin:
                 path=path,
                 view_range=view_range,
                 base_dir=base_dir,
+                extra_paths=extra_paths,
             )
         elif name == "view_directory":
             return view_directory_handler(
                 path=args.get("path", ""),
                 include_hidden=args.get("include_hidden", False),
                 base_dir=base_dir,
+                extra_paths=extra_paths,
             )
         elif name == "grep_search":
             params = GrepSearchParams(
@@ -311,6 +315,7 @@ class ToolCallsMixin:
                 include_hidden=args.get("include_hidden", False),
                 max_results=args.get("max_results", 200),
                 base_dir=base_dir,
+                extra_paths=extra_paths,
             )
         elif name == "bash":
             return bash_handler(
