@@ -116,7 +116,7 @@ def glob_handler(
                 dirs.clear()
                 continue
 
-            # Avoid huge dependency dirs and caches.
+            # Always prune heavy dependency/cache directories for predictable performance.
             dirs[:] = [d for d in dirs if d not in COMMON_IGNORED_DIRS]
 
             if not include_hidden:

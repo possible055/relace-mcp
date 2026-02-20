@@ -7,11 +7,9 @@ from .cloud import (
 )
 from .core import SyncState, get_repo_identity, load_sync_state
 from .local import chunkhound_search, codanna_search
-from .retrieval import agentic_retrieval_logic
 
 __all__ = [
     "SyncState",
-    "agentic_retrieval_logic",
     "chunkhound_search",
     "cloud_clear_logic",
     "cloud_info_logic",

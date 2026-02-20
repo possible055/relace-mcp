@@ -5,7 +5,7 @@ import pytest
 
 from relace_mcp.clients import RelaceRepoClient, SearchLLMClient
 from relace_mcp.config import RelaceConfig
-from relace_mcp.repo.retrieval import (
+from relace_mcp.tools.retrieval import (
     agentic_retrieval_logic,
     build_semantic_hints_section,
 )
@@ -46,7 +46,7 @@ class TestBuildSemanticHintsSection:
 
 @pytest.fixture(autouse=True)
 def _force_relace_backend():
-    with patch("relace_mcp.repo.retrieval.RETRIEVAL_BACKEND", "relace"):
+    with patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "relace"):
         yield
 
 
@@ -74,8 +74,8 @@ class TestAgenticRetrievalLogic:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.return_value = {"error": "Network error", "results": []}
             mock_harness = MagicMock()
@@ -105,8 +105,8 @@ class TestAgenticRetrievalLogic:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.return_value = {"results": []}
             mock_harness = MagicMock()
@@ -136,8 +136,8 @@ class TestAgenticRetrievalLogic:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.return_value = {
                 "results": [
@@ -178,8 +178,8 @@ class TestAgenticRetrievalLogic:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.return_value = {"results": [{"filename": "src/core.py", "score": 0.9}]}
             mock_harness = MagicMock()
@@ -214,8 +214,8 @@ class TestAgenticRetrievalLogic:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.side_effect = Exception("Fatal cloud error")
             mock_harness = MagicMock()
@@ -261,11 +261,11 @@ class TestAutoSync:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.repo.retrieval.AGENTIC_AUTO_SYNC", True),
-            patch("relace_mcp.repo.retrieval.cloud_info_logic") as mock_info,
-            patch("relace_mcp.repo.retrieval.cloud_sync_logic") as mock_sync,
-            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.tools.retrieval.AGENTIC_AUTO_SYNC", True),
+            patch("relace_mcp.tools.retrieval.cloud_info_logic") as mock_info,
+            patch("relace_mcp.tools.retrieval.cloud_sync_logic") as mock_sync,
+            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_info.return_value = {"status": {"needs_sync": True}}
             mock_sync.return_value = {"repo_id": "test-repo"}
@@ -296,11 +296,11 @@ class TestAutoSync:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.repo.retrieval.AGENTIC_AUTO_SYNC", True),
-            patch("relace_mcp.repo.retrieval.cloud_info_logic") as mock_info,
-            patch("relace_mcp.repo.retrieval.cloud_sync_logic") as mock_sync,
-            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.tools.retrieval.AGENTIC_AUTO_SYNC", True),
+            patch("relace_mcp.tools.retrieval.cloud_info_logic") as mock_info,
+            patch("relace_mcp.tools.retrieval.cloud_sync_logic") as mock_sync,
+            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_info.return_value = {"status": {"needs_sync": False}}
             mock_cloud.return_value = {"results": []}
@@ -330,10 +330,10 @@ class TestAutoSync:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.repo.retrieval.AGENTIC_AUTO_SYNC", False),
-            patch("relace_mcp.repo.retrieval.cloud_info_logic") as mock_info,
-            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.tools.retrieval.AGENTIC_AUTO_SYNC", False),
+            patch("relace_mcp.tools.retrieval.cloud_info_logic") as mock_info,
+            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.return_value = {"results": []}
             mock_harness = MagicMock()
@@ -361,11 +361,11 @@ class TestAutoSync:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.repo.retrieval.AGENTIC_AUTO_SYNC", True),
-            patch("relace_mcp.repo.retrieval.cloud_info_logic") as mock_info,
-            patch("relace_mcp.repo.retrieval.cloud_sync_logic") as mock_sync,
-            patch("relace_mcp.repo.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.tools.retrieval.AGENTIC_AUTO_SYNC", True),
+            patch("relace_mcp.tools.retrieval.cloud_info_logic") as mock_info,
+            patch("relace_mcp.tools.retrieval.cloud_sync_logic") as mock_sync,
+            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_info.return_value = {"status": {"needs_sync": True}}
             mock_sync.return_value = {"error": "Network timeout"}
@@ -407,11 +407,11 @@ class TestChunkHoundIncrementalSync:
         self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
     ) -> None:
         with (
-            patch("relace_mcp.repo.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
-            patch("relace_mcp.repo.retrieval.schedule_bg_chunkhound_index") as mock_sched,
-            patch("relace_mcp.repo.retrieval.chunkhound_search", return_value=[]),
-            patch("relace_mcp.repo.retrieval.is_backend_disabled", return_value=False),
-            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
+            patch("relace_mcp.tools.retrieval.schedule_bg_chunkhound_index") as mock_sched,
+            patch("relace_mcp.tools.retrieval.chunkhound_search", return_value=[]),
+            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_harness = MagicMock()
             mock_harness.run_async = AsyncMock(
@@ -430,11 +430,11 @@ class TestChunkHoundIncrementalSync:
     ) -> None:
         """Verifies fire-and-forget fires on every call (no HEAD-based skip)."""
         with (
-            patch("relace_mcp.repo.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
-            patch("relace_mcp.repo.retrieval.schedule_bg_chunkhound_index") as mock_sched,
-            patch("relace_mcp.repo.retrieval.chunkhound_search", return_value=[]),
-            patch("relace_mcp.repo.retrieval.is_backend_disabled", return_value=False),
-            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
+            patch("relace_mcp.tools.retrieval.schedule_bg_chunkhound_index") as mock_sched,
+            patch("relace_mcp.tools.retrieval.chunkhound_search", return_value=[]),
+            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_harness = MagicMock()
             mock_harness.run_async = AsyncMock(
@@ -456,17 +456,17 @@ class TestChunkHoundIncrementalSync:
         from relace_mcp.repo.local.backend import ExternalCLIError
 
         with (
-            patch("relace_mcp.repo.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
-            patch("relace_mcp.repo.retrieval.schedule_bg_chunkhound_index"),
+            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
+            patch("relace_mcp.tools.retrieval.schedule_bg_chunkhound_index"),
             patch(
-                "relace_mcp.repo.retrieval.chunkhound_search",
+                "relace_mcp.tools.retrieval.chunkhound_search",
                 side_effect=ExternalCLIError(
                     backend="chunkhound", kind="index_missing", message="no index"
                 ),
             ),
-            patch("relace_mcp.repo.retrieval.disable_backend") as mock_disable,
-            patch("relace_mcp.repo.retrieval.is_backend_disabled", return_value=False),
-            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.tools.retrieval.disable_backend") as mock_disable,
+            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_harness = MagicMock()
             mock_harness.run_async = AsyncMock(
@@ -489,16 +489,16 @@ class TestChunkHoundIncrementalSync:
         from relace_mcp.repo.local.backend import ExternalCLIError
 
         with (
-            patch("relace_mcp.repo.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
-            patch("relace_mcp.repo.retrieval.schedule_bg_chunkhound_index") as mock_sched,
+            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
+            patch("relace_mcp.tools.retrieval.schedule_bg_chunkhound_index") as mock_sched,
             patch(
-                "relace_mcp.repo.retrieval.chunkhound_search",
+                "relace_mcp.tools.retrieval.chunkhound_search",
                 side_effect=ExternalCLIError(
                     backend="chunkhound", kind="index_missing", message="no index"
                 ),
             ),
-            patch("relace_mcp.repo.retrieval.is_backend_disabled", return_value=False),
-            patch("relace_mcp.repo.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
+            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_harness = MagicMock()
             mock_harness.run_async = AsyncMock(
@@ -517,12 +517,12 @@ class TestResolveAutoBackendNoHealthProbe:
     """_resolve_auto_backend must not block via health probes."""
 
     def test_no_check_backend_health_called(self, tmp_path: Path) -> None:
-        from relace_mcp.repo.retrieval import _auto_backend_cache, _resolve_auto_backend
+        from relace_mcp.tools.retrieval import _auto_backend_cache, _resolve_auto_backend
 
         _auto_backend_cache.clear()
         with (
-            patch("relace_mcp.repo.retrieval.shutil.which", return_value=None),
-            patch("relace_mcp.repo.retrieval.is_backend_disabled", return_value=False),
+            patch("relace_mcp.tools.retrieval.shutil.which", return_value=None),
+            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
             patch("relace_mcp.repo.local.backend.check_backend_health") as mock_health,
         ):
             result = _resolve_auto_backend(str(tmp_path))
@@ -530,15 +530,15 @@ class TestResolveAutoBackendNoHealthProbe:
         mock_health.assert_not_called()
 
     def test_returns_first_available_cli(self, tmp_path: Path) -> None:
-        from relace_mcp.repo.retrieval import _auto_backend_cache, _resolve_auto_backend
+        from relace_mcp.tools.retrieval import _auto_backend_cache, _resolve_auto_backend
 
         _auto_backend_cache.clear()
         with (
             patch(
-                "relace_mcp.repo.retrieval.shutil.which",
+                "relace_mcp.tools.retrieval.shutil.which",
                 side_effect=lambda name: "/usr/bin/" + name if name == "chunkhound" else None,
             ),
-            patch("relace_mcp.repo.retrieval.is_backend_disabled", return_value=False),
+            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
         ):
             result = _resolve_auto_backend(str(tmp_path))
         assert result == "chunkhound"
@@ -551,7 +551,7 @@ class TestChunkHoundIndexFileBug1:
         from relace_mcp.repo.local.backend import ExternalCLIError, chunkhound_index_file
 
         with patch(
-            "relace_mcp.repo.local.backend._ensure_chunkhound_index",
+            "relace_mcp.repo.local.backend.chunkhound._ensure_chunkhound_index",
             side_effect=RuntimeError("chunkhound CLI not found"),
         ) as mock_ensure:
             mock_ensure.side_effect.__cause__ = None
@@ -570,7 +570,7 @@ class TestChunkHoundIndexFileBug1:
 
         plain_err = RuntimeError("chunkhound index failed: some error")
         with patch(
-            "relace_mcp.repo.local.backend._ensure_chunkhound_index",
+            "relace_mcp.repo.local.backend.chunkhound._ensure_chunkhound_index",
             side_effect=plain_err,
         ):
             with pytest.raises(ExternalCLIError) as exc_info:
@@ -587,10 +587,12 @@ class TestChunkHoundSearchAllowAutoIndex:
         missing_msg = "database not found, run chunkhound index"
         with (
             patch(
-                "relace_mcp.repo.local.backend._run_cli_text",
+                "relace_mcp.repo.local.backend.chunkhound._run_cli_text",
                 side_effect=RuntimeError(missing_msg),
             ),
-            patch("relace_mcp.repo.local.backend._ensure_chunkhound_index") as mock_ensure,
+            patch(
+                "relace_mcp.repo.local.backend.chunkhound._ensure_chunkhound_index"
+            ) as mock_ensure,
         ):
             with pytest.raises(ExternalCLIError) as exc_info:
                 chunkhound_search("auth", base_dir=str(tmp_path), allow_auto_index=False)
@@ -605,11 +607,8 @@ class TestScheduleBgDedup:
     async def test_dedup_sets_rerun_flag_when_task_running(self) -> None:
         import asyncio
 
-        from relace_mcp.repo.local.backend import (
-            _bg_index_rerun,
-            _bg_index_tasks,
-            schedule_bg_chunkhound_index,
-        )
+        from relace_mcp.repo.local.backend import schedule_bg_chunkhound_index
+        from relace_mcp.repo.local.backend.registry import _bg_index_rerun, _bg_index_tasks
 
         base_dir = "/fake/repo/dedup"
         key = (base_dir, "chunkhound")
@@ -635,11 +634,8 @@ class TestScheduleBgDedup:
     async def test_rerun_after_done_reschedules(self) -> None:
         import asyncio
 
-        from relace_mcp.repo.local.backend import (
-            _bg_index_rerun,
-            _bg_index_tasks,
-            schedule_bg_chunkhound_index,
-        )
+        from relace_mcp.repo.local.backend import schedule_bg_chunkhound_index
+        from relace_mcp.repo.local.backend.registry import _bg_index_rerun, _bg_index_tasks
 
         base_dir = "/fake/repo/rerun"
         key = (base_dir, "chunkhound")
@@ -653,7 +649,7 @@ class TestScheduleBgDedup:
             call_count += 1
 
         with patch(
-            "relace_mcp.repo.local.backend._async_run_chunkhound_index",
+            "relace_mcp.repo.local.backend.chunkhound._async_run_chunkhound_index",
             side_effect=_fast_index,
         ):
             schedule_bg_chunkhound_index(base_dir)
@@ -673,11 +669,11 @@ class TestScheduleBgCodannaQueue:
     async def test_queues_pending_paths_instead_of_last_write_wins(self) -> None:
         import asyncio
 
-        from relace_mcp.repo.local.backend import (
+        from relace_mcp.repo.local.backend import schedule_bg_codanna_index
+        from relace_mcp.repo.local.backend.registry import (
             _bg_codanna_pending,
             _bg_index_rerun,
             _bg_index_tasks,
-            schedule_bg_codanna_index,
         )
 
         base_dir = "/fake/repo/codanna"
@@ -700,7 +696,7 @@ class TestScheduleBgCodannaQueue:
 
         try:
             with patch(
-                "relace_mcp.repo.local.backend._async_run_codanna_index",
+                "relace_mcp.repo.local.backend.codanna._async_run_codanna_index",
                 side_effect=_fake_index,
             ):
                 schedule_bg_codanna_index(first_path, base_dir)

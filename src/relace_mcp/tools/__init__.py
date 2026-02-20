@@ -16,7 +16,6 @@ from ..clients.apply import ApplyLLMClient
 from ..config import RelaceConfig, resolve_base_dir
 from ..config.settings import AGENTIC_RETRIEVAL_ENABLED, RELACE_CLOUD_TOOLS, RETRIEVAL_BACKEND
 from ..repo import (
-    agentic_retrieval_logic,
     cloud_info_logic,
     cloud_list_logic,
     cloud_search_logic,
@@ -24,6 +23,7 @@ from ..repo import (
     load_sync_state,
 )
 from .apply import apply_file_logic
+from .retrieval import agentic_retrieval_logic
 from .search import FastAgenticSearchHarness
 
 __all__ = ["register_tools"]

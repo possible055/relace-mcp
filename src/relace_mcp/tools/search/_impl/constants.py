@@ -1,5 +1,7 @@
 import os
 
+from ....config.fs_policy import SEARCH_TRAVERSAL_PRUNE_DIRS
+
 # Directory listing limit
 MAX_DIR_ITEMS = 250
 # glob result limit
@@ -20,18 +22,8 @@ MAX_BASH_CHARS = 15000
 MAX_VIEW_DIRECTORY_CHARS = 8000
 MAX_GLOB_CHARS = 8000
 
-# Common directories to ignore during traversal (shared by glob, grep, encoding detection)
-COMMON_IGNORED_DIRS = frozenset(
-    {
-        "__pycache__",
-        "build",
-        "dist",
-        "node_modules",
-        "site-packages",
-        "target",
-        "venv",
-    }
-)
+# Common directories pruned during traversal for performance.
+COMMON_IGNORED_DIRS = SEARCH_TRAVERSAL_PRUNE_DIRS
 
 
 # === Bash Tool ===

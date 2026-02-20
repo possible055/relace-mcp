@@ -5,7 +5,7 @@ from .git import (
     get_git_root,
     is_git_dirty,
 )
-from .logging import _extract_error_fields, log_cloud_event
+from .logging import extract_error_fields, log_cloud_event
 from .state import (
     SyncState,
     clear_sync_state,
@@ -18,7 +18,7 @@ from .state import (
 
 __all__ = [
     "SyncState",
-    "_extract_error_fields",
+    "extract_error_fields",
     "build_cloud_error_details",
     "clear_sync_state",
     "compute_file_hash",

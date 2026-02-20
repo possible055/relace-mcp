@@ -4,6 +4,8 @@ from pathlib import Path
 
 from charset_normalizer import from_bytes
 
+from ...config.fs_policy import ENCODING_DETECTION_IGNORED_DIRS
+
 logger = logging.getLogger(__name__)
 
 # File extensions to sample for encoding detection
@@ -93,10 +95,7 @@ def detect_project_encoding(
             continue
         if any(part.startswith(".") for part in file_path.parts):
             continue
-        if any(
-            part in {"node_modules", "__pycache__", "venv", ".venv", "dist", "build"}
-            for part in file_path.parts
-        ):
+        if any(part in ENCODING_DETECTION_IGNORED_DIRS for part in file_path.parts):
             continue
 
         # Only sample known text file extensions
