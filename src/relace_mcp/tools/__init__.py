@@ -100,6 +100,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 edit_snippet=edit_snippet,
                 instruction=instruction or None,  # Convert empty string to None internally
                 base_dir=base_dir,
+                extra_paths=config.extra_paths,
             )
             if ctx is not None and result and result.get("status") == "ok":
                 diff_preview = (result.get("diff") or "")[:200]
