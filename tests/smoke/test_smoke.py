@@ -19,7 +19,7 @@ def test_relogs_help():
     """Verify that relogs can start normally and output basic information."""
     # Since dashboard requires an interactive terminal or specific environment, we test if it can be imported and main exists
     result = subprocess.run(
-        [sys.executable, "-c", "from relace_mcp.dashboard import main; print('ok')"],
+        [sys.executable, "-c", "from relace_dashboard import main; print('ok')"],
         capture_output=True,
         text=True,
         timeout=10,
