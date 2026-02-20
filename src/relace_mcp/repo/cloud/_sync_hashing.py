@@ -1,7 +1,7 @@
 # pyright: reportUnusedFunction=false
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from ..core import compute_file_hash
 from ._sync_constants import MAX_UPLOAD_WORKERS
@@ -27,7 +27,7 @@ def _compute_file_hashes(
 
     def hash_file(rel_path: str) -> tuple[str, str | None]:
         try:
-            if PurePosixPath(rel_path).is_absolute():
+            if PurePosixPath(rel_path).is_absolute() or PureWindowsPath(rel_path).is_absolute():
                 logger.warning("Blocked absolute path in hash: %s", rel_path)
                 return (rel_path, None)
             candidate = base_path / rel_path
