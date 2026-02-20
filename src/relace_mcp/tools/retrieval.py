@@ -6,9 +6,7 @@ from typing import Any
 from ..clients import RelaceRepoClient, SearchLLMClient
 from ..config import RETRIEVAL_USER_PROMPT_TEMPLATE, RelaceConfig
 from ..config.settings import AGENTIC_AUTO_SYNC, RETRIEVAL_BACKEND
-from ..tools.search import FastAgenticSearchHarness
-from .cloud import cloud_info_logic, cloud_search_logic, cloud_sync_logic
-from .local import (
+from ..repo.backends import (
     ExternalCLIError,
     chunkhound_search,
     codanna_search,
@@ -17,6 +15,8 @@ from .local import (
     schedule_bg_chunkhound_index,
     schedule_bg_codanna_full_index,
 )
+from ..repo.cloud import cloud_info_logic, cloud_search_logic, cloud_sync_logic
+from .search import FastAgenticSearchHarness
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,11 @@ def build_semantic_hints_section(cloud_results: list[dict[str, Any]], max_hints:
     ]
     for r in hints:
         file_path = r.get("filename") or r.get("file", "unknown")
-        score = r.get("score", 0.0)
+        raw_score = r.get("score", 0.0)
+        try:
+            score = float(raw_score)
+        except (TypeError, ValueError):
+            score = 0.0
         lines.append(f"- {file_path} (score: {score:.2f})")
     lines.append("Validate with grep/view before reporting.")
     lines.append("</semantic_hints>")
@@ -114,12 +118,10 @@ async def agentic_retrieval_logic(
         schedule_bg_chunkhound_index(base_dir)
         logger.debug("[%s] ChunkHound background index scheduled", trace_id)
 
-    # Stage 0c: Schedule background Codanna full init+index (fire-and-forget).
-    # Uses schedule_bg_codanna_full_index so `codanna init` is run if .codanna
-    # doesn't exist yet, preventing repeated failures when the index is missing.
+    # Stage 0c: Schedule background Codanna reindex (fire-and-forget).
     if backend == "codanna" and not is_backend_disabled("codanna"):
         schedule_bg_codanna_full_index(base_dir)
-        logger.debug("[%s] Codanna background full index scheduled", trace_id)
+        logger.debug("[%s] Codanna background index scheduled", trace_id)
 
     # Stage 1: Semantic retrieval (Relace, Codanna, or ChunkHound)
     if backend == "none":

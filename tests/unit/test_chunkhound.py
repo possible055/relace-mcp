@@ -2,10 +2,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from relace_mcp.repo.local.backend import (
+from relace_mcp.repo.backends import (
     ExternalCLIError,
-    _parse_chunkhound_text,
     check_backend_health,
+)
+from relace_mcp.repo.backends.chunkhound import (
+    _chunkhound_health_probe,
+    _parse_chunkhound_text,
     chunkhound_search,
 )
 
@@ -111,7 +114,7 @@ class TestParseChunkhoundText:
 
 
 class TestChunkhoundSearch:
-    @patch("relace_mcp.repo.local.backend.subprocess.run")
+    @patch("relace_mcp.repo.backends.cli.subprocess.run")
     def test_successful_search(self, mock_run: MagicMock):
         mock_run.return_value = MagicMock(
             returncode=0,
@@ -130,7 +133,7 @@ class TestChunkhoundSearch:
         assert "--page-size" in cmd
         assert "5" in cmd
 
-    @patch("relace_mcp.repo.local.backend.subprocess.run")
+    @patch("relace_mcp.repo.backends.cli.subprocess.run")
     def test_empty_output_returns_empty_list(self, mock_run: MagicMock):
         mock_run.return_value = MagicMock(
             returncode=0,
@@ -141,7 +144,7 @@ class TestChunkhoundSearch:
         results = chunkhound_search("query", base_dir="/project")
         assert results == []
 
-    @patch("relace_mcp.repo.local.backend.subprocess.run")
+    @patch("relace_mcp.repo.backends.cli.subprocess.run")
     def test_cli_not_found_raises_error(self, mock_run: MagicMock):
         mock_run.side_effect = FileNotFoundError("chunkhound not found")
 
@@ -150,7 +153,7 @@ class TestChunkhoundSearch:
 
         assert "not found" in str(exc_info.value).lower()
 
-    @patch("relace_mcp.repo.local.backend.subprocess.run")
+    @patch("relace_mcp.repo.backends.cli.subprocess.run")
     def test_cli_timeout_raises_error(self, mock_run: MagicMock):
         import subprocess
 
@@ -161,8 +164,8 @@ class TestChunkhoundSearch:
 
         assert "timeout" in str(exc_info.value).lower()
 
-    @patch("relace_mcp.repo.local.backend._ensure_chunkhound_index")
-    @patch("relace_mcp.repo.local.backend.subprocess.run")
+    @patch("relace_mcp.repo.backends.chunkhound._ensure_chunkhound_index")
+    @patch("relace_mcp.repo.backends.cli.subprocess.run")
     def test_auto_index_on_not_indexed_error(
         self, mock_run: MagicMock, mock_ensure_chunkhound_index: MagicMock
     ):
@@ -180,8 +183,8 @@ class TestChunkhoundSearch:
         mock_ensure_chunkhound_index.assert_called_once()
         assert len(results) == 2
 
-    @patch("relace_mcp.repo.local.backend._ensure_chunkhound_index")
-    @patch("relace_mcp.repo.local.backend.subprocess.run")
+    @patch("relace_mcp.repo.backends.chunkhound._ensure_chunkhound_index")
+    @patch("relace_mcp.repo.backends.cli.subprocess.run")
     def test_auto_index_on_database_not_found_output(
         self, mock_run: MagicMock, mock_ensure_chunkhound_index: MagicMock
     ):
@@ -208,8 +211,8 @@ class TestChunkhoundSearch:
 
 
 class TestChunkhoundHealthCheck:
-    @patch("relace_mcp.repo.local.backend._run_cli_text")
-    @patch("relace_mcp.repo.local.backend.shutil.which")
+    @patch("relace_mcp.repo.backends.chunkhound._run_cli_text")
+    @patch("relace_mcp.repo.backends.health.shutil.which")
     def test_database_not_found_is_treated_as_index_missing(
         self, mock_which: MagicMock, mock_run_cli_text: MagicMock
     ):
@@ -223,27 +226,23 @@ class TestChunkhoundHealthCheck:
 
         assert exc_info.value.kind == "index_missing"
 
-    @patch("relace_mcp.repo.local.backend._write_indexed_head")
-    @patch("relace_mcp.repo.local.backend._get_git_head")
-    @patch("relace_mcp.repo.local.backend._ensure_chunkhound_index")
-    @patch("relace_mcp.repo.local.backend._run_cli_text")
+    @patch("relace_mcp.repo.backends.chunkhound._write_indexed_head")
+    @patch("relace_mcp.repo.backends.chunkhound.get_git_head")
+    @patch("relace_mcp.repo.backends.chunkhound._ensure_chunkhound_index")
+    @patch("relace_mcp.repo.backends.chunkhound._run_cli_text")
     def test_writes_head_after_auto_index(self, mock_run, mock_ensure, mock_head, mock_write):
         mock_run.side_effect = RuntimeError("chunkhound error (exit 1): not indexed")
         mock_head.return_value = "cafebabe"
-        from relace_mcp.repo.local.backend import _chunkhound_health_probe
-
         _chunkhound_health_probe("/project")
         mock_ensure.assert_called_once()
         mock_write.assert_called_once_with("/project", "cafebabe", ".chunkhound/last_indexed_head")
 
-    @patch("relace_mcp.repo.local.backend._write_indexed_head")
-    @patch("relace_mcp.repo.local.backend._get_git_head")
-    @patch("relace_mcp.repo.local.backend._ensure_chunkhound_index")
-    @patch("relace_mcp.repo.local.backend._run_cli_text")
+    @patch("relace_mcp.repo.backends.chunkhound._write_indexed_head")
+    @patch("relace_mcp.repo.backends.chunkhound.get_git_head")
+    @patch("relace_mcp.repo.backends.chunkhound._ensure_chunkhound_index")
+    @patch("relace_mcp.repo.backends.chunkhound._run_cli_text")
     def test_no_write_when_not_git_repo(self, mock_run, mock_ensure, mock_head, mock_write):
         mock_run.side_effect = RuntimeError("chunkhound error (exit 1): not indexed")
         mock_head.return_value = None
-        from relace_mcp.repo.local.backend import _chunkhound_health_probe
-
         _chunkhound_health_probe("/project")
         mock_write.assert_not_called()

@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ...observability import get_trace_id, log_event, redact_value
+from ...observability import log_event, redact_value
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,3 @@ def log_apply_error(
             "error": str(exc),
         }
     )
-
-
-def generate_trace_id() -> str:
-    return get_trace_id()

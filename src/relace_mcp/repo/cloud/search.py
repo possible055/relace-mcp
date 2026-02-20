@@ -1,11 +1,13 @@
 import logging
+import time
 import uuid
 from typing import Any
 
+from ...clients.exceptions import RelaceAPIError
 from ...clients.repo import RelaceRepoClient
 from ..core import (
-    _extract_error_fields,
     build_cloud_error_details,
+    extract_error_fields,
     get_current_git_info,
     get_repo_identity,
     is_git_dirty,
@@ -14,6 +16,17 @@ from ..core import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _is_commit_not_indexed_404(exc: Exception, hash_to_send: str) -> bool:
+    if not hash_to_send:
+        return False
+    cause = exc.__cause__ or exc
+    if not isinstance(cause, RelaceAPIError) or cause.status_code != 404:
+        return False
+    code_lower = (cause.code or "").lower()
+    msg_lower = (cause.message or "").lower()
+    return "commit" in code_lower or "not_indexed" in code_lower or "commit" in msg_lower
 
 
 def cloud_search_logic(
@@ -47,6 +60,8 @@ def cloud_search_logic(
 
     local_repo_name: str | None = None
     cloud_repo_name: str | None = None
+    hash_used = ""
+    hash_to_send = ""
 
     try:
         local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(base_dir)
@@ -65,7 +80,7 @@ def cloud_search_logic(
                 trace_id,
                 repo_name=None,
                 cloud_repo_name=None,
-                **_extract_error_fields(error_result),
+                **extract_error_fields(error_result),
             )
             return error_result
 
@@ -105,7 +120,7 @@ def cloud_search_logic(
                 trace_id,
                 repo_name=local_repo_name,
                 cloud_repo_name=cloud_repo_name,
-                **_extract_error_fields(no_sync_result),
+                **extract_error_fields(no_sync_result),
             )
             return no_sync_result
 
@@ -141,6 +156,7 @@ def cloud_search_logic(
         # NOTE: Use repo_head (cloud commit), NOT git_head_sha (local git commit)
         use_cached_hash = (not branch) or (branch == cached_state.git_branch)
         hash_to_send = cached_state.repo_head if use_cached_hash else ""
+        hash_used = hash_to_send
 
         if branch and not use_cached_hash:
             warnings_list.append(
@@ -148,17 +164,37 @@ def cloud_search_logic(
                 f"'{cached_state.git_branch}'). Results reflect the latest indexed state of '{branch}'."
             )
 
-        # Execute semantic retrieval with commit hash
-        result = client.retrieve(
-            repo_id=repo_id,
-            query=query,
-            branch=branch,
-            hash=hash_to_send,
-            score_threshold=score_threshold,
-            token_limit=token_limit,
-            include_content=True,
-            trace_id=trace_id,
-        )
+        # Execute semantic retrieval with commit hash.
+        # Official behavior: `retrieve(hash=...)` may return 404 until the commit is indexed.
+        # We retry a few times with exponential backoff to smooth out indexing lag.
+        retry_delays = (0.5, 1.0, 2.0)
+        result: dict[str, Any] | None = None
+        for attempt in range(len(retry_delays) + 1):
+            try:
+                result = client.retrieve(
+                    repo_id=repo_id,
+                    query=query,
+                    branch=branch,
+                    hash=hash_to_send,
+                    score_threshold=score_threshold,
+                    token_limit=token_limit,
+                    include_content=True,
+                    trace_id=trace_id,
+                )
+                if attempt:
+                    warnings_list.append(
+                        f"Commit hash {hash_to_send[:8]} was not indexed yet; succeeded after {attempt} retries."
+                    )
+                break
+            except Exception as exc:
+                if not _is_commit_not_indexed_404(exc, hash_to_send):
+                    raise
+                if attempt >= len(retry_delays):
+                    raise
+                time.sleep(retry_delays[attempt])
+
+        if result is None:
+            raise RuntimeError("cloud_search retrieve returned no result")
 
         # Format results
         raw_results = result.get("results")
@@ -192,6 +228,7 @@ def cloud_search_logic(
 
     except Exception as exc:
         logger.error("[%s] Cloud search failed: %s", trace_id, exc)
+        commit_not_indexed = bool(hash_used) and _is_commit_not_indexed_404(exc, hash_to_send)
         exc_result: dict[str, Any] = {
             "trace_id": trace_id,
             "query": query,
@@ -202,6 +239,12 @@ def cloud_search_logic(
             "error": str(exc),
             **build_cloud_error_details(exc),
         }
+        if commit_not_indexed:
+            exc_result["retryable"] = True
+            exc_result["recommended_action"] = (
+                "Commit may not be indexed yet (404). Retry with exponential backoff, "
+                "or omit hash/choose a different branch. If the repo itself is missing, run cloud_sync()."
+            )
         if local_repo_name and cloud_repo_name:
             exc_result["repo_name"] = local_repo_name
             exc_result["cloud_repo_name"] = cloud_repo_name
@@ -210,6 +253,6 @@ def cloud_search_logic(
             trace_id,
             repo_name=local_repo_name,
             cloud_repo_name=cloud_repo_name,
-            **_extract_error_fields(exc_result),
+            **extract_error_fields(exc_result),
         )
         return exc_result

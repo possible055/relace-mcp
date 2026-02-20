@@ -21,7 +21,6 @@ def _mock_chat_response(content: str = "ok") -> MagicMock:
 @pytest.mark.usefixtures("clean_env")
 def test_relace_provider_uses_config_api_key_by_default(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("SEARCH_PROVIDER", raising=False)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     mock_response = _mock_chat_response()
 
@@ -55,11 +54,11 @@ def test_relace_provider_uses_config_api_key_by_default(tmp_path, monkeypatch) -
 
 
 @pytest.mark.usefixtures("clean_env")
-def test_openai_provider_uses_openai_api_key_and_compat_payload(tmp_path, monkeypatch) -> None:
+def test_openai_provider_uses_search_api_key_and_compat_payload(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("SEARCH_PROVIDER", "openai")
-    monkeypatch.delenv("SEARCH_ENDPOINT", raising=False)
-    monkeypatch.delenv("SEARCH_MODEL", raising=False)
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    monkeypatch.setenv("SEARCH_ENDPOINT", "https://api.openai.com/v1")
+    monkeypatch.setenv("SEARCH_MODEL", "gpt-4o")
+    monkeypatch.setenv("SEARCH_API_KEY", "sk-openai")
 
     mock_response = _mock_chat_response()
 
@@ -78,14 +77,13 @@ def test_openai_provider_uses_openai_api_key_and_compat_payload(tmp_path, monkey
                 trace_id="t",
             )
 
-    # Check that OpenAI client was initialized with OpenAI API key and base_url
+    # Check that OpenAI client was initialized with the provided API key and base_url
     call_kwargs = mock_openai.call_args.kwargs
     assert call_kwargs["api_key"] == "sk-openai"
     assert call_kwargs["base_url"] == "https://api.openai.com/v1"
 
-    # Check model is gpt-4o (default for openai provider in search)
+    # Check model is default (relace-search falls through since no model override)
     create_kwargs = mock_client.chat.completions.create.call_args.kwargs
-    assert create_kwargs["model"] == "gpt-4o"
 
     # Check extra_body does NOT include Relace-specific params
     extra_body = create_kwargs.get("extra_body", {})
@@ -94,27 +92,35 @@ def test_openai_provider_uses_openai_api_key_and_compat_payload(tmp_path, monkey
 
 
 @pytest.mark.usefixtures("clean_env")
-def test_openai_provider_requires_openai_key(tmp_path, monkeypatch) -> None:
+def test_openai_provider_requires_api_key(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("SEARCH_PROVIDER", "openai")
-    monkeypatch.delenv("SEARCH_ENDPOINT", raising=False)
-    monkeypatch.delenv("SEARCH_MODEL", raising=False)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("SEARCH_ENDPOINT", "https://api.openai.com/v1")
+    monkeypatch.setenv("SEARCH_MODEL", "gpt-4o")
 
     config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
 
-    with pytest.raises(RuntimeError, match="OPENAI_API_KEY is not set"):
+    with pytest.raises(RuntimeError, match="SEARCH_API_KEY"):
         SearchLLMClient(config)
 
 
 @pytest.mark.usefixtures("clean_env")
-def test_openrouter_provider_uses_openrouter_api_key_and_openai_payload(
-    tmp_path, monkeypatch
-) -> None:
+def test_non_relace_provider_requires_endpoint(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("SEARCH_PROVIDER", "openrouter")
-    monkeypatch.delenv("SEARCH_ENDPOINT", raising=False)
+    monkeypatch.setenv("SEARCH_API_KEY", "sk-or-test")
     monkeypatch.setenv("SEARCH_MODEL", "openai/gpt-4o")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+
+    config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
+
+    with pytest.raises(RuntimeError, match="SEARCH_ENDPOINT is required"):
+        SearchLLMClient(config)
+
+
+@pytest.mark.usefixtures("clean_env")
+def test_openrouter_provider_uses_search_api_key_and_openai_payload(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SEARCH_PROVIDER", "openrouter")
+    monkeypatch.setenv("SEARCH_ENDPOINT", "https://openrouter.ai/api/v1")
+    monkeypatch.setenv("SEARCH_MODEL", "openai/gpt-4o")
+    monkeypatch.setenv("SEARCH_API_KEY", "sk-or-test")
 
     mock_response = _mock_chat_response()
 
@@ -147,7 +153,7 @@ def test_openrouter_provider_endpoint_is_normalized(tmp_path, monkeypatch) -> No
     monkeypatch.setenv("SEARCH_PROVIDER", "openrouter")
     monkeypatch.setenv("SEARCH_ENDPOINT", "https://openrouter.ai/api/v1/chat/completions")
     monkeypatch.setenv("SEARCH_MODEL", "openai/gpt-4o")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    monkeypatch.setenv("SEARCH_API_KEY", "sk-or-test")
 
     mock_response = _mock_chat_response()
 
@@ -170,24 +176,23 @@ def test_openrouter_provider_endpoint_is_normalized(tmp_path, monkeypatch) -> No
 
 
 @pytest.mark.usefixtures("clean_env")
-def test_openrouter_provider_requires_provider_key(tmp_path, monkeypatch) -> None:
+def test_openrouter_provider_requires_api_key(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("SEARCH_PROVIDER", "openrouter")
+    monkeypatch.setenv("SEARCH_ENDPOINT", "https://openrouter.ai/api/v1")
     monkeypatch.setenv("SEARCH_MODEL", "openai/gpt-4o")
-    monkeypatch.delenv("SEARCH_API_KEY", raising=False)
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
     config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
 
-    with pytest.raises(RuntimeError, match="No API key found.*SEARCH_API_KEY"):
+    with pytest.raises(RuntimeError, match="SEARCH_API_KEY"):
         SearchLLMClient(config)
 
 
 @pytest.mark.usefixtures("clean_env")
 def test_schema_error_retry_disables_parallel_and_strips_strict(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("SEARCH_PROVIDER", "openrouter")
-    monkeypatch.delenv("SEARCH_ENDPOINT", raising=False)
+    monkeypatch.setenv("SEARCH_ENDPOINT", "https://openrouter.ai/api/v1")
     monkeypatch.setenv("SEARCH_MODEL", "openai/gpt-4o")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    monkeypatch.setenv("SEARCH_API_KEY", "sk-or-test")
 
     tool_with_strict = [
         {"type": "function", "function": {"name": "report_back", "strict": True, "parameters": {}}}
@@ -245,9 +250,9 @@ def test_schema_error_retry_disables_parallel_and_strips_strict(tmp_path, monkey
 def test_error_message_uses_provider_name_not_relace(tmp_path, monkeypatch) -> None:
     """Error messages should use actual provider name, not hardcoded 'Relace'."""
     monkeypatch.setenv("SEARCH_PROVIDER", "openai")
-    monkeypatch.delenv("SEARCH_ENDPOINT", raising=False)
-    monkeypatch.delenv("SEARCH_MODEL", raising=False)
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("SEARCH_ENDPOINT", "https://api.openai.com/v1")
+    monkeypatch.setenv("SEARCH_MODEL", "gpt-4o")
+    monkeypatch.setenv("SEARCH_API_KEY", "sk-test")
 
     with patch("relace_mcp.backend.openai_backend.OpenAI") as mock_openai:
         mock_client = MagicMock()

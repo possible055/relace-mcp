@@ -1,4 +1,5 @@
-from relace_mcp.lsp.client import LSPClient, LSPClientManager
+from relace_mcp.lsp import LSPClientManager
+from relace_mcp.lsp.client import LSPClient
 from relace_mcp.lsp.languages import get_config_for_file
 from relace_mcp.lsp.languages.go import GO_CONFIG
 from relace_mcp.lsp.languages.python import PYTHON_CONFIG

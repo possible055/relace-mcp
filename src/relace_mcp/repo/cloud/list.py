@@ -3,7 +3,7 @@ import uuid
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
-from ..core import _extract_error_fields, build_cloud_error_details, log_cloud_event
+from ..core import build_cloud_error_details, extract_error_fields, log_cloud_event
 
 logger = logging.getLogger(__name__)
 
@@ -70,5 +70,5 @@ def cloud_list_logic(client: RelaceRepoClient) -> dict[str, Any]:
             "error": str(exc),
             **build_cloud_error_details(exc),
         }
-        log_cloud_event("cloud_list_error", trace_id, **_extract_error_fields(result))
+        log_cloud_event("cloud_list_error", trace_id, **extract_error_fields(result))
         return result

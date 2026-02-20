@@ -8,16 +8,12 @@ import pytest
 from relace_mcp.clients.repo import RelaceRepoClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.encoding import set_project_encoding
-from relace_mcp.repo.cloud.sync import (
-    CODE_EXTENSIONS,
-    SPECIAL_FILENAMES,
-    _compute_diff_operations,
-    _compute_file_hashes,
-    _get_git_tracked_files,
-    _read_file_content,
-    _scan_directory,
-    cloud_sync_logic,
-)
+from relace_mcp.repo.cloud._sync_constants import CODE_EXTENSIONS, SPECIAL_FILENAMES
+from relace_mcp.repo.cloud._sync_diff import _compute_diff_operations
+from relace_mcp.repo.cloud._sync_discovery import _get_git_tracked_files, _scan_directory
+from relace_mcp.repo.cloud._sync_files import _read_file_content
+from relace_mcp.repo.cloud._sync_hashing import _compute_file_hashes
+from relace_mcp.repo.cloud.sync import cloud_sync_logic
 from relace_mcp.repo.core.git import get_current_git_info
 from relace_mcp.repo.core.state import (
     SyncState,

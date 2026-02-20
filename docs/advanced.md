@@ -7,6 +7,7 @@ This document covers advanced configuration options for power users and develope
 - [Environment Variables Reference](#environment-variables-reference)
 - [Using a .env File](#using-a-env-file)
 - [Sync Modes](#sync-modes)
+- [Local Retrieval Backends](#local-retrieval-backends)
 - [Logging](#logging)
 - [Alternative Providers](#alternative-providers)
 - [Remote Deployment](#remote-deployment-streamable-http)
@@ -26,6 +27,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `MCP_DOTENV_PATH` | — | Path to a `.env` file to load at startup |
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
 | `MCP_LOGGING` | `off` | File logging: `off`, `safe` (with redaction), `full` (no redaction) |
+| `MCP_LOG_LEVEL` | `WARNING` | Stderr log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `RELACE_CLOUD_TOOLS` | `0` | Set to `1` to enable cloud tools (cloud_sync, cloud_search, etc.) |
 | `MCP_SEARCH_RETRIEVAL` | `0` | Set to `1` to enable `agentic_retrieval` tool |
 
@@ -83,13 +85,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 
 ### Third-Party API Keys
 
-When using alternative providers, set the corresponding API key:
-
-| Variable | Used When |
-|----------|-----------|
-| `OPENAI_API_KEY` | `*_PROVIDER=openai` and no `*_API_KEY` set |
-| `OPENROUTER_API_KEY` | `*_PROVIDER=openrouter` and no `*_API_KEY` set |
-| `CEREBRAS_API_KEY` | `*_PROVIDER=cerebras` and no `*_API_KEY` set |
+When using alternative providers, you **must** set `APPLY_API_KEY` or `SEARCH_API_KEY` explicitly. Provider-specific environment variables (e.g., `OPENAI_API_KEY`) are **not** automatically detected.
 
 ## Using a .env File
 
@@ -102,6 +98,7 @@ RELACE_API_KEY=rlc-your-api-key
 
 # Optional provider overrides
 SEARCH_PROVIDER=openai
+SEARCH_ENDPOINT=https://api.openai.com/v1
 SEARCH_MODEL=gpt-4o
 SEARCH_API_KEY=sk-xxx
 
@@ -140,6 +137,51 @@ The `cloud_sync` tool supports three sync modes:
 | Mirror Full | `force=True, mirror=True` | Completely overwrites cloud to match local |
 
 When git HEAD changes since last sync (e.g., branch switch, rebase), Safe Full mode automatically cleans up zombie files from the old ref.
+
+---
+
+## Local Retrieval Backends
+
+`agentic_retrieval` uses semantic search to pre-rank files before the agentic pass. By default it uses the Relace cloud index (`relace` backend, requires `RELACE_CLOUD_TOOLS=1` and a synced repo). To run without cloud dependency, use a local backend.
+
+### Codanna
+
+```bash
+pip install codanna
+```
+
+Set in MCP config or `.env`:
+
+```bash
+MCP_SEARCH_RETRIEVAL=1
+MCP_RETRIEVAL_BACKEND=codanna
+```
+
+On first use the server automatically runs `codanna init` (creates the `.codanna` directory) followed by `codanna index`. After each `fast_apply` edit it incrementally reindexes the changed file in the background. Refer to the [Codanna project](https://pypi.org/project/codanna/) for configuration and model setup.
+
+### ChunkHound
+
+```bash
+pip install chunkhound
+```
+
+Set in MCP config or `.env`:
+
+```bash
+MCP_SEARCH_RETRIEVAL=1
+MCP_RETRIEVAL_BACKEND=chunkhound
+```
+
+On first use the server automatically runs `chunkhound index`. After each `fast_apply` edit it triggers a background scan; only files that changed are re-processed (xxHash3-64 checksums). Refer to the [ChunkHound project](https://pypi.org/project/chunkhound/) for configuration and embedding model setup.
+
+### Auto Mode
+
+```bash
+MCP_SEARCH_RETRIEVAL=1
+MCP_RETRIEVAL_BACKEND=auto
+```
+
+The server picks the first available backend per session: `codanna` → `chunkhound` → `relace` (cloud fallback).
 
 ---
 
@@ -224,9 +266,8 @@ export SEARCH_MODEL=gpt-4o
 
 ### API Key Resolution
 
-1. `APPLY_API_KEY` / `SEARCH_API_KEY` (explicit)
-2. Provider-specific key (e.g., `OPENROUTER_API_KEY`)
-3. `RELACE_API_KEY` (only for `relace` provider)
+1. `APPLY_API_KEY` / `SEARCH_API_KEY` (explicit; required for non-Relace providers)
+2. `RELACE_API_KEY` (only for `relace` provider)
 
 ### LSP Tool
 

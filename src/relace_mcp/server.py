@@ -132,7 +132,7 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
 
     # Retrieval backend health check
     if AGENTIC_RETRIEVAL_ENABLED and RETRIEVAL_BACKEND in ("chunkhound", "codanna"):
-        from .repo.local.backend import ExternalCLIError, check_backend_health
+        from .repo.backends import ExternalCLIError, check_backend_health
 
         try:
             status = check_backend_health(RETRIEVAL_BACKEND, config.base_dir)

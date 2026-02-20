@@ -4,8 +4,8 @@ from typing import Any
 
 from ...clients.repo import RelaceRepoClient
 from ..core import (
-    _extract_error_fields,
     build_cloud_error_details,
+    extract_error_fields,
     get_current_git_info,
     get_repo_identity,
     is_git_dirty,
@@ -58,7 +58,7 @@ def cloud_info_logic(
                 trace_id,
                 repo_name=local_repo_name or None,
                 cloud_repo_name=None,
-                **_extract_error_fields(result),
+                **extract_error_fields(result),
             )
             return result
 
@@ -233,6 +233,6 @@ def cloud_info_logic(
             trace_id,
             repo_name=local_repo_name or None,
             cloud_repo_name=cloud_repo_name or None,
-            **_extract_error_fields(result),
+            **extract_error_fields(result),
         )
         return result

@@ -21,7 +21,9 @@ class TestApplyClientSystemPrompt:
             "os.environ",
             {
                 "APPLY_PROVIDER": "openai",
-                "OPENAI_API_KEY": "sk-test",
+                "APPLY_API_KEY": "sk-test",
+                "APPLY_ENDPOINT": "https://api.openai.com/v1",
+                "APPLY_MODEL": "gpt-4o",
             },
         ):
             client = ApplyLLMClient(mock_config)

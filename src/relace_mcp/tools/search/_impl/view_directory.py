@@ -87,14 +87,14 @@ def _collect_directory_items(
             if len(items) >= MAX_DIR_ITEMS:
                 break
             rel_path = current_rel / name
-            items.append(_strip_dot_prefix(str(rel_path)))
+            items.append(_strip_dot_prefix(rel_path.as_posix()))
 
         # List subdirectories and add to queue
         for name, entry in dirs_list:
             if len(items) >= MAX_DIR_ITEMS:
                 break
             rel_path = current_rel / name
-            items.append(_strip_dot_prefix(str(rel_path)) + "/")
+            items.append(_strip_dot_prefix(rel_path.as_posix()) + "/")
             queue.append((entry, rel_path))
 
     truncated = len(items) >= MAX_DIR_ITEMS

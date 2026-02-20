@@ -1,4 +1,4 @@
-from relace_mcp.lsp.client import LSPClient, LSPClientManager
+from relace_mcp.lsp.client import LSPClient
 from relace_mcp.lsp.languages import (
     LANGUAGE_CONFIGS,
     PYTHON_CONFIG,
@@ -7,6 +7,7 @@ from relace_mcp.lsp.languages import (
     get_config_for_file,
     get_lsp_languages,
 )
+from relace_mcp.lsp.manager import LSPClientManager
 from relace_mcp.lsp.types import (
     CallHierarchyItem,
     CallInfo,

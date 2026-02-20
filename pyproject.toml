@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "relace-mcp"
-version = "0.2.5a1"
+version = "0.2.5a2"
 description = "Unofficial Relace MCP Server - Fast code merging via Relace API"
 readme = "README.md"
 license = { text = "MIT" }
@@ -70,17 +70,18 @@ benchmark = [
 
 [project.scripts]
 relace-mcp = "relace_mcp.server:main"
-relogs = "relace_mcp.dashboard:main"
+relogs = "relace_dashboard:main"
 
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.package-data]
-relace_mcp = ["**/*.yaml", "**/*.tcss"]
+relace_mcp = ["**/*.yaml"]
+relace_dashboard = ["*.tcss"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["relace_mcp*"]
+include = ["relace_mcp*", "relace_dashboard*"]
 exclude = ["tests*"]
 
 [tool.bandit]
@@ -99,10 +100,13 @@ follow_untyped_imports = true
 [[tool.mypy.overrides]]
 module = ["textual.*"]
 ignore_missing_imports = true
+follow_untyped_imports = true
 
 [[tool.mypy.overrides]]
-module = ["relace_mcp.dashboard.*"]
-ignore_errors = true
+module = ["relace_dashboard.*"]
+disable_error_code = ["misc"]
+
+
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -122,7 +126,7 @@ verbose = 1
 
 [tool.basedpyright]
 pythonVersion = "3.11"
-exclude = ["src/relace_mcp/dashboard"]
+
 typeCheckingMode = "standard"
 
 # reportUnused* — data-flow analysis not covered by mypy
