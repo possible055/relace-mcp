@@ -1,8 +1,9 @@
+# pyright: reportUnusedFunction=false
 import logging
 from pathlib import Path
 
-from ....encoding import decode_text_best_effort, get_project_encoding
-from .constants import SYNC_MAX_FILE_SIZE_BYTES
+from ...encoding import decode_text_best_effort, get_project_encoding
+from ._sync_constants import SYNC_MAX_FILE_SIZE_BYTES
 
 logger = logging.getLogger(__name__)
 

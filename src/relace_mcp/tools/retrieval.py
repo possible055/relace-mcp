@@ -6,16 +6,16 @@ from typing import Any
 from ..clients import RelaceRepoClient, SearchLLMClient
 from ..config import RETRIEVAL_USER_PROMPT_TEMPLATE, RelaceConfig
 from ..config.settings import AGENTIC_AUTO_SYNC, RETRIEVAL_BACKEND
-from ..repo.cloud import cloud_info_logic, cloud_search_logic, cloud_sync_logic
-from ..repo.local import (
+from ..repo.backends import (
     ExternalCLIError,
     chunkhound_search,
     codanna_search,
     disable_backend,
     is_backend_disabled,
     schedule_bg_chunkhound_index,
-    schedule_bg_codanna_index,
+    schedule_bg_codanna_full_index,
 )
+from ..repo.cloud import cloud_info_logic, cloud_search_logic, cloud_sync_logic
 from .search import FastAgenticSearchHarness
 
 logger = logging.getLogger(__name__)
@@ -120,7 +120,7 @@ async def agentic_retrieval_logic(
 
     # Stage 0c: Schedule background Codanna reindex (fire-and-forget).
     if backend == "codanna" and not is_backend_disabled("codanna"):
-        schedule_bg_codanna_index(base_dir, base_dir)
+        schedule_bg_codanna_full_index(base_dir)
         logger.debug("[%s] Codanna background index scheduled", trace_id)
 
     # Stage 1: Semantic retrieval (Relace, Codanna, or ChunkHound)
@@ -160,7 +160,7 @@ async def agentic_retrieval_logic(
                     if backend == "chunkhound":
                         schedule_bg_chunkhound_index(base_dir)
                     else:
-                        schedule_bg_codanna_index(base_dir, base_dir)
+                        schedule_bg_codanna_full_index(base_dir)
                 warnings_list.append(f"{exc.backend} retrieval unavailable ({exc.kind}): {exc}")
                 logger.warning(
                     "[%s] %s backend error (%s): %s", trace_id, exc.backend, exc.kind, exc

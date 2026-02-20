@@ -1,3 +1,4 @@
+# pyright: reportUnusedFunction=false
 import json
 import os
 import subprocess  # nosec B404

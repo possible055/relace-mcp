@@ -1,3 +1,4 @@
+# pyright: reportUnusedFunction=false
 import os
 
 _CHUNKHOUND_HEAD_FILE = ".chunkhound/last_indexed_head"

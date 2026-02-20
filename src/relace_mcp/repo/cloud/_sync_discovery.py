@@ -1,9 +1,10 @@
+# pyright: reportUnusedFunction=false
 import logging
 import os
 import subprocess  # nosec B404 - used safely with hardcoded commands only
 from pathlib import Path
 
-from .constants import (
+from ._sync_constants import (
     CODE_EXTENSIONS,
     EXCLUDED_DIRS,
     SPECIAL_FILENAMES,

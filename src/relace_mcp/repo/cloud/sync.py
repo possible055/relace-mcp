@@ -3,9 +3,9 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from ....clients.repo import RelaceRepoClient
-from ....config.settings import REPO_SYNC_MAX_FILES
-from ...core import (
+from ...clients.repo import RelaceRepoClient
+from ...config.settings import REPO_SYNC_MAX_FILES
+from ..core import (
     SyncState,
     build_cloud_error_details,
     extract_error_fields,
@@ -16,10 +16,10 @@ from ...core import (
     log_cloud_event,
     save_sync_state,
 )
-from .constants import CODE_EXTENSIONS, SPECIAL_FILENAMES
-from .diff import _compute_diff_operations
-from .discovery import _get_git_tracked_files, _scan_directory
-from .hashing import _compute_file_hashes
+from ._sync_constants import CODE_EXTENSIONS, SPECIAL_FILENAMES
+from ._sync_diff import _compute_diff_operations
+from ._sync_discovery import _get_git_tracked_files, _scan_directory
+from ._sync_hashing import _compute_file_hashes
 
 logger = logging.getLogger(__name__)
 

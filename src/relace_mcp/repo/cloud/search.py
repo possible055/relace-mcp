@@ -18,6 +18,17 @@ from ..core import (
 logger = logging.getLogger(__name__)
 
 
+def _is_commit_not_indexed_404(exc: Exception, hash_to_send: str) -> bool:
+    if not hash_to_send:
+        return False
+    cause = exc.__cause__ or exc
+    if not isinstance(cause, RelaceAPIError) or cause.status_code != 404:
+        return False
+    code_lower = (cause.code or "").lower()
+    msg_lower = (cause.message or "").lower()
+    return "commit" in code_lower or "not_indexed" in code_lower or "commit" in msg_lower
+
+
 def cloud_search_logic(
     client: RelaceRepoClient,
     base_dir: str,
@@ -50,6 +61,7 @@ def cloud_search_logic(
     local_repo_name: str | None = None
     cloud_repo_name: str | None = None
     hash_used = ""
+    hash_to_send = ""
 
     try:
         local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(base_dir)
@@ -152,12 +164,6 @@ def cloud_search_logic(
                 f"'{cached_state.git_branch}'). Results reflect the latest indexed state of '{branch}'."
             )
 
-        def _is_commit_not_indexed_404(exc: Exception) -> bool:
-            if not hash_to_send:
-                return False
-            cause = exc.__cause__ or exc
-            return isinstance(cause, RelaceAPIError) and cause.status_code == 404
-
         # Execute semantic retrieval with commit hash.
         # Official behavior: `retrieve(hash=...)` may return 404 until the commit is indexed.
         # We retry a few times with exponential backoff to smooth out indexing lag.
@@ -181,7 +187,7 @@ def cloud_search_logic(
                     )
                 break
             except Exception as exc:
-                if not _is_commit_not_indexed_404(exc):
+                if not _is_commit_not_indexed_404(exc, hash_to_send):
                     raise
                 if attempt >= len(retry_delays):
                     raise
@@ -222,10 +228,7 @@ def cloud_search_logic(
 
     except Exception as exc:
         logger.error("[%s] Cloud search failed: %s", trace_id, exc)
-        cause = exc.__cause__ or exc
-        commit_not_indexed = (
-            bool(hash_used) and isinstance(cause, RelaceAPIError) and cause.status_code == 404
-        )
+        commit_not_indexed = bool(hash_used) and _is_commit_not_indexed_404(exc, hash_to_send)
         exc_result: dict[str, Any] = {
             "trace_id": trace_id,
             "query": query,

@@ -107,7 +107,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             if result and result.get("status") == "ok":
                 import shutil as _shutil
 
-                from ..repo.local import (
+                from ..repo.backends import (
                     is_backend_disabled,
                     schedule_bg_chunkhound_index,
                     schedule_bg_codanna_index,

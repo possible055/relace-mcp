@@ -1,6 +1,6 @@
 import os
 
-from ....config.fs_policy import CLOUD_SYNC_EXCLUDED_DIRS
+from ...config.fs_policy import CLOUD_SYNC_EXCLUDED_DIRS
 
 CODE_EXTENSIONS = {
     ".py",

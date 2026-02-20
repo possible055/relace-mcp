@@ -1,9 +1,10 @@
+# pyright: reportUnusedFunction=false
 import logging
 from pathlib import Path
 from typing import Any
 
-from ...core import SyncState
-from .files import _decode_file_content, _read_file_content
+from ..core import SyncState
+from ._sync_files import _decode_file_content, _read_file_content
 
 logger = logging.getLogger(__name__)
 

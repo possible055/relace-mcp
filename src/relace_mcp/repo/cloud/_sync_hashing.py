@@ -1,9 +1,10 @@
+# pyright: reportUnusedFunction=false
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from ...core import compute_file_hash
-from .constants import MAX_UPLOAD_WORKERS
+from ..core import compute_file_hash
+from ._sync_constants import MAX_UPLOAD_WORKERS
 
 logger = logging.getLogger(__name__)
 

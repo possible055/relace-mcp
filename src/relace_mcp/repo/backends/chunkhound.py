@@ -1,3 +1,4 @@
+# pyright: reportUnusedFunction=false
 import asyncio
 import logging
 import os
@@ -5,9 +6,9 @@ import re
 import subprocess  # nosec B404
 from typing import Any
 
+from ..core.git import get_git_head
 from .cli import _run_cli_text
 from .errors import ExternalCLIError
-from .git import _get_git_head
 from .index_state import _CHUNKHOUND_HEAD_FILE, _read_indexed_head, _write_indexed_head
 from .registry import _bg_index_rerun, _bg_index_tasks, disable_backend
 
@@ -56,7 +57,7 @@ def _chunkhound_health_probe(base_dir: str) -> None:
                     message=f"ChunkHound index not found. Auto-index failed: {reindex_exc}",
                     command=["chunkhound", "search"],
                 ) from reindex_exc
-            head = _get_git_head(base_dir)
+            head = get_git_head(base_dir)
             if head:
                 _write_indexed_head(base_dir, head, _CHUNKHOUND_HEAD_FILE)
             return
@@ -74,7 +75,7 @@ def chunkhound_auto_reindex(base_dir: str) -> dict[str, Any]:
     Compares current git HEAD with the last indexed HEAD.
     Returns status dict with "action" key: "skipped", "reindexed", or "error".
     """
-    head = _get_git_head(base_dir)
+    head = get_git_head(base_dir)
     if not head:
         return {"action": "skipped", "reason": "not a git repo"}
 
