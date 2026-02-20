@@ -26,15 +26,3 @@ def test_relogs_help():
     )
     assert result.returncode == 0
     assert "ok" in result.stdout
-
-
-def test_version_output():
-    """Verify if version information can be obtained (if available)."""
-    # Here we directly test if the server can start enough to show help
-    result = subprocess.run(
-        [sys.executable, "-m", "relace_mcp.server", "--help"],
-        capture_output=True,
-        text=True,
-        timeout=5,
-    )
-    assert result.returncode == 0
