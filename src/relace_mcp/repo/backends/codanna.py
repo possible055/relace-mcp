@@ -3,17 +3,27 @@ import asyncio
 import logging
 import os
 import subprocess  # nosec B404
+import time
 from typing import Any
 
-from ..core.git import get_git_head
+from ..core.git import get_git_head, is_git_dirty
 from .cli import _run_cli_json
 from .errors import ExternalCLIError
-from .index_state import _CODANNA_HEAD_FILE, _read_indexed_head, _write_indexed_head
+from .index_state import (
+    _CODANNA_DIRTY_TS_FILE,
+    _CODANNA_HEAD_FILE,
+    DIRTY_TTL_SECONDS,
+    _read_dirty_ts,
+    _read_indexed_head,
+    _write_dirty_ts,
+    _write_indexed_head,
+)
 from .registry import (
     _bg_codanna_pending,
     _bg_index_rerun,
     _bg_index_tasks,
     disable_backend,
+    is_bg_index_running,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,6 +76,8 @@ def codanna_auto_reindex(base_dir: str) -> dict[str, Any]:
     """Check if codanna index is stale and reindex if needed.
 
     Compares current git HEAD with the last indexed HEAD.
+    When HEAD matches but the worktree is dirty, reindexes at most
+    once per DIRTY_TTL_SECONDS to cover external (non-fast_apply) edits.
     Returns status dict with "action" key: "skipped", "reindexed", or "error".
     """
     head = get_git_head(base_dir)
@@ -73,11 +85,24 @@ def codanna_auto_reindex(base_dir: str) -> dict[str, Any]:
         return {"action": "skipped", "reason": "not a git repo"}
 
     last_head = _read_indexed_head(base_dir, _CODANNA_HEAD_FILE)
-    if last_head == head:
-        return {"action": "skipped", "reason": "index up to date"}
 
+    dirty_trigger = False
+    if last_head == head:
+        if not is_git_dirty(base_dir):
+            return {"action": "skipped", "reason": "index up to date"}
+        if is_bg_index_running(base_dir, "codanna"):
+            return {"action": "skipped", "reason": "bg_index_running"}
+        last_ts = _read_dirty_ts(base_dir, _CODANNA_DIRTY_TS_FILE)
+        if last_ts is not None and (time.time() - last_ts) < DIRTY_TTL_SECONDS:
+            return {"action": "skipped", "reason": "dirty_ttl"}
+        dirty_trigger = True
+
+    reason = "dirty_worktree" if dirty_trigger else "head_changed"
     logger.info(
-        "Codanna index stale (HEAD %s -> %s), reindexing...", (last_head or "none")[:8], head[:8]
+        "Codanna index stale (%s, HEAD %s -> %s), reindexing...",
+        reason,
+        (last_head or "none")[:8],
+        head[:8],
     )
 
     env = os.environ.copy()
@@ -87,6 +112,8 @@ def codanna_auto_reindex(base_dir: str) -> dict[str, Any]:
     try:
         _ensure_codanna_index(base_dir, env)
         _write_indexed_head(base_dir, head, _CODANNA_HEAD_FILE)
+        if dirty_trigger:
+            _write_dirty_ts(base_dir, _CODANNA_DIRTY_TS_FILE)
         logger.info("Codanna auto-reindex completed")
         return {"action": "reindexed", "old_head": last_head, "new_head": head}
     except (RuntimeError, OSError) as exc:

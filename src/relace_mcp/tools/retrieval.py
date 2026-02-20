@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import shutil
 import uuid
@@ -23,6 +24,16 @@ from .search import FastAgenticSearchHarness
 logger = logging.getLogger(__name__)
 
 _auto_backend_cache: dict[str, str] = {}
+_reindex_locks: dict[tuple[str, str], asyncio.Lock] = {}
+
+
+def _get_reindex_lock(base_dir: str, backend: str) -> asyncio.Lock:
+    key = (base_dir, backend)
+    lock = _reindex_locks.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _reindex_locks[key] = lock
+    return lock
 
 
 def _resolve_auto_backend(base_dir: str) -> str:
@@ -113,15 +124,18 @@ async def agentic_retrieval_logic(
             warnings_list.append(f"Auto-sync error: {exc}")
             logger.warning("[%s] Auto-sync exception occurred, see warnings", trace_id)
 
-    # Stage 0b: Synchronous ChunkHound auto-reindex (HEAD-based staleness check).
-    # Compares last_indexed_head with current git HEAD; reindexes only when stale.
+    # Stage 0b: ChunkHound auto-reindex (HEAD + dirty-worktree staleness check).
+    # Runs in a thread to avoid blocking the async event loop.
     if backend == "chunkhound" and not is_backend_disabled("chunkhound"):
         try:
-            reindex_result = chunkhound_auto_reindex(base_dir)
+            async with _get_reindex_lock(base_dir, "chunkhound"):
+                reindex_result = await asyncio.to_thread(chunkhound_auto_reindex, base_dir)
             action = reindex_result.get("action", "unknown")
             if action == "reindexed":
                 logger.info(
-                    "[%s] ChunkHound auto-reindex completed (branch switch detected)", trace_id
+                    "[%s] ChunkHound auto-reindex completed (%s)",
+                    trace_id,
+                    reindex_result.get("old_head", "?")[:8],
                 )
             elif action == "error":
                 warnings_list.append(
@@ -138,15 +152,18 @@ async def agentic_retrieval_logic(
             warnings_list.append(f"ChunkHound auto-reindex failed: {exc}")
             logger.warning("[%s] ChunkHound auto-reindex failed: %s", trace_id, exc)
 
-    # Stage 0c: Synchronous Codanna auto-reindex (HEAD-based staleness check).
-    # Compares last_indexed_head with current git HEAD; reindexes only when stale.
+    # Stage 0c: Codanna auto-reindex (HEAD + dirty-worktree staleness check).
+    # Runs in a thread to avoid blocking the async event loop.
     if backend == "codanna" and not is_backend_disabled("codanna"):
         try:
-            reindex_result = codanna_auto_reindex(base_dir)
+            async with _get_reindex_lock(base_dir, "codanna"):
+                reindex_result = await asyncio.to_thread(codanna_auto_reindex, base_dir)
             action = reindex_result.get("action", "unknown")
             if action == "reindexed":
                 logger.info(
-                    "[%s] Codanna auto-reindex completed (branch switch detected)", trace_id
+                    "[%s] Codanna auto-reindex completed (%s)",
+                    trace_id,
+                    reindex_result.get("old_head", "?")[:8],
                 )
             elif action == "error":
                 warnings_list.append(
