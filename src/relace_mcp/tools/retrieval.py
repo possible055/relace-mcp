@@ -8,7 +8,9 @@ from ..config import RETRIEVAL_USER_PROMPT_TEMPLATE, RelaceConfig
 from ..config.settings import AGENTIC_AUTO_SYNC, RETRIEVAL_BACKEND
 from ..repo.backends import (
     ExternalCLIError,
+    chunkhound_auto_reindex,
     chunkhound_search,
+    codanna_auto_reindex,
     codanna_search,
     disable_backend,
     is_backend_disabled,
@@ -111,17 +113,55 @@ async def agentic_retrieval_logic(
             warnings_list.append(f"Auto-sync error: {exc}")
             logger.warning("[%s] Auto-sync exception occurred, see warnings", trace_id)
 
-    # Stage 0b: Schedule background ChunkHound incremental scan (fire-and-forget).
-    # ChunkHound uses xxHash3-64 checksums; only modified files are re-processed.
-    # Non-blocking: search proceeds immediately with the current index state.
+    # Stage 0b: Synchronous ChunkHound auto-reindex (HEAD-based staleness check).
+    # Compares last_indexed_head with current git HEAD; reindexes only when stale.
     if backend == "chunkhound" and not is_backend_disabled("chunkhound"):
-        schedule_bg_chunkhound_index(base_dir)
-        logger.debug("[%s] ChunkHound background index scheduled", trace_id)
+        try:
+            reindex_result = chunkhound_auto_reindex(base_dir)
+            action = reindex_result.get("action", "unknown")
+            if action == "reindexed":
+                logger.info(
+                    "[%s] ChunkHound auto-reindex completed (branch switch detected)", trace_id
+                )
+            elif action == "error":
+                warnings_list.append(
+                    f"ChunkHound auto-reindex failed: {reindex_result.get('message', 'unknown')}"
+                )
+                logger.warning(
+                    "[%s] ChunkHound auto-reindex returned error: %s",
+                    trace_id,
+                    reindex_result.get("message"),
+                )
+            else:
+                logger.debug("[%s] ChunkHound auto-reindex: %s", trace_id, action)
+        except Exception as exc:
+            warnings_list.append(f"ChunkHound auto-reindex failed: {exc}")
+            logger.warning("[%s] ChunkHound auto-reindex failed: %s", trace_id, exc)
 
-    # Stage 0c: Schedule background Codanna reindex (fire-and-forget).
+    # Stage 0c: Synchronous Codanna auto-reindex (HEAD-based staleness check).
+    # Compares last_indexed_head with current git HEAD; reindexes only when stale.
     if backend == "codanna" and not is_backend_disabled("codanna"):
-        schedule_bg_codanna_full_index(base_dir)
-        logger.debug("[%s] Codanna background index scheduled", trace_id)
+        try:
+            reindex_result = codanna_auto_reindex(base_dir)
+            action = reindex_result.get("action", "unknown")
+            if action == "reindexed":
+                logger.info(
+                    "[%s] Codanna auto-reindex completed (branch switch detected)", trace_id
+                )
+            elif action == "error":
+                warnings_list.append(
+                    f"Codanna auto-reindex failed: {reindex_result.get('message', 'unknown')}"
+                )
+                logger.warning(
+                    "[%s] Codanna auto-reindex returned error: %s",
+                    trace_id,
+                    reindex_result.get("message"),
+                )
+            else:
+                logger.debug("[%s] Codanna auto-reindex: %s", trace_id, action)
+        except Exception as exc:
+            warnings_list.append(f"Codanna auto-reindex failed: {exc}")
+            logger.warning("[%s] Codanna auto-reindex failed: %s", trace_id, exc)
 
     # Stage 1: Semantic retrieval (Relace, Codanna, or ChunkHound)
     if backend == "none":
