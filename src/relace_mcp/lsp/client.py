@@ -24,7 +24,6 @@ from relace_mcp.lsp.response_parsers import (
 )
 from relace_mcp.lsp.transport import JsonRpcTransport
 from relace_mcp.lsp.types import (
-    CallHierarchyItem,
     CallInfo,
     DocumentSymbol,
     HoverInfo,
@@ -35,7 +34,6 @@ from relace_mcp.lsp.types import (
 from relace_mcp.lsp.workspace_settings import build_workspace_settings
 from relace_mcp.lsp.workspace_sync import (
     WorkspaceSyncState,
-    extract_analysis_patterns,
     sync_workspace_changes,
 )
 
@@ -114,9 +112,6 @@ class LSPClient:
             self._workspace,
         )
 
-    def _get_analysis_patterns(self) -> tuple[list[str], list[str], list[str]]:
-        return extract_analysis_patterns(self._workspace_settings)
-
     def _restart_language_server(self, _reason: str) -> None:
         logger.debug("Restarting language server")
         self._fs_snapshot.clear()
@@ -166,19 +161,6 @@ class LSPClient:
         except Exception as e:
             logger.debug("Workspace file sync failed: %s", e)
 
-    def _resolve_command(self, command: list[str]) -> list[str]:
-        """Resolve the language server executable path.
-
-        If the environment running relace-mcp hasn't activated its virtualenv,
-        the venv's scripts directory may not be on PATH. In that case, look for
-        the executable next to the current Python interpreter.
-        """
-        return resolve_server_command(command, self._config.install_hint)
-
-    def _kill_process_tree(self, pid: int) -> None:
-        """Kill process and all children."""
-        kill_process_tree(pid)
-
     def _cleanup(self) -> None:
         """Cleanup resources (best-effort)."""
         try:
@@ -197,7 +179,7 @@ class LSPClient:
 
         if process:
             try:
-                self._kill_process_tree(process.pid)
+                kill_process_tree(process.pid)
             except Exception:  # nosec B110 - best-effort cleanup
                 pass
 
@@ -212,19 +194,12 @@ class LSPClient:
         self._stderr_thread = None
         self._transport.clear_buffer()
 
-    def _fail_all_pending(self, error: Exception) -> None:
-        self._transport.fail_all_pending(error)
-
     def _read_stdout(self) -> None:
         self._transport.read_stdout_loop(self._process)
 
     def _drain_stderr(self) -> None:
         """Drain stderr to prevent the server from blocking on a full buffer."""
         self._transport.drain_stderr_loop(self._process)
-
-    def _handle_message(self, msg: dict[str, Any]) -> None:
-        """Handle an incoming message from the language server."""
-        self._transport.handle_message(msg)
 
     def _send_response(self, req_id: Any, result: Any) -> None:
         self._send_message({"jsonrpc": "2.0", "id": req_id, "result": result})
@@ -318,7 +293,7 @@ class LSPClient:
                 if self._initialized:
                     return
 
-                command = self._resolve_command(self._config.command)
+                command = resolve_server_command(self._config.command, self._config.install_hint)
                 self._stop_event.clear()
                 try:
                     self._process = start_server_process(command, self._workspace)
@@ -451,7 +426,7 @@ class LSPClient:
                         "position": {"line": line, "character": column},
                     },
                 )
-                return self._parse_locations(result)
+                return parse_locations(result)
             finally:
                 self._close_file(uri)
 
@@ -475,13 +450,9 @@ class LSPClient:
                         "context": {"includeDeclaration": include_declaration},
                     },
                 )
-                return self._parse_locations(result)
+                return parse_locations(result)
             finally:
                 self._close_file(uri)
-
-    def _parse_locations(self, result: Any) -> list[Location]:
-        """Parse LSP locations from response."""
-        return parse_locations(result)
 
     def workspace_symbols(self, query: str) -> list[SymbolInfo]:
         """Search for symbols by name across the workspace."""
@@ -493,11 +464,7 @@ class LSPClient:
 
             self._sync_workspace_changes_best_effort()
             result = self._send_request("workspace/symbol", {"query": query})
-            return self._parse_symbol_info(result)
-
-    def _parse_symbol_info(self, result: Any) -> list[SymbolInfo]:
-        """Parse LSP SymbolInformation from response."""
-        return parse_symbol_info(result)
+            return parse_symbol_info(result)
 
     def document_symbols(self, file_path: str) -> list[DocumentSymbol]:
         """Get all symbols defined in a file."""
@@ -514,13 +481,9 @@ class LSPClient:
                     "textDocument/documentSymbol",
                     {"textDocument": {"uri": uri}},
                 )
-                return self._parse_document_symbols(result)
+                return parse_document_symbols(result)
             finally:
                 self._close_file(uri)
-
-    def _parse_document_symbols(self, result: Any) -> list[DocumentSymbol]:
-        """Parse LSP DocumentSymbol from response."""
-        return parse_document_symbols(result)
 
     def hover(self, file_path: str, line: int, column: int) -> HoverInfo | None:
         """Get type information at position."""
@@ -540,13 +503,9 @@ class LSPClient:
                         "position": {"line": line, "character": column},
                     },
                 )
-                return self._parse_hover(result)
+                return parse_hover(result)
             finally:
                 self._close_file(uri)
-
-    def _parse_hover(self, result: Any) -> HoverInfo | None:
-        """Parse LSP Hover response."""
-        return parse_hover(result)
 
     def call_hierarchy(
         self, file_path: str, line: int, column: int, direction: str = "incoming"
@@ -585,7 +544,7 @@ class LSPClient:
 
                 # Parse the CallHierarchyItem
                 raw_item = prepare_result[0]
-                item = self._parse_call_hierarchy_item(raw_item)
+                item = parse_call_hierarchy_item(raw_item)
                 if not item:
                     return []
 
@@ -597,17 +556,9 @@ class LSPClient:
                 )
                 calls_result = self._send_request(method, {"item": raw_item})
 
-                return self._parse_call_info_list(calls_result, direction)
+                return parse_call_info_list(calls_result, direction)
             finally:
                 self._close_file(uri)
-
-    def _parse_call_hierarchy_item(self, raw: dict[str, Any]) -> CallHierarchyItem | None:
-        """Parse a CallHierarchyItem from LSP response."""
-        return parse_call_hierarchy_item(raw)
-
-    def _parse_call_info_list(self, raw: Any, direction: str) -> list[CallInfo]:
-        """Parse incoming/outgoing calls response."""
-        return parse_call_info_list(raw, direction)
 
     def shutdown(self) -> None:
         """Shutdown the language server gracefully."""
