@@ -1,6 +1,6 @@
 # pyright: reportUnusedFunction=false
 import logging
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from ...encoding import decode_text_best_effort, get_project_encoding
 from ._sync_constants import SYNC_MAX_FILE_SIZE_BYTES
@@ -16,8 +16,15 @@ def _read_file_content(base_dir: str, rel_path: str) -> bytes | None:
     """
     try:
         base_path = Path(base_dir).resolve()
+        if PurePosixPath(rel_path).is_absolute():
+            logger.warning("Blocked absolute path read: %s", rel_path)
+            return None
+        candidate = base_path / rel_path
+        if candidate.is_symlink():
+            logger.warning("Blocked symlink read: %s", rel_path)
+            return None
         try:
-            file_path = (base_path / rel_path).resolve()
+            file_path = candidate.resolve()
         except (OSError, RuntimeError) as exc:
             logger.debug("Failed to resolve %s: %s", rel_path, exc)
             return None

@@ -79,7 +79,14 @@ def create_provider_config(
     base_url = _normalize_base_url(base_url)
 
     # Resolve model
-    model = raw_model.strip() or default_model
+    model = raw_model.strip()
+    if not model:
+        if provider != RELACE_PROVIDER:
+            raise RuntimeError(
+                f"{label}_MODEL is required when using {label}_PROVIDER={provider}. "
+                f"Set {label}_MODEL to a model supported by your provider."
+            )
+        model = default_model
 
     # Validate provider/model combination
     if provider != RELACE_PROVIDER and (model == "auto" or model.startswith("relace-")):

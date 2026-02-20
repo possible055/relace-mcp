@@ -1,7 +1,7 @@
 # pyright: reportUnusedFunction=false
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from ..core import compute_file_hash
 from ._sync_constants import MAX_UPLOAD_WORKERS
@@ -27,7 +27,14 @@ def _compute_file_hashes(
 
     def hash_file(rel_path: str) -> tuple[str, str | None]:
         try:
-            file_path = (base_path / rel_path).resolve()
+            if PurePosixPath(rel_path).is_absolute():
+                logger.warning("Blocked absolute path in hash: %s", rel_path)
+                return (rel_path, None)
+            candidate = base_path / rel_path
+            if candidate.is_symlink():
+                logger.warning("Blocked symlink in hash: %s", rel_path)
+                return (rel_path, None)
+            file_path = candidate.resolve()
         except (OSError, RuntimeError) as exc:
             logger.debug("Failed to resolve for hash %s: %s", rel_path, exc)
             return (rel_path, None)

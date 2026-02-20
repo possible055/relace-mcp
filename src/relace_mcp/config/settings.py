@@ -53,7 +53,7 @@ RELACE_REPO_ID = os.getenv("RELACE_REPO_ID", None)
 # Repo sync settings
 REPO_SYNC_TIMEOUT_SECONDS = float(os.getenv("RELACE_REPO_SYNC_TIMEOUT", "300.0"))
 REPO_SYNC_MAX_FILES = int(os.getenv("RELACE_REPO_SYNC_MAX_FILES", "5000"))
-REPO_LIST_MAX = 10000
+REPO_LIST_MAX = int(os.getenv("RELACE_REPO_LIST_MAX", "10000"))
 
 
 # Encoding detection: explicitly set project default encoding (e.g., "gbk", "big5", "shift_jis")
