@@ -1,10 +1,11 @@
 """Tests for cloud_search logic."""
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+from relace_mcp.clients.exceptions import RelaceAPIError
 from relace_mcp.clients.repo import RelaceRepoClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.repo.cloud.search import cloud_search_logic
@@ -64,6 +65,15 @@ def mock_sync_state(monkeypatch: pytest.MonkeyPatch) -> SyncState:
 class TestCloudSearchLogic:
     """Test cloud_search_logic function."""
 
+    def _commit_not_indexed_404(self) -> Exception:
+        exc = RuntimeError("Repos API error (not_found): commit not indexed")
+        exc.__cause__ = RelaceAPIError(
+            status_code=404,
+            code="not_found",
+            message="commit not indexed",
+        )
+        return exc
+
     def test_search_returns_results(
         self, mock_repo_client: MagicMock, mock_sync_state: SyncState
     ) -> None:
@@ -81,6 +91,68 @@ class TestCloudSearchLogic:
         assert result["result_count"] == 2
         assert isinstance(result.get("trace_id"), str)
         assert len(result["trace_id"]) == 8
+
+    def test_retries_on_commit_not_indexed_404_then_succeeds(
+        self, mock_repo_client: MagicMock, mock_sync_state: SyncState
+    ) -> None:
+        """Should retry 404 (hash not indexed yet) with exponential backoff."""
+        success_payload = {
+            "results": [
+                {
+                    "filename": "src/auth.py",
+                    "content": "def authenticate(user): ...",
+                    "score": 0.85,
+                }
+            ]
+        }
+        mock_repo_client.retrieve.side_effect = [
+            self._commit_not_indexed_404(),
+            self._commit_not_indexed_404(),
+            success_payload,
+        ]
+
+        with patch("relace_mcp.repo.cloud.search.time.sleep") as sleep_mock:
+            result = cloud_search_logic(
+                mock_repo_client,
+                base_dir="/tmp/project",
+                query="authentication",
+            )
+
+        assert result["repo_id"] == "test-repo-id"
+        assert result["hash"] == mock_sync_state.repo_head
+        assert result["result_count"] == 1
+        assert mock_repo_client.retrieve.call_count == 3
+        sleep_mock.assert_any_call(0.5)
+        sleep_mock.assert_any_call(1.0)
+        assert any("succeeded after 2 retries" in w for w in result.get("warnings", []))
+
+    def test_returns_actionable_error_after_commit_not_indexed_retries_exhausted(
+        self, mock_repo_client: MagicMock
+    ) -> None:
+        """Should return retryable error after 404 retries are exhausted."""
+        mock_repo_client.retrieve.side_effect = [
+            self._commit_not_indexed_404(),
+            self._commit_not_indexed_404(),
+            self._commit_not_indexed_404(),
+            self._commit_not_indexed_404(),
+        ]
+
+        with patch("relace_mcp.repo.cloud.search.time.sleep") as sleep_mock:
+            result = cloud_search_logic(
+                mock_repo_client,
+                base_dir="/tmp/project",
+                query="authentication",
+            )
+
+        assert result["repo_id"] is None
+        assert result["results"] == []
+        assert result["status_code"] == 404
+        assert result["retryable"] is True
+        assert "Commit may not be indexed yet" in result["recommended_action"]
+        assert mock_repo_client.retrieve.call_count == 4
+        sleep_mock.assert_any_call(0.5)
+        sleep_mock.assert_any_call(1.0)
+        sleep_mock.assert_any_call(2.0)
 
     def test_search_passes_parameters(
         self, mock_repo_client: MagicMock, mock_sync_state: SyncState

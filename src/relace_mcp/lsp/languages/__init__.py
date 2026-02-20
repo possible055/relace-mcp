@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+from relace_mcp.config.fs_policy import LSP_IGNORED_DIR_NAMES
 from relace_mcp.lsp.languages.base import LanguageServerConfig
 from relace_mcp.lsp.languages.go import GO_CONFIG
 from relace_mcp.lsp.languages.python import PYTHON_CONFIG
@@ -19,26 +20,7 @@ LANGUAGE_CONFIGS: dict[str, LanguageServerConfig] = {
 _lsp_cache: dict[Path, frozenset[str]] = {}
 
 # Directories ignored during language detection (performance + symlink safety).
-_DETECTION_IGNORED_DIR_NAMES = frozenset(
-    {
-        ".git",
-        ".hg",
-        ".svn",
-        ".mypy_cache",
-        ".pytest_cache",
-        ".ruff_cache",
-        ".tox",
-        ".venv",
-        ".direnv",
-        "__pycache__",
-        "build",
-        "dist",
-        "node_modules",
-        "site-packages",
-        "target",
-        "venv",
-    }
-)
+_DETECTION_IGNORED_DIR_NAMES = LSP_IGNORED_DIR_NAMES
 
 
 def get_config_for_file(path: str) -> LanguageServerConfig | None:

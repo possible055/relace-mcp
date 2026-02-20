@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`MCP_SEARCH_MODE` environment variable** — Use `MCP_SEARCH_RETRIEVAL=1` instead.
 - **`MCP_LOG_REDACT` environment variable** — Integrated into `MCP_LOGGING` values (`safe` or `full`).
 - **`agentic_retrieval` parameters** — `branch`, `score_threshold`, and `max_hints` removed.
+- **Provider-specific API key auto-derivation** — `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `CEREBRAS_API_KEY` are no longer auto-detected. Use `APPLY_API_KEY` / `SEARCH_API_KEY` explicitly for non-Relace providers.
 - **Deprecated environment variables** — All `RELACE_*` prefixed aliases removed:
   - `RELACE_APPLY_ENDPOINT` → Use `APPLY_ENDPOINT`
   - `RELACE_APPLY_MODEL` → Use `APPLY_MODEL`

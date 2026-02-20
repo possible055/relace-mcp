@@ -19,13 +19,13 @@ def test_python_m_entrypoint_calls_server_main(monkeypatch) -> None:
 
 
 def test_dashboard_entrypoint_calls_app_main(monkeypatch) -> None:
-    import relace_mcp.dashboard as dashboard_mod
+    import relace_dashboard as dashboard_mod
 
-    monkeypatch.delitem(sys.modules, "relace_mcp.dashboard.app", raising=False)
+    monkeypatch.delitem(sys.modules, "relace_dashboard.app", raising=False)
 
-    fake_app = types.ModuleType("relace_mcp.dashboard.app")
+    fake_app = types.ModuleType("relace_dashboard.app")
     fake_app.main = MagicMock()  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "relace_mcp.dashboard.app", fake_app)
+    monkeypatch.setitem(sys.modules, "relace_dashboard.app", fake_app)
 
     dashboard_mod.main()
 

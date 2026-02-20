@@ -193,6 +193,26 @@ class TestViewDirectoryHandler:
         assert ".hidden" in result
         assert "visible.txt" in result
 
+    def test_include_hidden_still_respects_gitignore(self, tmp_path: Path) -> None:
+        """include_hidden should not bypass .gitignore rules."""
+        (tmp_path / ".gitignore").write_text(".secret/\n")
+        (tmp_path / ".secret").mkdir()
+        (tmp_path / ".secret" / "hidden.txt").write_text("hidden")
+        (tmp_path / "visible.txt").write_text("visible")
+
+        result = view_directory_handler("/repo", True, str(tmp_path))
+        assert "visible.txt" in result
+        assert ".secret" not in result
+
+    def test_include_hidden_does_not_force_ignore_dot_dirs(self, tmp_path: Path) -> None:
+        """Hidden directories should remain visible when include_hidden=True."""
+        (tmp_path / ".venv").mkdir()
+        (tmp_path / ".venv" / "pyvenv.cfg").write_text("home=/tmp\n")
+
+        result = view_directory_handler("/repo", True, str(tmp_path))
+        assert ".venv/" in result
+        assert ".venv/pyvenv.cfg" in result
+
     def test_returns_error_for_missing_dir(self, tmp_path: Path) -> None:
         """Should return error for non-existent directory."""
         result = view_directory_handler("/repo/missing", False, str(tmp_path))
@@ -476,6 +496,15 @@ class TestGlobHandler:
 
         result2 = glob_handler("*.py", "/repo", True, 200, str(tmp_path))
         assert ".hidden/secret.py" in result2
+
+    def test_include_hidden_keeps_pruning_high_cost_dirs(self, tmp_path: Path) -> None:
+        """include_hidden should not disable traversal prune directories."""
+        (tmp_path / "node_modules").mkdir()
+        (tmp_path / "node_modules" / "lib.js").write_text("export {}\n")
+
+        result = glob_handler("**/*.js", "/repo", True, 200, str(tmp_path))
+        assert "No matches" in result
+        assert "node_modules" not in result
 
     def test_blocks_traversal_patterns(self, tmp_path: Path) -> None:
         """Should block ../ traversal in pattern."""

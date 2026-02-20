@@ -1,15 +1,16 @@
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
 from ..backend import OpenAIChatClient
 from ..config import APPLY_SYSTEM_PROMPT, RelaceConfig, create_provider_config
 from ..config.settings import (
-    APPLY_BASE_URL,
-    APPLY_MODEL,
+    APPLY_DEFAULT_ENDPOINT,
+    APPLY_DEFAULT_MODEL,
     APPLY_TEMPERATURE,
+    APPLY_TIMEOUT_SECONDS,
     RELACE_PROVIDER,
-    TIMEOUT_SECONDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -33,21 +34,25 @@ class ApplyResponse:
 class ApplyLLMClient:
     """LLM-based client for code merging (Instant Apply).
 
-    Supports Relace and OpenAI-compatible providers (OpenAI, OpenRouter, Cerebras, etc.).
+    Supports Relace and OpenAI-compatible providers.
 
     Environment variables:
         APPLY_PROVIDER: Provider name (default: relace)
-        APPLY_ENDPOINT: API base URL
+        APPLY_ENDPOINT: API base URL (required for non-relace)
         APPLY_MODEL: Model name
-        APPLY_API_KEY: API key (or use provider-specific key)
+        APPLY_API_KEY: API key (required for non-relace; relace uses RELACE_API_KEY)
     """
 
     def __init__(self, config: RelaceConfig) -> None:
         self._provider_config = create_provider_config(
-            "APPLY",
-            default_base_url=APPLY_BASE_URL,
-            default_model=APPLY_MODEL,
-            default_timeout=TIMEOUT_SECONDS,
+            label="APPLY",
+            raw_provider=os.getenv("APPLY_PROVIDER", ""),
+            raw_api_key=os.getenv("APPLY_API_KEY", ""),
+            raw_endpoint=os.getenv("APPLY_ENDPOINT", ""),
+            raw_model=os.getenv("APPLY_MODEL", ""),
+            default_endpoint=APPLY_DEFAULT_ENDPOINT,
+            default_model=APPLY_DEFAULT_MODEL,
+            timeout=APPLY_TIMEOUT_SECONDS,
             relace_api_key=config.api_key,
         )
         self._chat_client = OpenAIChatClient(self._provider_config)

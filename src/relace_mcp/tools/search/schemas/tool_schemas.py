@@ -49,7 +49,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "description": (
                 "List directory contents recursively.\n\n"
                 "Output: relative paths (alphabetical), dirs end with '/'. Max 250 items.\n"
-                "Returns error if path is not a valid directory."
+                "Respects .gitignore rules and returns error if path is not a valid directory."
             ),
             "parameters": {
                 "type": "object",
@@ -62,7 +62,10 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "include_hidden": {
                         "type": "boolean",
                         "default": False,
-                        "description": "Include dotfiles and hidden directories (default: false).",
+                        "description": (
+                            "Include dot-prefixed files/directories (default: false). "
+                            ".gitignore rules still apply."
+                        ),
                     },
                 },
                 "additionalProperties": False,
@@ -136,7 +139,11 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "include_hidden": {
                         "type": "boolean",
                         "default": False,
-                        "description": "Include dotfiles (default: false).",
+                        "description": (
+                            "Include dot-prefixed files/directories (default: false). "
+                            "Performance prune directories (for example node_modules/dist/target) "
+                            "may still be skipped."
+                        ),
                     },
                     "max_results": {
                         "type": "integer",

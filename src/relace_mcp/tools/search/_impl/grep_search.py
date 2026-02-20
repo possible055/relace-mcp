@@ -123,6 +123,7 @@ def _filter_visible_dirs(dirs: list[str]) -> list[str]:
     Returns:
         Visible directory list.
     """
+    # Always prune heavy dependency/cache directories for predictable performance.
     return [d for d in dirs if not d.startswith(".") and d not in COMMON_IGNORED_DIRS]
 
 
