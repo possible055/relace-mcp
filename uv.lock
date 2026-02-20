@@ -1844,7 +1844,7 @@ wheels = [
 
 [[package]]
 name = "relace-mcp"
-version = "0.2.5a1"
+version = "0.2.5a2"
 source = { editable = "." }
 dependencies = [
     { name = "charset-normalizer" },

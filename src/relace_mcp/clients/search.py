@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Any
 
 import openai
@@ -7,8 +8,8 @@ from ..backend import OpenAIChatClient
 from ..config import RelaceConfig, create_provider_config
 from ..config.settings import (
     RELACE_PROVIDER,
-    SEARCH_BASE_URL,
-    SEARCH_MODEL,
+    SEARCH_DEFAULT_ENDPOINT,
+    SEARCH_DEFAULT_MODEL,
     SEARCH_PARALLEL_TOOL_CALLS,
     SEARCH_TEMPERATURE,
     SEARCH_TIMEOUT_SECONDS,
@@ -34,23 +35,27 @@ def _strip_tool_strict(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
 class SearchLLMClient:
     """Search client for Fast Agentic Search.
 
-    Supports Relace and OpenAI-compatible providers (OpenAI, OpenRouter, Cerebras, etc.).
+    Supports Relace and OpenAI-compatible providers.
 
     Environment variables:
         SEARCH_PROVIDER: Provider name (default: relace)
-        SEARCH_ENDPOINT: API base URL
+        SEARCH_ENDPOINT: API base URL (required for non-relace)
         SEARCH_MODEL: Model name
-        SEARCH_API_KEY: API key (or use provider-specific key)
+        SEARCH_API_KEY: API key (required for non-relace; relace uses RELACE_API_KEY)
         SEARCH_PARALLEL_TOOL_CALLS: Enable parallel tool calls (default: true)
         SEARCH_TOOL_STRICT: Include strict field in tool schemas (default: true)
     """
 
     def __init__(self, config: RelaceConfig) -> None:
         self._provider_config = create_provider_config(
-            "SEARCH",
-            default_base_url=SEARCH_BASE_URL,
-            default_model=SEARCH_MODEL,
-            default_timeout=SEARCH_TIMEOUT_SECONDS,
+            label="SEARCH",
+            raw_provider=os.getenv("SEARCH_PROVIDER", ""),
+            raw_api_key=os.getenv("SEARCH_API_KEY", ""),
+            raw_endpoint=os.getenv("SEARCH_ENDPOINT", ""),
+            raw_model=os.getenv("SEARCH_MODEL", ""),
+            default_endpoint=SEARCH_DEFAULT_ENDPOINT,
+            default_model=SEARCH_DEFAULT_MODEL,
+            timeout=SEARCH_TIMEOUT_SECONDS,
             relace_api_key=config.api_key,
         )
         self._chat_client = OpenAIChatClient(self._provider_config)

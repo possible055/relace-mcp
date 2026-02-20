@@ -16,12 +16,10 @@ __all__ = [
     "RelaceConfig",
 ]
 
-# Fast Apply (OpenAI-compatible base URL; SDK appends /chat/completions automatically)
-APPLY_BASE_URL = (
-    os.getenv("APPLY_ENDPOINT", "") or "https://instantapply.endpoint.relace.run/v1/apply"
-)
-APPLY_MODEL = os.getenv("APPLY_MODEL", "") or "auto"
-TIMEOUT_SECONDS = float(os.getenv("APPLY_TIMEOUT_SECONDS", "") or "60.0")
+# Fast Apply defaults
+APPLY_DEFAULT_ENDPOINT = "https://instantapply.endpoint.relace.run/v1/apply"
+APPLY_DEFAULT_MODEL = "auto"
+APPLY_TIMEOUT_SECONDS = float(os.getenv("APPLY_TIMEOUT_SECONDS", "") or "60.0")
 MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0
 
@@ -29,20 +27,12 @@ RETRY_BASE_DELAY = 1.0
 SEARCH_TEMPERATURE = float(os.getenv("SEARCH_TEMPERATURE", "1.0"))
 APPLY_TEMPERATURE = float(os.getenv("APPLY_TEMPERATURE", "0.0"))
 
-# Provider identifiers (used for API compatibility detection)
-OPENAI_PROVIDER = "openai"
+# Provider identifier
 RELACE_PROVIDER = "relace"
 
-# Default base URLs for known providers (fallback when env var not set)
-DEFAULT_PROVIDER_BASE_URLS: dict[str, str] = {
-    "openai": "https://api.openai.com/v1",
-    "openrouter": "https://openrouter.ai/api/v1",
-    "cerebras": "https://api.cerebras.ai/v1",
-}
-
-# Fast Agentic Search (OpenAI-compatible base URL; SDK appends /chat/completions automatically)
-SEARCH_BASE_URL = os.getenv("SEARCH_ENDPOINT", "") or "https://search.endpoint.relace.run/v1/search"
-SEARCH_MODEL = os.getenv("SEARCH_MODEL", "") or "relace-search"
+# Fast Agentic Search defaults
+SEARCH_DEFAULT_ENDPOINT = "https://search.endpoint.relace.run/v1/search"
+SEARCH_DEFAULT_MODEL = "relace-search"
 SEARCH_TIMEOUT_SECONDS = float(os.getenv("SEARCH_TIMEOUT_SECONDS", "") or "120.0")
 SEARCH_MAX_TURNS = int(os.getenv("SEARCH_MAX_TURNS", "") or "6")
 # Search parallel tool calls (default: true)
@@ -63,8 +53,7 @@ RELACE_REPO_ID = os.getenv("RELACE_REPO_ID", None)
 # Repo sync settings
 REPO_SYNC_TIMEOUT_SECONDS = float(os.getenv("RELACE_REPO_SYNC_TIMEOUT", "300.0"))
 REPO_SYNC_MAX_FILES = int(os.getenv("RELACE_REPO_SYNC_MAX_FILES", "5000"))
-# Maximum repos to fetch (100 pages * 100 per page)
-REPO_LIST_MAX = int(os.getenv("RELACE_REPO_LIST_MAX", "10000"))
+REPO_LIST_MAX = 10000
 
 
 # Encoding detection: explicitly set project default encoding (e.g., "gbk", "big5", "shift_jis")

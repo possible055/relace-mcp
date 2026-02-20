@@ -7,6 +7,7 @@
 - [环境变量参考](#环境变量参考)
 - [使用 .env 文件](#使用-env-文件)
 - [同步模式](#同步模式)
+- [本地检索后端](#本地检索后端)
 - [日志](#日志)
 - [替代提供商](#替代提供商)
 - [远程部署 (Streamable HTTP)](#远程部署-streamable-http)
@@ -26,6 +27,7 @@
 | `MCP_DOTENV_PATH` | — | 启动时加载的 `.env` 文件路径（集中配置） |
 | `RELACE_DEFAULT_ENCODING` | — | 强制项目文件编码（如 `gbk`、`big5`） |
 | `MCP_LOGGING` | `off` | 文件日志：`off`、`safe`（启用并遮蔽）、`full`（启用不遮蔽） |
+| `MCP_LOG_LEVEL` | `WARNING` | stderr 日志级别：`DEBUG`、`INFO`、`WARNING`、`ERROR` |
 | `RELACE_CLOUD_TOOLS` | `0` | 设为 `1` 启用云工具（cloud_sync、cloud_search 等） |
 | `MCP_SEARCH_RETRIEVAL` | `0` | 设为 `1` 启用 `agentic_retrieval` 工具 |
 
@@ -83,13 +85,7 @@
 
 ### 第三方 API Keys
 
-使用替代提供商时，设置对应的 API key：
-
-| 变量 | 使用场景 |
-|------|----------|
-| `OPENAI_API_KEY` | `*_PROVIDER=openai` 且未设置 `*_API_KEY` |
-| `OPENROUTER_API_KEY` | `*_PROVIDER=openrouter` 且未设置 `*_API_KEY` |
-| `CEREBRAS_API_KEY` | `*_PROVIDER=cerebras` 且未设置 `*_API_KEY` |
+使用替代提供商时，**必须**显式设置 `APPLY_API_KEY` 或 `SEARCH_API_KEY`。提供商专用环境变量（如 `OPENAI_API_KEY`）**不会**被自动读取。
 
 ## 使用 .env 文件
 
@@ -141,6 +137,51 @@ SEARCH_MAX_TURNS=6
 | 镜像完整同步 | `force=True, mirror=True` | 完全覆盖云端以匹配本地 |
 
 当 git HEAD 自上次同步后发生变化（如分支切换、rebase），安全完整同步模式会自动清理旧 ref 的僵尸文件。
+
+---
+
+## 本地检索后端
+
+`agentic_retrieval` 在 agentic 搜索前利用语义检索对文件排序。默认使用 Relace 云端索引（`relace` 后端，需要 `RELACE_CLOUD_TOOLS=1` 并已完成 sync）。如需离线使用，可切换为本地后端。
+
+### Codanna
+
+```bash
+pip install codanna
+```
+
+在 MCP 配置或 `.env` 中设置：
+
+```bash
+MCP_SEARCH_RETRIEVAL=1
+MCP_RETRIEVAL_BACKEND=codanna
+```
+
+首次使用时，server 会自动执行 `codanna init`（创建 `.codanna` 目录）并紧接着运行 `codanna index`。每次 `fast_apply` 编辑后会在后台对变动文件增量重新索引。更多配置请参阅 [Codanna 项目](https://pypi.org/project/codanna/)。
+
+### ChunkHound
+
+```bash
+pip install chunkhound
+```
+
+在 MCP 配置或 `.env` 中设置：
+
+```bash
+MCP_SEARCH_RETRIEVAL=1
+MCP_RETRIEVAL_BACKEND=chunkhound
+```
+
+首次使用时，server 会自动执行 `chunkhound index`。每次 `fast_apply` 编辑后触发后台扫描，仅重新处理有变更的文件（xxHash3-64 校验）。更多配置请参阅 [ChunkHound 项目](https://pypi.org/project/chunkhound/)。
+
+### 自动模式
+
+```bash
+MCP_SEARCH_RETRIEVAL=1
+MCP_RETRIEVAL_BACKEND=auto
+```
+
+Server 按优先级自动选择当前 session 可用的后端：`codanna` → `chunkhound` → `relace`（云端兜底）。
 
 ---
 
@@ -225,9 +266,8 @@ export SEARCH_MODEL=gpt-4o
 
 ### API Key 解析顺序
 
-1. `APPLY_API_KEY` / `SEARCH_API_KEY`（显式）
-2. 提供商专用 key（如 `OPENROUTER_API_KEY`）
-3. `RELACE_API_KEY`（仅限 `relace` 提供商）
+1. `APPLY_API_KEY` / `SEARCH_API_KEY`（显式；非 Relace 提供商必须设置）
+2. `RELACE_API_KEY`（仅限 `relace` 提供商）
 
 ### LSP 工具
 

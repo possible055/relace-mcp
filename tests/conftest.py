@@ -141,10 +141,6 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
             if key.startswith(prefix):
                 monkeypatch.delenv(key, raising=False)
 
-    # Additionally clear common third-party API keys
-    for var in ["OPENAI_API_KEY", "OPENROUTER_API_KEY", "MISTRAL_API_KEY", "ANTHROPIC_API_KEY"]:
-        monkeypatch.delenv(var, raising=False)
-
 
 @pytest.fixture(autouse=True)
 def mock_log_path(tmp_path: Path) -> Generator[Path, None, None]:

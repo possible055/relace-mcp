@@ -1,8 +1,7 @@
 import logging
-import os
 from dataclasses import dataclass
 
-from .settings import DEFAULT_PROVIDER_BASE_URLS, OPENAI_PROVIDER, RELACE_PROVIDER
+from .settings import RELACE_PROVIDER
 
 logger = logging.getLogger(__name__)
 
@@ -36,89 +35,75 @@ class ProviderConfig:
 
 
 def create_provider_config(
-    prefix: str,
     *,
-    default_base_url: str,
+    label: str,
+    raw_provider: str,
+    raw_api_key: str,
+    raw_endpoint: str,
+    raw_model: str,
+    default_endpoint: str,
     default_model: str,
-    default_timeout: float,
+    timeout: float,
     relace_api_key: str | None,
 ) -> ProviderConfig:
-    """Create provider configuration from environment variables.
-
-    Reads and validates all provider-related environment variables at config layer.
+    """Create provider configuration from pre-read values.
 
     Args:
-        prefix: Environment variable prefix (e.g., "SEARCH" or "APPLY").
-        default_base_url: Default base URL if not specified.
-        default_model: Default model if not specified.
-        default_timeout: Default timeout in seconds.
+        label: Human-readable label for error messages (e.g., "APPLY", "SEARCH").
+        raw_provider: Raw provider string from env (empty = relace).
+        raw_api_key: Raw API key from env.
+        raw_endpoint: Raw endpoint URL from env.
+        raw_model: Raw model name from env.
+        default_endpoint: Default endpoint for Relace provider.
+        default_model: Default model for Relace provider.
+        timeout: Request timeout in seconds.
         relace_api_key: API key from RelaceConfig (used when provider is relace).
 
-    Returns:
-        Validated ProviderConfig ready for use.
-
     Raises:
-        RuntimeError: Configuration validation failed (missing API key, invalid combo).
+        RuntimeError: Configuration validation failed.
     """
-    # Environment variable names
-    provider_env = f"{prefix}_PROVIDER"
-    base_url_env = f"{prefix}_ENDPOINT"
-    model_env = f"{prefix}_MODEL"
-    api_key_env = f"{prefix}_API_KEY"
+    provider = (raw_provider.strip() or RELACE_PROVIDER).lower()
 
-    # Parse provider
-    raw_provider = os.getenv(provider_env, "").strip()
-    provider = (raw_provider if raw_provider else RELACE_PROVIDER).lower()
+    # API compatibility: relace vs openai-compatible
+    api_compat = RELACE_PROVIDER if provider == RELACE_PROVIDER else "openai"
 
-    # Derive API compatibility mode
-    api_compat = RELACE_PROVIDER if provider == RELACE_PROVIDER else OPENAI_PROVIDER
-
-    # Parse base URL
-    base_url = os.getenv(base_url_env, "").strip()
+    # Resolve endpoint
+    base_url = raw_endpoint.strip()
     if not base_url:
-        base_url = DEFAULT_PROVIDER_BASE_URLS.get(provider, default_base_url)
+        if provider != RELACE_PROVIDER:
+            raise RuntimeError(
+                f"{label}_ENDPOINT is required when using {label}_PROVIDER={provider}. "
+                f"Set {label}_ENDPOINT to your provider's API endpoint."
+            )
+        base_url = default_endpoint
     base_url = _normalize_base_url(base_url)
 
-    # Parse model
-    model = os.getenv(model_env, "").strip()
-    if not model:
-        model = "gpt-4o" if provider == OPENAI_PROVIDER else default_model
+    # Resolve model
+    model = raw_model.strip() or default_model
 
     # Validate provider/model combination
-    if provider != RELACE_PROVIDER and model.startswith("relace-"):
+    if provider != RELACE_PROVIDER and (model == "auto" or model.startswith("relace-")):
         raise RuntimeError(
-            f"Model '{model}' appears to be a Relace-specific model, "
+            f"Model '{model}' is a Relace-specific model, "
             f"but provider is set to '{provider}'. "
-            f"Please set {model_env} to a model supported by your provider."
+            f"Please set {label}_MODEL to a model supported by your provider."
         )
 
-    # Parse API key
-    api_key = os.getenv(api_key_env, "").strip()
+    # Resolve API key
+    api_key = raw_api_key.strip()
 
     if not api_key:
         if api_compat == RELACE_PROVIDER:
             api_key = relace_api_key or ""
             if not api_key:
                 raise RuntimeError(
-                    f"RELACE_API_KEY is required when using {prefix}_PROVIDER=relace (default). "
-                    f"Set RELACE_API_KEY or switch to a different provider via {prefix}_PROVIDER."
+                    f"RELACE_API_KEY is required when using {label}_PROVIDER=relace (default). "
+                    f"Set RELACE_API_KEY or switch to a different provider via {label}_PROVIDER."
                 )
-        elif provider == OPENAI_PROVIDER:
-            api_key = os.getenv("OPENAI_API_KEY", "").strip()
-            if not api_key:
-                raise RuntimeError(f"OPENAI_API_KEY is not set when {provider_env}=openai.")
         else:
-            # Derive API key env from provider name (e.g., openrouter -> OPENROUTER_API_KEY)
-            derived_env = "".join(ch if ch.isalnum() else "_" for ch in provider.upper()).strip("_")
-            derived_env = f"{derived_env}_API_KEY" if derived_env else ""
-            if derived_env:
-                api_key = os.getenv(derived_env, "").strip()
-
-            if not api_key:
-                raise RuntimeError(
-                    f"No API key found for {provider_env}={provider}. "
-                    f"Set {api_key_env} or export {derived_env}."
-                )
+            raise RuntimeError(
+                f"No API key found for {label}_PROVIDER={provider}. Set {label}_API_KEY."
+            )
 
     return ProviderConfig(
         provider=provider,
@@ -126,6 +111,6 @@ def create_provider_config(
         base_url=base_url,
         model=model,
         api_key=api_key,
-        timeout_seconds=default_timeout,
+        timeout_seconds=timeout,
         display_name=_derive_display_name(provider),
     )
