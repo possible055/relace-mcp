@@ -1,4 +1,5 @@
 import os
+from collections.abc import Sequence
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
@@ -184,7 +185,13 @@ def map_path_no_resolve(path: str, base_dir: str) -> Path:
     return Path(path)
 
 
-def validate_file_path(file_path: str, base_dir: str, *, allow_empty: bool = False) -> Path:
+def validate_file_path(
+    file_path: str,
+    base_dir: str,
+    *,
+    extra_paths: Sequence[str] = (),
+    allow_empty: bool = False,
+) -> Path:
     """Validates and resolves file path, preventing path traversal attacks.
 
     Accepts absolute or relative paths. Relative paths are resolved against base_dir.
@@ -192,6 +199,7 @@ def validate_file_path(file_path: str, base_dir: str, *, allow_empty: bool = Fal
     Args:
         file_path: File path to validate (absolute or relative).
         base_dir: Base directory that restricts access scope.
+        extra_paths: Additional allowed directories (already resolved absolute paths).
         allow_empty: If True, allows empty paths (will error in subsequent processing).
 
     Returns:
@@ -213,7 +221,13 @@ def validate_file_path(file_path: str, base_dir: str, *, allow_empty: bool = Fal
         raise RuntimeError(f"Invalid file path: {file_path}") from exc
 
     base_resolved = Path(base_dir).resolve()
-    if not _is_path_within_base(resolved, base_resolved):
-        raise RuntimeError(f"Access denied: {file_path} is outside allowed directory {base_dir}")
+    if _is_path_within_base(resolved, base_resolved):
+        return resolved
 
-    return resolved
+    # Check extra_paths
+    for extra in extra_paths:
+        extra_resolved = Path(extra).resolve()
+        if _is_path_within_base(resolved, extra_resolved):
+            return resolved
+
+    raise RuntimeError(f"Access denied: {file_path} is outside allowed directory {base_dir}")

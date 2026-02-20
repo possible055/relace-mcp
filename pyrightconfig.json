@@ -1,6 +1,6 @@
 {
     "include": [
-        "src"
+        "src/relace_mcp"
     ],
     "exclude": [
         "**/__pycache__",
@@ -15,8 +15,7 @@
         "docs",
         ".vscode",
         ".github",
-        "benchmark/artifacts/",
-        "src/relace_mcp/dashboard"
+        "benchmark/artifacts/"
     ],
     "venvPath": ".",
     "venv": ".venv",

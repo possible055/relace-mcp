@@ -1,5 +1,3 @@
-"""Tests for cloud_sync logic with incremental support."""
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -24,7 +22,7 @@ from relace_mcp.repo.core.state import (
 
 
 @pytest.fixture
-def _mock_config(tmp_path: Path) -> RelaceConfig:
+def _mock_config(tmp_path: Path) -> RelaceConfig:  # pyright: ignore[reportUnusedFunction]
     return RelaceConfig(
         api_key="rlc-test-api-key",
         base_dir=str(tmp_path),

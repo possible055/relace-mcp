@@ -1,5 +1,3 @@
-"""Tests for cloud_list and cloud_info logic."""
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,7 +11,7 @@ from relace_mcp.repo.core.state import SyncState
 
 
 @pytest.fixture
-def _mock_config(tmp_path: Path) -> RelaceConfig:
+def _mock_config(tmp_path: Path) -> RelaceConfig:  # pyright: ignore[reportUnusedFunction]
     return RelaceConfig(
         api_key="rlc-test-api-key",
         base_dir=str(tmp_path),
@@ -43,7 +41,7 @@ def mock_repo_client(_mock_config: RelaceConfig) -> MagicMock:
 
 
 @pytest.fixture(autouse=True)
-def _patch_repo_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+def _patch_repo_identity(monkeypatch: pytest.MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]
     """Keep cloud_repo_name == local repo dir name for unit tests."""
     monkeypatch.setattr(
         "relace_mcp.repo.cloud.info.get_repo_identity",

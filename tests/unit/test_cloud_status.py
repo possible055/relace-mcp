@@ -1,5 +1,3 @@
-"""Tests for cloud_status MCP resource with MCP Roots resolution."""
-
 from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch

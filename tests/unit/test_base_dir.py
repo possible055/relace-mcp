@@ -1,5 +1,3 @@
-"""Tests for dynamic base_dir resolution with MCP Roots support."""
-
 import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
