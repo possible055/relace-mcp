@@ -142,6 +142,47 @@ class ToolCallsMixin:
 
         return tool_results, report_back_result
 
+    @staticmethod
+    def _strip_mixed_report_back(
+        tool_calls: list[dict[str, Any]],
+        message: dict[str, Any],
+        trace_id: str,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any], list[str]]:
+        """Strip report_back from tool_calls when mixed with other tools.
+
+        Returns:
+            (filtered_tool_calls, updated_message, stripped_report_back_ids).
+            stripped_report_back_ids is empty when no stripping occurred.
+        """
+        if len(tool_calls) <= 1:
+            return tool_calls, message, []
+
+        rb_ids: list[str] = []
+        other: list[dict[str, Any]] = []
+        for tc in tool_calls:
+            if tc.get("function", {}).get("name") == "report_back":
+                rb_ids.append(tc.get("id", ""))
+            else:
+                other.append(tc)
+
+        if not rb_ids or not other:
+            return tool_calls, message, []
+
+        logger.warning(
+            "[%s] Guardrail: report_back mixed with %d other tools — stripping report_back",
+            trace_id,
+            len(other),
+        )
+
+        # Also strip from the message's tool_calls so the assistant message stays consistent
+        msg_tool_calls = message.get("tool_calls") or []
+        message = dict(message)
+        message["tool_calls"] = [
+            tc for tc in msg_tool_calls if tc.get("function", {}).get("name") != "report_back"
+        ]
+
+        return other, message, rb_ids
+
     def _execute_parallel_batch(
         self,
         parallel_calls: list[tuple[str, str, str, dict[str, Any] | None]],

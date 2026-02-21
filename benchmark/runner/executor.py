@@ -76,6 +76,7 @@ class BenchmarkRunner:
         fail_fast: int | None = None,
         search_mode: str = "agentic",
         resume: bool = False,
+        trace: bool = False,
     ):
         self.config = config
         self.verbose = verbose
@@ -87,6 +88,8 @@ class BenchmarkRunner:
         self.fail_fast = fail_fast
         self.search_mode = search_mode
         self.resume = resume
+        self.trace = trace
+        self._traces_dir: Path | None = None
 
     def run_benchmark(
         self,
@@ -111,6 +114,12 @@ class BenchmarkRunner:
         run_config: dict[str, Any] | None = None,
     ) -> BenchmarkSummary:
         started_at = datetime.now(UTC)
+
+        if self.trace:
+            traces_base = self.repos_dir.parent / "traces"
+            self._traces_dir = traces_base / started_at.strftime("%Y%m%d_%H%M%S")
+            self._traces_dir.mkdir(parents=True, exist_ok=True)
+
         wall_start = time.perf_counter()
         results: list[BenchmarkResult] = []
         total = len(cases)
@@ -194,7 +203,7 @@ class BenchmarkRunner:
                     status_icon = "✓" if result.completed else "✗"
                     print(
                         f"  {status_icon} recall={result.file_recall:.0%} "
-                        f"search={result.latency_ms / 1000:.1f}s",
+                        f"search={result.latency_s:.1f}s",
                         flush=True,
                     )
 
@@ -214,7 +223,7 @@ class BenchmarkRunner:
             print(f"\033[2K\r{line}", flush=True)
 
         completed_at = datetime.now(UTC)
-        duration_ms = (time.perf_counter() - wall_start) * 1000
+        duration_s = time.perf_counter() - wall_start
         metadata = build_run_metadata(
             config=self.config,
             repos_dir=self.repos_dir,
@@ -222,7 +231,7 @@ class BenchmarkRunner:
             run_config=run_config,
             started_at=started_at,
             completed_at=completed_at,
-            duration_ms=duration_ms,
+            duration_s=duration_s,
         )
         return self._compute_summary(results, metadata=metadata)
 
@@ -254,7 +263,7 @@ class BenchmarkRunner:
                 functions_hit=0,
                 functions_total=len(case.ground_truth_functions),
                 turns_used=0,
-                latency_ms=self.case_timeout * 1000,
+                latency_s=float(self.case_timeout),
                 partial=True,
                 error=str(e),
             )
@@ -289,7 +298,7 @@ class BenchmarkRunner:
                 functions_hit=0,
                 functions_total=len(case.ground_truth_functions),
                 turns_used=0,
-                latency_ms=0.0,
+                latency_s=0.0,
                 partial=True,
                 error=str(e),
             )
@@ -305,7 +314,7 @@ class BenchmarkRunner:
             import asyncio
 
             from relace_mcp.clients import RelaceRepoClient
-            from relace_mcp.repo import agentic_retrieval_logic
+            from relace_mcp.tools.retrieval import agentic_retrieval_logic
 
             repo_client = RelaceRepoClient(effective_config)
             result = asyncio.run(
@@ -319,10 +328,22 @@ class BenchmarkRunner:
             )
         else:
             result = FastAgenticSearchHarness(
-                effective_config, client, lsp_languages=lsp_languages
+                effective_config, client, lsp_languages=lsp_languages, trace=self.trace
             ).run(case.query)
 
-        latency_ms = (time.perf_counter() - start_time) * 1000
+        latency_s = round(time.perf_counter() - start_time, 1)
+
+        # Write trace file if tracing is enabled
+        trace_path_str: str | None = None
+        if self.trace and self._traces_dir and "turns_log" in result:
+            trace_file = self._traces_dir / f"{case.id}.jsonl"
+            try:
+                with trace_file.open("w", encoding="utf-8") as tf:
+                    for turn_entry in result["turns_log"]:
+                        tf.write(json.dumps(turn_entry, ensure_ascii=False, default=str) + "\n")
+                trace_path_str = str(trace_file)
+            except Exception:
+                pass
 
         returned_files_raw = result.get("files", {})
         if not isinstance(returned_files_raw, dict):
@@ -395,10 +416,12 @@ class BenchmarkRunner:
             functions_hit=functions_hit,
             functions_total=functions_total,
             turns_used=int(result.get("turns_used", 0) or 0),
-            latency_ms=latency_ms,
+            latency_s=latency_s,
             partial=partial,
             error=error,
             returned_files=returned_files,
+            raw_result=result,
+            trace_path=trace_path_str,
         )
 
     def _compute_summary(
@@ -426,7 +449,7 @@ class BenchmarkRunner:
                     "function_cases": 0,
                     "avg_function_hit_rate": 0.0,
                     "avg_turns": 0.0,
-                    "avg_latency_ms": 0.0,
+                    "avg_latency_s": 0.0,
                 },
                 results=[],
             )
@@ -469,7 +492,7 @@ class BenchmarkRunner:
             "function_cases": function_cases,
             "avg_function_hit_rate": avg_function_hit_rate,
             "avg_turns": avg("turns_used"),
-            "avg_latency_ms": avg("latency_ms"),
+            "avg_latency_s": avg("latency_s"),
         }
 
         return BenchmarkSummary(

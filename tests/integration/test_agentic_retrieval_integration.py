@@ -217,9 +217,14 @@ class TestRetrievalOrchestration:
         await agentic_retrieval_logic(
             mock_repo_client, mock_search_client, mock_config, mock_config.base_dir, "find auth"
         )
+        # Verify retrieval=True passed to harness constructor
         _, kwargs = all_mocks["harness_cls"].call_args
-        prompt = kwargs["user_prompt_override"]
-        assert "semantic_hints" in prompt
+        assert kwargs.get("retrieval") is True
+
+        # Verify run_async received semantic_hints_section with hints
+        harness_instance = all_mocks["harness_cls"].return_value
+        run_kwargs = harness_instance.run_async.call_args.kwargs
+        assert "semantic_hints" in run_kwargs.get("semantic_hints_section", "")
 
     @pytest.mark.asyncio
     async def test_harness_prompt_no_semantic_hints_when_no_cloud_results(
@@ -229,9 +234,10 @@ class TestRetrievalOrchestration:
         await agentic_retrieval_logic(
             mock_repo_client, mock_search_client, mock_config, mock_config.base_dir, "find auth"
         )
-        _, kwargs = all_mocks["harness_cls"].call_args
-        prompt = kwargs["user_prompt_override"]
-        assert "semantic_hints" not in prompt
+        # Verify run_async received empty semantic_hints_section
+        harness_instance = all_mocks["harness_cls"].return_value
+        run_kwargs = harness_instance.run_async.call_args.kwargs
+        assert run_kwargs.get("semantic_hints_section", "") == ""
 
 
 class TestRetrievalBackendDispatch:

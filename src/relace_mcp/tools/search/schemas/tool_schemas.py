@@ -161,8 +161,10 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "report_back",
             "strict": True,
             "description": (
-                "Report findings with file locations. MUST be called when exploration is complete.\n\n"
-                "Use this to terminate search and return results to the caller."
+                "TERMINAL TOOL — ends the search run.\n\n"
+                "Report findings with file locations. MUST be the ONLY tool call in its turn.\n"
+                "If you still need to explore, do NOT call report_back yet.\n"
+                "When called, no further turns will execute."
             ),
             "parameters": {
                 "type": "object",

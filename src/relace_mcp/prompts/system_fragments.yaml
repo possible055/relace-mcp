@@ -1,0 +1,81 @@
+# System prompt fragments (capability-driven)
+# These fragments are assembled dynamically based on enabled tools, project capabilities,
+# and operational context (e.g., retrieval mode).
+
+version: 1
+
+sections:
+  bash_tool:
+    - when: { tools_all: [bash] }
+      text: |
+        - Use `bash` ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
+        - NEVER use `bash` for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install, or any file creation/modification
+        - `bash` is for git history and filesystem listing ONLY — do NOT use bash grep/find to trace code when LSP tools are available
+
+  example_calls_dynamic:
+    # bash ON + LSP ON: all conditional tools (1 bash + 5 LSP = 6)
+    - when: { tools_all: [bash, find_symbol] }
+      text: |
+        - bash(command="git log --oneline -5")
+        - find_symbol(action="references", file="/repo/src/retry.py", line=15, column=5)
+        - search_symbol(query="RetryPolicy")
+        - get_type(file="/repo/src/retry.py", line=25, column=10)
+        - list_symbols(file="/repo/src/retry.py")
+        - call_graph(action="outgoing", file="/repo/src/retry.py", line=42, column=10)
+    # bash OFF + LSP ON: 5 LSP + 1 base filler
+    - when: { tools_all: [find_symbol], tools_none: [bash] }
+      text: |
+        - find_symbol(action="references", file="/repo/src/retry.py", line=15, column=5)
+        - search_symbol(query="RetryPolicy")
+        - get_type(file="/repo/src/retry.py", line=25, column=10)
+        - list_symbols(file="/repo/src/retry.py")
+        - call_graph(action="outgoing", file="/repo/src/retry.py", line=42, column=10)
+        - view_file(path="/repo/README.md", view_range=[1, 50])
+    # bash ON + LSP OFF: bash variants + base tools
+    - when: { tools_all: [bash], tools_none: [find_symbol] }
+      text: |
+        - bash(command="git log --oneline -5")
+        - bash(command="git diff HEAD~1 -- src/retry.py")
+        - grep_search(query="retry", include_pattern="*.py")
+        - grep_search(query="backoff", include_pattern="*.py")
+        - view_file(path="/repo/README.md", view_range=[1, 50])
+        - view_file(path="/repo/src/config.py", view_range=[1, 40])
+    # bash OFF + LSP OFF: pure base tools
+    - when: { tools_none: [bash, find_symbol] }
+      text: |
+        - grep_search(query="retry", include_pattern="*.py")
+        - grep_search(query="backoff", include_pattern="*.py")
+        - glob(pattern="**/error*.py")
+        - view_file(path="/repo/README.md", view_range=[1, 50])
+        - view_file(path="/repo/pyproject.toml", view_range=[1, 30])
+        - view_file(path="/repo/src/config.py", view_range=[1, 40])
+
+  lsp_strategy:
+    - when: { lsp: true }
+      text: |
+        - PREFER LSP tools over bash/grep for code tracing — LSP gives exact symbol locations, bash grep gives noisy text matches
+        - Use LSP (`find_symbol`, `call_graph`, `search_symbol`) for definitions, references, and call chains
+        - Reserve `bash` for git history (log, diff, blame) and `grep_search` for broad text patterns only
+
+  lsp_tools:
+    - when: { lsp: true, tools_all: [find_symbol] }
+      text: |
+        - Use `find_symbol` to trace {lsp_language_names} symbol definitions/references
+          - Supported: {lsp_exts}
+          - Requires `/repo/...` file path + 1-indexed line/column
+    - when: { lsp: true, tools_all: [search_symbol] }
+      text: "- Use `search_symbol` to search for symbol definitions by name across workspace"
+    - when: { lsp: true, tools_all: [get_type] }
+      text: "- Use `get_type` to get type info and docstring for a symbol at position"
+    - when: { lsp: true, tools_all: [list_symbols] }
+      text: "- Use `list_symbols` to get outline of all symbols in a file"
+    - when: { lsp: true, tools_all: [call_graph] }
+      text: "- Use `call_graph` to trace function call relationships (incoming/outgoing usages)"
+
+  retrieval_execution:
+    - when: { retrieval: true }
+      text: "- If semantic hints are provided, START with those files"
+
+  retrieval_workflow:
+    - when: { retrieval: true }
+      text: "2*. If hints provided, read hinted files first (call multiple view_file in parallel)"

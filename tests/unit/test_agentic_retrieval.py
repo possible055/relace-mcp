@@ -159,13 +159,18 @@ class TestAgenticRetrievalLogic:
                 "find authentication",
             )
 
-            # Verify harness was called with user_prompt_override containing hints
+            # Verify harness was called with retrieval=True and hints via run_async
             mock_harness_cls.assert_called_once()
             call_kwargs = mock_harness_cls.call_args.kwargs
-            assert "user_prompt_override" in call_kwargs
-            prompt = call_kwargs["user_prompt_override"]
-            assert "<semantic_hints>" in prompt
-            assert "src/auth.py" in prompt
+            assert call_kwargs.get("retrieval") is True
+            assert "user_prompt_override" not in call_kwargs
+
+            # Verify run_async received semantic_hints_section
+            mock_harness.run_async.assert_called_once()
+            run_kwargs = mock_harness.run_async.call_args.kwargs
+            hints_section = run_kwargs.get("semantic_hints_section", "")
+            assert "<semantic_hints>" in hints_section
+            assert "src/auth.py" in hints_section
 
             assert result["cloud_hints_used"] == 2
 

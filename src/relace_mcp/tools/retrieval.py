@@ -5,7 +5,7 @@ import uuid
 from typing import Any
 
 from ..clients import RelaceRepoClient, SearchLLMClient
-from ..config import RETRIEVAL_USER_PROMPT_TEMPLATE, RelaceConfig
+from ..config import RelaceConfig
 from ..config.settings import AGENTIC_AUTO_SYNC, RETRIEVAL_BACKEND
 from ..repo.backends import (
     ExternalCLIError,
@@ -263,14 +263,10 @@ async def agentic_retrieval_logic(
                 warnings_list.append(f"Cloud search error: {exc}. Proceeding without hints.")
                 logger.warning("[%s] Cloud search exception: %s", trace_id, exc)
 
-    # Stage 2: Build augmented prompt
+    # Stage 2: Build semantic hints section
     hints_section = build_semantic_hints_section(cloud_results, max_hints)
-    user_prompt = RETRIEVAL_USER_PROMPT_TEMPLATE.format(
-        query=query,
-        semantic_hints_section=hints_section,
-    )
 
-    # Stage 3: Run agentic search with custom prompt
+    # Stage 3: Run agentic search with retrieval mode (shared template, hints injected)
     from dataclasses import replace
     from pathlib import Path
 
@@ -283,9 +279,9 @@ async def agentic_retrieval_logic(
         effective_config,
         search_client,
         lsp_languages=lsp_languages,
-        user_prompt_override=user_prompt,
+        retrieval=True,
     )
-    result = await harness.run_async(query=query)
+    result = await harness.run_async(query=query, semantic_hints_section=hints_section)
 
     # Add metadata
     result["trace_id"] = trace_id

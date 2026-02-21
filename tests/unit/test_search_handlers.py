@@ -204,14 +204,14 @@ class TestViewDirectoryHandler:
         assert "visible.txt" in result
         assert ".secret" not in result
 
-    def test_include_hidden_does_not_force_ignore_dot_dirs(self, tmp_path: Path) -> None:
-        """Hidden directories should remain visible when include_hidden=True."""
+    def test_include_hidden_still_prunes_high_cost_dot_dirs(self, tmp_path: Path) -> None:
+        """Traversal prune directories should stay hidden even when include_hidden=True."""
         (tmp_path / ".venv").mkdir()
         (tmp_path / ".venv" / "pyvenv.cfg").write_text("home=/tmp\n")
 
         result = view_directory_handler("/repo", True, str(tmp_path))
-        assert ".venv/" in result
-        assert ".venv/pyvenv.cfg" in result
+        assert ".venv/" not in result
+        assert ".venv/pyvenv.cfg" not in result
 
     def test_returns_error_for_missing_dir(self, tmp_path: Path) -> None:
         """Should return error for non-existent directory."""
@@ -632,6 +632,7 @@ class TestGlobHandler:
 
         # Clear LRU cache for specs
         gi_mod.load_gitignore_spec.cache_clear()
+        gi_mod.collect_gitignore_specs.cache_clear()
 
         result = glob_handler("*.tmp", "/repo", False, 200, str(tmp_path))
         assert "keep.tmp" in result
@@ -665,12 +666,32 @@ class TestGlobHandler:
         (tmp_path / "project_keep.bak").write_text("unignored by .gitignore")
 
         gi_mod.load_gitignore_spec.cache_clear()
+        gi_mod.collect_gitignore_specs.cache_clear()
 
         result = glob_handler("*.*", "/repo", False, 200, str(tmp_path))
         assert "repo_keep.dat" in result
         assert "project_keep.bak" in result
         assert "global_ignored.dat" not in result
         assert "repo_ignored.bak" not in result
+
+    def test_collect_gitignore_specs_uses_cache(self, tmp_path: Path) -> None:
+        """Directory-spec collection should be cached for repeated lookups."""
+        nested = tmp_path / "a" / "b"
+        nested.mkdir(parents=True)
+        (tmp_path / ".gitignore").write_text("*.tmp\n")
+        (tmp_path / "a" / ".gitignore").write_text("!keep.tmp\n")
+
+        from relace_mcp.tools.search._impl import gitignore as gi_mod
+
+        gi_mod.load_gitignore_spec.cache_clear()
+        gi_mod.collect_gitignore_specs.cache_clear()
+
+        gi_mod.collect_gitignore_specs(nested, tmp_path)
+        first = gi_mod.collect_gitignore_specs.cache_info()
+        gi_mod.collect_gitignore_specs(nested, tmp_path)
+        second = gi_mod.collect_gitignore_specs.cache_info()
+
+        assert second.hits > first.hits
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash is not available on this platform")
@@ -745,11 +766,11 @@ class TestBashHandler:
         assert "Error" in result
         assert "blocked" in result.lower()
 
-    def test_blocks_pipe(self, tmp_path: Path) -> None:
-        """Should block pipe operator."""
-        result = bash_handler("ls | cat", str(tmp_path))
-        assert "Error" in result
-        assert "blocked" in result.lower()
+    def test_allows_pipe(self, tmp_path: Path) -> None:
+        """Pipe between safe commands should be allowed."""
+        (tmp_path / "test.txt").write_text("hello\nworld\n")
+        result = bash_handler("cat test.txt | head -1", str(tmp_path))
+        assert "Error" not in result
 
     def test_blocks_redirect(self, tmp_path: Path) -> None:
         """Should block output redirection."""
@@ -769,11 +790,10 @@ class TestBashHandler:
         assert "Error" in result
         assert "blocked" in result.lower()
 
-    def test_blocks_shell_variable_expansion(self, tmp_path: Path) -> None:
-        """Should block shell variable expansion ($...) to prevent sandbox escape."""
+    def test_allows_shell_variable_home(self, tmp_path: Path) -> None:
+        """$HOME is safe because env sets HOME=base_dir."""
         result = bash_handler('echo "$HOME"', str(tmp_path))
-        assert "Error" in result
-        assert "blocked" in result.lower()
+        assert str(tmp_path) in result
 
     def test_returns_no_output_message(self, tmp_path: Path) -> None:
         """Should return message for empty output."""

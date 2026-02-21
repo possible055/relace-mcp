@@ -21,10 +21,12 @@ class BenchmarkResult:
     functions_hit: int
     functions_total: int
     turns_used: int
-    latency_ms: float
+    latency_s: float
     partial: bool = False
     error: str | None = None
     returned_files: dict[str, list[list[int]]] = field(default_factory=dict)
+    raw_result: dict[str, Any] = field(default_factory=dict)
+    trace_path: str | None = None
 
 
 @dataclass

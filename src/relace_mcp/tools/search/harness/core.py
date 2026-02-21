@@ -53,8 +53,11 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         *,
         lsp_languages: frozenset[str] | None = None,
         user_prompt_override: str | None = None,
+        retrieval: bool = False,
+        trace: bool = False,
     ) -> None:
         self._config = config
+        self._trace = trace
         self._client = client
         self._observed_files: dict[str, list[list[int]]] = {}
         self._view_line_re = re.compile(r"^(\d+)\s")
@@ -73,9 +76,12 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             self._turn_hint_template = TURN_HINT_TEMPLATE_OPENAI
             self._turn_instructions = TURN_INSTRUCTIONS_OPENAI
 
-        # Build dynamic system prompt with LSP language info and enabled tools
+        # Build dynamic system prompt with LSP language info, enabled tools, and context
         enabled_tools = self._enabled_tool_names()
-        self._system_prompt = build_system_prompt(base_prompt, self._lsp_languages, enabled_tools)
+        context = {"retrieval": True} if retrieval else None
+        self._system_prompt = build_system_prompt(
+            base_prompt, self._lsp_languages, enabled_tools, context
+        )
 
     def _get_turn_hint(self, turn: int, max_turns: int, chars_used: int) -> str:
         """Generate turn status hint.
@@ -99,7 +105,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             instruction=instruction,
         )
 
-    def run(self, query: str) -> dict[str, Any]:
+    def run(self, query: str, semantic_hints_section: str = "") -> dict[str, Any]:
         """Execute one Fast Agentic Search.
 
         Args:
@@ -130,7 +136,12 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         self._observed_files = {}
 
         try:
-            result = self._run_search_loop(query, trace_id, start_time=start_time)
+            result = self._run_search_loop(
+                query,
+                trace_id,
+                start_time=start_time,
+                semantic_hints_section=semantic_hints_section,
+            )
             total_ms = (time.perf_counter() - start_time) * 1000
             log_search_complete(
                 trace_id,
@@ -153,7 +164,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 "error": str(exc),
             }
 
-    async def run_async(self, query: str) -> dict[str, Any]:
+    async def run_async(self, query: str, semantic_hints_section: str = "") -> dict[str, Any]:
         """Execute one Fast Agentic Search asynchronously.
 
         Note:
@@ -178,7 +189,12 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         self._observed_files = {}
 
         try:
-            result = await self._run_search_loop_async(query, trace_id, start_time=start_time)
+            result = await self._run_search_loop_async(
+                query,
+                trace_id,
+                start_time=start_time,
+                semantic_hints_section=semantic_hints_section,
+            )
             total_ms = (time.perf_counter() - start_time) * 1000
             log_search_complete(
                 trace_id,
@@ -201,22 +217,34 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 "error": str(exc),
             }
 
-    def _run_search_loop(self, query: str, trace_id: str, *, start_time: float) -> dict[str, Any]:
+    def _run_search_loop(
+        self,
+        query: str,
+        trace_id: str,
+        *,
+        start_time: float,
+        semantic_hints_section: str = "",
+    ) -> dict[str, Any]:
         """Internal method to execute the search loop."""
         user_content = (
             self._user_prompt_override
             if self._user_prompt_override
-            else self._user_prompt_template.format(query=query)
+            else self._user_prompt_template.format(
+                query=query,
+                semantic_hints_section=semantic_hints_section,
+            )
         )
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self._system_prompt},
             {"role": "user", "content": user_content},
         ]
 
+        turns_log: list[dict[str, Any]] = []
+
         for turn in range(SEARCH_MAX_TURNS):
             if (time.perf_counter() - start_time) > SEARCH_TIMEOUT_SECONDS:
                 merged_files = self._merge_observed_ranges()
-                return {
+                result_dict = {
                     "query": query,
                     "explanation": (
                         f"[PARTIAL] Search exceeded SEARCH_TIMEOUT_SECONDS={SEARCH_TIMEOUT_SECONDS}s. "
@@ -227,6 +255,9 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                     "partial": True,
                     "error": f"Search timed out after {SEARCH_TIMEOUT_SECONDS}s",
                 }
+                if self._trace:
+                    result_dict["turns_log"] = turns_log
+                return result_dict
             logger.debug(
                 "[%s] Turn %d/%d",
                 trace_id,
@@ -281,6 +312,16 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             message.setdefault("role", "assistant")
             tool_calls = message.get("tool_calls") or []
 
+            # Debug: log actual tool call names returned by model
+            tc_names = [tc.get("function", {}).get("name", "?") for tc in tool_calls]
+            logger.debug(
+                "[%s] Turn %d: %d tool_calls returned: %s",
+                trace_id,
+                turn + 1,
+                len(tool_calls),
+                tc_names,
+            )
+
             # Extract usage for token tracking
             usage = response.get("usage")
 
@@ -306,10 +347,35 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 )
                 # Add assistant message to context and continue
                 messages.append({"role": "assistant", "content": content})
+                if self._trace:
+                    trace_entry: dict[str, Any] = {
+                        "turn": turn + 1,
+                        "llm_latency_ms": round(llm_latency_ms, 1),
+                        "llm_response": response,
+                        "tool_calls_raw": [],
+                        "tool_results": [],
+                        "report_back": None,
+                    }
+                    turns_log.append(trace_entry)
                 continue
+
+            # Guardrail: detect report_back mixed with other tools
+            tool_calls, message, mixed_rb_ids = self._strip_mixed_report_back(
+                tool_calls, message, trace_id
+            )
 
             # Add assistant message (with tool_calls) to messages
             messages.append(self._sanitize_assistant_message(message))
+
+            # Insert dummy results for stripped report_back tool_calls
+            for rb_id in mixed_rb_ids:
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": rb_id,
+                        "content": "Error: report_back must be the only tool call in its turn. Stripped.",
+                    }
+                )
 
             # Execute tool calls in parallel and collect results
             tool_results, report_back_result = self._execute_tools_parallel(
@@ -319,6 +385,37 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             # Add all tool results to messages (per OpenAI protocol)
             self._append_tool_results_to_messages(messages, tool_results)
 
+            if self._trace:
+                trace_entry = {
+                    "turn": turn + 1,
+                    "llm_latency_ms": round(llm_latency_ms, 1),
+                    "llm_response": response,
+                    "tool_calls_raw": tool_calls,
+                    "tool_results": [
+                        {
+                            "id": tc_id,
+                            "name": tc_name,
+                            "result": tc_result if isinstance(tc_result, str) else tc_result,
+                        }
+                        for tc_id, tc_name, tc_result in tool_results
+                    ],
+                    "report_back": report_back_result,
+                }
+                turns_log.append(trace_entry)
+
+            # If we stripped report_back, inject a correction hint for next turn
+            if mixed_rb_ids:
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "Your previous turn mixed report_back with other tools — "
+                            "report_back was discarded. If you are done exploring, "
+                            "call report_back ALONE as the ONLY tool in your next turn."
+                        ),
+                    }
+                )
+
             # After processing all tool calls, if report_back was called, return
             if report_back_result is not None:
                 logger.debug(
@@ -327,12 +424,15 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                     turn + 1,
                     len(report_back_result.get("files", {})),
                 )
-                return {
+                result_dict = {
                     "query": query,
                     "explanation": report_back_result.get("explanation", ""),
                     "files": self._normalize_report_files(report_back_result.get("files", {})),
                     "turns_used": turn + 1,
                 }
+                if self._trace:
+                    result_dict["turns_log"] = turns_log
+                return result_dict
 
         # Exceeded limit, return partial report (don't raise)
         logger.warning(
@@ -341,7 +441,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             SEARCH_MAX_TURNS,
         )
         merged_files = self._merge_observed_ranges()
-        return {
+        result_dict = {
             "query": query,
             "explanation": (
                 f"[PARTIAL] Search did not complete within {SEARCH_MAX_TURNS} turns. "
@@ -351,20 +451,33 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             "turns_used": SEARCH_MAX_TURNS,
             "partial": True,
         }
+        if self._trace:
+            result_dict["turns_log"] = turns_log
+        return result_dict
 
     async def _run_search_loop_async(
-        self, query: str, trace_id: str, *, start_time: float
+        self,
+        query: str,
+        trace_id: str,
+        *,
+        start_time: float,
+        semantic_hints_section: str = "",
     ) -> dict[str, Any]:
         """Internal method to execute the search loop asynchronously."""
         user_content = (
             self._user_prompt_override
             if self._user_prompt_override
-            else self._user_prompt_template.format(query=query)
+            else self._user_prompt_template.format(
+                query=query,
+                semantic_hints_section=semantic_hints_section,
+            )
         )
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self._system_prompt},
             {"role": "user", "content": user_content},
         ]
+
+        turns_log: list[dict[str, Any]] = []
 
         loop = asyncio.get_running_loop()
         # Use an explicit ThreadPoolExecutor for blocking tool execution.
@@ -372,7 +485,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             for turn in range(SEARCH_MAX_TURNS):
                 if (time.perf_counter() - start_time) > SEARCH_TIMEOUT_SECONDS:
                     merged_files = self._merge_observed_ranges()
-                    return {
+                    result_dict = {
                         "query": query,
                         "explanation": (
                             f"[PARTIAL] Search exceeded SEARCH_TIMEOUT_SECONDS={SEARCH_TIMEOUT_SECONDS}s. "
@@ -383,6 +496,9 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                         "partial": True,
                         "error": f"Search timed out after {SEARCH_TIMEOUT_SECONDS}s",
                     }
+                    if self._trace:
+                        result_dict["turns_log"] = turns_log
+                    return result_dict
                 logger.debug(
                     "[%s] Turn %d/%d",
                     trace_id,
@@ -462,10 +578,35 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                     )
                     # Add assistant message to context and continue
                     messages.append({"role": "assistant", "content": content})
+                    if self._trace:
+                        trace_entry: dict[str, Any] = {
+                            "turn": turn + 1,
+                            "llm_latency_ms": round(llm_latency_ms, 1),
+                            "llm_response": response,
+                            "tool_calls_raw": [],
+                            "tool_results": [],
+                            "report_back": None,
+                        }
+                        turns_log.append(trace_entry)
                     continue
+
+                # Guardrail: detect report_back mixed with other tools
+                tool_calls, message, mixed_rb_ids = self._strip_mixed_report_back(
+                    tool_calls, message, trace_id
+                )
 
                 # Add assistant message (with tool_calls) to messages
                 messages.append(self._sanitize_assistant_message(message))
+
+                # Insert dummy results for stripped report_back tool_calls
+                for rb_id in mixed_rb_ids:
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": rb_id,
+                            "content": "Error: report_back must be the only tool call in its turn. Stripped.",
+                        }
+                    )
 
                 # Execute tool calls off the event loop to avoid blocking.
                 tool_results, report_back_result = await loop.run_in_executor(
@@ -479,6 +620,37 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 # Add all tool results to messages (per OpenAI protocol)
                 self._append_tool_results_to_messages(messages, tool_results)
 
+                if self._trace:
+                    trace_entry = {
+                        "turn": turn + 1,
+                        "llm_latency_ms": round(llm_latency_ms, 1),
+                        "llm_response": response,
+                        "tool_calls_raw": tool_calls,
+                        "tool_results": [
+                            {
+                                "id": tc_id,
+                                "name": tc_name,
+                                "result": tc_result if isinstance(tc_result, str) else tc_result,
+                            }
+                            for tc_id, tc_name, tc_result in tool_results
+                        ],
+                        "report_back": report_back_result,
+                    }
+                    turns_log.append(trace_entry)
+
+                # If we stripped report_back, inject a correction hint for next turn
+                if mixed_rb_ids:
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "Your previous turn mixed report_back with other tools — "
+                                "report_back was discarded. If you are done exploring, "
+                                "call report_back ALONE as the ONLY tool in your next turn."
+                            ),
+                        }
+                    )
+
                 # After processing all tool calls, if report_back was called, return
                 if report_back_result is not None:
                     logger.debug(
@@ -487,12 +659,15 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                         turn + 1,
                         len(report_back_result.get("files", {})),
                     )
-                    return {
+                    result_dict = {
                         "query": query,
                         "explanation": report_back_result.get("explanation", ""),
                         "files": self._normalize_report_files(report_back_result.get("files", {})),
                         "turns_used": turn + 1,
                     }
+                    if self._trace:
+                        result_dict["turns_log"] = turns_log
+                    return result_dict
 
         # Exceeded limit, return partial report (don't raise)
         logger.warning(
@@ -501,7 +676,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             SEARCH_MAX_TURNS,
         )
         merged_files = self._merge_observed_ranges()
-        return {
+        result_dict = {
             "query": query,
             "explanation": (
                 f"[PARTIAL] Search did not complete within {SEARCH_MAX_TURNS} turns. "
@@ -511,3 +686,6 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             "turns_used": SEARCH_MAX_TURNS,
             "partial": True,
         }
+        if self._trace:
+            result_dict["turns_log"] = turns_log
+        return result_dict

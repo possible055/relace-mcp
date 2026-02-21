@@ -87,23 +87,6 @@ class SearchLLMClient:
             self._parallel_tool_calls_enabled and not self._disable_parallel_tool_calls
         )
 
-        # OpenAI Structured Outputs does not support parallel_tool_calls with strict=true
-        if self._provider_config.api_compat != RELACE_PROVIDER and include_parallel_tool_calls:
-            tool_has_strict = any(
-                isinstance(t, dict)
-                and isinstance(t.get("function"), dict)
-                and t.get("function", {}).get("strict")
-                for t in tools
-            )
-            if tool_has_strict:
-                logger.warning(
-                    "[%s] OpenAI Structured Outputs does not support parallel_tool_calls "
-                    "with strict=true. Disabling parallel_tool_calls for compatibility. "
-                    "Set SEARCH_PARALLEL_TOOL_CALLS=0 to suppress this warning.",
-                    trace_id,
-                )
-                include_parallel_tool_calls = False
-
         temp = temperature if temperature is not None else SEARCH_TEMPERATURE
 
         extra_body: dict[str, Any] = {
@@ -121,6 +104,13 @@ class SearchLLMClient:
 
         if include_parallel_tool_calls:
             extra_body["parallel_tool_calls"] = True
+
+        logger.debug(
+            "chat request: parallel_tool_calls=%s, relace_sampling=%s, strip_strict=%s",
+            include_parallel_tool_calls,
+            include_relace_sampling,
+            self._strip_tool_strict,
+        )
 
         try:
             data, _latency_ms = self._chat_client.chat_completions(
@@ -197,23 +187,6 @@ class SearchLLMClient:
         include_parallel_tool_calls = (
             self._parallel_tool_calls_enabled and not self._disable_parallel_tool_calls
         )
-
-        # OpenAI Structured Outputs does not support parallel_tool_calls with strict=true
-        if self._provider_config.api_compat != RELACE_PROVIDER and include_parallel_tool_calls:
-            tool_has_strict = any(
-                isinstance(t, dict)
-                and isinstance(t.get("function"), dict)
-                and t.get("function", {}).get("strict")
-                for t in tools
-            )
-            if tool_has_strict:
-                logger.warning(
-                    "[%s] OpenAI Structured Outputs does not support parallel_tool_calls "
-                    "with strict=true. Disabling parallel_tool_calls for compatibility. "
-                    "Set SEARCH_PARALLEL_TOOL_CALLS=0 to suppress this warning.",
-                    trace_id,
-                )
-                include_parallel_tool_calls = False
 
         temp = temperature if temperature is not None else SEARCH_TEMPERATURE
 

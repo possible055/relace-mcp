@@ -168,18 +168,32 @@ class TestFastAgenticSearchHarness:
         bash_spy = MagicMock(return_value="should-not-run")
         monkeypatch.setattr(tc_mod, "bash_handler", bash_spy)
 
-        mock_client.chat.return_value = {
-            "choices": [
-                {
-                    "message": {
-                        "tool_calls": [
-                            _make_bash_call("call_1", "ls -la"),
-                            _make_report_back_call("call_2", "Done", {}),
-                        ]
+        # Turn 1: model tries bash (disabled) alone
+        # Turn 2: model calls report_back alone
+        mock_client.chat.side_effect = [
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [
+                                _make_bash_call("call_1", "ls -la"),
+                            ]
+                        }
                     }
-                }
-            ]
-        }
+                ]
+            },
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [
+                                _make_report_back_call("call_2", "Done", {}),
+                            ]
+                        }
+                    }
+                ]
+            },
+        ]
 
         harness = FastAgenticSearchHarness(mock_config, mock_client)
         result = harness.run("Try to run bash")
@@ -325,29 +339,48 @@ class TestParallelToolCallsFix:
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """report_back in middle should still process all tool calls."""
+        """report_back mixed with other tools triggers guardrail: strip report_back, run others."""
         (tmp_path / "file1.py").write_text("content1\n")
         (tmp_path / "file2.py").write_text("content2\n")
 
-        mock_client.chat.return_value = {
-            "choices": [
-                {
-                    "message": {
-                        "tool_calls": [
-                            _make_view_file_call("call_1", "/repo/file1.py"),
-                            _make_report_back_call("call_2", "Found files", {"file1.py": [[1, 1]]}),
-                            _make_view_file_call("call_3", "/repo/file2.py"),
-                        ]
+        # Turn 1: mixed — guardrail strips report_back, runs view_file calls
+        # Turn 2: model calls report_back alone
+        mock_client.chat.side_effect = [
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [
+                                _make_view_file_call("call_1", "/repo/file1.py"),
+                                _make_report_back_call(
+                                    "call_2", "Found files", {"file1.py": [[1, 1]]}
+                                ),
+                                _make_view_file_call("call_3", "/repo/file2.py"),
+                            ]
+                        }
                     }
-                }
-            ]
-        }
+                ]
+            },
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [
+                                _make_report_back_call(
+                                    "call_4", "Found files", {"file1.py": [[1, 1]]}
+                                ),
+                            ]
+                        }
+                    }
+                ]
+            },
+        ]
 
         harness = FastAgenticSearchHarness(mock_config, mock_client)
         result = harness.run("Find files")
 
         assert result["explanation"] == "Found files"
-        assert mock_client.chat.call_count == 1
+        assert mock_client.chat.call_count == 2
 
     def test_malformed_json_arguments_returns_error(
         self,

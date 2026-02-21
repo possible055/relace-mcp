@@ -1,5 +1,5 @@
 import os
-import shlex
+import re
 import shutil
 import subprocess  # nosec B404
 
@@ -9,14 +9,7 @@ from .constants import BASH_MAX_OUTPUT_CHARS, BASH_TIMEOUT_SECONDS
 
 
 def _format_bash_result(result: subprocess.CompletedProcess[str]) -> str:
-    """Format bash execution result.
-
-    Args:
-        result: subprocess.CompletedProcess object.
-
-    Returns:
-        Formatted output string.
-    """
+    """Format bash execution result."""
     stdout = result.stdout or ""
     stderr = result.stderr or ""
 
@@ -36,52 +29,29 @@ def _format_bash_result(result: subprocess.CompletedProcess[str]) -> str:
 
 
 def _translate_repo_paths_in_command(command: str, base_dir: str) -> str:
-    """Translate /repo paths in command tokens to base_dir paths.
+    """Translate /repo paths in command to base_dir paths via regex.
 
-    Only translates tokens that look like paths (exactly /repo or starting with /repo/).
-    Does not modify strings that happen to contain /repo as substring.
-
-    Security:
-        Uses resolve_repo_path to prevent /repo// escape attacks.
-
-    Args:
-        command: Original command string.
-        base_dir: Base directory to translate /repo to.
-
-    Returns:
-        Command with /repo paths translated.
+    Preserves shell operators (|, &&, 2>, etc.) by working at string level.
     """
-    try:
-        tokens = shlex.split(command)
-    except ValueError:
-        # Fallback: no translation if parsing fails
-        return command
 
-    translated = []
-    for token in tokens:
-        if token == "/repo" or token.startswith("/repo/"):  # nosec B105
-            try:
-                resolved = resolve_repo_path(
-                    token, base_dir, allow_relative=False, allow_absolute=False
-                )
-                # Git Bash on Windows generally prefers forward slashes (C:/Users/...).
-                if os.name == "nt":
-                    resolved = resolved.replace("\\", "/")
-                translated.append(resolved)
-            except ValueError:
-                # Security: invalid path (escape attempt), keep original (will fail safely)
-                translated.append(token)
-        else:
-            translated.append(token)
+    def _replace(m: re.Match[str]) -> str:
+        token = m.group(0)
+        try:
+            resolved = resolve_repo_path(
+                token, base_dir, allow_relative=False, allow_absolute=False
+            )
+            if os.name == "nt":
+                resolved = resolved.replace("\\", "/")
+            return resolved
+        except ValueError:
+            return token
 
-    return shlex.join(translated)
+    # Match /repo followed by /path chars, or standalone /repo at word boundary
+    return re.sub(r"/repo(?:/[\w.+\-/]*)?", _replace, command)
 
 
 def bash_handler(command: str, base_dir: str) -> str:
     """Execute read-only bash command (Unix-only).
-
-    Platform:
-        Unix/Linux/macOS only. Windows not supported (no bash).
 
     Args:
         command: Bash command to execute.
@@ -90,16 +60,13 @@ def bash_handler(command: str, base_dir: str) -> str:
     Returns:
         Command output or error message.
     """
-    # Step 1: Security check on ORIGINAL command (before path translation)
     blocked, reason = is_blocked_command(command, base_dir)
 
     if blocked:
         return f"Error: Command blocked for security reasons. {reason}"
 
-    # Step 2: Translate /repo paths AFTER security check
     translated_command = _translate_repo_paths_in_command(command, base_dir)
     # Defense-in-depth: disable glob expansion to avoid path checks being bypassed
-    # via wildcard expansion (e.g., `cat link*` -> `cat link_to_/etc/passwd`).
     translated_command = f"set -f; {translated_command}"
 
     try:
