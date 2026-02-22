@@ -23,7 +23,7 @@ system_prompt: |
   - FIRST EXPLORATION TURN: You MUST use EXACTLY 8 parallel tool calls. No fewer, no more.
   - SUBSEQUENT EXPLORATION TURNS: You MUST output BETWEEN 6 AND 9 tool calls. Fewer than 6 or more than 9 is FORBIDDEN.
   - REPORT_BACK TURN: You MUST output EXACTLY ONE <tool_call> block containing EXACTLY ONE <function>report_back</function>. NO other tools allowed.
-  - Only these tools may appear together in a multi-function <tool_call>: `view_file`, `view_directory`, `grep_search`, `glob`, `bash`.
+  - Only these tools may appear together in a multi-function <tool_call>: `view_file`, `view_directory`, `grep_search`, `bash`.
   - `report_back` MUST NEVER appear in a multi-function <tool_call>. If you still need more exploration, do the remaining tool calls first, then call report_back in the next turn.
   </critical_rules>
 
@@ -59,6 +59,8 @@ user_prompt_template: |
   <user_query>
   {query}
   </user_query>
+
+  {semantic_hints_section}
 
   <task>
   Follow critical_rules strictly.

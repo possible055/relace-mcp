@@ -159,8 +159,9 @@ class TestFastAgenticSearchHarness:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Even if the model hallucinates tool calls, disabled tools must not execute."""
-        # Ensure default tool allowlist is active (bash is opt-in).
-        monkeypatch.delenv("SEARCH_ENABLED_TOOLS", raising=False)
+        # Ensure bash toggle remains disabled.
+        monkeypatch.delenv("SEARCH_BASH_TOOLS", raising=False)
+        monkeypatch.delenv("SEARCH_LSP_TOOLS", raising=False)
 
         # If bash ever executes here, the handler would be called.
         from relace_mcp.tools.search.harness import tool_calls as tc_mod
@@ -287,10 +288,6 @@ class TestFastAgenticSearchHarness:
         import relace_mcp.tools.search.harness.core as harness_core
 
         monkeypatch.setattr(harness_core, "SEARCH_MAX_TURNS", 2)
-        # Enable find_symbol via env var since it's now opt-in
-        monkeypatch.setenv(
-            "SEARCH_ENABLED_TOOLS", "view_file,view_directory,grep_search,glob,find_symbol"
-        )
         (tmp_path / "test.py").write_text("line1\nline2\nline3\n")
 
         view_to_eof_call = {
@@ -481,10 +478,12 @@ class TestToolSchemas:
         """bash should be available when explicitly enabled."""
         import shutil
 
-        from relace_mcp.tools.search.schemas import get_tool_schemas
+        import relace_mcp.tools.search.schemas.tool_schemas as tool_schemas
 
-        monkeypatch.setenv("SEARCH_ENABLED_TOOLS", "view_file,view_directory,grep_search,glob,bash")
-        schemas = get_tool_schemas()
+        monkeypatch.setattr(tool_schemas, "SEARCH_BASH_TOOLS", True)
+        monkeypatch.setattr(tool_schemas, "SEARCH_LSP_TOOLS", False)
+
+        schemas = tool_schemas.get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
         if shutil.which("bash") is None:
             pytest.skip("bash is not available on this platform")
@@ -495,15 +494,20 @@ class TestToolSchemas:
         names = {t["function"]["name"] for t in TOOL_SCHEMAS}
         assert "glob" in names
 
-    def test_get_tool_schemas_allowlist(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Allowlist should restrict tools but always keep report_back."""
-        from relace_mcp.tools.search.schemas import get_tool_schemas
+    def test_legacy_allowlist_no_longer_enables_bash(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """SEARCH_ENABLED_TOOLS should not control tool exposure anymore."""
+        import relace_mcp.tools.search.schemas.tool_schemas as tool_schemas
 
-        monkeypatch.setenv("SEARCH_ENABLED_TOOLS", "view_file,grep_search,glob")
+        monkeypatch.setenv(
+            "SEARCH_ENABLED_TOOLS",
+            "view_file,view_directory,grep_search,glob,bash",
+        )
+        monkeypatch.setattr(tool_schemas, "SEARCH_BASH_TOOLS", False)
+        monkeypatch.setattr(tool_schemas, "SEARCH_LSP_TOOLS", False)
 
-        schemas = get_tool_schemas()
+        schemas = tool_schemas.get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
-        assert names == {"view_file", "grep_search", "glob", "report_back"}
+        assert "bash" not in names
 
     def test_schema_has_default_per_official_docs(self) -> None:
         """Per Relace official docs, certain params should have default values."""
@@ -519,47 +523,26 @@ class TestToolSchemas:
         case_sensitive = grep["function"]["parameters"]["properties"]["case_sensitive"]
         assert case_sensitive.get("default") is True
 
-    def test_lsp_tools_auto_mode_with_server(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """SEARCH_LSP_TOOLS=auto should enable LSP tools when servers are installed."""
-        import importlib
-
-        import relace_mcp.config.settings as settings
+    def test_lsp_tools_opt_in(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """SEARCH_LSP_TOOLS=1 should enable LSP tools."""
         import relace_mcp.tools.search.schemas.tool_schemas as tool_schemas
 
-        # Set auto mode
-        monkeypatch.setenv("SEARCH_LSP_TOOLS", "auto")
-        monkeypatch.delenv("SEARCH_ENABLED_TOOLS", raising=False)
-
-        # Reload to pick up env change
-        importlib.reload(settings)
-        importlib.reload(tool_schemas)
-
-        # Mock detect_available_lsp_servers AFTER reload to avoid being overwritten
-        monkeypatch.setattr(
-            tool_schemas, "detect_available_lsp_servers", lambda: frozenset({"python"})
-        )
+        monkeypatch.setattr(tool_schemas, "SEARCH_LSP_TOOLS", True)
+        monkeypatch.setattr(tool_schemas, "SEARCH_BASH_TOOLS", False)
 
         schemas = tool_schemas.get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
         assert "find_symbol" in names
 
-    def test_lsp_tools_auto_mode_no_server(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """SEARCH_LSP_TOOLS=auto should disable LSP tools when no servers installed."""
-        import importlib
-
-        import relace_mcp.config.settings as settings
+    def test_lsp_tools_hidden_when_project_has_no_languages(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Even with SEARCH_LSP_TOOLS=1, empty project languages should hide LSP tools."""
         import relace_mcp.tools.search.schemas.tool_schemas as tool_schemas
 
-        monkeypatch.setenv("SEARCH_LSP_TOOLS", "auto")
-        monkeypatch.delenv("SEARCH_ENABLED_TOOLS", raising=False)
+        monkeypatch.setattr(tool_schemas, "SEARCH_LSP_TOOLS", True)
+        monkeypatch.setattr(tool_schemas, "SEARCH_BASH_TOOLS", False)
 
-        # Reload settings first to pick up env change
-        importlib.reload(settings)
-        importlib.reload(tool_schemas)
-
-        # Now mock detect_available_lsp_servers AFTER reload
-        monkeypatch.setattr(tool_schemas, "detect_available_lsp_servers", lambda: frozenset())
-
-        schemas = tool_schemas.get_tool_schemas()
+        schemas = tool_schemas.get_tool_schemas(frozenset())
         names = {t["function"]["name"] for t in schemas}
         assert "find_symbol" not in names

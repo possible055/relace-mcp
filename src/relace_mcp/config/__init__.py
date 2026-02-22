@@ -71,7 +71,7 @@ SEARCH_USER_PROMPT_TEMPLATE: str = _PROMPTS["user_prompt_template"].strip()
 SEARCH_TURN_HINT_TEMPLATE: str = _PROMPTS["turn_hint_template"].strip()
 SEARCH_TURN_INSTRUCTIONS: dict[str, str] = _PROMPTS["turn_instructions"]
 
-# Load search_openai.yaml (OpenAI-compatible - shared by search & retrieval)
+# Load search_openai.yaml (base, no LSP tools)
 # File-level override: SEARCH_PROMPT_FILE_OPENAI
 _PROMPTS_OPENAI_PATH = _LLM_PROMPTS_DIR / "search_openai.yaml"
 _PROMPTS_OPENAI = _load_prompt_file(_PROMPTS_OPENAI_PATH, "SEARCH_PROMPT_FILE_OPENAI")
@@ -83,6 +83,18 @@ SEARCH_SYSTEM_PROMPT_OPENAI: str = _resolve_system_prompt(
 SEARCH_USER_PROMPT_TEMPLATE_OPENAI: str = _PROMPTS_OPENAI["user_prompt_template"].strip()
 SEARCH_TURN_HINT_TEMPLATE_OPENAI: str = _PROMPTS_OPENAI["turn_hint_template"].strip()
 SEARCH_TURN_INSTRUCTIONS_OPENAI: dict[str, str] = _PROMPTS_OPENAI["turn_instructions"]
+
+# Load search_openai_lsp.yaml (LSP-enabled variant)
+# File-level override: SEARCH_PROMPT_FILE_OPENAI_LSP
+_PROMPTS_OPENAI_LSP_PATH = _LLM_PROMPTS_DIR / "search_openai_lsp.yaml"
+_PROMPTS_OPENAI_LSP = _load_prompt_file(_PROMPTS_OPENAI_LSP_PATH, "SEARCH_PROMPT_FILE_OPENAI_LSP")
+
+SEARCH_SYSTEM_PROMPT_OPENAI_LSP: str = _resolve_system_prompt(
+    _PROMPTS_OPENAI_LSP["system_prompt"], "SEARCH_SYSTEM_PROMPT_OPENAI"
+)
+SEARCH_USER_PROMPT_TEMPLATE_OPENAI_LSP: str = _PROMPTS_OPENAI_LSP["user_prompt_template"].strip()
+SEARCH_TURN_HINT_TEMPLATE_OPENAI_LSP: str = _PROMPTS_OPENAI_LSP["turn_hint_template"].strip()
+SEARCH_TURN_INSTRUCTIONS_OPENAI_LSP: dict[str, str] = _PROMPTS_OPENAI_LSP["turn_instructions"]
 
 # Load apply_openai.yaml (Fast Apply for OpenAI-compatible endpoints)
 # Override with APPLY_PROMPT_FILE if set
@@ -105,11 +117,16 @@ __all__ = [
     "SEARCH_USER_PROMPT_TEMPLATE",
     "SEARCH_TURN_HINT_TEMPLATE",
     "SEARCH_TURN_INSTRUCTIONS",
-    # Prompts - OpenAI-compatible
+    # Prompts - OpenAI-compatible (base)
     "SEARCH_SYSTEM_PROMPT_OPENAI",
     "SEARCH_USER_PROMPT_TEMPLATE_OPENAI",
     "SEARCH_TURN_HINT_TEMPLATE_OPENAI",
     "SEARCH_TURN_INSTRUCTIONS_OPENAI",
+    # Prompts - OpenAI-compatible (LSP-enabled)
+    "SEARCH_SYSTEM_PROMPT_OPENAI_LSP",
+    "SEARCH_USER_PROMPT_TEMPLATE_OPENAI_LSP",
+    "SEARCH_TURN_HINT_TEMPLATE_OPENAI_LSP",
+    "SEARCH_TURN_INSTRUCTIONS_OPENAI_LSP",
     # Apply prompt
     "APPLY_SYSTEM_PROMPT",
 ]

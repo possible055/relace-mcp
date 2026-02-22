@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any
 
 from ....config import settings
+from ....observability import log_trace_event
 from .._impl import (
     CallGraphParams,
     GetTypeParams,
@@ -292,6 +293,18 @@ class ToolCallsMixin:
                 result_preview = json.dumps(result, ensure_ascii=False, default=str)[:300]
 
             log_tool_call(trace_id, name, args, result_preview, latency_ms, success, turn=turn)
+            log_trace_event(
+                {
+                    "kind": "agent_tool_call",
+                    "trace_id": trace_id,
+                    "turn": turn,
+                    "tool_name": name,
+                    "args": args,
+                    "result": result,
+                    "latency_ms": round(latency_ms, 1),
+                    "success": success,
+                }
+            )
         except Exception:
             # Logging failure should never break tool execution
             logger.debug("Failed to log tool call for %s", name, exc_info=True)
@@ -308,7 +321,7 @@ class ToolCallsMixin:
         if name not in enabled:
             return (
                 f"Error: Tool '{name}' is disabled. "
-                "Set SEARCH_ENABLED_TOOLS to explicitly allow it."
+                "Enable SEARCH_BASH_TOOLS or SEARCH_LSP_TOOLS as needed."
             )
 
         # report_back does not depend on base_dir.

@@ -174,6 +174,31 @@ def _check_git_subcommand(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
     return False, ""
 
 
+def _check_path_containment(tokens: list[str], base_dir: str) -> tuple[bool, str]:
+    """Verify resolved file arguments stay within base_dir (symlink-safe).
+
+    Args:
+        tokens: Parsed command tokens (first element is the command).
+        base_dir: Sandbox root directory.
+
+    Returns:
+        (is_blocked, reason) tuple.
+    """
+    if not base_dir:
+        return False, ""
+    real_base = os.path.realpath(base_dir)
+    for token in tokens[1:]:
+        if token.startswith("-"):
+            continue
+        if not token or token == ".":  # nosec B105 - "." is a path token, not a password
+            continue
+        candidate = token if os.path.isabs(token) else os.path.join(base_dir, token)
+        resolved = os.path.realpath(candidate)
+        if resolved != real_base and not resolved.startswith(real_base + os.sep):
+            return True, f"Path escapes sandbox: {token}"
+    return False, ""
+
+
 def _validate_single_command(cmd_str: str, base_dir: str) -> tuple[bool, str]:
     tokens = _parse_command_tokens(cmd_str)
     if not tokens:
@@ -193,6 +218,10 @@ def _validate_single_command(cmd_str: str, base_dir: str) -> tuple[bool, str]:
         return True, f"Blocked command: {base_cmd}"
 
     blocked, reason = _check_git_subcommand(tokens, base_cmd)
+    if blocked:
+        return blocked, reason
+
+    blocked, reason = _check_path_containment(tokens, base_dir)
     if blocked:
         return blocked, reason
 

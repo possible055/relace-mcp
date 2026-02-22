@@ -2,8 +2,7 @@ import os
 import shutil
 from typing import Any
 
-from ....config.settings import SEARCH_LSP_TOOLS_MODE
-from ....lsp.languages import detect_available_lsp_servers
+from ....config.settings import SEARCH_BASH_TOOLS, SEARCH_LSP_TOOLS
 
 _TRUTHY = {"1", "true", "yes", "y", "on"}
 _FALSY = {"0", "false", "no", "n", "off"}
@@ -375,11 +374,6 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
 ]
 
 
-def _split_tool_list(raw: str) -> list[str]:
-    # Accept comma/space/semicolon separated lists.
-    return [t for t in raw.replace(",", " ").replace(";", " ").split() if t]
-
-
 def _include_tool_strict() -> bool:
     raw = os.getenv("SEARCH_TOOL_STRICT", "1").strip().lower()
     if raw in _TRUTHY:
@@ -410,58 +404,31 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
 
     Args:
         lsp_languages: Set of available LSP language IDs for the current project.
-            If None, uses default tool set (LSP tools require explicit opt-in via SEARCH_LSP_TOOLS).
+            If None, relies only on environment toggles.
             If empty frozenset, LSP tools are hidden.
 
     Environment variables:
-        - SEARCH_LSP_TOOLS: Controls LSP tool availability.
-          - 'false'/unset (default): LSP tools are disabled.
-          - 'true': All LSP tools are enabled.
-          - 'auto': Enable LSP tools only for languages with installed servers.
-        - SEARCH_ENABLED_TOOLS: Comma/space-separated allowlist, e.g.
-          "view_file,view_directory,grep_search,glob,find_symbol". `report_back` is always enabled.
-          If not set, only basic tools (view_file, view_directory, grep_search, glob) are enabled.
-          When SEARCH_LSP_TOOLS=true/auto and this is set, it also filters which LSP tools are enabled.
-          bash requires explicit opt-in for security reasons.
+        - SEARCH_BASH_TOOLS: Set to 1/true to enable bash tool (disabled by default).
+        - SEARCH_LSP_TOOLS: Set to 1/true to enable LSP tools (disabled by default).
         - SEARCH_TOOL_STRICT: Set to 0/false to omit the non-standard `strict` field from tool schemas.
     """
-    raw_allowlist = os.getenv("SEARCH_ENABLED_TOOLS", "").strip()
-
     # LSP tool names for easy reference
     lsp_tool_names = {"find_symbol", "search_symbol", "get_type", "list_symbols", "call_graph"}
 
-    # Determine which LSP tools should be available based on mode
-    lsp_enabled = False
-    lsp_available_languages: frozenset[str] | None = None
+    # Default: basic exploration tools only.
+    enabled = {
+        "view_file",
+        "view_directory",
+        "grep_search",
+        "glob",
+        "report_back",
+    }
 
-    if SEARCH_LSP_TOOLS_MODE == "true":
-        lsp_enabled = True
-    elif SEARCH_LSP_TOOLS_MODE == "auto":
-        # Auto-detect: check which LSP servers are installed
-        available_servers = detect_available_lsp_servers()
-        if available_servers:
-            lsp_enabled = True
-            lsp_available_languages = available_servers
+    if SEARCH_BASH_TOOLS:
+        enabled.add("bash")
 
-    if raw_allowlist:
-        enabled = {t.strip().lower() for t in _split_tool_list(raw_allowlist)}
-    else:
-        # Default: basic exploration tools only
-        # bash requires opt-in for security (Unix shell, higher risk)
-        enabled = {
-            "view_file",
-            "view_directory",
-            "grep_search",
-            "glob",
-            "report_back",
-        }
-        # When LSP is enabled and no allowlist, enable all LSP tools
-        if lsp_enabled:
-            enabled.update(lsp_tool_names)
-
-    # LSP gatekeeper: when disabled, remove all LSP tools
-    if not lsp_enabled:
-        enabled -= lsp_tool_names
+    if SEARCH_LSP_TOOLS:
+        enabled.update(lsp_tool_names)
 
     # Always keep report_back so the harness can terminate deterministically.
     enabled.add("report_back")
@@ -473,13 +440,6 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
     # Hide LSP tools if no LSP languages are available for this project
     if lsp_languages is not None and not lsp_languages:
         enabled -= lsp_tool_names
-
-    # In auto mode, also consider the lsp_languages parameter for filtering
-    # (intersection of installed servers and project languages)
-    if lsp_available_languages is not None and lsp_languages is not None:
-        # Only keep LSP tools if there's overlap between installed servers and project languages
-        if not (lsp_available_languages & lsp_languages):
-            enabled -= lsp_tool_names
 
     selected = [
         schema for schema in _ALL_TOOL_SCHEMAS if schema.get("function", {}).get("name") in enabled

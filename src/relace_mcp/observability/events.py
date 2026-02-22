@@ -13,6 +13,48 @@ logger = logging.getLogger(__name__)
 MAX_ROTATED_LOGS = 5
 _LOG_LOCK = threading.Lock()
 
+_LEVEL_RANK: dict[str, int] = {
+    "debug": 10,
+    "info": 20,
+    "warning": 30,
+    "error": 40,
+}
+
+
+def _normalize_level(value: object, *, default: str) -> str:
+    if value is None:
+        return default
+    text = str(value).strip().lower()
+    if text in _LEVEL_RANK:
+        return text
+    if text == "warn":
+        return "warning"
+    return default
+
+
+def _level_rank(level: str) -> int:
+    return _LEVEL_RANK.get(level, _LEVEL_RANK["info"])
+
+
+def _normalize_kind(value: object) -> str:
+    if value is None:
+        return "unknown"
+    text = str(value).strip()
+    return text or "unknown"
+
+
+def _should_log_event(kind: str, level: str) -> bool:
+    include = settings.MCP_LOG_INCLUDE_KINDS
+    if include and kind not in include:
+        return False
+
+    exclude = settings.MCP_LOG_EXCLUDE_KINDS
+    if exclude and kind in exclude:
+        return False
+
+    min_level = _normalize_level(settings.MCP_LOG_FILE_LEVEL, default="debug")
+    return _level_rank(level) >= _level_rank(min_level)
+
 
 def redact_value(value: str, max_len: int = 200) -> str:
     if not value:
@@ -70,6 +112,12 @@ def log_event(event: dict[str, Any]) -> None:
             kind = str(event.get("kind", "")).lower()
             event["level"] = "error" if kind.endswith("error") else "info"
 
+        kind = _normalize_kind(event.get("kind"))
+        level = _normalize_level(event.get("level"), default="info")
+        event["level"] = level
+        if not _should_log_event(kind, level):
+            return
+
         with _LOG_LOCK:
             if settings.LOG_PATH.is_dir():
                 logger.warning("Log path is a directory, skipping log write")
@@ -83,7 +131,7 @@ def log_event(event: dict[str, Any]) -> None:
 
 
 def log_tool_start(tool: str, params: dict[str, Any] | None = None) -> None:
-    event: dict[str, Any] = {"kind": "tool_start", "tool": tool}
+    event: dict[str, Any] = {"kind": "tool_start", "level": "debug", "tool": tool}
     if params:
         event["params_keys"] = list(params.keys())
         event["params_preview"] = {k: f"len={len(str(v))}" for k, v in params.items()}
@@ -94,6 +142,7 @@ def log_tool_complete(tool: str, latency_ms: float, result_keys: list[str] | Non
     log_event(
         {
             "kind": "tool_complete",
+            "level": "info",
             "tool": tool,
             "latency_ms": int(latency_ms),
             "result_keys": result_keys,
@@ -105,6 +154,7 @@ def log_tool_error(tool: str, latency_ms: float, error: str, error_type: str | N
     log_event(
         {
             "kind": "tool_error",
+            "level": "error",
             "tool": tool,
             "latency_ms": int(latency_ms),
             "error": redact_value(error, 500),

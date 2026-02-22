@@ -16,6 +16,10 @@ class TraceAnalysis:
     zero_tool_call_turns: list[int]
     has_failed_tool_calls: bool
     failed_tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    total_llm_latency_ms: float = 0.0
+    total_prompt_tokens: int = 0
+    total_completion_tokens: int = 0
+    tool_type_counts: dict[str, int] = field(default_factory=dict)
 
 
 def _classify_trend(counts: list[int]) -> str:
@@ -65,6 +69,20 @@ def analyze_single_trace(trace_path: Path) -> TraceAnalysis:
         )
 
     total_turns = len(turns)
+
+    # Accumulate latency, token, and tool-type metrics
+    total_llm_latency_ms = 0.0
+    total_prompt_tokens = 0
+    total_completion_tokens = 0
+    tool_type_counts: dict[str, int] = {}
+    for t in turns:
+        total_llm_latency_ms += t.get("llm_latency_ms", 0.0)
+        usage = (t.get("llm_response") or {}).get("usage") or {}
+        total_prompt_tokens += usage.get("prompt_tokens", 0)
+        total_completion_tokens += usage.get("completion_tokens", 0)
+        for tr in t.get("tool_results", []):
+            name = tr.get("name", "unknown")
+            tool_type_counts[name] = tool_type_counts.get(name, 0) + 1
 
     # Q1: report_back position
     report_back_turn: int | None = None
@@ -126,6 +144,10 @@ def analyze_single_trace(trace_path: Path) -> TraceAnalysis:
         zero_tool_call_turns=zero_tool_call_turns,
         has_failed_tool_calls=len(failed_tool_calls) > 0,
         failed_tool_calls=failed_tool_calls,
+        total_llm_latency_ms=round(total_llm_latency_ms, 1),
+        total_prompt_tokens=total_prompt_tokens,
+        total_completion_tokens=total_completion_tokens,
+        tool_type_counts=tool_type_counts,
     )
 
 
@@ -189,6 +211,16 @@ def aggregate_summary(analyses: list[TraceAnalysis]) -> dict[str, Any]:
         for fc in a.failed_tool_calls:
             failed_tool_counter[fc["name"]] += 1
 
+    # Q6: LLM latency and token usage
+    avg_llm_latency_ms = sum(a.total_llm_latency_ms for a in analyses) / n
+    avg_prompt_tokens = sum(a.total_prompt_tokens for a in analyses) / n
+    avg_completion_tokens = sum(a.total_completion_tokens for a in analyses) / n
+
+    # Q7: Tool type distribution
+    global_tool_counts: Counter[str] = Counter()
+    for a in analyses:
+        global_tool_counts.update(a.tool_type_counts)
+
     return {
         "total_cases": n,
         "q1_report_back_last_turn": rb_last,
@@ -204,6 +236,10 @@ def aggregate_summary(analyses: list[TraceAnalysis]) -> dict[str, Any]:
         "q5_has_failed_tool_calls": has_failed,
         "q5_has_failed_tool_calls_pct": has_failed / n,
         "q5_top_failed_tools": failed_tool_counter.most_common(10),
+        "q6_avg_llm_latency_ms": round(avg_llm_latency_ms, 1),
+        "q6_avg_prompt_tokens": round(avg_prompt_tokens, 1),
+        "q6_avg_completion_tokens": round(avg_completion_tokens, 1),
+        "q7_top_tool_types": global_tool_counts.most_common(15),
     }
 
 
@@ -230,47 +266,61 @@ def format_report(analyses: list[TraceAnalysis]) -> str:
     rb_last = summary["q1_report_back_last_turn"]
     rb_none = summary["q1_no_report_back"]
     lines.append("")
-    lines.append("Q1: report_back 位置")
-    lines.append(f"  最後一輪 report_back: {rb_last}/{n} ({rb_last / n:.1%})")
+    lines.append("Q1: report_back position")
+    lines.append(f"  report_back on final turn: {rb_last}/{n} ({rb_last / n:.1%})")
     lines.append(
-        f"  非最後一輪:            {n - rb_last - rb_none}/{n} ({(n - rb_last - rb_none) / n:.1%})"
+        f"  not on final turn:       {n - rb_last - rb_none}/{n} ({(n - rb_last - rb_none) / n:.1%})"
     )
     if rb_none:
-        lines.append(f"  無 report_back:        {rb_none}/{n} ({rb_none / n:.1%})")
+        lines.append(f"  no report_back:         {rb_none}/{n} ({rb_none / n:.1%})")
 
     # Q2
     lines.append("")
-    lines.append("Q2: 工具調用頻率趨勢")
+    lines.append("Q2: Tool-call frequency trend")
     for trend, count in sorted(summary["q2_trend_counts"].items(), key=lambda x: -x[1]):
         lines.append(f"  {trend:20s}: {count}/{n} ({count / n:.1%})")
     avg_positions = summary["q2_avg_tool_calls_per_position"]
     if avg_positions:
         preview = avg_positions[:10]
-        lines.append(f"  平均每輪工具調用: {preview}")
+        lines.append(f"  Avg tool calls per turn: {preview}")
 
     # Q3
     vd = summary["q3_view_directory_first_turn"]
     lines.append("")
-    lines.append("Q3: view_directory 首輪出現")
-    lines.append(f"  首輪包含 view_directory: {vd}/{n} ({vd / n:.1%})")
+    lines.append("Q3: view_directory on first turn")
+    lines.append(f"  first turn includes view_directory: {vd}/{n} ({vd / n:.1%})")
 
     # Q4
     hz = summary["q4_has_zero_tool_call_turns"]
     lines.append("")
-    lines.append("Q4: 零工具調用輪次")
-    lines.append(f"  存在 0 工具調用的 case: {hz}/{n} ({hz / n:.1%})")
+    lines.append("Q4: Turns with zero tool calls")
+    lines.append(f"  cases with a 0-tool-call turn: {hz}/{n} ({hz / n:.1%})")
     zero_positions = summary["q4_zero_turn_positions"]
     if zero_positions:
-        lines.append(f"  涉及的 turns: {zero_positions}")
+        lines.append(f"  affected turns: {zero_positions}")
 
     # Q5
     hf = summary["q5_has_failed_tool_calls"]
     lines.append("")
-    lines.append("Q5: 失敗工具調用")
-    lines.append(f"  包含失敗工具的 case: {hf}/{n} ({hf / n:.1%})")
+    lines.append("Q5: Failed tool calls")
+    lines.append(f"  cases with failed tools: {hf}/{n} ({hf / n:.1%})")
     top_failed = summary["q5_top_failed_tools"]
     if top_failed:
         parts = [f"{name} ({count})" for name, count in top_failed]
-        lines.append(f"  常見失敗工具: {', '.join(parts)}")
+        lines.append(f"  most common failed tools: {', '.join(parts)}")
+
+    # Q6
+    lines.append("")
+    lines.append("Q6: LLM Latency & Token Usage")
+    lines.append(f"  Avg LLM latency: {summary['q6_avg_llm_latency_ms']:.0f}ms")
+    lines.append(f"  Avg prompt tokens: {summary['q6_avg_prompt_tokens']:.0f}")
+    lines.append(f"  Avg completion tokens: {summary['q6_avg_completion_tokens']:.0f}")
+
+    # Q7
+    lines.append("")
+    lines.append("Q7: Tool Type Distribution")
+    top_tools = summary.get("q7_top_tool_types", [])
+    for name, count in top_tools:
+        lines.append(f"  {name:30s}: {count}")
 
     return "\n".join(lines)

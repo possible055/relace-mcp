@@ -136,6 +136,9 @@ def build_run_metadata(
             "temperature": relace_settings.SEARCH_TEMPERATURE,
             "prompt_file": prompt_file,
         },
+        "retrieval": {
+            "backend": os.getenv("MCP_RETRIEVAL_BACKEND", "auto"),
+        },
         "environment": {
             "python": sys.version,
             "platform": platform.platform(),

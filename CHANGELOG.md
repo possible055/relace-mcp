@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`MCP_LOGGING` unified** — Now accepts `off` (default), `safe` (with redaction), or `full` (no redaction). Replaces separate `MCP_LOGGING` and `MCP_LOG_REDACT` variables.
 - **`MCP_SEARCH_MODE` → `MCP_SEARCH_RETRIEVAL`** — Simplified boolean flag (`1` to enable `agentic_retrieval` tool).
+- **Search tool toggles simplified** — `SEARCH_LSP_TOOLS` is now boolean-only (`1`/`0`), and `SEARCH_BASH_TOOLS` was added for `bash` enablement.
 - **`agentic_retrieval` parameter simplification** — Removed `branch`, `score_threshold`, and `max_hints` parameters; only `query` is required.
 - **Tool descriptions enhanced** — Improved consistency and clarity across all MCP tools.
 
@@ -27,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`fast_search` tool** — Use `agentic_search` instead.
 - **`MCP_SEARCH_MODE` environment variable** — Use `MCP_SEARCH_RETRIEVAL=1` instead.
 - **`MCP_LOG_REDACT` environment variable** — Integrated into `MCP_LOGGING` values (`safe` or `full`).
+- **`SEARCH_ENABLED_TOOLS` environment variable** — Replaced by dedicated toggles (`SEARCH_BASH_TOOLS`, `SEARCH_LSP_TOOLS`).
 - **`agentic_retrieval` parameters** — `branch`, `score_threshold`, and `max_hints` removed.
 - **Provider-specific API key auto-derivation** — `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `CEREBRAS_API_KEY` are no longer auto-detected. Use `APPLY_API_KEY` / `SEARCH_API_KEY` explicitly for non-Relace providers.
 - **Deprecated environment variables** — All `RELACE_*` prefixed aliases removed:
@@ -42,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `RELACE_SEARCH_TIMEOUT_SECONDS` → Use `SEARCH_TIMEOUT_SECONDS`
   - `RELACE_SEARCH_MAX_TURNS` → Use `SEARCH_MAX_TURNS`
   - `RELACE_SEARCH_PARALLEL_TOOL_CALLS` → Use `SEARCH_PARALLEL_TOOL_CALLS`
-  - `RELACE_SEARCH_ENABLED_TOOLS` → Use `SEARCH_ENABLED_TOOLS`
+  - `RELACE_SEARCH_ENABLED_TOOLS` → Removed; use `SEARCH_BASH_TOOLS` and `SEARCH_LSP_TOOLS`
   - `RELACE_SEARCH_TOOL_STRICT` → Use `SEARCH_TOOL_STRICT`
   - `RELACE_SEARCH_PROMPT_FILE` → Use `SEARCH_PROMPT_FILE`
   - `RELACE_APPLY_PROMPT_FILE` → Use `APPLY_PROMPT_FILE`

@@ -27,6 +27,16 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `MCP_DOTENV_PATH` | — | Path to a `.env` file to load at startup |
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
 | `MCP_LOGGING` | `off` | File logging: `off`, `safe` (with redaction), `full` (no redaction) |
+| `MCP_TRACE` | `1` | Trace toggle (only relevant when `MCP_LOGGING=full`): set to `0` to disable `relace.trace.jsonl` even in full mode |
+| `MCP_LOG_FILE_LEVEL` | `DEBUG` | Minimum level written to `relace.log`: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `MCP_LOG_INCLUDE_KINDS` | — | Comma-separated allowlist for `relace.log` event `kind` (empty = allow all) |
+| `MCP_LOG_EXCLUDE_KINDS` | — | Comma-separated denylist for `relace.log` event `kind` |
+| `MCP_TRACE_INCLUDE_KINDS` | — | Comma-separated allowlist for `relace.trace.jsonl` trace `kind` (empty = allow all) |
+| `MCP_TRACE_EXCLUDE_KINDS` | — | Comma-separated denylist for `relace.trace.jsonl` trace `kind` |
+| `MCP_LOG_DIR` | — | Override base directory for `relace.log`/`traces/` (defaults to the platform state dir) |
+| `MCP_LOG_PATH` | — | Override full path for `relace.log` |
+| `MCP_TRACE_DIR` | — | Override trace directory (defaults to `${MCP_LOG_DIR}/traces`) |
+| `MCP_TRACE_PATH` | — | Override full path for `relace.trace.jsonl` |
 | `MCP_LOG_LEVEL` | `WARNING` | Stderr log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `RELACE_CLOUD_TOOLS` | `0` | Set to `1` to enable cloud tools (cloud_sync, cloud_search, etc.) |
 | `MCP_SEARCH_RETRIEVAL` | `0` | Set to `1` to enable `agentic_retrieval` tool |
@@ -59,8 +69,8 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `SEARCH_TEMPERATURE` | `1.0` | LLM sampling temperature (0.0-2.0) |
 | `SEARCH_TOP_P` | — | Optional top_p sampling (e.g., set to `1` for providers requiring explicit top_p like Mistral) |
 | `SEARCH_MAX_TURNS` | `6` | Maximum agent loop turns |
-| `SEARCH_LSP_TOOLS` | `false` | LSP tool mode: `false` (disabled), `true` (all enabled), `auto` (detect installed servers) |
-| `SEARCH_ENABLED_TOOLS` | (basic only) | Tool allowlist (comma/space-separated). If unset, only basic tools are enabled. When `SEARCH_LSP_TOOLS=true/auto`, this also filters which LSP tools are enabled. `bash` requires explicit opt-in. |
+| `SEARCH_BASH_TOOLS` | `0` | Bash tool toggle (`1` enabled, `0` disabled) |
+| `SEARCH_LSP_TOOLS` | `0` | LSP tools toggle (`1` enabled, `0` disabled) |
 | `SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls |
 | `SEARCH_TOOL_STRICT` | `1` | Include `strict` field in tool schemas |
 | `SEARCH_LSP_TIMEOUT_SECONDS` | `15.0` | LSP startup/request timeout |
@@ -197,6 +207,27 @@ File logging is opt-in. Set `MCP_LOGGING=safe` (with redaction) or `MCP_LOGGING=
 | macOS | `~/Library/Application Support/relace/relace.log` |
 | Windows | `%LOCALAPPDATA%\relace\relace.log` |
 
+> You can override the location with `MCP_LOG_DIR` / `MCP_LOG_PATH`.
+
+### Trace Location (MCP_LOGGING=full)
+
+When `MCP_LOGGING=full`, the server also writes a heavy trace log with full tool I/O
+(including LLM request/response payloads and external CLI stdout/stderr).
+
+| Platform | Path |
+|----------|------|
+| Linux | `~/.local/state/relace/traces/relace.trace.jsonl` |
+| macOS | `~/Library/Application Support/relace/traces/relace.trace.jsonl` |
+| Windows | `%LOCALAPPDATA%\relace\traces\relace.trace.jsonl` |
+
+> You can override the location with `MCP_TRACE_DIR` / `MCP_TRACE_PATH`. Use `MCP_TRACE=0` to disable trace writing.
+
+### Filtering
+
+- **Minimum event level:** `MCP_LOG_FILE_LEVEL=INFO` (or `WARNING`, `ERROR`).
+- **Event kind allow/deny:** `MCP_LOG_INCLUDE_KINDS=search_turn,tool_call` and/or `MCP_LOG_EXCLUDE_KINDS=tool_start`.
+- **Trace kind allow/deny:** `MCP_TRACE_INCLUDE_KINDS=llm_request,llm_response` (or exclude with `MCP_TRACE_EXCLUDE_KINDS`).
+
 ### Log Format
 
 Logs are written in JSON Lines (JSONL) format:
@@ -204,6 +235,23 @@ Logs are written in JSON Lines (JSONL) format:
 ```json
 {"kind":"apply_success","level":"info","trace_id":"a1b2c3d4","latency_ms":150,"file_path":"/path/to/file.py",...}
 ```
+
+### Trace Event Types (MCP_LOGGING=full)
+
+Trace logs are also JSONL. Each line is one event.
+
+| Kind | Description |
+|------|-------------|
+| `mcp_tool_request` | MCP tool call arguments (full) |
+| `mcp_tool_response` | MCP tool call result (full) |
+| `mcp_tool_exception` | MCP tool call exception (full) |
+| `agent_tool_call` | `agentic_search` internal tool I/O (full) |
+| `llm_request` | LLM request payload (full messages + extra_body) |
+| `llm_response` | LLM response payload (full) |
+| `llm_error` | LLM API error payload |
+| `cli_request` | External CLI invocation |
+| `cli_response` | External CLI stdout/stderr |
+| `cli_error` | External CLI failure details |
 
 ### Event Types
 
@@ -217,6 +265,17 @@ Logs are written in JSON Lines (JSONL) format:
 | `tool_call` | Tool call with timing |
 | `search_complete` | Search completed |
 | `search_error` | Search failed |
+| `indexing_status` | Indexing backends summary (relace/codanna/chunkhound) |
+| `indexing_status_error` | Indexing status error (e.g., base_dir resolution failure) |
+| `backend_index_start` | Codanna/ChunkHound indexing started |
+| `backend_index_complete` | Codanna/ChunkHound indexing completed |
+| `backend_index_error` | Codanna/ChunkHound indexing failed |
+| `backend_disabled` | Backend disabled for session (e.g., CLI missing) |
+| `retrieval_backend_selected` | Retrieval backend selection (including auto) |
+| `retrieval_hints_complete` | Retrieval hints completed |
+| `retrieval_hints_error` | Retrieval hints failed (fallback continues) |
+| `retrieval_auto_sync_complete` | Relace auto-sync completed |
+| `retrieval_auto_sync_error` | Relace auto-sync failed |
 
 ### Cloud Event Types
 
@@ -243,6 +302,12 @@ Logs are written in JSON Lines (JSONL) format:
 - Rotates automatically at **10 MB**
 - Keeps up to **5** rotated files
 - Naming: `relace.YYYYMMDD_HHMMSS.log`
+
+### Trace Rotation (MCP_LOGGING=full)
+
+- Rotates automatically at **50 MB**
+- Keeps up to **5** rotated files
+- Naming: `relace.trace.YYYYMMDD_HHMMSS.jsonl`
 
 ---
 
@@ -271,13 +336,10 @@ export SEARCH_MODEL=gpt-4o
 
 ### LSP Tool
 
-LSP tools (`find_symbol`, `search_symbol`, `get_type`, `list_symbols`, `call_graph`) are disabled by default. Enable them via:
+LSP tools (`find_symbol`, `search_symbol`, `get_type`, `list_symbols`, `call_graph`) are disabled by default.
 
-- **Auto-detect:** `SEARCH_LSP_TOOLS=auto` — enables LSP tools only for languages with installed servers
-- **Enable all:** `SEARCH_LSP_TOOLS=1` — enables all LSP tools at once
-- **Fine-grained control:** `SEARCH_LSP_TOOLS=1` + `SEARCH_ENABLED_TOOLS=view_file,find_symbol,...` — only listed LSP tools are enabled
-
-> **Note:** `SEARCH_LSP_TOOLS` acts as a **gatekeeper**. When `false` (default), LSP tools are always disabled. When `auto`, only languages with installed servers are enabled. When `true`, all LSP tools are enabled by default, or filtered by the allowlist if set.
+- **Enable LSP tools:** `SEARCH_LSP_TOOLS=1`
+- **Disable LSP tools:** `SEARCH_LSP_TOOLS=0` (default)
 
 The `find_symbol` tool uses Language Server Protocol for Python semantic queries:
 - `definition`: Jump to symbol definition
@@ -303,7 +365,7 @@ The `bash` tool is disabled by default. To enable on Unix:
   "mcpServers": {
     "relace": {
       "env": {
-        "SEARCH_ENABLED_TOOLS": "view_file,view_directory,grep_search,glob,find_symbol,bash"
+        "SEARCH_BASH_TOOLS": "1"
       }
     }
   }

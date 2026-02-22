@@ -9,6 +9,7 @@ from tenacity import RetryCallState, retry, stop_after_attempt, wait_exponential
 
 from ..config.provider import ProviderConfig
 from ..config.settings import MAX_RETRIES, RETRY_BASE_DELAY
+from ..observability import log_trace_event
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,18 @@ class OpenAIChatClient:
             openai.APIError: API call failed after retries.
         """
         start = time.perf_counter()
+        log_trace_event(
+            {
+                "kind": "llm_request",
+                "trace_id": trace_id,
+                "mode": "sync",
+                "model": self._model,
+                "base_url": self._config.base_url,
+                "temperature": temperature,
+                "extra_body": extra_body,
+                "messages": messages,
+            }
+        )
         try:
             response = self._sync_client.chat.completions.create(
                 model=self._model,
@@ -85,10 +98,31 @@ class OpenAIChatClient:
                 extra_body=extra_body,
             )
             latency_ms = round((time.perf_counter() - start) * 1000, 2)
+            payload = response.model_dump()
+            log_trace_event(
+                {
+                    "kind": "llm_response",
+                    "trace_id": trace_id,
+                    "mode": "sync",
+                    "latency_ms": latency_ms,
+                    "response": payload,
+                }
+            )
             logger.debug("[%s] chat_completions ok (latency=%.1fms)", trace_id, latency_ms)
-            return response.model_dump(), latency_ms
+            return payload, latency_ms
         except openai.APIError as exc:
             latency_ms = round((time.perf_counter() - start) * 1000, 2)
+            error_event: dict[str, Any] = {
+                "kind": "llm_error",
+                "trace_id": trace_id,
+                "mode": "sync",
+                "latency_ms": latency_ms,
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+            if isinstance(exc, openai.APIStatusError):
+                error_event["status_code"] = exc.status_code
+            log_trace_event(error_event)
             logger.warning(
                 "[%s] chat_completions error: %s (latency=%.1fms)",
                 trace_id,
@@ -126,6 +160,18 @@ class OpenAIChatClient:
             openai.APIError: API call failed after retries.
         """
         start = time.perf_counter()
+        log_trace_event(
+            {
+                "kind": "llm_request",
+                "trace_id": trace_id,
+                "mode": "async",
+                "model": self._model,
+                "base_url": self._config.base_url,
+                "temperature": temperature,
+                "extra_body": extra_body,
+                "messages": messages,
+            }
+        )
         try:
             response = await self._async_client.chat.completions.create(
                 model=self._model,
@@ -134,10 +180,31 @@ class OpenAIChatClient:
                 extra_body=extra_body,
             )
             latency_ms = round((time.perf_counter() - start) * 1000, 2)
+            payload = response.model_dump()
+            log_trace_event(
+                {
+                    "kind": "llm_response",
+                    "trace_id": trace_id,
+                    "mode": "async",
+                    "latency_ms": latency_ms,
+                    "response": payload,
+                }
+            )
             logger.debug("[%s] chat_completions_async ok (latency=%.1fms)", trace_id, latency_ms)
-            return response.model_dump(), latency_ms
+            return payload, latency_ms
         except openai.APIError as exc:
             latency_ms = round((time.perf_counter() - start) * 1000, 2)
+            error_event: dict[str, Any] = {
+                "kind": "llm_error",
+                "trace_id": trace_id,
+                "mode": "async",
+                "latency_ms": latency_ms,
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+            if isinstance(exc, openai.APIStatusError):
+                error_event["status_code"] = exc.status_code
+            log_trace_event(error_event)
             logger.warning(
                 "[%s] chat_completions_async error: %s (latency=%.1fms)",
                 trace_id,

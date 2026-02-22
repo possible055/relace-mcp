@@ -2,6 +2,8 @@
 # Decorator-registered functions (@mcp.tool, @mcp.resource) are accessed by the framework
 import asyncio
 import inspect
+import shutil
+import uuid
 from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
@@ -15,6 +17,7 @@ from ..clients import RelaceRepoClient, SearchLLMClient
 from ..clients.apply import ApplyLLMClient
 from ..config import RelaceConfig, resolve_base_dir
 from ..config.settings import AGENTIC_RETRIEVAL_ENABLED, RELACE_CLOUD_TOOLS, RETRIEVAL_BACKEND
+from ..observability import log_event, redact_value
 from ..repo import (
     cloud_info_logic,
     cloud_list_logic,
@@ -22,6 +25,7 @@ from ..repo import (
     cloud_sync_logic,
     load_sync_state,
 )
+from ..repo.core import get_current_git_info, is_git_dirty
 from .apply import apply_file_logic
 from .retrieval import agentic_retrieval_logic
 from .search import FastAgenticSearchHarness
@@ -177,6 +181,239 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 await progress_task
 
     repo_client: RelaceRepoClient | None = None
+
+    @mcp.tool(
+        annotations={
+            "readOnlyHint": False,  # probe=True may auto-index via external CLIs
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": RELACE_CLOUD_TOOLS,  # probe may call cloud_info
+        }
+    )
+    async def indexing_status(
+        probe: Annotated[
+            bool,
+            Field(
+                description=(
+                    "If True, run active health probes for local backends (may auto-index) "
+                    "and run cloud_info when RELACE_CLOUD_TOOLS=1."
+                )
+            ),
+        ] = False,
+        ctx: Context | None = None,
+    ) -> dict[str, Any]:
+        """Inspect indexing services status.
+
+        This reports:
+        - Relace cloud repo sync/index status (passive by default; probe can call cloud_info)
+        - Codanna local index status (markers + optional health probe)
+        - ChunkHound local index status (markers + optional health probe)
+        """
+
+        def _read_text(path: Path) -> str | None:
+            try:
+                if not path.is_file():
+                    return None
+                text = path.read_text(encoding="utf-8", errors="replace").strip()
+                return text or None
+            except OSError:
+                return None
+
+        trace_id = str(uuid.uuid4())[:8]
+
+        try:
+            base_dir, base_dir_source = await resolve_base_dir(config.base_dir, ctx)
+        except Exception as exc:
+            log_event(
+                {
+                    "kind": "indexing_status_error",
+                    "level": "error",
+                    "trace_id": trace_id,
+                    "probe": probe,
+                    "error": redact_value(str(exc), 500),
+                }
+            )
+            return {
+                "trace_id": trace_id,
+                "probe": probe,
+                "base_dir": None,
+                "error": str(exc),
+            }
+
+        base_path = Path(base_dir)
+
+        # --- Relace (cloud) ---
+        current_branch, current_head = get_current_git_info(base_dir)
+        git_dirty = is_git_dirty(base_dir)
+        sync_state = load_sync_state(base_dir)
+
+        relace_status: dict[str, Any] = {
+            "cloud_tools_enabled": RELACE_CLOUD_TOOLS,
+            "local_git": {
+                "git_branch": current_branch,
+                "git_head": current_head[:8] if current_head else "",
+                "git_dirty": git_dirty,
+            },
+            "sync_state": None,
+            "status": None,
+            "probe": None,
+        }
+
+        if sync_state is None:
+            relace_status["status"] = {
+                "ref_changed": False,
+                "needs_sync": True,
+                "recommended_action": "No sync state found. Run cloud_sync().",
+            }
+        else:
+            relace_status["sync_state"] = {
+                "repo_id": sync_state.repo_id,
+                "repo_head": sync_state.repo_head[:8] if sync_state.repo_head else "",
+                "git_branch": sync_state.git_branch,
+                "git_head": sync_state.git_head_sha[:8] if sync_state.git_head_sha else "",
+                "last_sync": sync_state.last_sync,
+                "tracked_files": len(sync_state.files),
+                "skipped_files": len(sync_state.skipped_files),
+                "files_found": sync_state.files_found,
+                "files_selected": sync_state.files_selected,
+                "file_limit": sync_state.file_limit,
+                "files_truncated": sync_state.files_truncated,
+            }
+
+            ref_changed = False
+            needs_sync = False
+            recommended_action = None
+
+            if sync_state.git_head_sha and current_head and sync_state.git_head_sha != current_head:
+                ref_changed = True
+                needs_sync = True
+                recommended_action = (
+                    "Git HEAD changed since last sync. Run cloud_sync() "
+                    "or cloud_sync(force=True, mirror=True)."
+                )
+            elif git_dirty:
+                needs_sync = True
+                recommended_action = (
+                    "Local working tree is dirty. Run cloud_sync() if you want cloud_search "
+                    "to reflect uncommitted changes."
+                )
+
+            relace_status["status"] = {
+                "ref_changed": ref_changed,
+                "needs_sync": needs_sync,
+                "recommended_action": recommended_action,
+            }
+
+        if probe:
+            if not RELACE_CLOUD_TOOLS or repo_client is None:
+                relace_status["probe"] = {
+                    "status": "skipped",
+                    "reason": "RELACE_CLOUD_TOOLS is disabled",
+                }
+            else:
+                relace_status["probe"] = cloud_info_logic(repo_client, base_dir)
+
+        # --- Local backends (Codanna / ChunkHound) ---
+        codanna_cli_path = shutil.which("codanna")
+        chunkhound_cli_path = shutil.which("chunkhound")
+
+        codanna_head_path = base_path / ".codanna" / "last_indexed_head"
+        chunkhound_head_path = base_path / ".chunkhound" / "last_indexed_head"
+
+        codanna_status: dict[str, Any] = {
+            "cli_found": bool(codanna_cli_path),
+            "cli_path": codanna_cli_path,
+            "index_dir_exists": (base_path / ".codanna").is_dir(),
+            "last_indexed_head": _read_text(codanna_head_path),
+            "probe": None,
+        }
+        chunkhound_status: dict[str, Any] = {
+            "cli_found": bool(chunkhound_cli_path),
+            "cli_path": chunkhound_cli_path,
+            "index_dir_exists": (base_path / ".chunkhound").is_dir(),
+            "last_indexed_head": _read_text(chunkhound_head_path),
+            "probe": None,
+        }
+
+        if probe:
+            from ..repo.backends import ExternalCLIError, check_backend_health
+
+            for backend_name, status_obj in (
+                ("codanna", codanna_status),
+                ("chunkhound", chunkhound_status),
+            ):
+                if not status_obj.get("cli_found"):
+                    status_obj["probe"] = {
+                        "status": "error",
+                        "kind": "cli_not_found",
+                        "message": f"{backend_name} CLI not found in PATH",
+                    }
+                    continue
+
+                try:
+                    probe_status = check_backend_health(backend_name, base_dir)
+                    status_obj["probe"] = {"status": probe_status}
+                except ExternalCLIError as exc:
+                    status_obj["probe"] = {
+                        "status": "error",
+                        "backend": exc.backend,
+                        "kind": exc.kind,
+                        "message": str(exc),
+                        "command": exc.command,
+                    }
+                except Exception as exc:
+                    status_obj["probe"] = {
+                        "status": "error",
+                        "kind": type(exc).__name__,
+                        "message": str(exc),
+                    }
+
+        payload = {
+            "trace_id": trace_id,
+            "probe": probe,
+            "base_dir": base_dir,
+            "base_dir_source": base_dir_source,
+            "retrieval_backend": RETRIEVAL_BACKEND,
+            "relace": relace_status,
+            "codanna": codanna_status,
+            "chunkhound": chunkhound_status,
+        }
+
+        relace_needs_sync = None
+        relace_recommended_action = None
+        if isinstance(relace_status.get("status"), dict):
+            relace_needs_sync = relace_status["status"].get("needs_sync")
+            relace_recommended_action = relace_status["status"].get("recommended_action")
+
+        log_event(
+            {
+                "kind": "indexing_status",
+                "level": "info",
+                "trace_id": trace_id,
+                "probe": probe,
+                "base_dir": base_dir,
+                "base_dir_source": base_dir_source,
+                "retrieval_backend": RETRIEVAL_BACKEND,
+                "relace_cloud_tools_enabled": bool(relace_status.get("cloud_tools_enabled")),
+                "relace_needs_sync": relace_needs_sync,
+                "relace_recommended_action": redact_value(
+                    str(relace_recommended_action),
+                    500,
+                )
+                if relace_recommended_action
+                else None,
+                "codanna_cli_found": bool(codanna_status.get("cli_found")),
+                "codanna_index_dir_exists": bool(codanna_status.get("index_dir_exists")),
+                "codanna_last_indexed_head": codanna_status.get("last_indexed_head"),
+                "codanna_probe": codanna_status.get("probe"),
+                "chunkhound_cli_found": bool(chunkhound_status.get("cli_found")),
+                "chunkhound_index_dir_exists": bool(chunkhound_status.get("index_dir_exists")),
+                "chunkhound_last_indexed_head": chunkhound_status.get("last_indexed_head"),
+                "chunkhound_probe": chunkhound_status.get("probe"),
+            }
+        )
+
+        return payload
 
     # Cloud Repos (Semantic Search & Sync) - only register if enabled
     if RELACE_CLOUD_TOOLS:
@@ -393,6 +630,14 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 "id": "agentic_search",
                 "name": "Agentic Search",
                 "description": "Agentic search over local codebase",
+                "enabled": True,
+            }
+        )
+        tools.append(
+            {
+                "id": "indexing_status",
+                "name": "Indexing Status",
+                "description": "Inspect indexing services status (relace/codanna/chunkhound)",
                 "enabled": True,
             }
         )

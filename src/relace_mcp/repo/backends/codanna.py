@@ -6,6 +6,7 @@ import subprocess  # nosec B404
 import time
 from typing import Any
 
+from ...observability import log_event, log_trace_event, redact_value
 from ..core.git import get_git_head, is_git_dirty
 from .cli import _run_cli_json
 from .errors import ExternalCLIError
@@ -124,42 +125,418 @@ def codanna_auto_reindex(base_dir: str) -> dict[str, Any]:
 def _ensure_codanna_index(base_dir: str, env: dict[str, str]) -> None:
     # If .codanna directory doesn't exist, we must run `codanna init` first.
     if not os.path.isdir(os.path.join(base_dir, ".codanna")):
+        command = ["codanna", "init"]
+        timeout_s = 60
+        started = time.perf_counter()
+
+        log_event(
+            {
+                "kind": "backend_index_start",
+                "level": "info",
+                "backend": "codanna",
+                "op": "init",
+                "command": command,
+                "cwd": base_dir,
+                "background": False,
+                "timeout_s": timeout_s,
+            }
+        )
+        log_trace_event(
+            {
+                "kind": "cli_request",
+                "cli": "codanna",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "env_keys": sorted(env.keys()),
+                "background": False,
+                "op": "init",
+            }
+        )
+
         try:
             result = subprocess.run(  # nosec B603 B607
-                ["codanna", "init"],
+                command,
                 cwd=base_dir,
                 capture_output=True,
                 text=True,
                 check=False,
-                timeout=60,
+                timeout=timeout_s,
                 env=env,
             )
-            if result.returncode != 0:
-                stderr = (result.stderr or "").strip()
-                raise RuntimeError(f"codanna init failed: {stderr}")
         except subprocess.TimeoutExpired as exc:
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            log_trace_event(
+                {
+                    "kind": "cli_error",
+                    "cli": "codanna",
+                    "command": command,
+                    "cwd": base_dir,
+                    "timeout_s": timeout_s,
+                    "mode": "text",
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    "background": False,
+                    "op": "init",
+                }
+            )
+            log_event(
+                {
+                    "kind": "backend_index_error",
+                    "level": "error",
+                    "backend": "codanna",
+                    "op": "init",
+                    "command": command,
+                    "cwd": base_dir,
+                    "background": False,
+                    "timeout_s": timeout_s,
+                    "latency_ms": latency_ms,
+                    "error_kind": "timeout",
+                    "error": redact_value(str(exc), 500),
+                }
+            )
             raise RuntimeError(f"codanna init timeout: {exc}") from exc
         except FileNotFoundError as exc:
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            log_trace_event(
+                {
+                    "kind": "cli_error",
+                    "cli": "codanna",
+                    "command": command,
+                    "cwd": base_dir,
+                    "timeout_s": timeout_s,
+                    "mode": "text",
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    "background": False,
+                    "op": "init",
+                }
+            )
+            log_event(
+                {
+                    "kind": "backend_index_error",
+                    "level": "error",
+                    "backend": "codanna",
+                    "op": "init",
+                    "command": command,
+                    "cwd": base_dir,
+                    "background": False,
+                    "timeout_s": timeout_s,
+                    "latency_ms": latency_ms,
+                    "error_kind": "cli_not_found",
+                    "error": "codanna CLI not found",
+                }
+            )
             raise RuntimeError("codanna CLI not found") from exc
+        except OSError as exc:
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            log_trace_event(
+                {
+                    "kind": "cli_error",
+                    "cli": "codanna",
+                    "command": command,
+                    "cwd": base_dir,
+                    "timeout_s": timeout_s,
+                    "mode": "text",
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    "background": False,
+                    "op": "init",
+                }
+            )
+            log_event(
+                {
+                    "kind": "backend_index_error",
+                    "level": "error",
+                    "backend": "codanna",
+                    "op": "init",
+                    "command": command,
+                    "cwd": base_dir,
+                    "background": False,
+                    "timeout_s": timeout_s,
+                    "latency_ms": latency_ms,
+                    "error_kind": "os_error",
+                    "error": redact_value(str(exc), 500),
+                }
+            )
+            raise RuntimeError(f"codanna init failed: {exc}") from exc
+
+        latency_ms = int((time.perf_counter() - started) * 1000)
+
+        if result.returncode != 0:
+            stderr = (result.stderr or "").strip()
+            log_trace_event(
+                {
+                    "kind": "cli_error",
+                    "cli": "codanna",
+                    "command": command,
+                    "cwd": base_dir,
+                    "timeout_s": timeout_s,
+                    "mode": "text",
+                    "returncode": result.returncode,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "detail": stderr,
+                    "background": False,
+                    "op": "init",
+                }
+            )
+            log_event(
+                {
+                    "kind": "backend_index_error",
+                    "level": "error",
+                    "backend": "codanna",
+                    "op": "init",
+                    "command": command,
+                    "cwd": base_dir,
+                    "background": False,
+                    "timeout_s": timeout_s,
+                    "latency_ms": latency_ms,
+                    "returncode": result.returncode,
+                    "stderr_preview": redact_value(stderr, 500),
+                }
+            )
+            raise RuntimeError(f"codanna init failed: {stderr}")
+
+        log_trace_event(
+            {
+                "kind": "cli_response",
+                "cli": "codanna",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "returncode": result.returncode,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "background": False,
+                "op": "init",
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_complete",
+                "level": "info",
+                "backend": "codanna",
+                "op": "init",
+                "command": command,
+                "cwd": base_dir,
+                "background": False,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "returncode": result.returncode,
+                "stdout_len": len(result.stdout or ""),
+                "stderr_len": len(result.stderr or ""),
+            }
+        )
+
+    command = ["codanna", "index"]
+    timeout_s = 600
+    started = time.perf_counter()
+
+    log_event(
+        {
+            "kind": "backend_index_start",
+            "level": "info",
+            "backend": "codanna",
+            "op": "index",
+            "command": command,
+            "cwd": base_dir,
+            "background": False,
+            "timeout_s": timeout_s,
+        }
+    )
+    log_trace_event(
+        {
+            "kind": "cli_request",
+            "cli": "codanna",
+            "command": command,
+            "cwd": base_dir,
+            "timeout_s": timeout_s,
+            "mode": "text",
+            "env_keys": sorted(env.keys()),
+            "background": False,
+            "op": "index",
+        }
+    )
 
     try:
         result = subprocess.run(  # nosec B603 B607
-            ["codanna", "index"],
+            command,
             cwd=base_dir,
             capture_output=True,
             text=True,
             check=False,
-            timeout=600,
+            timeout=timeout_s,
             env=env,
         )
-        if result.returncode != 0:
-            stderr = (result.stderr or "").strip()
-            raise RuntimeError(f"codanna index failed: {stderr}")
-        logger.debug("Codanna index created successfully")
     except subprocess.TimeoutExpired as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "codanna",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "background": False,
+                "op": "index",
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "codanna",
+                "op": "index",
+                "command": command,
+                "cwd": base_dir,
+                "background": False,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "error_kind": "timeout",
+                "error": redact_value(str(exc), 500),
+            }
+        )
         raise RuntimeError(f"codanna index timeout: {exc}") from exc
     except FileNotFoundError as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "codanna",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "background": False,
+                "op": "index",
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "codanna",
+                "op": "index",
+                "command": command,
+                "cwd": base_dir,
+                "background": False,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "error_kind": "cli_not_found",
+                "error": "codanna CLI not found",
+            }
+        )
         raise RuntimeError("codanna CLI not found") from exc
+    except OSError as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "codanna",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "background": False,
+                "op": "index",
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "codanna",
+                "op": "index",
+                "command": command,
+                "cwd": base_dir,
+                "background": False,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "error_kind": "os_error",
+                "error": redact_value(str(exc), 500),
+            }
+        )
+        raise RuntimeError(f"codanna index failed: {exc}") from exc
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "codanna",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "returncode": result.returncode,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "detail": stderr,
+                "background": False,
+                "op": "index",
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "codanna",
+                "op": "index",
+                "command": command,
+                "cwd": base_dir,
+                "background": False,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "returncode": result.returncode,
+                "stderr_preview": redact_value(stderr, 500),
+            }
+        )
+        raise RuntimeError(f"codanna index failed: {stderr}")
+
+    log_trace_event(
+        {
+            "kind": "cli_response",
+            "cli": "codanna",
+            "command": command,
+            "cwd": base_dir,
+            "timeout_s": timeout_s,
+            "mode": "text",
+            "returncode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "background": False,
+            "op": "index",
+        }
+    )
+    log_event(
+        {
+            "kind": "backend_index_complete",
+            "level": "info",
+            "backend": "codanna",
+            "op": "index",
+            "command": command,
+            "cwd": base_dir,
+            "background": False,
+            "timeout_s": timeout_s,
+            "latency_ms": latency_ms,
+            "returncode": result.returncode,
+            "stdout_len": len(result.stdout or ""),
+            "stderr_len": len(result.stderr or ""),
+        }
+    )
+    logger.debug("Codanna index created successfully")
 
 
 def codanna_search(
@@ -302,7 +679,39 @@ def codanna_index_file(file_path: str, base_dir: str) -> None:
         rel_path = os.path.relpath(file_path, base_dir)
     except ValueError:
         rel_path = file_path
+
     command = ["codanna", "index", rel_path]
+    timeout_s = 120
+    started = time.perf_counter()
+
+    log_event(
+        {
+            "kind": "backend_index_start",
+            "level": "info",
+            "backend": "codanna",
+            "op": "index_file",
+            "command": command,
+            "cwd": base_dir,
+            "background": False,
+            "timeout_s": timeout_s,
+            "file_path": file_path,
+            "rel_path": rel_path,
+        }
+    )
+    log_trace_event(
+        {
+            "kind": "cli_request",
+            "cli": "codanna",
+            "command": command,
+            "cwd": base_dir,
+            "timeout_s": timeout_s,
+            "mode": "text",
+            "env_keys": sorted(env.keys()),
+            "background": False,
+            "op": "index_file",
+        }
+    )
+
     try:
         result = subprocess.run(  # nosec B603 B607
             command,
@@ -310,17 +719,185 @@ def codanna_index_file(file_path: str, base_dir: str) -> None:
             capture_output=True,
             text=True,
             check=False,
-            timeout=120,
+            timeout=timeout_s,
             env=env,
         )
-        if result.returncode != 0:
-            stderr = (result.stderr or "").strip()
-            raise RuntimeError(f"codanna index failed: {stderr}")
-        logger.debug("Codanna incremental reindex triggered by edit: %s", rel_path)
     except subprocess.TimeoutExpired as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "codanna",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "background": False,
+                "op": "index_file",
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "codanna",
+                "op": "index_file",
+                "command": command,
+                "cwd": base_dir,
+                "background": False,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "error_kind": "timeout",
+                "error": redact_value(str(exc), 500),
+                "file_path": file_path,
+                "rel_path": rel_path,
+            }
+        )
         raise RuntimeError(f"codanna index timeout: {exc}") from exc
     except FileNotFoundError as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "codanna",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "background": False,
+                "op": "index_file",
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "codanna",
+                "op": "index_file",
+                "command": command,
+                "cwd": base_dir,
+                "background": False,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "error_kind": "cli_not_found",
+                "error": "codanna CLI not found",
+                "file_path": file_path,
+                "rel_path": rel_path,
+            }
+        )
         raise RuntimeError("codanna CLI not found") from exc
+    except OSError as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "codanna",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "background": False,
+                "op": "index_file",
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "codanna",
+                "op": "index_file",
+                "command": command,
+                "cwd": base_dir,
+                "background": False,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "error_kind": "os_error",
+                "error": redact_value(str(exc), 500),
+                "file_path": file_path,
+                "rel_path": rel_path,
+            }
+        )
+        raise RuntimeError(f"codanna index failed: {exc}") from exc
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "codanna",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "returncode": result.returncode,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "detail": stderr,
+                "background": False,
+                "op": "index_file",
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "codanna",
+                "op": "index_file",
+                "command": command,
+                "cwd": base_dir,
+                "background": False,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "returncode": result.returncode,
+                "stderr_preview": redact_value(stderr, 500),
+                "file_path": file_path,
+                "rel_path": rel_path,
+            }
+        )
+        raise RuntimeError(f"codanna index failed: {stderr}")
+
+    log_trace_event(
+        {
+            "kind": "cli_response",
+            "cli": "codanna",
+            "command": command,
+            "cwd": base_dir,
+            "timeout_s": timeout_s,
+            "mode": "text",
+            "returncode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "background": False,
+            "op": "index_file",
+        }
+    )
+    log_event(
+        {
+            "kind": "backend_index_complete",
+            "level": "info",
+            "backend": "codanna",
+            "op": "index_file",
+            "command": command,
+            "cwd": base_dir,
+            "background": False,
+            "timeout_s": timeout_s,
+            "latency_ms": latency_ms,
+            "returncode": result.returncode,
+            "stdout_len": len(result.stdout or ""),
+            "stderr_len": len(result.stderr or ""),
+            "file_path": file_path,
+            "rel_path": rel_path,
+        }
+    )
+    logger.debug("Codanna incremental reindex triggered by edit: %s", rel_path)
 
 
 async def _async_run_codanna_index(file_path: str, base_dir: str) -> None:
@@ -331,6 +908,39 @@ async def _async_run_codanna_index(file_path: str, base_dir: str) -> None:
         rel_path = os.path.relpath(file_path, base_dir)
     except ValueError:
         rel_path = file_path
+
+    command = ["codanna", "index", rel_path]
+    timeout_s = 120
+    started = time.perf_counter()
+
+    log_event(
+        {
+            "kind": "backend_index_start",
+            "level": "info",
+            "backend": "codanna",
+            "op": "index_file",
+            "command": command,
+            "cwd": base_dir,
+            "background": True,
+            "timeout_s": timeout_s,
+            "file_path": file_path,
+            "rel_path": rel_path,
+        }
+    )
+    log_trace_event(
+        {
+            "kind": "cli_request",
+            "cli": "codanna",
+            "command": command,
+            "cwd": base_dir,
+            "timeout_s": timeout_s,
+            "mode": "text",
+            "env_keys": sorted(env.keys()),
+            "background": True,
+            "op": "index_file",
+        }
+    )
+
     try:
         proc = await asyncio.create_subprocess_exec(
             "codanna",
@@ -341,27 +951,196 @@ async def _async_run_codanna_index(file_path: str, base_dir: str) -> None:
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
         logger.warning("codanna CLI not found in background index; disabling backend")
         disable_backend("codanna", "cli_not_found: codanna not in PATH")
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "codanna",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "background": True,
+                "op": "index_file",
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "codanna",
+                "op": "index_file",
+                "command": command,
+                "cwd": base_dir,
+                "background": True,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "error_kind": "cli_not_found",
+                "error": "codanna CLI not found",
+                "file_path": file_path,
+                "rel_path": rel_path,
+            }
+        )
         return
     except OSError as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
         logger.warning("codanna background index failed to start: %s", exc)
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "codanna",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "background": True,
+                "op": "index_file",
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "codanna",
+                "op": "index_file",
+                "command": command,
+                "cwd": base_dir,
+                "background": True,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "error_kind": "os_error",
+                "error": redact_value(str(exc), 500),
+                "file_path": file_path,
+                "rel_path": rel_path,
+            }
+        )
         return
+
     try:
-        _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=120)
-    except TimeoutError:
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
+    except TimeoutError as exc:
         try:
             proc.kill()
         except ProcessLookupError:
             pass
+        latency_ms = int((time.perf_counter() - started) * 1000)
         logger.warning("Codanna background index timed out for %s", rel_path)
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "codanna",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "background": True,
+                "op": "index_file",
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "codanna",
+                "op": "index_file",
+                "command": command,
+                "cwd": base_dir,
+                "background": True,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "error_kind": "timeout",
+                "error": "codanna index timed out",
+                "file_path": file_path,
+                "rel_path": rel_path,
+            }
+        )
         return
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    stdout = (stdout_bytes or b"").decode("utf-8", errors="replace")
+    stderr = (stderr_bytes or b"").decode("utf-8", errors="replace")
+
     if proc.returncode != 0:
-        stderr = (stderr_bytes or b"").decode("utf-8", errors="replace").strip()
-        logger.warning("Codanna background index failed (exit %d): %s", proc.returncode, stderr)
-    else:
-        logger.debug("Codanna background index completed for %s", rel_path)
+        stderr_str = stderr.strip()
+        logger.warning("Codanna background index failed (exit %d): %s", proc.returncode, stderr_str)
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "codanna",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "returncode": proc.returncode,
+                "stdout": stdout,
+                "stderr": stderr,
+                "detail": stderr_str,
+                "background": True,
+                "op": "index_file",
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "codanna",
+                "op": "index_file",
+                "command": command,
+                "cwd": base_dir,
+                "background": True,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "returncode": proc.returncode,
+                "stderr_preview": redact_value(stderr_str, 500),
+                "file_path": file_path,
+                "rel_path": rel_path,
+            }
+        )
+        return
+
+    log_trace_event(
+        {
+            "kind": "cli_response",
+            "cli": "codanna",
+            "command": command,
+            "cwd": base_dir,
+            "timeout_s": timeout_s,
+            "mode": "text",
+            "returncode": proc.returncode,
+            "stdout": stdout,
+            "stderr": stderr,
+            "background": True,
+            "op": "index_file",
+        }
+    )
+    log_event(
+        {
+            "kind": "backend_index_complete",
+            "level": "info",
+            "backend": "codanna",
+            "op": "index_file",
+            "command": command,
+            "cwd": base_dir,
+            "background": True,
+            "timeout_s": timeout_s,
+            "latency_ms": latency_ms,
+            "returncode": proc.returncode,
+            "stdout_len": len(stdout),
+            "stderr_len": len(stderr),
+            "file_path": file_path,
+            "rel_path": rel_path,
+        }
+    )
+    logger.debug("Codanna background index completed for %s", rel_path)
 
 
 async def _async_run_codanna_full_index(base_dir: str) -> None:

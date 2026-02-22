@@ -141,7 +141,8 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 | `RELACE_API_KEY` | ✅* | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥 |
 | `RELACE_CLOUD_TOOLS` | ❌ | 设为 `1` 启用云端工具 |
 | `MCP_SEARCH_MODE` | ❌ | 搜索模式：`agentic`（默认）、`indexed` 或 `both` |
-| `SEARCH_LSP_TOOLS` | ❌ | LSP 工具：`1`（全开）、`auto`（检测已安装服务器）、`0`（关，默认） |
+| `SEARCH_BASH_TOOLS` | ❌ | Bash 工具开关：`1`（开）、`0`（关，默认） |
+| `SEARCH_LSP_TOOLS` | ❌ | LSP 工具开关：`1`（开）、`0`（关，默认） |
 | `MCP_BASE_DIR` | ❌ | 项目根目录（自动检测：MCP Roots → Git → CWD） |
 | `MCP_LOGGING` | ❌ | 文件日志：`off`（默认）、`safe`、`full` |
 | `MCP_DOTENV_PATH` | ❌ | `.env` 文件路径，用于集中配置 |

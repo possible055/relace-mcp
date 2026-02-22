@@ -90,7 +90,9 @@ def _load_benchmark_config():
 @click.option("-v", "--verbose", is_flag=True, help="Verbose output")
 @click.option("-q", "--quiet", is_flag=True, help="Disable progress bar")
 @click.option("--dry-run", is_flag=True, help="Only load data, don't run searches")
-@click.option("--trace", is_flag=True, help="Enable full trace logging (saves per-case JSONL)")
+@click.option(
+    "--trace", is_flag=True, help="Save per-case trace JSONL (reconstructed from relace.log)"
+)
 @click.option(
     "--search-mode",
     type=click.Choice(["agentic", "indexed"]),
@@ -99,14 +101,15 @@ def _load_benchmark_config():
 )
 @click.option(
     "--lsp-tools",
-    type=click.Choice(["true", "false", "auto"]),
+    type=click.Choice(["true", "false"]),
     default=None,
-    help="LSP tools mode: true (all), false (disabled), auto (detect servers)",
+    help="LSP tools toggle: true (enabled), false (disabled)",
 )
 @click.option(
-    "--enabled-tools",
+    "--bash-tools",
+    type=click.Choice(["true", "false"]),
     default=None,
-    help="Comma-separated list of enabled internal tools (e.g., view_file,grep_search,bash)",
+    help="Bash tool toggle: true (enabled), false (disabled)",
 )
 def main(
     dataset_path: str,
@@ -126,7 +129,7 @@ def main(
     trace: bool,
     search_mode: str,
     lsp_tools: str | None,
-    enabled_tools: str | None,
+    bash_tools: str | None,
 ) -> None:
     """Run benchmark on agentic_search or agentic_retrieval.
 
@@ -142,8 +145,8 @@ def main(
         os.environ["SEARCH_TEMPERATURE"] = str(temperature)
     if lsp_tools is not None:
         os.environ["SEARCH_LSP_TOOLS"] = lsp_tools
-    if enabled_tools is not None:
-        os.environ["SEARCH_ENABLED_TOOLS"] = enabled_tools
+    if bash_tools is not None:
+        os.environ["SEARCH_BASH_TOOLS"] = bash_tools
     if search_mode == "indexed":
         os.environ.setdefault("MCP_RETRIEVAL_BACKEND", "auto")
 
@@ -161,7 +164,7 @@ def main(
     click.echo(f"  seed:    {seed}")
     click.echo(f"  search_mode: {search_mode}")
     click.echo(f"  lsp_tools: {lsp_tools or 'default'}")
-    click.echo(f"  enabled_tools: {enabled_tools or 'default'}")
+    click.echo(f"  bash_tools: {bash_tools or 'default'}")
     click.echo(f"  excluded repos: {len(EXCLUDED_REPOS)}")
 
     try:
@@ -243,7 +246,7 @@ def main(
             "seed": seed,
             "search_mode": search_mode,
             "lsp_tools": lsp_tools,
-            "enabled_tools": enabled_tools,
+            "bash_tools": bash_tools,
         },
     )
 

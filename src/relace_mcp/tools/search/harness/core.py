@@ -19,12 +19,16 @@ from ..logging import (
 from ..schemas import (
     SYSTEM_PROMPT,
     SYSTEM_PROMPT_OPENAI,
+    SYSTEM_PROMPT_OPENAI_LSP,
     TURN_HINT_TEMPLATE,
     TURN_HINT_TEMPLATE_OPENAI,
+    TURN_HINT_TEMPLATE_OPENAI_LSP,
     TURN_INSTRUCTIONS,
     TURN_INSTRUCTIONS_OPENAI,
+    TURN_INSTRUCTIONS_OPENAI_LSP,
     USER_PROMPT_TEMPLATE,
     USER_PROMPT_TEMPLATE_OPENAI,
+    USER_PROMPT_TEMPLATE_OPENAI_LSP,
     build_system_prompt,
     get_tool_schemas,
 )
@@ -64,20 +68,27 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         self._lsp_languages = lsp_languages if lsp_languages is not None else frozenset()
         self._user_prompt_override = user_prompt_override
 
+        # Resolve enabled tools first (runtime LSP detection happens here)
+        enabled_tools = self._enabled_tool_names()
+        _lsp_tool_names = {"find_symbol", "search_symbol", "get_type", "list_symbols", "call_graph"}
+        has_lsp = bool(enabled_tools & _lsp_tool_names)
+
         # Select base prompts based on API compatibility mode
         if client.api_compat == RELACE_PROVIDER:
             base_prompt = SYSTEM_PROMPT
             self._user_prompt_template = USER_PROMPT_TEMPLATE
             self._turn_hint_template = TURN_HINT_TEMPLATE
             self._turn_instructions = TURN_INSTRUCTIONS
+        elif has_lsp:
+            base_prompt = SYSTEM_PROMPT_OPENAI_LSP
+            self._user_prompt_template = USER_PROMPT_TEMPLATE_OPENAI_LSP
+            self._turn_hint_template = TURN_HINT_TEMPLATE_OPENAI_LSP
+            self._turn_instructions = TURN_INSTRUCTIONS_OPENAI_LSP
         else:
             base_prompt = SYSTEM_PROMPT_OPENAI
             self._user_prompt_template = USER_PROMPT_TEMPLATE_OPENAI
             self._turn_hint_template = TURN_HINT_TEMPLATE_OPENAI
             self._turn_instructions = TURN_INSTRUCTIONS_OPENAI
-
-        # Build dynamic system prompt with LSP language info, enabled tools, and context
-        enabled_tools = self._enabled_tool_names()
         context = {"retrieval": True} if retrieval else None
         self._system_prompt = build_system_prompt(
             base_prompt, self._lsp_languages, enabled_tools, context
@@ -105,7 +116,9 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             instruction=instruction,
         )
 
-    def run(self, query: str, semantic_hints_section: str = "") -> dict[str, Any]:
+    def run(
+        self, query: str, semantic_hints_section: str = "", *, trace_id: str | None = None
+    ) -> dict[str, Any]:
         """Execute one Fast Agentic Search.
 
         Args:
@@ -120,16 +133,17 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 "turns_used": int,
                 "partial": bool,  # optional, True when error or max turns exceeded
                 "error": str,  # optional, present when error occurred
+                "trace_id": str,
             }
 
         Note:
             This method always returns a dict, never raises exceptions.
             When errors occur, returns a partial report with error field.
         """
-        trace_id = str(uuid.uuid4())[:8]
+        tid = trace_id or str(uuid.uuid4())[:8]
         # Safe query truncation (avoid cutting in middle of multi-byte characters)
-        logger.debug("[%s] Starting Fast Agentic Search (query_len=%d)", trace_id, len(query))
-        log_search_start(trace_id, query)
+        logger.debug("[%s] Starting Fast Agentic Search (query_len=%d)", tid, len(query))
+        log_search_start(tid, query)
         start_time = time.perf_counter()
 
         # Reset observed_files (used to accumulate explored files)
@@ -138,13 +152,14 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         try:
             result = self._run_search_loop(
                 query,
-                trace_id,
+                tid,
                 start_time=start_time,
                 semantic_hints_section=semantic_hints_section,
             )
+            result["trace_id"] = tid
             total_ms = (time.perf_counter() - start_time) * 1000
             log_search_complete(
-                trace_id,
+                tid,
                 result.get("turns_used", 0),
                 len(result.get("files", {})),
                 result.get("partial", False),
@@ -152,8 +167,8 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             )
             return result
         except Exception as exc:
-            logger.exception("[%s] Search failed with error", trace_id)
-            log_search_error(trace_id, str(exc))
+            logger.exception("[%s] Search failed with error", tid)
+            log_search_error(tid, str(exc))
             merged_files = self._merge_observed_ranges()
             return {
                 "query": query,
@@ -162,27 +177,30 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 "turns_used": 0,
                 "partial": True,
                 "error": str(exc),
+                "trace_id": tid,
             }
 
-    async def run_async(self, query: str, semantic_hints_section: str = "") -> dict[str, Any]:
+    async def run_async(
+        self, query: str, semantic_hints_section: str = "", *, trace_id: str | None = None
+    ) -> dict[str, Any]:
         """Execute one Fast Agentic Search asynchronously.
 
         Note:
             This method always returns a dict, never raises exceptions.
             When errors occur, returns a partial report with error field.
         """
-        trace_id = str(uuid.uuid4())[:8]
+        tid = trace_id or str(uuid.uuid4())[:8]
         # Safe query truncation (avoid cutting in middle of multi-byte characters)
         query_preview = query[:100] if len(query) <= 100 else query[:97] + "..."
         # Sanitize preview for log injection safety (remove newlines and control chars)
         query_preview = query_preview.replace("\n", " ").replace("\r", " ")
         logger.debug(
             "[%s] Starting Fast Agentic Search async (query_len=%d, preview=%s)",
-            trace_id,
+            tid,
             len(query),
             query_preview,
         )
-        log_search_start(trace_id, query)
+        log_search_start(tid, query)
         start_time = time.perf_counter()
 
         # Reset observed_files (used to accumulate explored files)
@@ -191,13 +209,14 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         try:
             result = await self._run_search_loop_async(
                 query,
-                trace_id,
+                tid,
                 start_time=start_time,
                 semantic_hints_section=semantic_hints_section,
             )
+            result["trace_id"] = tid
             total_ms = (time.perf_counter() - start_time) * 1000
             log_search_complete(
-                trace_id,
+                tid,
                 result.get("turns_used", 0),
                 len(result.get("files", {})),
                 result.get("partial", False),
@@ -205,8 +224,8 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             )
             return result
         except Exception as exc:
-            logger.exception("[%s] Search failed with error", trace_id)
-            log_search_error(trace_id, str(exc))
+            logger.exception("[%s] Search failed with error", tid)
+            log_search_error(tid, str(exc))
             merged_files = self._merge_observed_ranges()
             return {
                 "query": query,
@@ -215,6 +234,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 "turns_used": 0,
                 "partial": True,
                 "error": str(exc),
+                "trace_id": tid,
             }
 
     def _run_search_loop(
@@ -366,16 +386,6 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
 
             # Add assistant message (with tool_calls) to messages
             messages.append(self._sanitize_assistant_message(message))
-
-            # Insert dummy results for stripped report_back tool_calls
-            for rb_id in mixed_rb_ids:
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": rb_id,
-                        "content": "Error: report_back must be the only tool call in its turn. Stripped.",
-                    }
-                )
 
             # Execute tool calls in parallel and collect results
             tool_results, report_back_result = self._execute_tools_parallel(
@@ -597,16 +607,6 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
 
                 # Add assistant message (with tool_calls) to messages
                 messages.append(self._sanitize_assistant_message(message))
-
-                # Insert dummy results for stripped report_back tool_calls
-                for rb_id in mixed_rb_ids:
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": rb_id,
-                            "content": "Error: report_back must be the only tool call in its turn. Stripped.",
-                        }
-                    )
 
                 # Execute tool calls off the event loop to avoid blocking.
                 tool_results, report_back_result = await loop.run_in_executor(

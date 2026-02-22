@@ -66,9 +66,15 @@ def _format_float_for_filename(value: float) -> str:
 )
 @click.option(
     "--lsp-tools",
-    type=click.Choice(["true", "false", "auto"]),
+    type=click.Choice(["true", "false"]),
     default=None,
-    help="LSP tools mode: true (all), false (disabled), auto (detect servers)",
+    help="LSP tools toggle: true (enabled), false (disabled)",
+)
+@click.option(
+    "--bash-tools",
+    type=click.Choice(["true", "false"]),
+    default=None,
+    help="Bash tool toggle: true (enabled), false (disabled)",
 )
 def main(
     dataset_path: str,
@@ -82,6 +88,7 @@ def main(
     dry_run: bool,
     search_mode: str,
     lsp_tools: str | None,
+    bash_tools: str | None,
 ) -> None:
     benchmark_dir = get_benchmark_dir()
     resolved_dataset_path = (
@@ -172,6 +179,8 @@ def main(
         ]
         if lsp_tools is not None:
             cmd.extend(["--lsp-tools", lsp_tools])
+        if bash_tools is not None:
+            cmd.extend(["--bash-tools", bash_tools])
         if limit is not None:
             cmd.extend(["--limit", str(limit)])
         if shuffle:
