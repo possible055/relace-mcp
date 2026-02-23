@@ -1,8 +1,11 @@
 import logging
+import time
 import uuid
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
+from ...observability import get_trace_id
+from ...observability import tool_name as tool_name_ctx
 from ..core import (
     build_cloud_error_details,
     clear_sync_state,
@@ -33,8 +36,9 @@ def cloud_clear_logic(
     Returns:
         Dict containing operation result.
     """
-    trace_id = str(uuid.uuid4())[:8]
+    trace_id = get_trace_id() if tool_name_ctx.get() else str(uuid.uuid4())[:8]
     logger.debug("[%s] Starting cloud clear", trace_id)
+    t0 = time.perf_counter()
 
     if not confirm:
         result = {
@@ -46,7 +50,12 @@ def cloud_clear_logic(
         log_cloud_event(
             "cloud_clear_start", trace_id, repo_name=None, cloud_repo_name=None, confirm=False
         )
-        log_cloud_event("cloud_clear_complete", trace_id, status="cancelled")
+        log_cloud_event(
+            "cloud_clear_complete",
+            trace_id,
+            status="cancelled",
+            latency_ms=round((time.perf_counter() - t0) * 1000),
+        )
         return result
 
     # Direct repo_id mode: bypass base_dir lookup entirely
@@ -68,7 +77,12 @@ def cloud_clear_logic(
                     "message": f"Repository ({repo_id}) deleted successfully.",
                     "repo_id": repo_id,
                 }
-                log_cloud_event("cloud_clear_complete", trace_id, status="deleted")
+                log_cloud_event(
+                    "cloud_clear_complete",
+                    trace_id,
+                    status="deleted",
+                    latency_ms=round((time.perf_counter() - t0) * 1000),
+                )
                 return result
             else:
                 result = {
@@ -77,7 +91,12 @@ def cloud_clear_logic(
                     "message": f"Failed to delete repository ({repo_id}).",
                     "repo_id": repo_id,
                 }
-                log_cloud_event("cloud_clear_complete", trace_id, status="error")
+                log_cloud_event(
+                    "cloud_clear_complete",
+                    trace_id,
+                    status="error",
+                    latency_ms=round((time.perf_counter() - t0) * 1000),
+                )
                 return result
         except Exception as exc:
             logger.error("[%s] Cloud clear failed: %s", trace_id, exc)
@@ -89,7 +108,12 @@ def cloud_clear_logic(
                 "repo_id": repo_id,
                 **build_cloud_error_details(exc),
             }
-            log_cloud_event("cloud_clear_error", trace_id, result=result)
+            log_cloud_event(
+                "cloud_clear_error",
+                trace_id,
+                result=result,
+                latency_ms=round((time.perf_counter() - t0) * 1000),
+            )
             return result
 
     local_repo_name: str | None = None
@@ -107,7 +131,12 @@ def cloud_clear_logic(
             log_cloud_event(
                 "cloud_clear_start", trace_id, repo_name=None, cloud_repo_name=None, confirm=True
             )
-            log_cloud_event("cloud_clear_error", trace_id, result=result)
+            log_cloud_event(
+                "cloud_clear_error",
+                trace_id,
+                result=result,
+                latency_ms=round((time.perf_counter() - t0) * 1000),
+            )
             return result
 
         log_cloud_event(
@@ -153,7 +182,12 @@ def cloud_clear_logic(
                     "repo_name": local_repo_name,
                     "cloud_repo_name": cloud_repo_name,
                 }
-                log_cloud_event("cloud_clear_complete", trace_id, status="error")
+                log_cloud_event(
+                    "cloud_clear_complete",
+                    trace_id,
+                    status="error",
+                    latency_ms=round((time.perf_counter() - t0) * 1000),
+                )
                 return result
 
             if matching_repos:
@@ -171,7 +205,12 @@ def cloud_clear_logic(
                 "repo_name": local_repo_name,
                 "cloud_repo_name": cloud_repo_name,
             }
-            log_cloud_event("cloud_clear_complete", trace_id, status="not_found")
+            log_cloud_event(
+                "cloud_clear_complete",
+                trace_id,
+                status="not_found",
+                latency_ms=round((time.perf_counter() - t0) * 1000),
+            )
             return result
 
         # 3. specific deletion
@@ -187,7 +226,12 @@ def cloud_clear_logic(
                 "cloud_repo_name": cloud_repo_name,
                 "repo_id": repo_id,
             }
-            log_cloud_event("cloud_clear_complete", trace_id, status="deleted")
+            log_cloud_event(
+                "cloud_clear_complete",
+                trace_id,
+                status="deleted",
+                latency_ms=round((time.perf_counter() - t0) * 1000),
+            )
             return result
         else:
             result = {
@@ -198,7 +242,12 @@ def cloud_clear_logic(
                 "cloud_repo_name": cloud_repo_name,
                 "repo_id": repo_id,
             }
-            log_cloud_event("cloud_clear_complete", trace_id, status="error")
+            log_cloud_event(
+                "cloud_clear_complete",
+                trace_id,
+                status="error",
+                latency_ms=round((time.perf_counter() - t0) * 1000),
+            )
             return result
 
     except Exception as exc:
@@ -210,5 +259,10 @@ def cloud_clear_logic(
             "error": str(exc),
             **build_cloud_error_details(exc),
         }
-        log_cloud_event("cloud_clear_error", trace_id, result=result)
+        log_cloud_event(
+            "cloud_clear_error",
+            trace_id,
+            result=result,
+            latency_ms=round((time.perf_counter() - t0) * 1000),
+        )
         return result

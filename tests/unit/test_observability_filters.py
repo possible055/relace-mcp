@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from relace_mcp.observability import log_event
+from relace_mcp.observability import log_event, log_tool_error
 from relace_mcp.observability.traces import log_trace_event
 
 
@@ -44,3 +44,17 @@ class TestTraceLogFiltering:
         assert len(lines) == 1
         payload = json.loads(lines[0])
         assert payload["kind"] == "keep"
+
+
+class TestToolErrorTraceback:
+    def test_includes_traceback_when_provided(self, mock_log_path: Path) -> None:
+        log_tool_error(
+            "agentic_search",
+            12.3,
+            "boom",
+            "RuntimeError",
+            traceback_str="Traceback (most recent call last):\n  ...\nRuntimeError: boom",
+        )
+        payload = json.loads(mock_log_path.read_text(encoding="utf-8").strip())
+        assert payload["kind"] == "tool_error"
+        assert payload.get("traceback")

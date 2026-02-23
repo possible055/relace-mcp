@@ -3,7 +3,6 @@
 import asyncio
 import inspect
 import shutil
-import uuid
 from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
@@ -17,7 +16,7 @@ from ..clients import RelaceRepoClient, SearchLLMClient
 from ..clients.apply import ApplyLLMClient
 from ..config import RelaceConfig, resolve_base_dir
 from ..config.settings import AGENTIC_RETRIEVAL_ENABLED, RELACE_CLOUD_TOOLS, RETRIEVAL_BACKEND
-from ..observability import log_event, redact_value
+from ..observability import get_trace_id, log_event, redact_value
 from ..repo import (
     cloud_info_logic,
     cloud_list_logic,
@@ -171,7 +170,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             effective_config = replace(config, base_dir=base_dir)
             result = await FastAgenticSearchHarness(
                 effective_config, search_client, lsp_languages=lsp_languages
-            ).run_async(query=query)
+            ).run_async(query=query, trace_id=get_trace_id())
             files_found = len(result.get("files", {}))
             await ctx.debug(f"Search found {files_found} files")
             return result
@@ -219,7 +218,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             except OSError:
                 return None
 
-        trace_id = str(uuid.uuid4())[:8]
+        trace_id = get_trace_id()
 
         try:
             base_dir, base_dir_source = await resolve_base_dir(config.base_dir, ctx)

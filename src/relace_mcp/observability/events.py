@@ -150,7 +150,14 @@ def log_tool_complete(tool: str, latency_ms: float, result_keys: list[str] | Non
     )
 
 
-def log_tool_error(tool: str, latency_ms: float, error: str, error_type: str | None = None) -> None:
+def log_tool_error(
+    tool: str,
+    latency_ms: float,
+    error: str,
+    error_type: str | None = None,
+    *,
+    traceback_str: str | None = None,
+) -> None:
     log_event(
         {
             "kind": "tool_error",
@@ -159,5 +166,6 @@ def log_tool_error(tool: str, latency_ms: float, error: str, error_type: str | N
             "latency_ms": int(latency_ms),
             "error": redact_value(error, 500),
             "error_type": error_type or "Exception",
+            "traceback": redact_value(traceback_str, 8000) if traceback_str else None,
         }
     )

@@ -68,7 +68,7 @@ def log_tool_call(
     safe_args = _sanitize_args(tool_name, args)
     event: dict[str, Any] = {
         "kind": "tool_call",
-        "level": "debug",
+        "level": "debug" if success else "warning",
         "trace_id": trace_id,
         "tool_name": tool_name,
         "args": safe_args,

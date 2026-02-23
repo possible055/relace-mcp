@@ -8,7 +8,8 @@ from typing import Any
 from ..clients import RelaceRepoClient, SearchLLMClient
 from ..config import RelaceConfig
 from ..config.settings import AGENTIC_AUTO_SYNC, RETRIEVAL_BACKEND
-from ..observability import log_event, redact_value
+from ..observability import get_trace_id, log_event, redact_value
+from ..observability import tool_name as tool_name_ctx
 from ..repo.backends import (
     ExternalCLIError,
     chunkhound_auto_reindex,
@@ -104,7 +105,7 @@ async def agentic_retrieval_logic(
     max_hints = 8
     token_limit = 10000
 
-    trace_id = str(uuid.uuid4())[:8]
+    trace_id = get_trace_id() if tool_name_ctx.get() else str(uuid.uuid4())[:8]
     logger.debug("[%s] Starting agentic retrieval", trace_id)
 
     # Resolve "auto" backend now that base_dir is known
