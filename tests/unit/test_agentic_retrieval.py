@@ -715,7 +715,7 @@ class TestScheduleBgDedup:
 
         call_count = 0
 
-        async def _fast_index(bd: str) -> None:
+        async def _fast_index(_bd: str) -> None:
             nonlocal call_count
             call_count += 1
 
@@ -767,7 +767,7 @@ class TestScheduleBgCodannaQueue:
         started: list[str] = []
         unblock = asyncio.Event()
 
-        async def _fake_index(fp: str, bd: str) -> None:
+        async def _fake_index(fp: str, _bd: str) -> None:
             started.append(fp)
             if fp == first_path:
                 await unblock.wait()

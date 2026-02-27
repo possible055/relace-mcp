@@ -2,6 +2,26 @@ import os
 import re
 import shlex
 
+BASH_ALLOWED_COMMANDS = frozenset(
+    {
+        "cat",
+        "diff",
+        "echo",
+        "file",
+        "find",
+        "git",
+        "grep",
+        "head",
+        "jq",
+        "ls",
+        "rg",
+        "tail",
+        "tree",
+        "true",
+        "wc",
+    }
+)
+
 BASH_BLOCKED_COMMANDS = frozenset(
     {
         # File deletion
@@ -70,14 +90,13 @@ BASH_BLOCKED_COMMANDS = frozenset(
 )
 
 BASH_BLOCKED_PATTERNS = [
-    r"(?<![0-9])>\s*[^&\s>]",  # Redirect stdout to file (allow 2> and >&)
-    r"(?<![0-9])>>\s*",  # Append stdout to file (allow 2>>)
     r"\$\(",  # Command substitution (inner commands bypass validation)
     r"`",  # Command substitution (backtick form)
     r"[\r\n]",  # Multi-line commands
     r";\s*\w",  # Command chaining with semicolon
     r"-(exec|execdir|ok|okdir)\b",  # find -exec (executes commands)
     r"-delete\b",  # find -delete
+    r"-f(?:print0?|printf|ls)\b",  # find -fprint/-fprint0/-fprintf/-fls
 ]
 
 _SED_INPLACE_RE = re.compile(r"\bsed\b.*\s-[a-hj-zA-Z]*i")
@@ -109,8 +128,81 @@ GIT_BLOCKED_SUBCOMMANDS = frozenset(
     }
 )
 
+GIT_ALLOWED_SUBCOMMANDS = frozenset(
+    {
+        "blame",
+        "diff",
+        "grep",
+        "log",
+        "ls-files",
+        "show",
+        "status",
+    }
+)
+
+
+def _check_unquoted_operators(command: str) -> tuple[bool, str]:
+    in_single = False
+    in_double = False
+    escaped = False
+    i = 0
+    while i < len(command):
+        ch = command[i]
+
+        if escaped:
+            escaped = False
+            i += 1
+            continue
+
+        if ch == "\\" and not in_single:
+            escaped = True
+            i += 1
+            continue
+
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            i += 1
+            continue
+
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            i += 1
+            continue
+
+        if not in_single and ch == "$":
+            # Allow $HOME / ${HOME} only (HOME is forced to base_dir in bash_handler).
+            if i + 1 < len(command) and command[i + 1] == "{":
+                end = command.find("}", i + 2)
+                if end != -1 and command[i + 2 : end] == "HOME":
+                    i += 1
+                    continue
+                return True, "Blocked: variable expansion ($...)"
+
+            m = re.match(r"[A-Za-z_][A-Za-z0-9_]*", command[i + 1 :])
+            if m and m.group(0) == "HOME":
+                i += 1
+                continue
+            return True, "Blocked: variable expansion ($...)"
+
+        if not in_single and not in_double:
+            if ch in ("<", ">"):
+                return True, "Blocked: redirects (< or >)"
+
+            if ch == "&":
+                if i + 1 < len(command) and command[i + 1] == "&":
+                    i += 2
+                    continue
+                return True, "Blocked: background operator (&)"
+
+        i += 1
+    return False, ""
+
 
 def _check_blocked_patterns(command: str) -> tuple[bool, str]:
+    blocked, reason = _check_unquoted_operators(command)
+    if blocked:
+        return blocked, reason
+
     for pattern in BASH_BLOCKED_PATTERNS:
         if re.search(pattern, command):
             return True, f"Blocked pattern: {pattern}"
@@ -127,13 +219,116 @@ def _parse_command_tokens(command: str) -> list[str]:
 
 
 def _extract_commands(command: str) -> list[str]:
-    parts = re.split(r"\s*(?:&&|\|\|)\s*", command)
-    return [p.strip() for p in parts if p.strip()]
+    parts: list[str] = []
+    buf: list[str] = []
+    in_single = False
+    in_double = False
+    escaped = False
+    i = 0
+    while i < len(command):
+        ch = command[i]
+
+        if escaped:
+            escaped = False
+            buf.append(ch)
+            i += 1
+            continue
+
+        if ch == "\\" and not in_single:
+            escaped = True
+            buf.append(ch)
+            i += 1
+            continue
+
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            buf.append(ch)
+            i += 1
+            continue
+
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            buf.append(ch)
+            i += 1
+            continue
+
+        if not in_single and not in_double:
+            if ch == "&" and i + 1 < len(command) and command[i + 1] == "&":
+                part = "".join(buf).strip()
+                if part:
+                    parts.append(part)
+                buf = []
+                i += 2
+                continue
+            if ch == "|" and i + 1 < len(command) and command[i + 1] == "|":
+                part = "".join(buf).strip()
+                if part:
+                    parts.append(part)
+                buf = []
+                i += 2
+                continue
+
+        buf.append(ch)
+        i += 1
+
+    tail = "".join(buf).strip()
+    if tail:
+        parts.append(tail)
+    return parts
 
 
 def _extract_pipe_commands(command: str) -> list[str]:
-    parts = re.split(r"(?<!\|)\|(?!\|)", command)
-    return [p.strip() for p in parts if p.strip()]
+    parts: list[str] = []
+    buf: list[str] = []
+    in_single = False
+    in_double = False
+    escaped = False
+    i = 0
+    while i < len(command):
+        ch = command[i]
+
+        if escaped:
+            escaped = False
+            buf.append(ch)
+            i += 1
+            continue
+
+        if ch == "\\" and not in_single:
+            escaped = True
+            buf.append(ch)
+            i += 1
+            continue
+
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            buf.append(ch)
+            i += 1
+            continue
+
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            buf.append(ch)
+            i += 1
+            continue
+
+        if not in_single and not in_double and ch == "|":
+            prev_is_pipe = i > 0 and command[i - 1] == "|"
+            next_is_pipe = i + 1 < len(command) and command[i + 1] == "|"
+            if not prev_is_pipe and not next_is_pipe:
+                part = "".join(buf).strip()
+                if part:
+                    parts.append(part)
+                buf = []
+                i += 1
+                continue
+
+        buf.append(ch)
+        i += 1
+
+    tail = "".join(buf).strip()
+    if tail:
+        parts.append(tail)
+    return parts
 
 
 def _check_absolute_paths(tokens: list[str]) -> tuple[bool, str]:
@@ -165,12 +360,26 @@ def _check_path_traversal(command: str, tokens: list[str]) -> tuple[bool, str]:
 def _check_git_subcommand(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
     if base_cmd != "git":
         return False, ""
+    subcmd = ""
     for token in tokens[1:]:
         if token.startswith("-"):
             continue
-        if token in GIT_BLOCKED_SUBCOMMANDS:
-            return True, f"Git subcommand blocked: {token}"
+        subcmd = token
         break
+
+    if not subcmd:
+        return False, ""
+
+    if subcmd in GIT_BLOCKED_SUBCOMMANDS:
+        return True, f"Git subcommand blocked: {subcmd}"
+
+    if subcmd not in GIT_ALLOWED_SUBCOMMANDS:
+        return True, f"Git subcommand not allowlisted: {subcmd}"
+
+    for token in tokens[1:]:
+        if token == "--output" or token.startswith("--output="):  # nosec B105 - not a password
+            return True, "Git option blocked: --output"
+
     return False, ""
 
 
@@ -216,6 +425,9 @@ def _validate_single_command(cmd_str: str, base_dir: str) -> tuple[bool, str]:
 
     if base_cmd in BASH_BLOCKED_COMMANDS:
         return True, f"Blocked command: {base_cmd}"
+
+    if base_cmd not in BASH_ALLOWED_COMMANDS:
+        return True, f"Command not allowlisted: {base_cmd}"
 
     blocked, reason = _check_git_subcommand(tokens, base_cmd)
     if blocked:

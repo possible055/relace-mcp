@@ -30,7 +30,7 @@ def log_search_turn(
     """Record agent loop turn state with LLM API timing and token usage."""
     event: dict[str, Any] = {
         "kind": "search_turn",
-        "level": "debug",
+        "level": "info",
         "trace_id": trace_id,
         "turn": turn,
         "max_turns": max_turns,

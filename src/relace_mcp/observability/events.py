@@ -1,3 +1,4 @@
+import glob
 import json
 import logging
 import threading
@@ -6,7 +7,6 @@ from typing import Any
 
 from ..config import settings
 from .context import get_trace_id, tool_name
-from .settings import MCP_LOG_REDACT
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ def _should_log_event(kind: str, level: str) -> bool:
 def redact_value(value: str, max_len: int = 200) -> str:
     if not value:
         return value
-    if not MCP_LOG_REDACT:
+    if not settings.MCP_LOG_REDACT:
         return value
     if len(value) <= max_len:
         return value
@@ -71,17 +71,17 @@ def redact_value(value: str, max_len: int = 200) -> str:
 
 def rotate_log_if_needed() -> None:
     try:
-        if (
-            settings.LOG_PATH.exists()
-            and settings.LOG_PATH.stat().st_size > settings.MAX_LOG_SIZE_BYTES
-        ):
-            rotated_path = settings.LOG_PATH.with_suffix(
-                f".{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.log"
-            )
-            settings.LOG_PATH.rename(rotated_path)
+        log_path = settings.LOG_PATH
+        if log_path.exists() and log_path.stat().st_size > settings.MAX_LOG_SIZE_BYTES:
+            ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+            stem = log_path.stem
+            suffix = log_path.suffix
+            rotated_path = log_path.with_name(f"{stem}.{ts}{suffix}")
+            log_path.rename(rotated_path)
             logger.debug("Rotated log file to %s", rotated_path)
 
-            rotated_logs = sorted(settings.LOG_PATH.parent.glob("relace.*.log"), reverse=True)
+            pattern = f"{glob.escape(stem)}.*{glob.escape(suffix)}"
+            rotated_logs = sorted(log_path.parent.glob(pattern), reverse=True)
             for old_log in rotated_logs[MAX_ROTATED_LOGS:]:
                 old_log.unlink(missing_ok=True)
                 logger.debug("Cleaned up old log file: %s", old_log)

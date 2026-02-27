@@ -28,7 +28,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
 | `MCP_LOGGING` | `off` | File logging: `off`, `safe` (with redaction), `full` (no redaction) |
 | `MCP_TRACE` | `1` | Trace toggle (only relevant when `MCP_LOGGING=full`): set to `0` to disable `relace.trace.jsonl` even in full mode |
-| `MCP_LOG_FILE_LEVEL` | `DEBUG` | Minimum level written to `relace.log`: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `MCP_LOG_FILE_LEVEL` | `DEBUG` | Minimum level written to `relace.log` (and `relace.trace.jsonl` when enabled): `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `MCP_LOG_INCLUDE_KINDS` | — | Comma-separated allowlist for `relace.log` event `kind` (empty = allow all) |
 | `MCP_LOG_EXCLUDE_KINDS` | — | Comma-separated denylist for `relace.log` event `kind` |
 | `MCP_TRACE_INCLUDE_KINDS` | — | Comma-separated allowlist for `relace.trace.jsonl` trace `kind` (empty = allow all) |
@@ -224,7 +224,7 @@ When `MCP_LOGGING=full`, the server also writes a heavy trace log with full tool
 
 ### Filtering
 
-- **Minimum event level:** `MCP_LOG_FILE_LEVEL=INFO` (or `WARNING`, `ERROR`).
+- **Minimum event/trace level:** `MCP_LOG_FILE_LEVEL=INFO` (or `WARNING`, `ERROR`).
 - **Event kind allow/deny:** `MCP_LOG_INCLUDE_KINDS=search_turn,tool_call` and/or `MCP_LOG_EXCLUDE_KINDS=tool_start`.
 - **Trace kind allow/deny:** `MCP_TRACE_INCLUDE_KINDS=llm_request,llm_response` (or exclude with `MCP_TRACE_EXCLUDE_KINDS`).
 

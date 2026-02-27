@@ -62,6 +62,14 @@ class TestBlocksRedirects:
         blocked, _ = _is_blocked_command("echo test >> output.txt", DEFAULT_BASE_DIR)
         assert blocked
 
+    def test_blocks_stderr_redirect_to_file(self) -> None:
+        blocked, _ = _is_blocked_command("ls missing 2>/repo/out.txt", DEFAULT_BASE_DIR)
+        assert blocked
+
+    def test_blocks_stderr_append_redirect(self) -> None:
+        blocked, _ = _is_blocked_command("ls missing 2>>/repo/out.txt", DEFAULT_BASE_DIR)
+        assert blocked
+
 
 class TestBlocksSedInplace:
     def test_blocks_sed_i(self) -> None:
@@ -72,13 +80,13 @@ class TestBlocksSedInplace:
         blocked, _ = _is_blocked_command("sed -nri 's/old/new/g' file.txt", DEFAULT_BASE_DIR)
         assert blocked
 
-    def test_allows_sed_readonly(self) -> None:
+    def test_blocks_sed_readonly(self) -> None:
         blocked, _ = _is_blocked_command("sed 's/foo/bar/g' file.txt", DEFAULT_BASE_DIR)
-        assert not blocked
+        assert blocked
 
-    def test_allows_sed_n(self) -> None:
+    def test_blocks_sed_n(self) -> None:
         blocked, _ = _is_blocked_command("sed -n '1,10p' file.txt", DEFAULT_BASE_DIR)
-        assert not blocked
+        assert blocked
 
 
 class TestBlocksFindDangerous:
@@ -96,6 +104,10 @@ class TestBlocksFindDangerous:
 
     def test_blocks_find_ok(self) -> None:
         blocked, _ = _is_blocked_command("find . -name '*.py' -ok ls {} \\;", DEFAULT_BASE_DIR)
+        assert blocked
+
+    def test_blocks_find_fprint(self) -> None:
+        blocked, _ = _is_blocked_command("find . -name '*.py' -fprint out.txt", DEFAULT_BASE_DIR)
         assert blocked
 
 
@@ -118,6 +130,20 @@ class TestBlocksCommandInjection:
 
     def test_blocks_multiline(self) -> None:
         blocked, _ = _is_blocked_command("ls\nrm file", DEFAULT_BASE_DIR)
+        assert blocked
+
+    def test_blocks_background_operator(self) -> None:
+        blocked, _ = _is_blocked_command("ls & ls", DEFAULT_BASE_DIR)
+        assert blocked
+
+
+class TestBlocksVariableExpansion:
+    def test_blocks_simple_var(self) -> None:
+        blocked, _ = _is_blocked_command("cat $BASH", DEFAULT_BASE_DIR)
+        assert blocked
+
+    def test_blocks_brace_expansion(self) -> None:
+        blocked, _ = _is_blocked_command("cat ${HOME%/*}/etc/passwd", DEFAULT_BASE_DIR)
         assert blocked
 
 
@@ -178,10 +204,6 @@ class TestAllowsReadOnlyCommands:
         blocked, _ = _is_blocked_command("diff a.txt b.txt", DEFAULT_BASE_DIR)
         assert not blocked
 
-    def test_allows_awk(self) -> None:
-        blocked, _ = _is_blocked_command("awk '{print $1}' file.txt", DEFAULT_BASE_DIR)
-        assert not blocked
-
     def test_allows_echo(self) -> None:
         blocked, _ = _is_blocked_command("echo hello", DEFAULT_BASE_DIR)
         assert not blocked
@@ -198,13 +220,19 @@ class TestAllowsReadOnlyCommands:
         blocked, _ = _is_blocked_command("grep 'foo$' file.txt", DEFAULT_BASE_DIR)
         assert not blocked
 
-    def test_allows_python_unknown_command(self) -> None:
-        blocked, _ = _is_blocked_command("python --version", DEFAULT_BASE_DIR)
-        assert not blocked
-
     def test_allows_jq(self) -> None:
         blocked, _ = _is_blocked_command("jq '.name' package.json", DEFAULT_BASE_DIR)
         assert not blocked
+
+
+class TestBlocksNonAllowlistedCommands:
+    def test_blocks_python(self) -> None:
+        blocked, _ = _is_blocked_command("python --version", DEFAULT_BASE_DIR)
+        assert blocked
+
+    def test_blocks_awk(self) -> None:
+        blocked, _ = _is_blocked_command("awk '{print $1}' file.txt", DEFAULT_BASE_DIR)
+        assert blocked
 
 
 class TestGitSecurity:
@@ -231,6 +259,14 @@ class TestGitSecurity:
     def test_allows_git_log_p(self) -> None:
         blocked, _ = _is_blocked_command("git log -p -n 1", DEFAULT_BASE_DIR)
         assert not blocked
+
+    def test_blocks_git_config(self) -> None:
+        blocked, _ = _is_blocked_command("git config --global user.name foo", DEFAULT_BASE_DIR)
+        assert blocked
+
+    def test_blocks_git_diff_output(self) -> None:
+        blocked, _ = _is_blocked_command("git diff --output=patch.txt HEAD~1", DEFAULT_BASE_DIR)
+        assert blocked
 
     def test_blocks_git_push(self) -> None:
         blocked, _ = _is_blocked_command("git push origin main", DEFAULT_BASE_DIR)

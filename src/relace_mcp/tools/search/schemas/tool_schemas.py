@@ -2,10 +2,20 @@ import os
 import shutil
 from typing import Any
 
-from ....config.settings import SEARCH_BASH_TOOLS, SEARCH_LSP_TOOLS
-
 _TRUTHY = {"1", "true", "yes", "y", "on"}
 _FALSY = {"0", "false", "no", "n", "off"}
+
+
+def _env_toggle(name: str) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+    if not raw:
+        return False
+    if raw in _TRUTHY:
+        return True
+    if raw in _FALSY:
+        return False
+    return False
+
 
 _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
@@ -424,10 +434,10 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
         "report_back",
     }
 
-    if SEARCH_BASH_TOOLS:
+    if _env_toggle("SEARCH_BASH_TOOLS"):
         enabled.add("bash")
 
-    if SEARCH_LSP_TOOLS:
+    if _env_toggle("SEARCH_LSP_TOOLS"):
         enabled.update(lsp_tool_names)
 
     # Always keep report_back so the harness can terminate deterministically.
@@ -447,5 +457,19 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
     return normalize_tool_schemas(selected, include_strict=_include_tool_strict())
 
 
-# Default export for backward compatibility (computed at import time)
-TOOL_SCHEMAS: list[dict[str, Any]] = get_tool_schemas()
+_DEFAULT_TOOL_NAMES = {
+    "view_file",
+    "view_directory",
+    "grep_search",
+    "glob",
+    "report_back",
+}
+
+TOOL_SCHEMAS: list[dict[str, Any]] = normalize_tool_schemas(
+    [
+        schema
+        for schema in _ALL_TOOL_SCHEMAS
+        if schema.get("function", {}).get("name") in _DEFAULT_TOOL_NAMES
+    ],
+    include_strict=_include_tool_strict(),
+)

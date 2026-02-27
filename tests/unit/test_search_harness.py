@@ -480,8 +480,8 @@ class TestToolSchemas:
 
         import relace_mcp.tools.search.schemas.tool_schemas as tool_schemas
 
-        monkeypatch.setattr(tool_schemas, "SEARCH_BASH_TOOLS", True)
-        monkeypatch.setattr(tool_schemas, "SEARCH_LSP_TOOLS", False)
+        monkeypatch.setenv("SEARCH_BASH_TOOLS", "1")
+        monkeypatch.setenv("SEARCH_LSP_TOOLS", "0")
 
         schemas = tool_schemas.get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
@@ -502,8 +502,8 @@ class TestToolSchemas:
             "SEARCH_ENABLED_TOOLS",
             "view_file,view_directory,grep_search,glob,bash",
         )
-        monkeypatch.setattr(tool_schemas, "SEARCH_BASH_TOOLS", False)
-        monkeypatch.setattr(tool_schemas, "SEARCH_LSP_TOOLS", False)
+        monkeypatch.setenv("SEARCH_BASH_TOOLS", "0")
+        monkeypatch.setenv("SEARCH_LSP_TOOLS", "0")
 
         schemas = tool_schemas.get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
@@ -527,8 +527,8 @@ class TestToolSchemas:
         """SEARCH_LSP_TOOLS=1 should enable LSP tools."""
         import relace_mcp.tools.search.schemas.tool_schemas as tool_schemas
 
-        monkeypatch.setattr(tool_schemas, "SEARCH_LSP_TOOLS", True)
-        monkeypatch.setattr(tool_schemas, "SEARCH_BASH_TOOLS", False)
+        monkeypatch.setenv("SEARCH_LSP_TOOLS", "1")
+        monkeypatch.setenv("SEARCH_BASH_TOOLS", "0")
 
         schemas = tool_schemas.get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
@@ -540,8 +540,8 @@ class TestToolSchemas:
         """Even with SEARCH_LSP_TOOLS=1, empty project languages should hide LSP tools."""
         import relace_mcp.tools.search.schemas.tool_schemas as tool_schemas
 
-        monkeypatch.setattr(tool_schemas, "SEARCH_LSP_TOOLS", True)
-        monkeypatch.setattr(tool_schemas, "SEARCH_BASH_TOOLS", False)
+        monkeypatch.setenv("SEARCH_LSP_TOOLS", "1")
+        monkeypatch.setenv("SEARCH_BASH_TOOLS", "0")
 
         schemas = tool_schemas.get_tool_schemas(frozenset())
         names = {t["function"]["name"] for t in schemas}

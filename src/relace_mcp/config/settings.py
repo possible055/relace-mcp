@@ -161,6 +161,56 @@ TRACE_PATH = (
 
 MAX_TRACE_LOG_SIZE_BYTES = 50 * 1024 * 1024
 
+
+def reload_logging_settings() -> None:
+    """Re-read logging/trace environment variables and update module globals.
+
+    The module-level assignments run at import time — before ``load_dotenv()``
+    has been called.  Invoke this function once after dotenv loading so that
+    values defined in ``.env`` take effect.
+    """
+    global MCP_LOGGING_MODE, MCP_LOGGING, MCP_LOG_REDACT, MCP_TRACE_LOGGING
+    global MCP_LOG_FILE_LEVEL
+    global MCP_LOG_INCLUDE_KINDS, MCP_LOG_EXCLUDE_KINDS
+    global MCP_TRACE_INCLUDE_KINDS, MCP_TRACE_EXCLUDE_KINDS
+    global LOG_DIR, LOG_PATH, TRACE_DIR, TRACE_PATH
+
+    raw = os.getenv("MCP_LOGGING", "off").strip().lower()
+    if raw == "full":
+        MCP_LOGGING_MODE = "full"
+    elif raw in ("safe", "1", "true", "yes"):
+        MCP_LOGGING_MODE = "safe"
+    else:
+        MCP_LOGGING_MODE = "off"
+
+    MCP_LOGGING = MCP_LOGGING_MODE in ("safe", "full")
+    MCP_LOG_REDACT = MCP_LOGGING_MODE != "full"
+    MCP_TRACE_LOGGING = (MCP_LOGGING_MODE == "full") and env_bool("MCP_TRACE", default=True)
+
+    MCP_LOG_FILE_LEVEL = os.getenv("MCP_LOG_FILE_LEVEL", "DEBUG").strip().upper()
+
+    MCP_LOG_INCLUDE_KINDS = _parse_csv_env_set("MCP_LOG_INCLUDE_KINDS")
+    MCP_LOG_EXCLUDE_KINDS = _parse_csv_env_set("MCP_LOG_EXCLUDE_KINDS")
+    MCP_TRACE_INCLUDE_KINDS = _parse_csv_env_set("MCP_TRACE_INCLUDE_KINDS")
+    MCP_TRACE_EXCLUDE_KINDS = _parse_csv_env_set("MCP_TRACE_EXCLUDE_KINDS")
+
+    raw_dir = os.getenv("MCP_LOG_DIR", "").strip()
+    LOG_DIR = (
+        Path(raw_dir).expanduser() if raw_dir else Path(user_state_dir("relace", appauthor=False))
+    )
+
+    raw_path = os.getenv("MCP_LOG_PATH", "").strip()
+    LOG_PATH = Path(raw_path).expanduser() if raw_path else (LOG_DIR / "relace.log")
+
+    raw_trace_dir = os.getenv("MCP_TRACE_DIR", "").strip()
+    TRACE_DIR = Path(raw_trace_dir).expanduser() if raw_trace_dir else (LOG_DIR / "traces")
+
+    raw_trace_path = os.getenv("MCP_TRACE_PATH", "").strip()
+    TRACE_PATH = (
+        Path(raw_trace_path).expanduser() if raw_trace_path else (TRACE_DIR / "relace.trace.jsonl")
+    )
+
+
 # File size limit (10MB) to prevent memory exhaustion on file read/write operations
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 

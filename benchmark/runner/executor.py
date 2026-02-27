@@ -51,10 +51,15 @@ def _format_eta(elapsed_seconds: float, current: int, total: int) -> str:
 def _format_running_stats(results: list[BenchmarkResult]) -> str:
     if not results:
         return ""
-    n = len(results)
-    avg_recall = sum(r.file_recall for r in results) / n
-    avg_precision = sum(r.file_precision for r in results) / n
-    return f"R:{avg_recall:.0%} P:{avg_precision:.0%}"
+    scored = [r for r in results if not r.partial]
+    n = len(scored)
+    if n == 0:
+        return f"({len(results)} partial)"
+    avg_recall = sum(r.file_recall for r in scored) / n
+    avg_precision = sum(r.file_precision for r in scored) / n
+    partial_count = len(results) - n
+    suffix = f" +{partial_count}p" if partial_count else ""
+    return f"R:{avg_recall:.0%} P:{avg_precision:.0%}{suffix}"
 
 
 def _print_progress(line: str) -> None:
@@ -64,6 +69,17 @@ def _print_progress(line: str) -> None:
 
 class CaseTimeoutError(Exception):
     pass
+
+
+_MCP_SETTINGS_KEYS = (
+    "LOG_PATH",
+    "MCP_LOGGING",
+    "MCP_LOG_FILE_LEVEL",
+    "MCP_LOG_INCLUDE_KINDS",
+    "MCP_LOG_EXCLUDE_KINDS",
+    "MAX_LOG_SIZE_BYTES",
+    "MCP_TRACE_LOGGING",
+)
 
 
 class BenchmarkRunner:
@@ -101,6 +117,9 @@ class BenchmarkRunner:
     def _configure_mcp_file_logging(self, log_path: Path) -> None:
         import relace_mcp.config.settings as mcp_settings
 
+        # Snapshot current settings for later restoration
+        self._mcp_settings_snapshot = {k: getattr(mcp_settings, k) for k in _MCP_SETTINGS_KEYS}
+
         log_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             log_path.unlink(missing_ok=True)
@@ -116,6 +135,15 @@ class BenchmarkRunner:
 
         # Benchmark trace analysis uses relace.log only; keep the heavy trace log off by default.
         mcp_settings.MCP_TRACE_LOGGING = False
+
+    def _restore_mcp_file_logging(self) -> None:
+        if not hasattr(self, "_mcp_settings_snapshot"):
+            return
+        import relace_mcp.config.settings as mcp_settings
+
+        for k, v in self._mcp_settings_snapshot.items():
+            setattr(mcp_settings, k, v)
+        del self._mcp_settings_snapshot
 
     def _read_new_log_events(self) -> list[dict[str, Any]]:
         if self._log_path is None or not self._log_path.exists():
@@ -267,6 +295,15 @@ class BenchmarkRunner:
         except Exception:
             return None
 
+    def _write_turns_log(self, turns_log: list[dict[str, Any]], trace_file: Path) -> str | None:
+        try:
+            with trace_file.open("w", encoding="utf-8") as tf:
+                for entry in turns_log:
+                    tf.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+            return str(trace_file)
+        except Exception:
+            return None
+
     def run_benchmark(
         self,
         cases: list[DatasetCase],
@@ -304,6 +341,18 @@ class BenchmarkRunner:
             self._log_remainder = b""
             self._configure_mcp_file_logging(self._log_path)
 
+        try:
+            return self._run_benchmark_loop(cases, started_at=started_at, run_config=run_config)
+        finally:
+            self._restore_mcp_file_logging()
+
+    def _run_benchmark_loop(
+        self,
+        cases: list[DatasetCase],
+        *,
+        started_at: datetime,
+        run_config: dict[str, Any] | None = None,
+    ) -> BenchmarkSummary:
         wall_start = time.perf_counter()
         results: list[BenchmarkResult] = []
         total = len(cases)
@@ -517,7 +566,7 @@ class BenchmarkRunner:
                     effective_config,
                     str(repo_path),
                     case.query,
-                    trace=False,
+                    trace=self.trace,
                 )
             )
         else:
@@ -525,24 +574,30 @@ class BenchmarkRunner:
                 effective_config,
                 client,
                 lsp_languages=lsp_languages,
-                trace=False,
+                trace=self.trace,
             ).run(case.query)
 
         latency_s = round(time.perf_counter() - start_time, 1)
 
-        # Write trace file if tracing is enabled (reconstructed from relace.log)
+        # Write trace file if tracing is enabled
         trace_path_str: str | None = None
         if self.trace and self._traces_dir:
-            trace_id = result.get("trace_id") if isinstance(result, dict) else None
-            if isinstance(trace_id, str) and trace_id:
-                new_events = self._read_new_log_events()
-                trace_file = self._traces_dir / f"{case.id}.jsonl"
-                trace_path_str = self._write_case_trace_from_events(
-                    case_id=case.id,
-                    trace_id=trace_id,
-                    events=new_events,
-                    trace_file=trace_file,
-                )
+            trace_file = self._traces_dir / f"{case.id}.jsonl"
+            turns_log = result.get("turns_log")
+            if turns_log:
+                # Primary: complete data from harness (full LLM response + tool results)
+                trace_path_str = self._write_turns_log(turns_log, trace_file)
+            else:
+                # Fallback: reconstruct from relace.log (truncated previews)
+                trace_id = result.get("trace_id") if isinstance(result, dict) else None
+                if isinstance(trace_id, str) and trace_id:
+                    new_events = self._read_new_log_events()
+                    trace_path_str = self._write_case_trace_from_events(
+                        case_id=case.id,
+                        trace_id=trace_id,
+                        events=new_events,
+                        trace_file=trace_file,
+                    )
 
         returned_files_raw = result.get("files", {})
         if not isinstance(returned_files_raw, dict):
@@ -654,27 +709,37 @@ class BenchmarkRunner:
                     "avg_function_hit_rate": 0.0,
                     "avg_turns": 0.0,
                     "avg_latency_s": 0.0,
+                    "partial_cases": 0,
+                    "scored_cases": 0,
                 },
                 results=[],
             )
 
+        # Exclude partial cases (no report_back) from metric averages to avoid
+        # inflating recall/precision with accidentally-observed files.
+        scored = [r for r in results if not r.partial]
+        ns = len(scored)
+
         def avg(field: str) -> float:
-            return sum(getattr(r, field) for r in results) / n
+            if ns == 0:
+                return 0.0
+            return sum(getattr(r, field) for r in scored) / ns
 
         # Compute quality_score: weighted combination of recall + precision + function hit
-        # Weights: file_recall=0.4, line_precision_matched=0.4, function_hit_rate=0.2
+        # Weights: file_recall=0.3, file_precision=0.2, line_precision_matched=0.3, function_hit_rate=0.2
         def quality_score(r: BenchmarkResult) -> float:
             func_weight = 0.2 if r.functions_total > 0 else 0.0
             remaining = 1.0 - func_weight
             return (
-                (remaining / 2) * r.file_recall
-                + (remaining / 2) * r.line_precision_matched
+                (remaining * 3 / 8) * r.file_recall
+                + (remaining * 2 / 8) * r.file_precision
+                + (remaining * 3 / 8) * r.line_precision_matched
                 + func_weight * r.function_hit_rate
             )
 
-        avg_quality_score = sum(quality_score(r) for r in results) / n
+        avg_quality_score = (sum(quality_score(r) for r in scored) / ns) if ns else 0.0
 
-        function_results = [r for r in results if r.functions_total > 0]
+        function_results = [r for r in scored if r.functions_total > 0]
         function_cases = len(function_results)
         avg_function_hit_rate = (
             (sum(r.function_hit_rate for r in function_results) / function_cases)
@@ -697,6 +762,8 @@ class BenchmarkRunner:
             "avg_function_hit_rate": avg_function_hit_rate,
             "avg_turns": avg("turns_used"),
             "avg_latency_s": avg("latency_s"),
+            "partial_cases": n - ns,
+            "scored_cases": ns,
         }
 
         return BenchmarkSummary(

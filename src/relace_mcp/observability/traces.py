@@ -1,3 +1,4 @@
+import glob
 import json
 import logging
 import threading
@@ -12,6 +13,23 @@ logger = logging.getLogger(__name__)
 MAX_ROTATED_TRACES = 5
 _TRACE_LOCK = threading.Lock()
 
+_LEVEL_RANK: dict[str, int] = {"debug": 10, "info": 20, "warning": 30, "error": 40}
+
+
+def _normalize_level(value: object, *, default: str) -> str:
+    if value is None:
+        return default
+    text = str(value).strip().lower()
+    if text in _LEVEL_RANK:
+        return text
+    if text == "warn":
+        return "warning"
+    return default
+
+
+def _level_rank(level: str) -> int:
+    return _LEVEL_RANK.get(level, _LEVEL_RANK["info"])
+
 
 def _normalize_kind(value: object) -> str:
     if value is None:
@@ -20,7 +38,7 @@ def _normalize_kind(value: object) -> str:
     return text or "unknown"
 
 
-def _should_log_trace(kind: str) -> bool:
+def _should_log_trace(kind: str, level: str) -> bool:
     include = settings.MCP_TRACE_INCLUDE_KINDS
     if include and kind not in include:
         return False
@@ -29,24 +47,25 @@ def _should_log_trace(kind: str) -> bool:
     if exclude and kind in exclude:
         return False
 
-    return True
+    min_level = _normalize_level(settings.MCP_LOG_FILE_LEVEL, default="debug")
+    return _level_rank(level) >= _level_rank(min_level)
 
 
 def rotate_trace_if_needed() -> None:
     """Rotate the trace log when it exceeds the configured size limit."""
     try:
-        if (
-            settings.TRACE_PATH.exists()
-            and settings.TRACE_PATH.stat().st_size > settings.MAX_TRACE_LOG_SIZE_BYTES
-        ):
-            rotated_path = settings.TRACE_PATH.with_suffix(
-                f".{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.jsonl"
-            )
-            settings.TRACE_PATH.rename(rotated_path)
+        trace_path = settings.TRACE_PATH
+        if trace_path.exists() and trace_path.stat().st_size > settings.MAX_TRACE_LOG_SIZE_BYTES:
+            ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+            stem = trace_path.stem
+            suffix = trace_path.suffix
+            rotated_path = trace_path.with_name(f"{stem}.{ts}{suffix}")
+            trace_path.rename(rotated_path)
             logger.debug("Rotated trace file to %s", rotated_path)
 
+            pattern = f"{glob.escape(stem)}.*{glob.escape(suffix)}"
             rotated_traces = sorted(
-                settings.TRACE_PATH.parent.glob("relace.trace.*.jsonl"),
+                trace_path.parent.glob(pattern),
                 reverse=True,
             )
             for old_trace in rotated_traces[MAX_ROTATED_TRACES:]:
@@ -62,7 +81,7 @@ def log_trace_event(event: dict[str, Any]) -> None:
     This is only enabled when MCP_LOGGING=full.
 
     Args:
-        event: Trace event payload. Enriched with timestamp and trace_id if missing.
+        event: Trace event payload. Enriched with timestamp, trace_id, and level if missing.
     """
     if not settings.MCP_TRACE_LOGGING:
         return
@@ -70,7 +89,19 @@ def log_trace_event(event: dict[str, Any]) -> None:
     event = dict(event)
     try:
         kind = _normalize_kind(event.get("kind"))
-        if not _should_log_trace(kind):
+
+        # Infer level when not explicitly provided
+        if "level" not in event:
+            if kind.endswith("error") or kind.endswith("exception"):
+                event["level"] = "error"
+            elif event.get("success") is False:
+                event["level"] = "warning"
+            else:
+                event["level"] = "debug"
+        level = _normalize_level(event.get("level"), default="debug")
+        event["level"] = level
+
+        if not _should_log_trace(kind, level):
             return
 
         if "timestamp" not in event:

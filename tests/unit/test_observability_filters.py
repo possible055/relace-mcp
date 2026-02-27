@@ -58,3 +58,47 @@ class TestToolErrorTraceback:
         payload = json.loads(mock_log_path.read_text(encoding="utf-8").strip())
         assert payload["kind"] == "tool_error"
         assert payload.get("traceback")
+
+
+class TestTraceLevelFiltering:
+    def test_trace_filters_by_min_level(self, tmp_path: Path) -> None:
+        trace_path = tmp_path / "relace.trace.jsonl"
+        with (
+            patch("relace_mcp.config.settings.MCP_TRACE_LOGGING", True),
+            patch("relace_mcp.config.settings.TRACE_PATH", trace_path),
+            patch("relace_mcp.config.settings.MCP_LOG_FILE_LEVEL", "WARNING"),
+            patch("relace_mcp.config.settings.MCP_TRACE_INCLUDE_KINDS", frozenset()),
+            patch("relace_mcp.config.settings.MCP_TRACE_EXCLUDE_KINDS", frozenset()),
+        ):
+            log_trace_event({"kind": "llm_request"})  # inferred debug -> filtered
+            log_trace_event({"kind": "llm_error"})  # inferred error -> kept
+            log_trace_event(
+                {"kind": "mcp_tool_response", "success": False}
+            )  # inferred warning -> kept
+
+        lines = trace_path.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 2
+        kinds = [json.loads(line)["kind"] for line in lines]
+        assert "llm_error" in kinds
+        assert "mcp_tool_response" in kinds
+
+    def test_trace_infers_level_on_events(self, tmp_path: Path) -> None:
+        trace_path = tmp_path / "relace.trace.jsonl"
+        with (
+            patch("relace_mcp.config.settings.MCP_TRACE_LOGGING", True),
+            patch("relace_mcp.config.settings.TRACE_PATH", trace_path),
+            patch("relace_mcp.config.settings.MCP_LOG_FILE_LEVEL", "DEBUG"),
+            patch("relace_mcp.config.settings.MCP_TRACE_INCLUDE_KINDS", frozenset()),
+            patch("relace_mcp.config.settings.MCP_TRACE_EXCLUDE_KINDS", frozenset()),
+        ):
+            log_trace_event({"kind": "llm_request"})
+            log_trace_event({"kind": "mcp_tool_exception"})
+            log_trace_event({"kind": "mcp_tool_response", "success": False})
+            log_trace_event({"kind": "mcp_tool_response", "success": True})
+
+        lines = trace_path.read_text(encoding="utf-8").splitlines()
+        events = [json.loads(line) for line in lines]
+        assert events[0]["level"] == "debug"
+        assert events[1]["level"] == "error"
+        assert events[2]["level"] == "warning"
+        assert events[3]["level"] == "debug"

@@ -152,3 +152,37 @@ class TestLLMTrace:
         llm_errors = [e for e in events if e.get("kind") == "llm_error"]
         assert llm_errors
         assert llm_errors[-1].get("status_code") == 400
+
+
+class TestRotationDynamicPattern:
+    def test_event_rotation_custom_filename(self, tmp_path: Path) -> None:
+        custom_log = tmp_path / "myapp.log"
+        custom_log.write_text("x" * 100, encoding="utf-8")
+
+        with (
+            patch("relace_mcp.config.settings.MCP_LOGGING", True),
+            patch("relace_mcp.config.settings.LOG_PATH", custom_log),
+            patch("relace_mcp.config.settings.MAX_LOG_SIZE_BYTES", 1),
+        ):
+            from relace_mcp.observability import log_event
+
+            log_event({"kind": "after_rotate", "level": "info"})
+
+        assert custom_log.exists()
+        rotated = list(tmp_path.glob("myapp.*.log"))
+        assert rotated
+
+    def test_trace_rotation_custom_filename(self, tmp_path: Path) -> None:
+        custom_trace = tmp_path / "mytrace.jsonl"
+        custom_trace.write_text("x" * 100, encoding="utf-8")
+
+        with (
+            patch("relace_mcp.config.settings.MCP_TRACE_LOGGING", True),
+            patch("relace_mcp.config.settings.TRACE_PATH", custom_trace),
+            patch("relace_mcp.config.settings.MAX_TRACE_LOG_SIZE_BYTES", 1),
+        ):
+            log_trace_event({"kind": "after_rotate", "trace_id": "t1"})
+
+        assert custom_trace.exists()
+        rotated = list(tmp_path.glob("mytrace.*.jsonl"))
+        assert rotated

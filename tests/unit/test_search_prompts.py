@@ -19,6 +19,24 @@ def test_build_system_prompt_strips_triple_newlines(template: str) -> None:
     assert "\n\n\n" not in prompt
 
 
+@pytest.mark.parametrize("template", [SYSTEM_PROMPT, SYSTEM_PROMPT_OPENAI])
+def test_build_system_prompt_renders_max_turns(
+    template: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SEARCH_MAX_TURNS", "7")
+    enabled = {"view_file", "view_directory", "grep_search", "glob", "report_back"}
+    prompt = build_system_prompt(template, frozenset(), enabled)
+    assert "{max_turns}" not in prompt
+    assert "You have 7 exploration turns maximum." in prompt
+
+
+@pytest.mark.parametrize("template", [SYSTEM_PROMPT, SYSTEM_PROMPT_OPENAI])
+def test_build_system_prompt_hides_bash_when_disabled(template: str) -> None:
+    enabled = {"view_file", "view_directory", "grep_search", "glob", "report_back"}
+    prompt = build_system_prompt(template, frozenset(), enabled)
+    assert "`bash`" not in prompt
+
+
 # --- Unified user_prompt_template tests ---
 
 

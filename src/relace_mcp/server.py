@@ -17,20 +17,12 @@ from dotenv import load_dotenv
 from fastmcp import FastMCP
 
 from .config import RelaceConfig
+from .config import settings as _settings
 from .config.settings import (
     AGENTIC_RETRIEVAL_ENABLED,
     ENCODING_DETECTION_SAMPLE_LIMIT,
-    LOG_PATH,
-    MCP_LOG_EXCLUDE_KINDS,
-    MCP_LOG_FILE_LEVEL,
-    MCP_LOG_INCLUDE_KINDS,
-    MCP_LOGGING,
-    MCP_LOGGING_MODE,
-    MCP_TRACE_EXCLUDE_KINDS,
-    MCP_TRACE_INCLUDE_KINDS,
-    MCP_TRACE_LOGGING,
     RETRIEVAL_BACKEND,
-    TRACE_PATH,
+    reload_logging_settings,
 )
 from .encoding import set_project_encoding
 from .middleware import RootsMiddleware, ToolTracingMiddleware
@@ -130,8 +122,8 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
     else:
         results["base_dir"] = "deferred (will resolve from MCP Roots)"
 
-    if MCP_LOGGING:
-        log_dir = LOG_PATH.parent
+    if _settings.MCP_LOGGING:
+        log_dir = _settings.LOG_PATH.parent
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
             if not os.access(log_dir, os.W_OK):
@@ -141,8 +133,8 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
         except OSError as exc:
             errors.append(f"cannot create log directory: {exc}")
 
-    if MCP_TRACE_LOGGING:
-        trace_dir = TRACE_PATH.parent
+    if _settings.MCP_TRACE_LOGGING:
+        trace_dir = _settings.TRACE_PATH.parent
         try:
             trace_dir.mkdir(parents=True, exist_ok=True)
             if not os.access(trace_dir, os.W_OK):
@@ -281,6 +273,15 @@ def main() -> None:
         _configure_logging_for_stdio()
 
     _load_dotenv_from_path()
+    reload_logging_settings()
+
+    if _settings.MCP_LOGGING_MODE == "full":
+        logger.warning(
+            "MCP_LOGGING=full: writing unredacted tool/LLM I/O to %s and %s. "
+            "Set MCP_TRACE=0 to disable trace logging.",
+            _settings.LOG_PATH,
+            _settings.TRACE_PATH,
+        )
 
     config = RelaceConfig.from_env()
     try:
@@ -289,15 +290,15 @@ def main() -> None:
             "level": "info",
             "transport": args.transport,
             "mcp_log_level": os.getenv("MCP_LOG_LEVEL", "WARNING").upper(),
-            "mcp_logging_mode": MCP_LOGGING_MODE,
-            "mcp_trace_enabled": MCP_TRACE_LOGGING,
-            "mcp_log_file_level": MCP_LOG_FILE_LEVEL,
-            "mcp_log_include_kinds": sorted(MCP_LOG_INCLUDE_KINDS),
-            "mcp_log_exclude_kinds": sorted(MCP_LOG_EXCLUDE_KINDS),
-            "mcp_trace_include_kinds": sorted(MCP_TRACE_INCLUDE_KINDS),
-            "mcp_trace_exclude_kinds": sorted(MCP_TRACE_EXCLUDE_KINDS),
-            "log_path": str(LOG_PATH),
-            "trace_path": str(TRACE_PATH),
+            "mcp_logging_mode": _settings.MCP_LOGGING_MODE,
+            "mcp_trace_enabled": _settings.MCP_TRACE_LOGGING,
+            "mcp_log_file_level": _settings.MCP_LOG_FILE_LEVEL,
+            "mcp_log_include_kinds": sorted(_settings.MCP_LOG_INCLUDE_KINDS),
+            "mcp_log_exclude_kinds": sorted(_settings.MCP_LOG_EXCLUDE_KINDS),
+            "mcp_trace_include_kinds": sorted(_settings.MCP_TRACE_INCLUDE_KINDS),
+            "mcp_trace_exclude_kinds": sorted(_settings.MCP_TRACE_EXCLUDE_KINDS),
+            "log_path": str(_settings.LOG_PATH),
+            "trace_path": str(_settings.TRACE_PATH),
             "relace_cloud_tools": os.getenv("RELACE_CLOUD_TOOLS", "0"),
             "mcp_search_retrieval": os.getenv("MCP_SEARCH_RETRIEVAL", "0"),
             "mcp_retrieval_backend": os.getenv("MCP_RETRIEVAL_BACKEND", "relace"),
