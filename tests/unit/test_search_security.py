@@ -329,3 +329,61 @@ class TestPathSandbox:
     def test_blocks_dotdot(self) -> None:
         blocked, _ = _is_blocked_command("ls ..", DEFAULT_BASE_DIR)
         assert blocked
+
+
+class TestTildeExpansion:
+    def test_blocks_tilde_root(self) -> None:
+        blocked, reason = _is_blocked_command("cat ~root/.bashrc", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "tilde" in reason.lower()
+
+    def test_blocks_tilde_nobody(self) -> None:
+        blocked, _ = _is_blocked_command("ls ~nobody", DEFAULT_BASE_DIR)
+        assert blocked
+
+    def test_blocks_tilde_user_with_hyphen(self) -> None:
+        blocked, _ = _is_blocked_command("cat ~www-data/.env", DEFAULT_BASE_DIR)
+        assert blocked
+
+    def test_allows_bare_tilde(self) -> None:
+        blocked, _ = _is_blocked_command("ls ~", DEFAULT_BASE_DIR)
+        assert not blocked
+
+    def test_allows_tilde_slash(self) -> None:
+        blocked, _ = _is_blocked_command("cat ~/file.txt", DEFAULT_BASE_DIR)
+        assert not blocked
+
+
+class TestGitOptionBlocking:
+    def test_blocks_git_dir_equals(self) -> None:
+        blocked, reason = _is_blocked_command("git --git-dir=/tmp/other/.git log", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "--git-dir" in reason
+
+    def test_blocks_git_dir_space(self) -> None:
+        blocked, _ = _is_blocked_command("git --git-dir /tmp/other/.git log", DEFAULT_BASE_DIR)
+        assert blocked
+
+    def test_blocks_work_tree_equals(self) -> None:
+        blocked, reason = _is_blocked_command("git --work-tree=/etc status", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "--work-tree" in reason
+
+    def test_blocks_exec_path_equals(self) -> None:
+        blocked, _ = _is_blocked_command("git --exec-path=/tmp/evil log", DEFAULT_BASE_DIR)
+        assert blocked
+
+    def test_allows_normal_git_log(self) -> None:
+        blocked, _ = _is_blocked_command("git log --oneline -10", DEFAULT_BASE_DIR)
+        assert not blocked
+
+    def test_allows_normal_git_diff(self) -> None:
+        blocked, _ = _is_blocked_command("git diff HEAD~1", DEFAULT_BASE_DIR)
+        assert not blocked
+
+
+class TestTreeRemoved:
+    def test_blocks_tree(self) -> None:
+        blocked, reason = _is_blocked_command("tree", DEFAULT_BASE_DIR)
+        assert blocked
+        assert "not allowlisted" in reason.lower()

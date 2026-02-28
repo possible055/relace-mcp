@@ -215,7 +215,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "strict": True,
             "description": (
                 "Execute read-only bash command.\n\n"
-                "Allowed: find, ls, tree, head, tail, wc, file, git log.\n"
+                "Allowed: find, ls, head, tail, wc, file, git log.\n"
                 "Forbidden: rm, mv, cp, curl, wget, sudo, pipes (|), redirects (>)."
             ),
             "parameters": {

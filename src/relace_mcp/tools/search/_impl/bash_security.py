@@ -16,7 +16,6 @@ BASH_ALLOWED_COMMANDS = frozenset(
         "ls",
         "rg",
         "tail",
-        "tree",
         "true",
         "wc",
     }
@@ -357,6 +356,16 @@ def _check_path_traversal(command: str, tokens: list[str]) -> tuple[bool, str]:
     return False, ""
 
 
+_GIT_BLOCKED_OPTIONS = frozenset(
+    {
+        "--output",
+        "--git-dir",
+        "--work-tree",
+        "--exec-path",
+    }
+)
+
+
 def _check_git_subcommand(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
     if base_cmd != "git":
         return False, ""
@@ -377,8 +386,9 @@ def _check_git_subcommand(tokens: list[str], base_cmd: str) -> tuple[bool, str]:
         return True, f"Git subcommand not allowlisted: {subcmd}"
 
     for token in tokens[1:]:
-        if token == "--output" or token.startswith("--output="):  # nosec B105 - not a password
-            return True, "Git option blocked: --output"
+        for opt in _GIT_BLOCKED_OPTIONS:
+            if token == opt or token.startswith(opt + "="):
+                return True, f"Git option blocked: {opt}"
 
     return False, ""
 
@@ -408,6 +418,9 @@ def _check_path_containment(tokens: list[str], base_dir: str) -> tuple[bool, str
     return False, ""
 
 
+_TILDE_USER_RE = re.compile(r"^~[A-Za-z_][A-Za-z0-9_-]*")
+
+
 def _validate_single_command(cmd_str: str, base_dir: str) -> tuple[bool, str]:
     tokens = _parse_command_tokens(cmd_str)
     if not tokens:
@@ -420,6 +433,10 @@ def _validate_single_command(cmd_str: str, base_dir: str) -> tuple[bool, str]:
     blocked, reason = _check_absolute_paths(tokens)
     if blocked:
         return blocked, reason
+
+    for token in tokens:
+        if _TILDE_USER_RE.match(token):
+            return True, f"Blocked: tilde user expansion ({token})"
 
     base_cmd = os.path.basename(tokens[0])
 
