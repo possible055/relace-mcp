@@ -1,15 +1,11 @@
 from collections import deque
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from ....utils import validate_file_path
-from .constants import MAX_DIR_ITEMS
-from .gitignore import collect_gitignore_specs, is_ignored
+from .constants import COMMON_IGNORED_DIRS, MAX_DIR_ITEMS
+from .gitignore import GitIgnoreSpecs, collect_gitignore_specs, is_ignored
 from .paths import map_repo_path
-
-if TYPE_CHECKING:
-    from pathspec import GitIgnoreSpec
 
 
 def _strip_dot_prefix(path_str: str) -> str:
@@ -20,7 +16,7 @@ def _strip_dot_prefix(path_str: str) -> str:
 def _collect_entries(
     current_abs: Path,
     include_hidden: bool,
-    gitignore_specs: list[tuple[Path, "GitIgnoreSpec"]] | None,
+    gitignore_specs: GitIgnoreSpecs,
     base_dir: Path,
 ) -> tuple[list[tuple[str, Path]], list[tuple[str, Path]]]:
     """Collect files and subdirectories in directory."""
@@ -42,20 +38,25 @@ def _collect_entries(
 
     for entry in entries:
         name = entry.name
+        is_symlink = entry.is_symlink()
+        is_dir = entry.is_dir() and not is_symlink
+
+        if is_dir and name in COMMON_IGNORED_DIRS:
+            continue
+
         if not include_hidden and name.startswith("."):
             continue
 
         # Check gitignore rules
         if gitignore_specs:
             entry_rel = f"{rel_prefix}/{name}" if rel_prefix else name
-            is_dir = entry.is_dir() and not entry.is_symlink()
-            if is_ignored(entry_rel, is_dir, gitignore_specs, base_dir):
+            if is_ignored(entry_rel, is_dir, gitignore_specs):
                 continue
 
         # Never follow symlinks (prevents traversal outside base_dir and cycles).
-        if entry.is_symlink():
+        if is_symlink:
             files_list.append((name, entry))
-        elif entry.is_dir():
+        elif is_dir:
             dirs_list.append((name, entry))
         elif entry.is_file():
             files_list.append((name, entry))

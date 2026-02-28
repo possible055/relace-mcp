@@ -7,6 +7,7 @@ import subprocess  # nosec B404
 import time
 from typing import Any
 
+from ...observability import log_event, log_trace_event, redact_value
 from ..core.git import get_git_head, is_git_dirty
 from .cli import _run_cli_text
 from .errors import ExternalCLIError
@@ -129,6 +130,33 @@ def chunkhound_auto_reindex(base_dir: str) -> dict[str, Any]:
 
 def _ensure_chunkhound_index(base_dir: str, env: dict[str, str]) -> None:
     command = ["chunkhound", "index"]
+    timeout_s = 300
+    started = time.perf_counter()
+
+    log_event(
+        {
+            "kind": "backend_index_start",
+            "level": "info",
+            "backend": "chunkhound",
+            "command": command,
+            "cwd": base_dir,
+            "background": False,
+            "timeout_s": timeout_s,
+        }
+    )
+    log_trace_event(
+        {
+            "kind": "cli_request",
+            "cli": "chunkhound",
+            "command": command,
+            "cwd": base_dir,
+            "timeout_s": timeout_s,
+            "mode": "text",
+            "env_keys": sorted(env.keys()),
+            "background": False,
+        }
+    )
+
     try:
         result = subprocess.run(  # nosec B603 B607
             command,
@@ -136,17 +164,160 @@ def _ensure_chunkhound_index(base_dir: str, env: dict[str, str]) -> None:
             capture_output=True,
             text=True,
             check=False,
-            timeout=300,
+            timeout=timeout_s,
             env=env,
         )
-        if result.returncode != 0:
-            stderr = (result.stderr or "").strip()
-            raise RuntimeError(f"chunkhound index failed: {stderr}")
-        logger.debug("ChunkHound index created successfully")
     except subprocess.TimeoutExpired as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "chunkhound",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "chunkhound",
+                "command": command,
+                "cwd": base_dir,
+                "background": False,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "error_kind": "timeout",
+                "error": redact_value(str(exc), 500),
+            }
+        )
         raise RuntimeError(f"chunkhound index timeout: {exc}") from exc
     except FileNotFoundError as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "chunkhound",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "chunkhound",
+                "command": command,
+                "cwd": base_dir,
+                "background": False,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "error_kind": "cli_not_found",
+                "error": "chunkhound CLI not found",
+            }
+        )
         raise RuntimeError("chunkhound CLI not found") from exc
+    except OSError as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "chunkhound",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "chunkhound",
+                "command": command,
+                "cwd": base_dir,
+                "background": False,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "error_kind": "os_error",
+                "error": redact_value(str(exc), 500),
+            }
+        )
+        raise RuntimeError(f"chunkhound index failed: {exc}") from exc
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "chunkhound",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "returncode": result.returncode,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "detail": stderr,
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "chunkhound",
+                "command": command,
+                "cwd": base_dir,
+                "background": False,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "returncode": result.returncode,
+                "stderr_preview": redact_value(stderr, 500),
+            }
+        )
+        raise RuntimeError(f"chunkhound index failed: {stderr}")
+
+    log_trace_event(
+        {
+            "kind": "cli_response",
+            "cli": "chunkhound",
+            "command": command,
+            "cwd": base_dir,
+            "timeout_s": timeout_s,
+            "mode": "text",
+            "returncode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        }
+    )
+    log_event(
+        {
+            "kind": "backend_index_complete",
+            "level": "info",
+            "backend": "chunkhound",
+            "command": command,
+            "cwd": base_dir,
+            "background": False,
+            "timeout_s": timeout_s,
+            "latency_ms": latency_ms,
+            "returncode": result.returncode,
+            "stdout_len": len(result.stdout or ""),
+            "stderr_len": len(result.stderr or ""),
+        }
+    )
+    logger.debug("ChunkHound index created successfully")
 
 
 def _parse_chunkhound_text(output: str, threshold: float) -> list[dict[str, Any]]:
@@ -320,6 +491,35 @@ async def _async_run_chunkhound_index(base_dir: str) -> None:
     env = os.environ.copy()
     env["LANG"] = "C.UTF-8"
     env["LC_ALL"] = "C.UTF-8"
+
+    command = ["chunkhound", "index"]
+    timeout_s = 300
+    started = time.perf_counter()
+
+    log_event(
+        {
+            "kind": "backend_index_start",
+            "level": "info",
+            "backend": "chunkhound",
+            "command": command,
+            "cwd": base_dir,
+            "background": True,
+            "timeout_s": timeout_s,
+        }
+    )
+    log_trace_event(
+        {
+            "kind": "cli_request",
+            "cli": "chunkhound",
+            "command": command,
+            "cwd": base_dir,
+            "timeout_s": timeout_s,
+            "mode": "text",
+            "env_keys": sorted(env.keys()),
+            "background": True,
+        }
+    )
+
     try:
         proc = await asyncio.create_subprocess_exec(
             "chunkhound",
@@ -329,27 +529,181 @@ async def _async_run_chunkhound_index(base_dir: str) -> None:
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
         logger.warning("chunkhound CLI not found in background index; disabling backend")
         disable_backend("chunkhound", "cli_not_found: chunkhound not in PATH")
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "chunkhound",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "background": True,
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "chunkhound",
+                "command": command,
+                "cwd": base_dir,
+                "background": True,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "error_kind": "cli_not_found",
+                "error": "chunkhound CLI not found",
+            }
+        )
         return
     except OSError as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
         logger.warning("chunkhound background index failed to start: %s", exc)
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "chunkhound",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "background": True,
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "chunkhound",
+                "command": command,
+                "cwd": base_dir,
+                "background": True,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "error_kind": "os_error",
+                "error": redact_value(str(exc), 500),
+            }
+        )
         return
+
     try:
-        _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=300)
-    except TimeoutError:
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+            proc.communicate(),
+            timeout=timeout_s,
+        )
+    except TimeoutError as exc:
         try:
             proc.kill()
         except ProcessLookupError:
             pass
+        latency_ms = int((time.perf_counter() - started) * 1000)
         logger.warning("ChunkHound background index timed out for %s", base_dir)
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "chunkhound",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "background": True,
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "chunkhound",
+                "command": command,
+                "cwd": base_dir,
+                "background": True,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "error_kind": "timeout",
+                "error": "chunkhound index timed out",
+            }
+        )
         return
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    stdout = (stdout_bytes or b"").decode("utf-8", errors="replace")
+    stderr = (stderr_bytes or b"").decode("utf-8", errors="replace")
+
     if proc.returncode != 0:
-        stderr = (stderr_bytes or b"").decode("utf-8", errors="replace").strip()
-        logger.warning("ChunkHound background index failed (exit %d): %s", proc.returncode, stderr)
-    else:
-        logger.debug("ChunkHound background index completed for %s", base_dir)
+        stderr_str = stderr.strip()
+        logger.warning(
+            "ChunkHound background index failed (exit %d): %s", proc.returncode, stderr_str
+        )
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": "chunkhound",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout_s,
+                "mode": "text",
+                "returncode": proc.returncode,
+                "stdout": stdout,
+                "stderr": stderr,
+                "detail": stderr_str,
+                "background": True,
+            }
+        )
+        log_event(
+            {
+                "kind": "backend_index_error",
+                "level": "error",
+                "backend": "chunkhound",
+                "command": command,
+                "cwd": base_dir,
+                "background": True,
+                "timeout_s": timeout_s,
+                "latency_ms": latency_ms,
+                "returncode": proc.returncode,
+                "stderr_preview": redact_value(stderr_str, 500),
+            }
+        )
+        return
+
+    log_trace_event(
+        {
+            "kind": "cli_response",
+            "cli": "chunkhound",
+            "command": command,
+            "cwd": base_dir,
+            "timeout_s": timeout_s,
+            "mode": "text",
+            "returncode": proc.returncode,
+            "stdout": stdout,
+            "stderr": stderr,
+            "background": True,
+        }
+    )
+    log_event(
+        {
+            "kind": "backend_index_complete",
+            "level": "info",
+            "backend": "chunkhound",
+            "command": command,
+            "cwd": base_dir,
+            "background": True,
+            "timeout_s": timeout_s,
+            "latency_ms": latency_ms,
+            "returncode": proc.returncode,
+            "stdout_len": len(stdout),
+            "stderr_len": len(stderr),
+        }
+    )
+    logger.debug("ChunkHound background index completed for %s", base_dir)
 
 
 def schedule_bg_chunkhound_index(base_dir: str) -> None:

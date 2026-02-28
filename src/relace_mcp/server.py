@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import shutil
 import sys
 import tempfile
 import warnings
@@ -16,15 +17,17 @@ from dotenv import load_dotenv
 from fastmcp import FastMCP
 
 from .config import RelaceConfig
+from .config import settings as _settings
 from .config.settings import (
     AGENTIC_RETRIEVAL_ENABLED,
     ENCODING_DETECTION_SAMPLE_LIMIT,
-    LOG_PATH,
-    MCP_LOGGING,
     RETRIEVAL_BACKEND,
+    reload_logging_settings,
 )
 from .encoding import set_project_encoding
 from .middleware import RootsMiddleware, ToolTracingMiddleware
+from .observability import log_event
+from .repo import load_sync_state
 from .tools import register_tools
 from .tools.apply.encoding import detect_project_encoding
 
@@ -119,8 +122,8 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
     else:
         results["base_dir"] = "deferred (will resolve from MCP Roots)"
 
-    if MCP_LOGGING:
-        log_dir = LOG_PATH.parent
+    if _settings.MCP_LOGGING:
+        log_dir = _settings.LOG_PATH.parent
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
             if not os.access(log_dir, os.W_OK):
@@ -130,19 +133,30 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
         except OSError as exc:
             errors.append(f"cannot create log directory: {exc}")
 
-    # Retrieval backend health check
-    if AGENTIC_RETRIEVAL_ENABLED and RETRIEVAL_BACKEND in ("chunkhound", "codanna"):
-        from .repo.backends import ExternalCLIError, check_backend_health
-
+    if _settings.MCP_TRACE_LOGGING:
+        trace_dir = _settings.TRACE_PATH.parent
         try:
-            status = check_backend_health(RETRIEVAL_BACKEND, config.base_dir)
-            results["retrieval_backend"] = f"{RETRIEVAL_BACKEND}: {status}"
-        except ExternalCLIError as exc:
-            if exc.kind == "index_missing" and exc.backend == "chunkhound":
-                logger.warning("%s backend: %s — will auto-index on first query", exc.backend, exc)
-                results["retrieval_backend"] = f"{RETRIEVAL_BACKEND}: index_missing (deferred)"
+            trace_dir.mkdir(parents=True, exist_ok=True)
+            if not os.access(trace_dir, os.W_OK):
+                errors.append(f"trace directory is not writable: {trace_dir}")
             else:
-                errors.append(f"{exc.backend} backend: {exc} ({exc.kind})")
+                results["trace_path"] = "ok"
+        except OSError as exc:
+            errors.append(f"cannot create trace directory: {exc}")
+
+    # Retrieval backend health check (passive only: do NOT run expensive CLI probes on startup)
+    if AGENTIC_RETRIEVAL_ENABLED and RETRIEVAL_BACKEND in ("chunkhound", "codanna"):
+        cli_path = shutil.which(RETRIEVAL_BACKEND)
+        if not cli_path:
+            logger.warning(
+                "%s backend: CLI not found in PATH — retrieval will be unavailable until installed",
+                RETRIEVAL_BACKEND,
+            )
+            results["retrieval_backend"] = f"{RETRIEVAL_BACKEND}: cli_not_found"
+        elif not config.base_dir:
+            results["retrieval_backend"] = f"{RETRIEVAL_BACKEND}: deferred (base_dir not set)"
+        else:
+            results["retrieval_backend"] = f"{RETRIEVAL_BACKEND}: cli_found"
     elif AGENTIC_RETRIEVAL_ENABLED and RETRIEVAL_BACKEND == "auto":
         results["retrieval_backend"] = "auto: deferred (resolved at query time)"
     else:
@@ -259,8 +273,86 @@ def main() -> None:
         _configure_logging_for_stdio()
 
     _load_dotenv_from_path()
+    reload_logging_settings()
+
+    if _settings.MCP_LOGGING_MODE == "full":
+        logger.warning(
+            "MCP_LOGGING=full: writing unredacted tool/LLM I/O to %s and %s. "
+            "Set MCP_TRACE=0 to disable trace logging.",
+            _settings.LOG_PATH,
+            _settings.TRACE_PATH,
+        )
 
     config = RelaceConfig.from_env()
+    try:
+        server_start_event: dict[str, object] = {
+            "kind": "server_start",
+            "level": "info",
+            "transport": args.transport,
+            "mcp_log_level": os.getenv("MCP_LOG_LEVEL", "WARNING").upper(),
+            "mcp_logging_mode": _settings.MCP_LOGGING_MODE,
+            "mcp_trace_enabled": _settings.MCP_TRACE_LOGGING,
+            "mcp_log_file_level": _settings.MCP_LOG_FILE_LEVEL,
+            "mcp_log_include_kinds": sorted(_settings.MCP_LOG_INCLUDE_KINDS),
+            "mcp_log_exclude_kinds": sorted(_settings.MCP_LOG_EXCLUDE_KINDS),
+            "mcp_trace_include_kinds": sorted(_settings.MCP_TRACE_INCLUDE_KINDS),
+            "mcp_trace_exclude_kinds": sorted(_settings.MCP_TRACE_EXCLUDE_KINDS),
+            "log_path": str(_settings.LOG_PATH),
+            "trace_path": str(_settings.TRACE_PATH),
+            "relace_cloud_tools": os.getenv("RELACE_CLOUD_TOOLS", "0"),
+            "mcp_search_retrieval": os.getenv("MCP_SEARCH_RETRIEVAL", "0"),
+            "mcp_retrieval_backend": os.getenv("MCP_RETRIEVAL_BACKEND", "relace"),
+            "codanna_cli_found": bool(shutil.which("codanna")),
+            "chunkhound_cli_found": bool(shutil.which("chunkhound")),
+            "base_dir": config.base_dir,
+        }
+        if config.base_dir:
+            base_dir = Path(config.base_dir)
+            codanna_dir = base_dir / ".codanna"
+            chunkhound_dir = base_dir / ".chunkhound"
+            codanna_head = codanna_dir / "last_indexed_head"
+            chunkhound_head = chunkhound_dir / "last_indexed_head"
+
+            server_start_event["codanna_index_dir_exists"] = codanna_dir.is_dir()
+            server_start_event["chunkhound_index_dir_exists"] = chunkhound_dir.is_dir()
+
+            try:
+                server_start_event["codanna_last_indexed_head"] = (
+                    codanna_head.read_text(encoding="utf-8", errors="replace").strip()
+                    if codanna_head.is_file()
+                    else None
+                )
+            except OSError:
+                server_start_event["codanna_last_indexed_head"] = None
+            try:
+                server_start_event["chunkhound_last_indexed_head"] = (
+                    chunkhound_head.read_text(encoding="utf-8", errors="replace").strip()
+                    if chunkhound_head.is_file()
+                    else None
+                )
+            except OSError:
+                server_start_event["chunkhound_last_indexed_head"] = None
+
+            try:
+                sync_state = load_sync_state(config.base_dir)
+            except Exception:
+                sync_state = None
+            if sync_state is None:
+                server_start_event["relace_sync_state_found"] = False
+            else:
+                server_start_event["relace_sync_state_found"] = True
+                server_start_event["relace_repo_id"] = sync_state.repo_id
+                server_start_event["relace_repo_head"] = (
+                    sync_state.repo_head[:8] if sync_state.repo_head else ""
+                )
+                server_start_event["relace_last_sync"] = sync_state.last_sync
+                server_start_event["relace_tracked_files"] = len(sync_state.files)
+                server_start_event["relace_skipped_files"] = len(sync_state.skipped_files)
+
+        log_event(server_start_event)
+    except Exception:
+        # Startup logging must never break MCP stdio transport.
+        logger.debug("Failed to write server_start event", exc_info=True)
     server = build_server(config)
 
     if args.transport in ("http", "streamable-http"):

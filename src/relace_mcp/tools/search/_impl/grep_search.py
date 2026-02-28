@@ -180,7 +180,7 @@ def _iter_searchable_files(
             pruned_dirs = []
             for d in dirs:
                 dir_rel = f"{root_rel}/{d}" if root_rel else d
-                if not is_ignored(dir_rel, True, gitignore_specs, base_path):
+                if not is_ignored(dir_rel, True, gitignore_specs):
                     pruned_dirs.append(d)
             dirs[:] = pruned_dirs
 
@@ -201,7 +201,7 @@ def _iter_searchable_files(
             # Check gitignore for files
             if gitignore_specs:
                 file_rel = f"{root_rel}/{filename}" if root_rel else filename
-                if is_ignored(file_rel, False, gitignore_specs, base_path):
+                if is_ignored(file_rel, False, gitignore_specs):
                     continue
 
             yield filepath, rel_path

@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "RELACE_CLOUD_TOOLS",
     "RETRIEVAL_BACKEND",
-    "SEARCH_LSP_TOOLS_MODE",
+    "SEARCH_BASH_TOOLS",
+    "SEARCH_LSP_TOOLS",
     "RelaceConfig",
 ]
 
@@ -70,8 +71,35 @@ APPLY_SEMANTIC_CHECK = env_bool("APPLY_SEMANTIC_CHECK", default=False)
 # Local file logging mode (default: off)
 # Options: off (disabled), safe (enabled with redaction), full (enabled without redaction)
 _MCP_LOGGING_RAW = os.getenv("MCP_LOGGING", "off").strip().lower()
-MCP_LOGGING = _MCP_LOGGING_RAW in ("safe", "full", "1", "true", "yes")
-MCP_LOG_REDACT = _MCP_LOGGING_RAW != "full"
+if _MCP_LOGGING_RAW == "full":
+    MCP_LOGGING_MODE = "full"
+elif _MCP_LOGGING_RAW in ("safe", "1", "true", "yes"):
+    MCP_LOGGING_MODE = "safe"
+else:
+    MCP_LOGGING_MODE = "off"
+
+MCP_LOGGING = MCP_LOGGING_MODE in ("safe", "full")
+MCP_LOG_REDACT = MCP_LOGGING_MODE != "full"
+# NOTE: Trace log contains full tool/LLM/CLI I/O and is only enabled in MCP_LOGGING=full.
+# Use MCP_TRACE=0 to disable trace writing even in full mode.
+MCP_TRACE_LOGGING = (MCP_LOGGING_MODE == "full") and env_bool("MCP_TRACE", default=True)
+
+# JSONL file log filtering
+MCP_LOG_FILE_LEVEL = os.getenv("MCP_LOG_FILE_LEVEL", "DEBUG").strip().upper()
+
+
+def _parse_csv_env_set(name: str) -> frozenset[str]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return frozenset()
+    items = [item.strip() for item in raw.split(",") if item.strip()]
+    return frozenset(items)
+
+
+MCP_LOG_INCLUDE_KINDS = _parse_csv_env_set("MCP_LOG_INCLUDE_KINDS")
+MCP_LOG_EXCLUDE_KINDS = _parse_csv_env_set("MCP_LOG_EXCLUDE_KINDS")
+MCP_TRACE_INCLUDE_KINDS = _parse_csv_env_set("MCP_TRACE_INCLUDE_KINDS")
+MCP_TRACE_EXCLUDE_KINDS = _parse_csv_env_set("MCP_TRACE_EXCLUDE_KINDS")
 
 # Cloud tools (disabled by default)
 RELACE_CLOUD_TOOLS = env_bool("RELACE_CLOUD_TOOLS", default=False)
@@ -97,18 +125,9 @@ RETRIEVAL_BACKEND = _parse_retrieval_backend()
 # Enable agentic_retrieval tool (requires cloud sync or local backend)
 AGENTIC_RETRIEVAL_ENABLED = env_bool("MCP_SEARCH_RETRIEVAL", default=False)
 
-
-# LSP tools mode: 'false' (disabled), 'true' (all enabled), or 'auto' (detect installed servers)
-def _get_lsp_tools_mode() -> str:
-    raw = os.environ.get("SEARCH_LSP_TOOLS", "").strip().lower()
-    if raw in {"1", "true", "yes", "y", "on"}:
-        return "true"
-    if raw == "auto":
-        return "auto"
-    return "false"
-
-
-SEARCH_LSP_TOOLS_MODE = _get_lsp_tools_mode()
+# Search tool toggles (both disabled by default)
+SEARCH_BASH_TOOLS = env_bool("SEARCH_BASH_TOOLS", default=False)
+SEARCH_LSP_TOOLS = env_bool("SEARCH_LSP_TOOLS", default=False)
 
 # Agentic retrieval auto-sync (enabled by default when cloud tools are enabled)
 AGENTIC_AUTO_SYNC = env_bool("RELACE_AGENTIC_AUTO_SYNC", default=True)
@@ -118,9 +137,79 @@ AGENTIC_AUTO_SYNC = env_bool("RELACE_AGENTIC_AUTO_SYNC", default=True)
 # - macOS: ~/Library/Application Support/relace
 # - Windows: %LOCALAPPDATA%\relace
 # Note: Directory is created lazily in logging.py when actually writing logs
-LOG_DIR = Path(user_state_dir("relace", appauthor=False))
-LOG_PATH = LOG_DIR / "relace.log"
+_MCP_LOG_DIR_RAW = os.getenv("MCP_LOG_DIR", "").strip()
+LOG_DIR = (
+    Path(_MCP_LOG_DIR_RAW).expanduser()
+    if _MCP_LOG_DIR_RAW
+    else Path(user_state_dir("relace", appauthor=False))
+)
+
+_MCP_LOG_PATH_RAW = os.getenv("MCP_LOG_PATH", "").strip()
+LOG_PATH = Path(_MCP_LOG_PATH_RAW).expanduser() if _MCP_LOG_PATH_RAW else (LOG_DIR / "relace.log")
+
 MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024
+
+_MCP_TRACE_DIR_RAW = os.getenv("MCP_TRACE_DIR", "").strip()
+TRACE_DIR = Path(_MCP_TRACE_DIR_RAW).expanduser() if _MCP_TRACE_DIR_RAW else (LOG_DIR / "traces")
+
+_MCP_TRACE_PATH_RAW = os.getenv("MCP_TRACE_PATH", "").strip()
+TRACE_PATH = (
+    Path(_MCP_TRACE_PATH_RAW).expanduser()
+    if _MCP_TRACE_PATH_RAW
+    else (TRACE_DIR / "relace.trace.jsonl")
+)
+
+MAX_TRACE_LOG_SIZE_BYTES = 50 * 1024 * 1024
+
+
+def reload_logging_settings() -> None:
+    """Re-read logging/trace environment variables and update module globals.
+
+    The module-level assignments run at import time — before ``load_dotenv()``
+    has been called.  Invoke this function once after dotenv loading so that
+    values defined in ``.env`` take effect.
+    """
+    global MCP_LOGGING_MODE, MCP_LOGGING, MCP_LOG_REDACT, MCP_TRACE_LOGGING
+    global MCP_LOG_FILE_LEVEL
+    global MCP_LOG_INCLUDE_KINDS, MCP_LOG_EXCLUDE_KINDS
+    global MCP_TRACE_INCLUDE_KINDS, MCP_TRACE_EXCLUDE_KINDS
+    global LOG_DIR, LOG_PATH, TRACE_DIR, TRACE_PATH
+
+    raw = os.getenv("MCP_LOGGING", "off").strip().lower()
+    if raw == "full":
+        MCP_LOGGING_MODE = "full"
+    elif raw in ("safe", "1", "true", "yes"):
+        MCP_LOGGING_MODE = "safe"
+    else:
+        MCP_LOGGING_MODE = "off"
+
+    MCP_LOGGING = MCP_LOGGING_MODE in ("safe", "full")
+    MCP_LOG_REDACT = MCP_LOGGING_MODE != "full"
+    MCP_TRACE_LOGGING = (MCP_LOGGING_MODE == "full") and env_bool("MCP_TRACE", default=True)
+
+    MCP_LOG_FILE_LEVEL = os.getenv("MCP_LOG_FILE_LEVEL", "DEBUG").strip().upper()
+
+    MCP_LOG_INCLUDE_KINDS = _parse_csv_env_set("MCP_LOG_INCLUDE_KINDS")
+    MCP_LOG_EXCLUDE_KINDS = _parse_csv_env_set("MCP_LOG_EXCLUDE_KINDS")
+    MCP_TRACE_INCLUDE_KINDS = _parse_csv_env_set("MCP_TRACE_INCLUDE_KINDS")
+    MCP_TRACE_EXCLUDE_KINDS = _parse_csv_env_set("MCP_TRACE_EXCLUDE_KINDS")
+
+    raw_dir = os.getenv("MCP_LOG_DIR", "").strip()
+    LOG_DIR = (
+        Path(raw_dir).expanduser() if raw_dir else Path(user_state_dir("relace", appauthor=False))
+    )
+
+    raw_path = os.getenv("MCP_LOG_PATH", "").strip()
+    LOG_PATH = Path(raw_path).expanduser() if raw_path else (LOG_DIR / "relace.log")
+
+    raw_trace_dir = os.getenv("MCP_TRACE_DIR", "").strip()
+    TRACE_DIR = Path(raw_trace_dir).expanduser() if raw_trace_dir else (LOG_DIR / "traces")
+
+    raw_trace_path = os.getenv("MCP_TRACE_PATH", "").strip()
+    TRACE_PATH = (
+        Path(raw_trace_path).expanduser() if raw_trace_path else (TRACE_DIR / "relace.trace.jsonl")
+    )
+
 
 # File size limit (10MB) to prevent memory exhaustion on file read/write operations
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024

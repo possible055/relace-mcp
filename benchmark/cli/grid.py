@@ -55,9 +55,27 @@ def _format_float_for_filename(value: float) -> str:
     "--prompt-file",
     "search_prompt_file",
     default=None,
-    help="Override SEARCH_PROMPT_FILE for all runs (YAML)",
+    help="Override SEARCH_PROMPT_FILE_RELACE for all runs (YAML)",
 )
 @click.option("--dry-run", is_flag=True, help="Print planned runs without executing")
+@click.option(
+    "--search-mode",
+    type=click.Choice(["agentic", "indexed"]),
+    default="agentic",
+    help="Search mode: agentic (agentic_search) or indexed (agentic_retrieval)",
+)
+@click.option(
+    "--lsp-tools",
+    type=click.Choice(["true", "false"]),
+    default=None,
+    help="LSP tools toggle: true (enabled), false (disabled)",
+)
+@click.option(
+    "--bash-tools",
+    type=click.Choice(["true", "false"]),
+    default=None,
+    help="Bash tool toggle: true (enabled), false (disabled)",
+)
 def main(
     dataset_path: str,
     output: str | None,
@@ -68,6 +86,9 @@ def main(
     search_temperature_values: tuple[float, ...],
     search_prompt_file: str | None,
     dry_run: bool,
+    search_mode: str,
+    lsp_tools: str | None,
+    bash_tools: str | None,
 ) -> None:
     benchmark_dir = get_benchmark_dir()
     resolved_dataset_path = (
@@ -141,7 +162,7 @@ def main(
         env["SEARCH_MAX_TURNS"] = str(item["search_max_turns"])
         env["SEARCH_TEMPERATURE"] = str(item["search_temperature"])
         if search_prompt_file:
-            env["SEARCH_PROMPT_FILE"] = search_prompt_file
+            env["SEARCH_PROMPT_FILE_RELACE"] = search_prompt_file
 
         cmd = [
             sys.executable,
@@ -153,7 +174,13 @@ def main(
             str(seed),
             "--output",
             str(item["output_prefix"]),
+            "--search-mode",
+            search_mode,
         ]
+        if lsp_tools is not None:
+            cmd.extend(["--lsp-tools", lsp_tools])
+        if bash_tools is not None:
+            cmd.extend(["--bash-tools", bash_tools])
         if limit is not None:
             cmd.extend(["--limit", str(limit)])
         if shuffle:
@@ -197,7 +224,7 @@ def main(
                     "avg_line_coverage": report.get("avg_line_coverage"),
                     "avg_line_precision_matched": report.get("avg_line_precision_matched"),
                     "avg_turns": report.get("avg_turns"),
-                    "avg_latency_ms": report.get("avg_latency_ms"),
+                    "avg_latency_s": report.get("avg_latency_s"),
                 },
                 "search": (report.get("metadata") or {}).get("search"),
             }

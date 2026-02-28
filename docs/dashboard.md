@@ -147,6 +147,8 @@ Logs are stored using `platformdirs`:
 | macOS | `~/Library/Application Support/relace/relace.log` |
 | Windows | `%LOCALAPPDATA%\relace\relace.log` |
 
+> You can override the location with `MCP_LOG_DIR` / `MCP_LOG_PATH`.
+
 ## Event Types
 
 | Kind | Description | Source |

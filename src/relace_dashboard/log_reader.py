@@ -1,12 +1,11 @@
 import json
+import os
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from platformdirs import user_state_dir
-
-LOG_PATH = Path(user_state_dir("relace", appauthor=False)) / "relace.log"
 
 APPLY_KINDS = frozenset({"create_success", "apply_success", "apply_error"})
 SEARCH_KINDS = frozenset(
@@ -17,7 +16,13 @@ ALL_KINDS = APPLY_KINDS | SEARCH_KINDS
 
 
 def get_log_path() -> Path:
-    return LOG_PATH
+    raw = os.getenv("MCP_LOG_PATH", "").strip()
+    if raw:
+        return Path(raw).expanduser()
+    raw_dir = os.getenv("MCP_LOG_DIR", "").strip()
+    if raw_dir:
+        return Path(raw_dir).expanduser() / "relace.log"
+    return Path(user_state_dir("relace", appauthor=False)) / "relace.log"
 
 
 def parse_log_event(line: str) -> dict[str, Any] | None:

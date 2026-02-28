@@ -241,7 +241,7 @@ class TestChunkhoundHealthCheck:
     @patch("relace_mcp.repo.backends.chunkhound.get_git_head")
     @patch("relace_mcp.repo.backends.chunkhound._ensure_chunkhound_index")
     @patch("relace_mcp.repo.backends.chunkhound._run_cli_text")
-    def test_no_write_when_not_git_repo(self, mock_run, mock_ensure, mock_head, mock_write):
+    def test_no_write_when_not_git_repo(self, mock_run, _mock_ensure, mock_head, mock_write):
         mock_run.side_effect = RuntimeError("chunkhound error (exit 1): not indexed")
         mock_head.return_value = None
         _chunkhound_health_probe("/project")

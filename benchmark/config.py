@@ -9,6 +9,7 @@ CACHE_DIR = ARTIFACTS_DIR / "cache"
 REPOS_DIR = ARTIFACTS_DIR / "repos"
 RESULTS_DIR = ARTIFACTS_DIR / "results"
 REPORTS_DIR = ARTIFACTS_DIR / "reports"
+TRACES_DIR = ARTIFACTS_DIR / "traces"
 
 # Subdirectory structure
 RAW_DATA_DIR = DATA_DIR / "raw"
@@ -67,3 +68,7 @@ def get_processed_data_dir() -> Path:
 
 def get_reports_dir() -> Path:
     return REPORTS_DIR
+
+
+def get_traces_dir() -> Path:
+    return TRACES_DIR

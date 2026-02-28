@@ -1,6 +1,13 @@
 # Shared traversal prune set for search tools.
 SEARCH_TRAVERSAL_PRUNE_DIRS = frozenset(
     {
+        ".direnv",
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".tox",
+        ".venv",
         "__pycache__",
         "build",
         "dist",

@@ -39,7 +39,7 @@ repos:
       # Python type check — dmypy daemon
       - id: mypy
         name: mypy (daemon)
-        entry: uv run -- dmypy run -- src/
+        entry: uv run --extra dev -- dmypy run -- src/
         language: system
         files: '\.py$'
         pass_filenames: false
@@ -47,7 +47,7 @@ repos:
       # Python security scan
       - id: bandit
         name: bandit
-        entry: uv run -- bandit -r src/ -c pyproject.toml
+        entry: uv run --extra dev -- bandit -r src/ -c pyproject.toml
         language: system
         files: '\.py$'
         pass_filenames: false
@@ -55,7 +55,7 @@ repos:
       # ty type check
       - id: ty
         name: ty
-        entry: uv run -- ty check
+        entry: uv run --extra dev -- ty check
         language: system
         files: '\.py$'
         pass_filenames: false

@@ -141,7 +141,8 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 | `RELACE_API_KEY` | ✅* | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
 | `RELACE_CLOUD_TOOLS` | ❌ | Set to `1` to enable cloud tools |
 | `MCP_SEARCH_RETRIEVAL` | ❌ | Set to `1` to enable `agentic_retrieval` tool |
-| `SEARCH_LSP_TOOLS` | ❌ | LSP tools: `1` (all on), `auto` (detect installed servers), `0` (off, default) |
+| `SEARCH_BASH_TOOLS` | ❌ | Bash tool toggle: `1` (on), `0` (off, default) |
+| `SEARCH_LSP_TOOLS` | ❌ | LSP tools toggle: `1` (on), `0` (off, default) |
 | `MCP_BASE_DIR` | ❌ | Project root (auto-detected via MCP Roots → Git → CWD) |
 | `MCP_LOGGING` | ❌ | File logging: `off` (default), `safe`, `full` |
 | `MCP_DOTENV_PATH` | ❌ | Path to `.env` file for centralized config |

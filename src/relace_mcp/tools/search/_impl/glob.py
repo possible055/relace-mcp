@@ -137,7 +137,7 @@ def glob_handler(
                 pruned_dirs = []
                 for d in dirs:
                     dir_rel = f"{root_rel}/{d}" if root_rel else d
-                    if not is_ignored(dir_rel, True, gitignore_specs, base_path):
+                    if not is_ignored(dir_rel, True, gitignore_specs):
                         pruned_dirs.append(d)
                 dirs[:] = pruned_dirs
 
@@ -145,7 +145,7 @@ def glob_handler(
                 pruned_files = []
                 for f in files:
                     file_rel = f"{root_rel}/{f}" if root_rel else f
-                    if not is_ignored(file_rel, False, gitignore_specs, base_path):
+                    if not is_ignored(file_rel, False, gitignore_specs):
                         pruned_files.append(f)
                 files = pruned_files
 

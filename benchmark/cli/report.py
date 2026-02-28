@@ -38,7 +38,7 @@ def _extract_metrics(report: dict) -> dict:
         "avg_line_coverage": report.get("avg_line_coverage", 0),
         "avg_line_precision_matched": report.get("avg_line_precision_matched", 0),
         "avg_turns": report.get("avg_turns", 0),
-        "avg_latency_ms": report.get("avg_latency_ms", 0),
+        "avg_latency_s": report.get("avg_latency_s", 0),
     }
 
 
@@ -71,7 +71,7 @@ def _generate_markdown_comparison(reports: list[tuple[str, dict]]) -> str:
             f"{_format_pct(m['avg_file_precision'])} | "
             f"{_format_pct(m['avg_line_precision_matched'])} | "
             f"{m['avg_turns']:.1f} | "
-            f"{m['avg_latency_ms']:.0f}ms |"
+            f"{m['avg_latency_s']:.1f}s |"
         )
 
     return "\n".join(lines)
@@ -103,7 +103,7 @@ def _generate_markdown_grid_best(grid_path: Path, metric: str) -> str:
         f"- File Precision: {_format_pct(metrics.get('avg_file_precision', 0))}",
         f"- Line Prec (Matched): {_format_pct(metrics.get('avg_line_precision_matched', 0))}",
         f"- Avg Turns: {metrics.get('avg_turns', 0):.1f}",
-        f"- Avg Latency: {metrics.get('avg_latency_ms', 0):.0f}ms",
+        f"- Avg Latency: {metrics.get('avg_latency_s', 0):.1f}s",
     ]
 
     return "\n".join(lines)

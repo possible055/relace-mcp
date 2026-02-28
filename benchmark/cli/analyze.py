@@ -104,7 +104,7 @@ def print_worst_cases(results: list[dict[str, Any]], key: str, label: str, n: in
         print(f"    Target Line Coverage: {r['line_coverage'] * 100:.1f}%")
         if "context_line_coverage" in r:
             print(f"    Context Line Coverage: {r['context_line_coverage'] * 100:.1f}%")
-        print(f"    Turns: {r['turns_used']}, Latency: {r['latency_ms']:.0f}ms")
+        print(f"    Turns: {r['turns_used']}, Latency: {r['latency_s']:.1f}s")
         if r.get("error"):
             print(f"    Error: {r['error']}")
         print()
