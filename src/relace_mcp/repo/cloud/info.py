@@ -1,8 +1,11 @@
 import logging
+import time
 import uuid
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
+from ...observability import get_trace_id
+from ...observability import tool_name as tool_name_ctx
 from ..core import (
     build_cloud_error_details,
     extract_error_fields,
@@ -37,9 +40,10 @@ def cloud_info_logic(
         - status: Sync status and recommended action
         - error: Error message if failed (optional)
     """
-    trace_id = str(uuid.uuid4())[:8]
+    trace_id = get_trace_id() if tool_name_ctx.get() else str(uuid.uuid4())[:8]
     local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(base_dir)
     logger.debug("[%s] Getting cloud info for repository", trace_id)
+    t0 = time.perf_counter()
 
     try:
         if not local_repo_name or not cloud_repo_name:
@@ -58,6 +62,7 @@ def cloud_info_logic(
                 trace_id,
                 repo_name=local_repo_name or None,
                 cloud_repo_name=None,
+                latency_ms=round((time.perf_counter() - t0) * 1000),
                 **extract_error_fields(result),
             )
             return result
@@ -212,6 +217,7 @@ def cloud_info_logic(
             trace_id,
             repo_name=local_repo_name,
             cloud_repo_name=cloud_repo_name,
+            latency_ms=round((time.perf_counter() - t0) * 1000),
         )
         return result_payload
 
@@ -233,6 +239,7 @@ def cloud_info_logic(
             trace_id,
             repo_name=local_repo_name or None,
             cloud_repo_name=cloud_repo_name or None,
+            latency_ms=round((time.perf_counter() - t0) * 1000),
             **extract_error_fields(result),
         )
         return result

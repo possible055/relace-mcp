@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any
 
 from ....config import settings
+from ....observability import log_trace_event
 from .._impl import (
     CallGraphParams,
     GetTypeParams,
@@ -142,6 +143,47 @@ class ToolCallsMixin:
 
         return tool_results, report_back_result
 
+    @staticmethod
+    def _strip_mixed_report_back(
+        tool_calls: list[dict[str, Any]],
+        message: dict[str, Any],
+        trace_id: str,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any], list[str]]:
+        """Strip report_back from tool_calls when mixed with other tools.
+
+        Returns:
+            (filtered_tool_calls, updated_message, stripped_report_back_ids).
+            stripped_report_back_ids is empty when no stripping occurred.
+        """
+        if len(tool_calls) <= 1:
+            return tool_calls, message, []
+
+        rb_ids: list[str] = []
+        other: list[dict[str, Any]] = []
+        for tc in tool_calls:
+            if tc.get("function", {}).get("name") == "report_back":
+                rb_ids.append(tc.get("id", ""))
+            else:
+                other.append(tc)
+
+        if not rb_ids or not other:
+            return tool_calls, message, []
+
+        logger.warning(
+            "[%s] Guardrail: report_back mixed with %d other tools — stripping report_back",
+            trace_id,
+            len(other),
+        )
+
+        # Also strip from the message's tool_calls so the assistant message stays consistent
+        msg_tool_calls = message.get("tool_calls") or []
+        message = dict(message)
+        message["tool_calls"] = [
+            tc for tc in msg_tool_calls if tc.get("function", {}).get("name") != "report_back"
+        ]
+
+        return other, message, rb_ids
+
     def _execute_parallel_batch(
         self,
         parallel_calls: list[tuple[str, str, str, dict[str, Any] | None]],
@@ -251,6 +293,18 @@ class ToolCallsMixin:
                 result_preview = json.dumps(result, ensure_ascii=False, default=str)[:300]
 
             log_tool_call(trace_id, name, args, result_preview, latency_ms, success, turn=turn)
+            log_trace_event(
+                {
+                    "kind": "agent_tool_call",
+                    "trace_id": trace_id,
+                    "turn": turn,
+                    "tool_name": name,
+                    "args": args,
+                    "result": result,
+                    "latency_ms": round(latency_ms, 1),
+                    "success": success,
+                }
+            )
         except Exception:
             # Logging failure should never break tool execution
             logger.debug("Failed to log tool call for %s", name, exc_info=True)
@@ -267,7 +321,7 @@ class ToolCallsMixin:
         if name not in enabled:
             return (
                 f"Error: Tool '{name}' is disabled. "
-                "Set SEARCH_ENABLED_TOOLS to explicitly allow it."
+                "Enable SEARCH_BASH_TOOLS or SEARCH_LSP_TOOLS as needed."
             )
 
         # report_back does not depend on base_dir.

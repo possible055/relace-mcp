@@ -1,20 +1,34 @@
 import os
 import subprocess  # nosec B404 - safe use with fixed args, no user input
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
 from pathspec import GitIgnoreSpec
+from pathspec.pattern import Pattern
+
+
+@dataclass(frozen=True)
+class CompiledGitIgnoreSpec:
+    """Compiled .gitignore patterns for fast "last match wins" lookup."""
+
+    patterns_reversed: tuple[Pattern, ...]
+
+
+GitIgnoreSpecEntry = tuple[str, CompiledGitIgnoreSpec]
+GitIgnoreSpecs = tuple[GitIgnoreSpecEntry, ...]
 
 
 @lru_cache(maxsize=256)
-def load_gitignore_spec(gitignore_path: str) -> GitIgnoreSpec | None:
-    """Load and cache a .gitignore file as a GitIgnoreSpec."""
+def load_gitignore_spec(gitignore_path: str) -> CompiledGitIgnoreSpec | None:
+    """Load and cache a .gitignore file with precompiled pattern order."""
     path = Path(gitignore_path)
     if not path.is_file():
         return None
     try:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-        return GitIgnoreSpec.from_lines(lines)
+        spec = GitIgnoreSpec.from_lines(lines)
+        return CompiledGitIgnoreSpec(patterns_reversed=tuple(reversed(list(spec.patterns))))
     except Exception:
         return None
 
@@ -60,13 +74,40 @@ def get_global_excludes_path() -> Path | None:
     return None
 
 
-def load_repo_exclude_spec(base_dir: Path) -> GitIgnoreSpec | None:
+def load_repo_exclude_spec(base_dir: Path) -> CompiledGitIgnoreSpec | None:
     """Load .git/info/exclude if exists."""
     exclude_path = base_dir / ".git" / "info" / "exclude"
     return load_gitignore_spec(str(exclude_path))
 
 
-def collect_gitignore_specs(current_dir: Path, base_dir: Path) -> list[tuple[Path, GitIgnoreSpec]]:
+def _append_project_gitignore(
+    specs: GitIgnoreSpecs, check_dir: Path, base_dir: Path
+) -> GitIgnoreSpecs:
+    spec = load_gitignore_spec(str(check_dir / ".gitignore"))
+    if not spec:
+        return specs
+
+    spec_dir_rel = "" if check_dir == base_dir else check_dir.relative_to(base_dir).as_posix()
+    return specs + ((spec_dir_rel, spec),)
+
+
+def _collect_repo_level_specs(base_dir: Path) -> GitIgnoreSpecs:
+    specs: GitIgnoreSpecs = ()
+    global_path = get_global_excludes_path()
+    if global_path:
+        global_spec = load_gitignore_spec(str(global_path))
+        if global_spec:
+            specs += (("", global_spec),)
+
+    repo_exclude = load_repo_exclude_spec(base_dir)
+    if repo_exclude:
+        specs += (("", repo_exclude),)
+
+    return specs
+
+
+@lru_cache(maxsize=4096)
+def collect_gitignore_specs(current_dir: Path, base_dir: Path) -> GitIgnoreSpecs:
     """Collect all exclude specs in git priority order.
 
     Priority (low to high, later overrides earlier):
@@ -74,55 +115,30 @@ def collect_gitignore_specs(current_dir: Path, base_dir: Path) -> list[tuple[Pat
     2. Repository excludes (.git/info/exclude)
     3. Project .gitignore files (from base_dir down to current_dir)
     """
-    specs: list[tuple[Path, GitIgnoreSpec]] = []
+    if current_dir == base_dir:
+        specs = _collect_repo_level_specs(base_dir)
+        return _append_project_gitignore(specs, base_dir, base_dir)
 
-    # 1. Global excludes (lowest priority, applies to entire repo)
-    global_path = get_global_excludes_path()
-    if global_path:
-        global_spec = load_gitignore_spec(str(global_path))
-        if global_spec:
-            specs.append((base_dir, global_spec))
-
-    # 2. .git/info/exclude (repo-level, applies to entire repo)
-    repo_exclude = load_repo_exclude_spec(base_dir)
-    if repo_exclude:
-        specs.append((base_dir, repo_exclude))
-
-    # 3. Project .gitignore files (highest priority, directory-scoped)
     try:
-        rel_parts = current_dir.relative_to(base_dir).parts
+        current_dir.relative_to(base_dir)
     except ValueError:
-        return specs
+        return _collect_repo_level_specs(base_dir)
 
-    check_dir = base_dir
-    gitignore = check_dir / ".gitignore"
-    spec = load_gitignore_spec(str(gitignore))
-    if spec:
-        specs.append((check_dir, spec))
-
-    for part in rel_parts:
-        check_dir = check_dir / part
-        gitignore = check_dir / ".gitignore"
-        spec = load_gitignore_spec(str(gitignore))
-        if spec:
-            specs.append((check_dir, spec))
-
-    return specs
+    parent_specs = collect_gitignore_specs(current_dir.parent, base_dir)
+    return _append_project_gitignore(parent_specs, current_dir, base_dir)
 
 
 def is_ignored(
     rel_path: str,
     is_dir: bool,
-    specs: list[tuple[Path, GitIgnoreSpec]],
-    base_dir: Path,
+    specs: GitIgnoreSpecs,
 ) -> bool:
     """Check if a path is ignored by gitignore rules.
 
     Args:
         rel_path: Path relative to base_dir.
         is_dir: Whether the path is a directory.
-        specs: List of (spec_dir, spec) from base_dir to current_dir.
-        base_dir: Repository base directory.
+        specs: Ordered gitignore specs (global -> repo -> nested directories).
 
     Returns:
         True if ignored by the effective rules, otherwise False.
@@ -130,23 +146,32 @@ def is_ignored(
     if not specs:
         return False
 
-    full_path = base_dir / rel_path
+    rel_posix = rel_path.strip("/")
+    if not rel_posix:
+        return False
 
     ignored = False
-    for spec_dir, spec in specs:
-        try:
-            spec_rel = full_path.relative_to(spec_dir).as_posix()
-            if is_dir:
-                spec_rel += "/"
-        except ValueError:
-            continue
+    for spec_dir_rel, spec in specs:
+        if spec_dir_rel:
+            prefix = f"{spec_dir_rel}/"
+            if rel_posix == spec_dir_rel:
+                spec_rel = "."
+            elif rel_posix.startswith(prefix):
+                spec_rel = rel_posix[len(prefix) :]
+            else:
+                continue
+        else:
+            spec_rel = rel_posix
+
+        if is_dir:
+            spec_rel += "/"
 
         # Git semantics: "last match wins" within each .gitignore file, and
         # deeper .gitignore files override parent rules. `GitIgnoreSpec.match_file`
         # only returns the final decision (ignored or not), so we need to
         # distinguish between "no match" and an explicit `!` unignore match.
         last_match: bool | None = None
-        for pattern in reversed(list(spec.patterns)):
+        for pattern in spec.patterns_reversed:
             if pattern.match_file(spec_rel):
                 last_match = pattern.include
                 break

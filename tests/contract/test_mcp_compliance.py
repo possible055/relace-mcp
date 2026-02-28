@@ -35,9 +35,7 @@ class TestMCPToolExistence:
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("clean_env")
-    async def test_cloud_tools_conditional_on_flag(
-        self, mock_config: RelaceConfig, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_cloud_tools_conditional_on_flag(self, mock_config: RelaceConfig) -> None:
         """Cloud tools only registered when RELACE_CLOUD_TOOLS=true."""
         with patch("relace_mcp.tools.RELACE_CLOUD_TOOLS", True):
             server = build_server(config=mock_config, run_health_check=False)

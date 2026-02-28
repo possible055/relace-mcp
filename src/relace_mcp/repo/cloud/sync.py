@@ -1,10 +1,13 @@
 import logging
+import time
 import uuid
 from pathlib import Path
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
 from ...config.settings import REPO_SYNC_MAX_FILES
+from ...observability import get_trace_id
+from ...observability import tool_name as tool_name_ctx
 from ..core import (
     SyncState,
     build_cloud_error_details,
@@ -57,8 +60,9 @@ def cloud_sync_logic(
         - deletes_suppressed: Number of delete operations suppressed (safe_full mode)
         - error: Error message if failed (optional)
     """
-    trace_id = str(uuid.uuid4())[:8]
+    trace_id = get_trace_id() if tool_name_ctx.get() else str(uuid.uuid4())[:8]
     logger.debug("[%s] Starting cloud sync", trace_id)
+    t0 = time.perf_counter()
 
     original_base_dir = base_dir
     base_dir = str(get_git_root(base_dir))
@@ -95,6 +99,7 @@ def cloud_sync_logic(
             trace_id,
             repo_name=local_repo_name or None,
             cloud_repo_name=None,
+            latency_ms=round((time.perf_counter() - t0) * 1000),
             **extract_error_fields(result),
         )
         return result
@@ -331,6 +336,7 @@ def cloud_sync_logic(
             files_selected=result_payload.get("files_selected"),
             files_truncated=result_payload.get("files_truncated"),
             warnings_count=len(warnings_list),
+            latency_ms=round((time.perf_counter() - t0) * 1000),
         )
         return result_payload
 
@@ -362,6 +368,7 @@ def cloud_sync_logic(
             trace_id,
             repo_name=local_repo_name,
             cloud_repo_name=cloud_repo_name,
+            latency_ms=round((time.perf_counter() - t0) * 1000),
             **extract_error_fields(result),
         )
         return result

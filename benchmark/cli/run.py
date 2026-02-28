@@ -83,13 +83,16 @@ def _load_benchmark_config():
 @click.option("--shuffle", is_flag=True, help="Shuffle cases before selecting --limit")
 @click.option("--max-turns", default=None, type=int, help="Override SEARCH_MAX_TURNS")
 @click.option("--temperature", default=None, type=float, help="Override SEARCH_TEMPERATURE")
-@click.option("--prompt-file", default=None, help="Override SEARCH_PROMPT_FILE (YAML)")
+@click.option("--prompt-file", default=None, help="Override SEARCH_PROMPT_FILE_RELACE (YAML)")
 @click.option("--timeout", default=None, type=int, help="Per-case timeout in seconds")
 @click.option("--fail-fast", default=None, type=int, help="Stop after N consecutive failures")
 @click.option("--resume", is_flag=True, help="Resume from checkpoint")
 @click.option("-v", "--verbose", is_flag=True, help="Verbose output")
 @click.option("-q", "--quiet", is_flag=True, help="Disable progress bar")
 @click.option("--dry-run", is_flag=True, help="Only load data, don't run searches")
+@click.option(
+    "--trace", is_flag=True, help="Save per-case trace JSONL (reconstructed from relace.log)"
+)
 @click.option(
     "--search-mode",
     type=click.Choice(["agentic", "indexed"]),
@@ -98,14 +101,15 @@ def _load_benchmark_config():
 )
 @click.option(
     "--lsp-tools",
-    type=click.Choice(["true", "false", "auto"]),
+    type=click.Choice(["true", "false"]),
     default=None,
-    help="LSP tools mode: true (all), false (disabled), auto (detect servers)",
+    help="LSP tools toggle: true (enabled), false (disabled)",
 )
 @click.option(
-    "--enabled-tools",
+    "--bash-tools",
+    type=click.Choice(["true", "false"]),
     default=None,
-    help="Comma-separated list of enabled internal tools (e.g., view_file,grep_search,bash)",
+    help="Bash tool toggle: true (enabled), false (disabled)",
 )
 def main(
     dataset_path: str,
@@ -122,9 +126,10 @@ def main(
     verbose: bool,
     quiet: bool,
     dry_run: bool,
+    trace: bool,
     search_mode: str,
     lsp_tools: str | None,
-    enabled_tools: str | None,
+    bash_tools: str | None,
 ) -> None:
     """Run benchmark on agentic_search or agentic_retrieval.
 
@@ -133,15 +138,17 @@ def main(
     _load_dotenv_from_env_path()
 
     if prompt_file:
-        os.environ["SEARCH_PROMPT_FILE"] = prompt_file
+        os.environ["SEARCH_PROMPT_FILE_RELACE"] = prompt_file
     if max_turns is not None:
         os.environ["SEARCH_MAX_TURNS"] = str(max_turns)
     if temperature is not None:
         os.environ["SEARCH_TEMPERATURE"] = str(temperature)
     if lsp_tools is not None:
         os.environ["SEARCH_LSP_TOOLS"] = lsp_tools
-    if enabled_tools is not None:
-        os.environ["SEARCH_ENABLED_TOOLS"] = enabled_tools
+    if bash_tools is not None:
+        os.environ["SEARCH_BASH_TOOLS"] = bash_tools
+    if search_mode == "indexed":
+        os.environ.setdefault("MCP_RETRIEVAL_BACKEND", "auto")
 
     from ..runner.executor import BenchmarkRunner
 
@@ -157,7 +164,7 @@ def main(
     click.echo(f"  seed:    {seed}")
     click.echo(f"  search_mode: {search_mode}")
     click.echo(f"  lsp_tools: {lsp_tools or 'default'}")
-    click.echo(f"  enabled_tools: {enabled_tools or 'default'}")
+    click.echo(f"  bash_tools: {bash_tools or 'default'}")
     click.echo(f"  excluded repos: {len(EXCLUDED_REPOS)}")
 
     try:
@@ -225,6 +232,7 @@ def main(
         fail_fast=fail_fast,
         search_mode=search_mode,
         resume=resume,
+        trace=trace,
     )
 
     click.echo("\nRunning benchmark...")
@@ -238,7 +246,7 @@ def main(
             "seed": seed,
             "search_mode": search_mode,
             "lsp_tools": lsp_tools,
-            "enabled_tools": enabled_tools,
+            "bash_tools": bash_tools,
         },
     )
 
@@ -262,6 +270,8 @@ def main(
     click.echo("\nResults saved to:")
     click.echo(f"  - {jsonl_path}")
     click.echo(f"  - {report_path}")
+    if trace and hasattr(runner, "_traces_dir") and runner._traces_dir:
+        click.echo(f"  - traces: {runner._traces_dir}")
 
     # Print summary
     click.echo("\n" + "=" * 50)
@@ -282,7 +292,7 @@ def main(
     click.echo(f"Func Cases:        {int(s['function_cases'])}/{summary.total_cases}")
     click.echo(f"Avg Func Hit Rate: {s['avg_function_hit_rate']:.1%}")
     click.echo(f"Avg Turns:         {s['avg_turns']:.2f}")
-    click.echo(f"Avg Latency:       {s['avg_latency_ms']:.0f}ms")
+    click.echo(f"Avg Latency:       {s['avg_latency_s']:.1f}s")
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ def log_search_start(trace_id: str, query: str) -> None:
     log_event(
         {
             "kind": "search_start",
+            "level": "info",
             "trace_id": trace_id,
             "query_preview": q[:500] if len(q) > 500 else q,
         }
@@ -29,6 +30,7 @@ def log_search_turn(
     """Record agent loop turn state with LLM API timing and token usage."""
     event: dict[str, Any] = {
         "kind": "search_turn",
+        "level": "info",
         "trace_id": trace_id,
         "turn": turn,
         "max_turns": max_turns,
@@ -66,6 +68,7 @@ def log_tool_call(
     safe_args = _sanitize_args(tool_name, args)
     event: dict[str, Any] = {
         "kind": "tool_call",
+        "level": "debug" if success else "warning",
         "trace_id": trace_id,
         "tool_name": tool_name,
         "args": safe_args,
@@ -89,6 +92,7 @@ def log_search_complete(
     log_event(
         {
             "kind": "search_complete",
+            "level": "info",
             "trace_id": trace_id,
             "turns_used": turns_used,
             "files_found": files_found,

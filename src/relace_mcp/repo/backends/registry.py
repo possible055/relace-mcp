@@ -1,6 +1,8 @@
 import asyncio
 import logging
 
+from ...observability import log_event, redact_value
+
 logger = logging.getLogger(__name__)
 
 _disabled_backends: set[str] = set()
@@ -17,6 +19,14 @@ def is_backend_disabled(name: str) -> bool:
 def disable_backend(name: str, reason: str) -> None:
     _disabled_backends.add(name)
     logger.warning("Backend %r disabled for this session: %s", name, reason)
+    log_event(
+        {
+            "kind": "backend_disabled",
+            "level": "warning",
+            "backend": name,
+            "reason": redact_value(reason, 500),
+        }
+    )
 
 
 def is_bg_index_running(base_dir: str, backend: str) -> bool:

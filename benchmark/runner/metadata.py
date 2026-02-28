@@ -55,7 +55,7 @@ def build_run_metadata(
     run_config: dict[str, Any] | None,
     started_at: datetime,
     completed_at: datetime,
-    duration_ms: float,
+    duration_s: float,
 ) -> dict[str, Any]:
     """Build reproducibility metadata for this benchmark run (no secrets)."""
     config_meta: dict[str, Any] = {
@@ -67,7 +67,12 @@ def build_run_metadata(
     provider = os.getenv("SEARCH_PROVIDER", "relace").strip().lower()
     model = os.getenv("SEARCH_MODEL", "").strip()
     base_url = os.getenv("SEARCH_ENDPOINT", "").strip()
-    prompt_file = os.getenv("SEARCH_PROMPT_FILE", "").strip() or None
+    prompt_file = (
+        os.getenv("SEARCH_PROMPT_FILE_RELACE", "").strip()
+        or os.getenv("SEARCH_PROMPT_FILE_OPENAI", "").strip()
+        or os.getenv("SEARCH_PROMPT_FILE_OPENAI_LSP", "").strip()
+        or None
+    )
 
     case_list = [
         {
@@ -119,7 +124,7 @@ def build_run_metadata(
             **run_meta,
             "started_at_utc": started_at.isoformat(),
             "completed_at_utc": completed_at.isoformat(),
-            "duration_ms": round(duration_ms, 2),
+            "duration_s": round(duration_s, 1),
         },
         "config": config_meta,
         "dataset": dataset_info,
@@ -131,6 +136,9 @@ def build_run_metadata(
             "max_turns": relace_settings.SEARCH_MAX_TURNS,
             "temperature": relace_settings.SEARCH_TEMPERATURE,
             "prompt_file": prompt_file,
+        },
+        "retrieval": {
+            "backend": os.getenv("MCP_RETRIEVAL_BACKEND", "auto"),
         },
         "environment": {
             "python": sys.version,

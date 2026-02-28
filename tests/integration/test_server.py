@@ -59,6 +59,16 @@ class TestServerToolRegistration:
             tool_names = [t.name for t in tools]
             assert "agentic_search" in tool_names
 
+    @pytest.mark.asyncio
+    async def test_indexing_status_registered(self, mock_config: RelaceConfig) -> None:
+        """Verify indexing_status registration via public API Client.list_tools()."""
+        server = build_server(config=mock_config)
+
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            tool_names = [t.name for t in tools]
+            assert "indexing_status" in tool_names
+
 
 class TestServerToolExecution:
     """Test tool execution via server."""
@@ -94,6 +104,24 @@ class TestServerToolExecution:
 
                 # FastMCP Client.call_tool returns deserialized data
                 assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_indexing_status_success(self, mock_config: RelaceConfig) -> None:
+        """Should execute indexing_status tool successfully."""
+        server = build_server(config=mock_config)
+
+        async with Client(server) as client:
+            result = await client.call_tool(
+                "indexing_status",
+                {
+                    "probe": False,
+                },
+            )
+
+            assert result.structured_content is not None
+            payload = result.structured_content
+            for key in ("trace_id", "base_dir", "relace", "codanna", "chunkhound"):
+                assert key in payload
 
     @pytest.mark.asyncio
     async def test_fast_apply_creates_new_file(

@@ -1,8 +1,11 @@
 import logging
+import time
 import uuid
 from typing import Any
 
 from ...clients.repo import RelaceRepoClient
+from ...observability import get_trace_id
+from ...observability import tool_name as tool_name_ctx
 from ..core import build_cloud_error_details, extract_error_fields, log_cloud_event
 
 logger = logging.getLogger(__name__)
@@ -23,8 +26,9 @@ def cloud_list_logic(client: RelaceRepoClient) -> dict[str, Any]:
         - has_more: True only if safety limit (10,000 repos) was reached
         - error: Error message if failed (optional)
     """
-    trace_id = str(uuid.uuid4())[:8]
+    trace_id = get_trace_id() if tool_name_ctx.get() else str(uuid.uuid4())[:8]
     logger.debug("[%s] Listing cloud repositories", trace_id)
+    t0 = time.perf_counter()
 
     try:
         log_cloud_event("cloud_list_start", trace_id)
@@ -57,7 +61,12 @@ def cloud_list_logic(client: RelaceRepoClient) -> dict[str, Any]:
             "repos": repo_summaries,
             "has_more": has_more,
         }
-        log_cloud_event("cloud_list_complete", trace_id, count=len(repo_summaries))
+        log_cloud_event(
+            "cloud_list_complete",
+            trace_id,
+            count=len(repo_summaries),
+            latency_ms=round((time.perf_counter() - t0) * 1000),
+        )
         return result
 
     except Exception as exc:
@@ -70,5 +79,10 @@ def cloud_list_logic(client: RelaceRepoClient) -> dict[str, Any]:
             "error": str(exc),
             **build_cloud_error_details(exc),
         }
-        log_cloud_event("cloud_list_error", trace_id, **extract_error_fields(result))
+        log_cloud_event(
+            "cloud_list_error",
+            trace_id,
+            latency_ms=round((time.perf_counter() - t0) * 1000),
+            **extract_error_fields(result),
+        )
         return result

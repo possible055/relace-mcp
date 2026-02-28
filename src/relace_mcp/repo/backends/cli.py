@@ -4,6 +4,8 @@ import os
 import subprocess  # nosec B404
 from typing import Any
 
+from ...observability import log_trace_event
+
 
 def _format_cli_error_detail(stdout: str, stderr: str) -> str:
     stdout_text = (stdout or "").strip()
@@ -28,6 +30,18 @@ def _run_cli_json(
             "LC_ALL": "C.UTF-8",
         }
 
+    log_trace_event(
+        {
+            "kind": "cli_request",
+            "cli": command[0] if command else "unknown",
+            "command": command,
+            "cwd": base_dir,
+            "timeout_s": timeout,
+            "mode": "json",
+            "env_keys": sorted(env.keys()),
+        }
+    )
+
     try:
         result = subprocess.run(  # nosec B603 B607
             command,
@@ -39,17 +53,81 @@ def _run_cli_json(
             env=env,
         )
     except subprocess.TimeoutExpired as exc:
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": command[0] if command else "unknown",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout,
+                "mode": "json",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+        )
         raise RuntimeError(f"CLI timeout after {timeout}s: {exc}") from exc
     except FileNotFoundError as exc:
         cmd_name = command[0] if command else "unknown"
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": cmd_name,
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout,
+                "mode": "json",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+        )
         raise RuntimeError(f"{cmd_name} CLI not found: {exc}") from exc
     except OSError as exc:
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": command[0] if command else "unknown",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout,
+                "mode": "json",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+        )
         raise RuntimeError(f"CLI failed: {exc}") from exc
 
     if result.returncode != 0:
         cmd_name = command[0] if command else "CLI"
         detail = _format_cli_error_detail(result.stdout or "", result.stderr or "")
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": cmd_name,
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout,
+                "mode": "json",
+                "returncode": result.returncode,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "detail": detail,
+            }
+        )
         raise RuntimeError(f"{cmd_name} error (exit {result.returncode}): {detail}")
+
+    log_trace_event(
+        {
+            "kind": "cli_response",
+            "cli": command[0] if command else "unknown",
+            "command": command,
+            "cwd": base_dir,
+            "timeout_s": timeout,
+            "mode": "json",
+            "returncode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        }
+    )
 
     payload = (result.stdout or "").strip()
     if not payload:
@@ -58,6 +136,19 @@ def _run_cli_json(
     try:
         return json.loads(payload)
     except json.JSONDecodeError as exc:
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": command[0] if command else "unknown",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout,
+                "mode": "json",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "payload_preview": payload[:5000],
+            }
+        )
         raise RuntimeError(f"JSON parse error: {exc}") from exc
 
 
@@ -72,6 +163,18 @@ def _run_cli_text(
             "LC_ALL": "C.UTF-8",
         }
 
+    log_trace_event(
+        {
+            "kind": "cli_request",
+            "cli": command[0] if command else "unknown",
+            "command": command,
+            "cwd": base_dir,
+            "timeout_s": timeout,
+            "mode": "text",
+            "env_keys": sorted(env.keys()),
+        }
+    )
+
     try:
         result = subprocess.run(  # nosec B603 B607
             command,
@@ -83,16 +186,80 @@ def _run_cli_text(
             env=env,
         )
     except subprocess.TimeoutExpired as exc:
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": command[0] if command else "unknown",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+        )
         raise RuntimeError(f"CLI timeout after {timeout}s: {exc}") from exc
     except FileNotFoundError as exc:
         cmd_name = command[0] if command else "unknown"
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": cmd_name,
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+        )
         raise RuntimeError(f"{cmd_name} CLI not found: {exc}") from exc
     except OSError as exc:
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": command[0] if command else "unknown",
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout,
+                "mode": "text",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+        )
         raise RuntimeError(f"CLI failed: {exc}") from exc
 
     if result.returncode != 0:
         cmd_name = command[0] if command else "CLI"
         detail = _format_cli_error_detail(result.stdout or "", result.stderr or "")
+        log_trace_event(
+            {
+                "kind": "cli_error",
+                "cli": cmd_name,
+                "command": command,
+                "cwd": base_dir,
+                "timeout_s": timeout,
+                "mode": "text",
+                "returncode": result.returncode,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "detail": detail,
+            }
+        )
         raise RuntimeError(f"{cmd_name} error (exit {result.returncode}): {detail}")
+
+    log_trace_event(
+        {
+            "kind": "cli_response",
+            "cli": command[0] if command else "unknown",
+            "command": command,
+            "cwd": base_dir,
+            "timeout_s": timeout,
+            "mode": "text",
+            "returncode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        }
+    )
 
     return (result.stdout or "").strip()

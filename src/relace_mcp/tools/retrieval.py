@@ -1,12 +1,15 @@
 import asyncio
 import logging
 import shutil
+import time
 import uuid
 from typing import Any
 
 from ..clients import RelaceRepoClient, SearchLLMClient
-from ..config import RETRIEVAL_USER_PROMPT_TEMPLATE, RelaceConfig
+from ..config import RelaceConfig
 from ..config.settings import AGENTIC_AUTO_SYNC, RETRIEVAL_BACKEND
+from ..observability import get_trace_id, log_event, redact_value
+from ..observability import tool_name as tool_name_ctx
 from ..repo.backends import (
     ExternalCLIError,
     chunkhound_auto_reindex,
@@ -69,7 +72,7 @@ def build_semantic_hints_section(cloud_results: list[dict[str, Any]], max_hints:
         except (TypeError, ValueError):
             score = 0.0
         lines.append(f"- {file_path} (score: {score:.2f})")
-    lines.append("Validate with grep/view before reporting.")
+    lines.append("Open these files FIRST (parallel view_file), then broaden exploration.")
     lines.append("</semantic_hints>")
     return "\n".join(lines)
 
@@ -80,6 +83,8 @@ async def agentic_retrieval_logic(
     config: RelaceConfig,
     base_dir: str,
     query: str,
+    *,
+    trace: bool = False,
 ) -> dict[str, Any]:
     """Two-stage retrieval: semantic hints + agentic exploration.
 
@@ -89,6 +94,7 @@ async def agentic_retrieval_logic(
         config: Relace configuration.
         base_dir: Repository base directory.
         query: Natural language query.
+        trace: If True, collect per-turn trace data (turns_log) in the result.
 
     Returns:
         Dict with explanation, files, and metadata (same format as agentic_search).
@@ -99,14 +105,28 @@ async def agentic_retrieval_logic(
     max_hints = 8
     token_limit = 10000
 
-    trace_id = str(uuid.uuid4())[:8]
+    trace_id = get_trace_id() if tool_name_ctx.get() else str(uuid.uuid4())[:8]
     logger.debug("[%s] Starting agentic retrieval", trace_id)
 
     # Resolve "auto" backend now that base_dir is known
     backend = _resolve_auto_backend(base_dir) if RETRIEVAL_BACKEND == "auto" else RETRIEVAL_BACKEND
 
+    log_event(
+        {
+            "kind": "retrieval_backend_selected",
+            "level": "info",
+            "trace_id": trace_id,
+            "base_dir": base_dir,
+            "retrieval_backend": backend,
+            "configured_backend": RETRIEVAL_BACKEND,
+        }
+    )
+
     warnings_list: list[str] = []
     cloud_results: list[dict[str, Any]] = []
+
+    reindex_action: str | None = None
+    reindex_t0 = time.perf_counter()
 
     # Stage 0a: Auto-sync if enabled and needed (Relace backend only)
     if AGENTIC_AUTO_SYNC and backend == "relace" and repo_client is not None:
@@ -118,11 +138,37 @@ async def agentic_retrieval_logic(
                 if sync_result.get("error"):
                     warnings_list.append(f"Auto-sync failed: {sync_result['error']}")
                     logger.warning("[%s] Auto-sync failed, see warnings", trace_id)
+                    log_event(
+                        {
+                            "kind": "retrieval_auto_sync_error",
+                            "level": "warning",
+                            "trace_id": trace_id,
+                            "backend": "relace",
+                            "error": redact_value(str(sync_result.get("error")), 500),
+                        }
+                    )
                 else:
                     logger.debug("[%s] Auto-sync completed successfully", trace_id)
+                    log_event(
+                        {
+                            "kind": "retrieval_auto_sync_complete",
+                            "level": "info",
+                            "trace_id": trace_id,
+                            "backend": "relace",
+                        }
+                    )
         except Exception as exc:
             warnings_list.append(f"Auto-sync error: {exc}")
             logger.warning("[%s] Auto-sync exception occurred, see warnings", trace_id)
+            log_event(
+                {
+                    "kind": "retrieval_auto_sync_error",
+                    "level": "warning",
+                    "trace_id": trace_id,
+                    "backend": "relace",
+                    "error": redact_value(str(exc), 500),
+                }
+            )
 
     # Stage 0b: ChunkHound auto-reindex (HEAD + dirty-worktree staleness check).
     # Runs in a thread to avoid blocking the async event loop.
@@ -131,11 +177,22 @@ async def agentic_retrieval_logic(
             async with _get_reindex_lock(base_dir, "chunkhound"):
                 reindex_result = await asyncio.to_thread(chunkhound_auto_reindex, base_dir)
             action = reindex_result.get("action", "unknown")
+            reindex_action = action
             if action == "reindexed":
                 logger.info(
                     "[%s] ChunkHound auto-reindex completed (%s)",
                     trace_id,
                     (reindex_result.get("old_head") or "?")[:8],
+                )
+                log_event(
+                    {
+                        "kind": "backend_auto_reindex_complete",
+                        "level": "info",
+                        "trace_id": trace_id,
+                        "backend": "chunkhound",
+                        "old_head": reindex_result.get("old_head"),
+                        "new_head": reindex_result.get("new_head"),
+                    }
                 )
             elif action == "error":
                 warnings_list.append(
@@ -146,24 +203,52 @@ async def agentic_retrieval_logic(
                     trace_id,
                     reindex_result.get("message"),
                 )
+                log_event(
+                    {
+                        "kind": "backend_auto_reindex_error",
+                        "level": "warning",
+                        "trace_id": trace_id,
+                        "backend": "chunkhound",
+                        "error": redact_value(str(reindex_result.get("message")), 500),
+                    }
+                )
             else:
                 logger.debug("[%s] ChunkHound auto-reindex: %s", trace_id, action)
         except Exception as exc:
             warnings_list.append(f"ChunkHound auto-reindex failed: {exc}")
             logger.warning("[%s] ChunkHound auto-reindex failed: %s", trace_id, exc)
+            log_event(
+                {
+                    "kind": "backend_auto_reindex_error",
+                    "level": "warning",
+                    "trace_id": trace_id,
+                    "backend": "chunkhound",
+                    "error": redact_value(str(exc), 500),
+                }
+            )
 
-    # Stage 0c: Codanna auto-reindex (HEAD + dirty-worktree staleness check).
-    # Runs in a thread to avoid blocking the async event loop.
+    # Stage 0c: Codanna auto-reindex (same staleness semantics as ChunkHound)
     if backend == "codanna" and not is_backend_disabled("codanna"):
         try:
             async with _get_reindex_lock(base_dir, "codanna"):
                 reindex_result = await asyncio.to_thread(codanna_auto_reindex, base_dir)
             action = reindex_result.get("action", "unknown")
+            reindex_action = action
             if action == "reindexed":
                 logger.info(
                     "[%s] Codanna auto-reindex completed (%s)",
                     trace_id,
                     (reindex_result.get("old_head") or "?")[:8],
+                )
+                log_event(
+                    {
+                        "kind": "backend_auto_reindex_complete",
+                        "level": "info",
+                        "trace_id": trace_id,
+                        "backend": "codanna",
+                        "old_head": reindex_result.get("old_head"),
+                        "new_head": reindex_result.get("new_head"),
+                    }
                 )
             elif action == "error":
                 warnings_list.append(
@@ -174,19 +259,49 @@ async def agentic_retrieval_logic(
                     trace_id,
                     reindex_result.get("message"),
                 )
+                log_event(
+                    {
+                        "kind": "backend_auto_reindex_error",
+                        "level": "warning",
+                        "trace_id": trace_id,
+                        "backend": "codanna",
+                        "error": redact_value(str(reindex_result.get("message")), 500),
+                    }
+                )
             else:
                 logger.debug("[%s] Codanna auto-reindex: %s", trace_id, action)
         except Exception as exc:
             warnings_list.append(f"Codanna auto-reindex failed: {exc}")
             logger.warning("[%s] Codanna auto-reindex failed: %s", trace_id, exc)
+            log_event(
+                {
+                    "kind": "backend_auto_reindex_error",
+                    "level": "warning",
+                    "trace_id": trace_id,
+                    "backend": "codanna",
+                    "error": redact_value(str(exc), 500),
+                }
+            )
+
+    reindex_latency_s = round(time.perf_counter() - reindex_t0, 3)
 
     # Stage 1: Semantic retrieval (Relace, Codanna, or ChunkHound)
+    retrieval_t0 = time.perf_counter()
     if backend == "none":
         warnings_list.append("Semantic retrieval disabled (MCP_RETRIEVAL_BACKEND=none).")
     elif backend in ("codanna", "chunkhound"):
         if is_backend_disabled(backend):
             warnings_list.append(
                 f"{backend} backend disabled for this session. Proceeding without hints."
+            )
+            log_event(
+                {
+                    "kind": "retrieval_hints_skipped",
+                    "level": "warning",
+                    "trace_id": trace_id,
+                    "backend": backend,
+                    "reason": "backend_disabled",
+                }
             )
         else:
             search_fn = chunkhound_search if backend == "chunkhound" else codanna_search
@@ -197,6 +312,15 @@ async def agentic_retrieval_logic(
                     limit=max_hints,
                     threshold=score_threshold,
                     allow_auto_index=False,
+                )
+                log_event(
+                    {
+                        "kind": "retrieval_hints_complete",
+                        "level": "info",
+                        "trace_id": trace_id,
+                        "backend": backend,
+                        "results_count": len(cloud_results) if cloud_results else 0,
+                    }
                 )
                 if not cloud_results:
                     warnings_list.append(
@@ -222,9 +346,30 @@ async def agentic_retrieval_logic(
                 logger.warning(
                     "[%s] %s backend error (%s): %s", trace_id, exc.backend, exc.kind, exc
                 )
+                log_event(
+                    {
+                        "kind": "retrieval_hints_error",
+                        "level": "warning",
+                        "trace_id": trace_id,
+                        "backend": exc.backend,
+                        "error_kind": exc.kind,
+                        "error": redact_value(str(exc), 500),
+                        "command": exc.command,
+                    }
+                )
             except Exception as exc:
                 warnings_list.append(f"{backend} search crashed: {exc}. Proceeding without hints.")
                 logger.exception("[%s] %s unexpected exception", trace_id, backend)
+                log_event(
+                    {
+                        "kind": "retrieval_hints_error",
+                        "level": "warning",
+                        "trace_id": trace_id,
+                        "backend": backend,
+                        "error_kind": type(exc).__name__,
+                        "error": redact_value(str(exc), 500),
+                    }
+                )
     else:
         if repo_client is None:
             warnings_list.append(
@@ -263,14 +408,12 @@ async def agentic_retrieval_logic(
                 warnings_list.append(f"Cloud search error: {exc}. Proceeding without hints.")
                 logger.warning("[%s] Cloud search exception: %s", trace_id, exc)
 
-    # Stage 2: Build augmented prompt
-    hints_section = build_semantic_hints_section(cloud_results, max_hints)
-    user_prompt = RETRIEVAL_USER_PROMPT_TEMPLATE.format(
-        query=query,
-        semantic_hints_section=hints_section,
-    )
+    retrieval_latency_s = round(time.perf_counter() - retrieval_t0, 3)
 
-    # Stage 3: Run agentic search with custom prompt
+    # Stage 2: Build semantic hints section
+    hints_section = build_semantic_hints_section(cloud_results, max_hints)
+
+    # Stage 3: Run agentic search with retrieval mode (shared template, hints injected)
     from dataclasses import replace
     from pathlib import Path
 
@@ -283,13 +426,22 @@ async def agentic_retrieval_logic(
         effective_config,
         search_client,
         lsp_languages=lsp_languages,
-        user_prompt_override=user_prompt,
+        retrieval=True,
+        trace=trace,
     )
-    result = await harness.run_async(query=query)
+    result = await harness.run_async(
+        query=query,
+        semantic_hints_section=hints_section,
+        trace_id=trace_id,
+    )
 
     # Add metadata
     result["trace_id"] = trace_id
     result["cloud_hints_used"] = len(cloud_results[:max_hints]) if cloud_results else 0
+    result["retrieval_backend"] = backend
+    result["reindex_action"] = reindex_action
+    result["reindex_latency_s"] = reindex_latency_s
+    result["retrieval_latency_s"] = retrieval_latency_s
     if warnings_list:
         result["warnings"] = warnings_list
 

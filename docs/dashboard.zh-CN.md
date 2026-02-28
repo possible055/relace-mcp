@@ -147,6 +147,8 @@ Turn 2 [████████████████████████
 | macOS | `~/Library/Application Support/relace/relace.log` |
 | Windows | `%LOCALAPPDATA%\relace\relace.log` |
 
+> 可以使用 `MCP_LOG_DIR` / `MCP_LOG_PATH` 覆盖位置。
+
 ## 事件类型
 
 | 类型 | 说明 | 来源 |

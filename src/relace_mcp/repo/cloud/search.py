@@ -5,6 +5,8 @@ from typing import Any
 
 from ...clients.exceptions import RelaceAPIError
 from ...clients.repo import RelaceRepoClient
+from ...observability import get_trace_id
+from ...observability import tool_name as tool_name_ctx
 from ..core import (
     build_cloud_error_details,
     extract_error_fields,
@@ -55,8 +57,9 @@ def cloud_search_logic(
         - hash: Commit SHA used for search (if available)
         - error: Error message if failed (optional)
     """
-    trace_id = str(uuid.uuid4())[:8]
+    trace_id = get_trace_id() if tool_name_ctx.get() else str(uuid.uuid4())[:8]
     logger.debug("[%s] Starting cloud semantic search", trace_id)
+    t0 = time.perf_counter()
 
     local_repo_name: str | None = None
     cloud_repo_name: str | None = None
@@ -80,6 +83,7 @@ def cloud_search_logic(
                 trace_id,
                 repo_name=None,
                 cloud_repo_name=None,
+                latency_ms=round((time.perf_counter() - t0) * 1000),
                 **extract_error_fields(error_result),
             )
             return error_result
@@ -120,6 +124,7 @@ def cloud_search_logic(
                 trace_id,
                 repo_name=local_repo_name,
                 cloud_repo_name=cloud_repo_name,
+                latency_ms=round((time.perf_counter() - t0) * 1000),
                 **extract_error_fields(no_sync_result),
             )
             return no_sync_result
@@ -223,6 +228,7 @@ def cloud_search_logic(
             repo_name=local_repo_name,
             cloud_repo_name=cached_state.cloud_repo_name or cloud_repo_name,
             result_count=len(results),
+            latency_ms=round((time.perf_counter() - t0) * 1000),
         )
         return result_payload
 
@@ -253,6 +259,7 @@ def cloud_search_logic(
             trace_id,
             repo_name=local_repo_name,
             cloud_repo_name=cloud_repo_name,
+            latency_ms=round((time.perf_counter() - t0) * 1000),
             **extract_error_fields(exc_result),
         )
         return exc_result

@@ -4,6 +4,7 @@ MAX_TOTAL_CONTEXT_CHARS = 400000
 # Read-only tools safe for parallel execution
 PARALLEL_SAFE_TOOLS = frozenset(
     {
+        "bash",
         "view_file",
         "view_directory",
         "grep_search",

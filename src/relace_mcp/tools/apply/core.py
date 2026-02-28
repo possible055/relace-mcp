@@ -14,6 +14,8 @@ from ...clients.apply import ApplyLLMClient, ApplyRequest, ApplyResponse
 from ...config.settings import APPLY_SEMANTIC_CHECK, MAX_FILE_SIZE_BYTES
 from ...encoding import atomic_write, get_project_encoding, read_text_with_fallback
 from ...encoding.exceptions import EncodingDetectionError as BaseEncodingDetectionError
+from ...observability import get_trace_id
+from ...observability import tool_name as tool_name_ctx
 from ...utils import validate_file_path
 from . import errors, snippet
 from . import logging as apply_logging
@@ -305,15 +307,16 @@ async def apply_file_logic(
     Returns:
         A structured dict with status, path, trace_id, timing_ms, diff, and message.
     """
+    trace_id = get_trace_id() if tool_name_ctx.get() else str(uuid.uuid4())[:8]
     ctx = ApplyContext(
-        trace_id=str(uuid.uuid4())[:8],
+        trace_id=trace_id,
         started_at=datetime.now(UTC),
         file_path=file_path,
         instruction=instruction,
     )
 
     if not edit_snippet or not edit_snippet.strip():
-        return errors.recoverable_error(
+        empty_result = errors.recoverable_error(
             "INVALID_INPUT",
             "edit_snippet cannot be empty",
             file_path,
@@ -321,20 +324,42 @@ async def apply_file_logic(
             ctx.trace_id,
             ctx.elapsed_ms(),
         )
+        apply_logging.log_apply_recoverable_error(
+            ctx.trace_id,
+            ctx.started_at,
+            file_path,
+            edit_snippet,
+            instruction,
+            error_code=str(empty_result.get("code") or "") or None,
+            message=str(empty_result.get("message") or ""),
+        )
+        return empty_result
+
+    logged_error_event = False
+    result: dict[str, Any]
 
     try:
-        result = _resolve_path(file_path, base_dir, ctx, extra_paths=extra_paths)
-        if isinstance(result, dict):
-            return result
-        resolved_path, file_exists, file_size = result
+        resolved = _resolve_path(file_path, base_dir, ctx, extra_paths=extra_paths)
+        if isinstance(resolved, dict):
+            result = resolved
+        else:
+            resolved_path, file_exists, file_size = resolved
 
-        if not file_exists:
-            return _create_new_file(ctx, resolved_path, edit_snippet)
-        return await _apply_to_existing_file(ctx, backend, resolved_path, edit_snippet, file_size)
+            if not file_exists:
+                result = _create_new_file(ctx, resolved_path, edit_snippet)
+            else:
+                result = await _apply_to_existing_file(
+                    ctx,
+                    backend,
+                    resolved_path,
+                    edit_snippet,
+                    file_size,
+                )
     except Exception as exc:
         apply_logging.log_apply_error(
             ctx.trace_id, ctx.started_at, file_path, edit_snippet, instruction, exc
         )
+        logged_error_event = True
 
         if isinstance(exc, openai.APIError):
             logger.warning(
@@ -402,7 +427,7 @@ async def apply_file_logic(
             )
 
         logger.error("[%s] Apply failed for %s: %s", ctx.trace_id, file_path, exc)
-        return errors.recoverable_error(
+        result = errors.recoverable_error(
             "INTERNAL_ERROR",
             f"Unexpected error ({type(exc).__name__}): {exc}",
             file_path,
@@ -410,3 +435,16 @@ async def apply_file_logic(
             ctx.trace_id,
             ctx.elapsed_ms(),
         )
+
+    if result.get("status") == "error" and not logged_error_event:
+        apply_logging.log_apply_recoverable_error(
+            ctx.trace_id,
+            ctx.started_at,
+            file_path,
+            edit_snippet,
+            instruction,
+            error_code=str(result.get("code") or "") or None,
+            message=str(result.get("message") or result.get("error") or ""),
+        )
+
+    return result

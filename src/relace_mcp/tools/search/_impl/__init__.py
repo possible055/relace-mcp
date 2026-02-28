@@ -2,8 +2,7 @@ from .bash import bash_handler
 from .bash_security import (
     BASH_BLOCKED_COMMANDS,
     BASH_BLOCKED_PATTERNS,
-    BASH_SAFE_COMMANDS,
-    GIT_ALLOWED_SUBCOMMANDS,
+    GIT_BLOCKED_SUBCOMMANDS,
     is_blocked_command,
 )
 from .constants import (
@@ -48,10 +47,9 @@ __all__ = [
     "BASH_BLOCKED_COMMANDS",
     "BASH_BLOCKED_PATTERNS",
     "BASH_MAX_OUTPUT_CHARS",
-    "BASH_SAFE_COMMANDS",
     "BASH_TIMEOUT_SECONDS",
     "CallGraphParams",
-    "GIT_ALLOWED_SUBCOMMANDS",
+    "GIT_BLOCKED_SUBCOMMANDS",
     "GREP_TIMEOUT_SECONDS",
     "GetTypeParams",
     "LSPQueryParams",
