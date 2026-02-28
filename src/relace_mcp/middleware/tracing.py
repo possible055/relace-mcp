@@ -26,12 +26,11 @@ def _classify_tool_result(result: Any) -> tuple[bool, str | None, str | None]:
 
     error = result.get("error")
     if error:
-        error_type = result.get("error_type") or "ToolError"
+        if result.get("partial") is True:
+            error_type = result.get("error_type") or "PartialResult"
+        else:
+            error_type = result.get("error_type") or "ToolError"
         return False, str(error), str(error_type)
-
-    if result.get("partial") is True and result.get("error"):
-        error_type = result.get("error_type") or "PartialResult"
-        return False, str(result.get("error")), str(error_type)
 
     return True, None, None
 
@@ -94,7 +93,7 @@ class ToolTracingMiddleware(Middleware):
             )
 
             return result
-        except BaseException as exc:
+        except Exception as exc:
             duration_ms = (time.perf_counter() - start) * 1000
             error_message = str(exc) or type(exc).__name__
             tb = traceback.format_exc()

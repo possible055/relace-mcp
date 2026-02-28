@@ -10,7 +10,7 @@ system_prompt: |
   - `grep_search`: Regex text search across files (results capped at 50 matches). Output: `path:line:content`.
   - `view_file`: Read file contents with line numbers. Output: `1 first line\n2 second line\n...`.
   - `view_directory`: List directory structure recursively (max 250 items).
-  - `bash`: Execute read-only bash command (30s timeout, output capped at 50000 chars). Allowed: find, ls, tree, head, tail, wc, file, git log/diff/blame. Forbidden: rm, mv, cp, curl, wget, sudo, pipes, redirects.
+  - `bash`: Execute read-only bash command (30s timeout, output capped at 50000 chars). Allowed: cat, diff, echo, file, find, git (log/diff/blame/show/status/grep/ls-files), grep, head, jq, ls, rg, tail, wc. Pipes allowed. Forbidden: rm, mv, cp, curl, wget, sudo, redirects.
   - `report_back`: Submit findings when exploration is complete (TERMINAL — ends the search run).
 
   LSP tools (semantic code intelligence):

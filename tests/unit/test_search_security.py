@@ -387,3 +387,49 @@ class TestTreeRemoved:
         blocked, reason = _is_blocked_command("tree", DEFAULT_BASE_DIR)
         assert blocked
         assert "not allowlisted" in reason.lower()
+
+
+class TestSingleQuotedCommandSubstitution:
+    """$( inside single quotes is a literal string and must not be blocked."""
+
+    def test_allows_dollar_paren_in_single_quotes(self) -> None:
+        blocked, _ = _is_blocked_command("grep '$(' /repo/file.txt", DEFAULT_BASE_DIR)
+        assert not blocked
+
+    def test_blocks_unquoted_dollar_paren(self) -> None:
+        blocked, _ = _is_blocked_command("echo $(whoami)", DEFAULT_BASE_DIR)
+        assert blocked
+
+
+class TestSedCrossPipeFix:
+    """sed-inplace detection must not span across pipe segments."""
+
+    def test_allows_grep_i_after_pipe_with_sed_word(self) -> None:
+        blocked, _ = _is_blocked_command("echo sed | grep -i pattern", DEFAULT_BASE_DIR)
+        assert not blocked
+
+    def test_sed_still_blocked_as_not_allowlisted(self) -> None:
+        blocked, reason = _is_blocked_command("sed -i 's/old/new/' file.txt", DEFAULT_BASE_DIR)
+        assert blocked
+
+
+class TestRepoPathSubstringMatch:
+    """The /repo path translation must not match partial prefixes like /repository."""
+
+    def test_no_false_match_on_repository(self) -> None:
+        from relace_mcp.tools.search._impl.bash import _translate_repo_paths_in_command
+
+        result = _translate_repo_paths_in_command("ls /repository/foo", "/tmp/base")
+        assert "/repository/foo" in result
+
+    def test_translates_repo_standalone(self) -> None:
+        from relace_mcp.tools.search._impl.bash import _translate_repo_paths_in_command
+
+        result = _translate_repo_paths_in_command("ls /repo", "/tmp/base")
+        assert "/tmp/base" in result
+
+    def test_translates_repo_with_path(self) -> None:
+        from relace_mcp.tools.search._impl.bash import _translate_repo_paths_in_command
+
+        result = _translate_repo_paths_in_command("ls /repo/src/file.py", "/tmp/base")
+        assert "/tmp/base" in result

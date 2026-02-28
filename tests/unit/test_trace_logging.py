@@ -186,3 +186,48 @@ class TestRotationDynamicPattern:
         assert custom_trace.exists()
         rotated = list(tmp_path.glob("mytrace.*.jsonl"))
         assert rotated
+
+
+class TestClassifyToolResult:
+    """Tests for _classify_tool_result in tracing middleware."""
+
+    def test_non_dict_returns_success(self) -> None:
+        from relace_mcp.middleware.tracing import _classify_tool_result
+
+        success, error, error_type = _classify_tool_result("string result")
+        assert success is True
+        assert error is None
+
+    def test_status_error(self) -> None:
+        from relace_mcp.middleware.tracing import _classify_tool_result
+
+        success, error, error_type = _classify_tool_result({"status": "error", "message": "fail"})
+        assert success is False
+        assert error == "fail"
+
+    def test_error_field_returns_tool_error(self) -> None:
+        from relace_mcp.middleware.tracing import _classify_tool_result
+
+        success, error, error_type = _classify_tool_result({"error": "something broke"})
+        assert success is False
+        assert error_type == "ToolError"
+
+    def test_partial_with_error_returns_partial_result_type(self) -> None:
+        from relace_mcp.middleware.tracing import _classify_tool_result
+
+        success, error, error_type = _classify_tool_result({"partial": True, "error": "incomplete"})
+        assert success is False
+        assert error == "incomplete"
+        assert error_type == "PartialResult"
+
+    def test_partial_without_error_returns_success(self) -> None:
+        from relace_mcp.middleware.tracing import _classify_tool_result
+
+        success, _, _ = _classify_tool_result({"partial": True})
+        assert success is True
+
+    def test_ok_dict_returns_success(self) -> None:
+        from relace_mcp.middleware.tracing import _classify_tool_result
+
+        success, _, _ = _classify_tool_result({"status": "ok", "data": []})
+        assert success is True

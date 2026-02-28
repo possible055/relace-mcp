@@ -32,6 +32,19 @@ from .search import FastAgenticSearchHarness
 __all__ = ["register_tools"]
 
 
+def _read_text_safe(path: Path) -> str | None:
+    """Read text from *path*, returning ``None`` for symlinks, missing, or empty files."""
+    try:
+        if path.is_symlink():
+            return None
+        if not path.is_file():
+            return None
+        text = path.read_text(encoding="utf-8", errors="replace").strip()
+        return text or None
+    except OSError:
+        return None
+
+
 def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     """Register Relace tools to the FastMCP instance."""
     apply_backend = ApplyLLMClient(config)
@@ -209,15 +222,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         - ChunkHound local index status (markers + optional health probe)
         """
 
-        def _read_text(path: Path) -> str | None:
-            try:
-                if not path.is_file():
-                    return None
-                text = path.read_text(encoding="utf-8", errors="replace").strip()
-                return text or None
-            except OSError:
-                return None
-
         trace_id = get_trace_id()
 
         try:
@@ -323,14 +327,14 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             "cli_found": bool(codanna_cli_path),
             "cli_path": codanna_cli_path,
             "index_dir_exists": (base_path / ".codanna").is_dir(),
-            "last_indexed_head": _read_text(codanna_head_path),
+            "last_indexed_head": _read_text_safe(codanna_head_path),
             "probe": None,
         }
         chunkhound_status: dict[str, Any] = {
             "cli_found": bool(chunkhound_cli_path),
             "cli_path": chunkhound_cli_path,
             "index_dir_exists": (base_path / ".chunkhound").is_dir(),
-            "last_indexed_head": _read_text(chunkhound_head_path),
+            "last_indexed_head": _read_text_safe(chunkhound_head_path),
             "probe": None,
         }
 

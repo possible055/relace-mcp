@@ -793,7 +793,9 @@ class TestBashHandler:
     def test_allows_shell_variable_home(self, tmp_path: Path) -> None:
         """$HOME is safe because env sets HOME=base_dir."""
         result = bash_handler('echo "$HOME"', str(tmp_path))
-        assert str(tmp_path) in result
+        # On Windows (MSYS/Git Bash), paths are converted to /c/Users/...
+        # so compare using the directory name which is platform-agnostic
+        assert tmp_path.name in result
 
     def test_returns_no_output_message(self, tmp_path: Path) -> None:
         """Should return message for empty output."""

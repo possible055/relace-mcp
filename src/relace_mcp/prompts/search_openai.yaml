@@ -10,14 +10,14 @@ system_prompt: |
   - `grep_search`: Text pattern search across files (results capped at 50 matches)
   - `view_file`: Read file contents with line range
   - `view_directory`: List directory structure (max 250 items)
-  - `bash`: Execute read-only bash command (30s timeout, output capped at 50000 chars)
+  - `bash`: Execute read-only bash command (30s timeout, output capped at 50000 chars). Allowed: cat, diff, echo, file, find, git (log/diff/blame/show/status/grep/ls-files), grep, head, jq, ls, rg, tail, wc. Pipes allowed. Forbidden: rm, mv, cp, curl, wget, sudo, redirects.
   - `report_back`: Submit findings when exploration complete (TERMINAL — ends the search run)
   </tools>
 
-  <rules>
+  <critical_rules>
   - You have {max_turns} exploration turns maximum.
   - When you call `report_back`, this is the FINAL turn. DO NOT call other tools.
-  <rules>
+  </critical_rules>
 
   <workflow>
   1. Broad discovery (**exactly 8 parallel calls**): map directory structure, search patterns, grep keywords

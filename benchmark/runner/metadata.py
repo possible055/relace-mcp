@@ -70,6 +70,7 @@ def build_run_metadata(
     prompt_file = (
         os.getenv("SEARCH_PROMPT_FILE_RELACE", "").strip()
         or os.getenv("SEARCH_PROMPT_FILE_OPENAI", "").strip()
+        or os.getenv("SEARCH_PROMPT_FILE_OPENAI_LSP", "").strip()
         or None
     )
 

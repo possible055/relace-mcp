@@ -89,7 +89,6 @@ BASH_BLOCKED_COMMANDS = frozenset(
 )
 
 BASH_BLOCKED_PATTERNS = [
-    r"\$\(",  # Command substitution (inner commands bypass validation)
     r"`",  # Command substitution (backtick form)
     r"[\r\n]",  # Multi-line commands
     r";\s*\w",  # Command chaining with semicolon
@@ -97,8 +96,6 @@ BASH_BLOCKED_PATTERNS = [
     r"-delete\b",  # find -delete
     r"-f(?:print0?|printf|ls)\b",  # find -fprint/-fprint0/-fprintf/-fls
 ]
-
-_SED_INPLACE_RE = re.compile(r"\bsed\b.*\s-[a-hj-zA-Z]*i")
 
 GIT_BLOCKED_SUBCOMMANDS = frozenset(
     {
@@ -205,8 +202,6 @@ def _check_blocked_patterns(command: str) -> tuple[bool, str]:
     for pattern in BASH_BLOCKED_PATTERNS:
         if re.search(pattern, command):
             return True, f"Blocked pattern: {pattern}"
-    if _SED_INPLACE_RE.search(command):
-        return True, "Blocked: sed -i (in-place edit)"
     return False, ""
 
 
@@ -449,6 +444,15 @@ def _validate_single_command(cmd_str: str, base_dir: str) -> tuple[bool, str]:
     blocked, reason = _check_git_subcommand(tokens, base_cmd)
     if blocked:
         return blocked, reason
+
+    # Sed in-place edit check (defense in depth; sed is not in the allowlist)
+    if base_cmd == "sed":
+        for token in tokens[1:]:
+            if token == "--in-place":  # nosec B105 — not a password, sed flag check
+                return True, "Blocked: sed --in-place (in-place edit)"
+            if token.startswith("-") and not token.startswith("--"):
+                if "i" in token[1:]:
+                    return True, "Blocked: sed -i (in-place edit)"
 
     blocked, reason = _check_path_containment(tokens, base_dir)
     if blocked:

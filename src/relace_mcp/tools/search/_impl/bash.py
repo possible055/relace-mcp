@@ -46,8 +46,9 @@ def _translate_repo_paths_in_command(command: str, base_dir: str) -> str:
         except ValueError:
             return token
 
-    # Match /repo followed by /path chars, or standalone /repo at word boundary
-    return re.sub(r"/repo(?:/[\w.+\-/]*)?", _replace, command)
+    # Match /repo followed by /path chars, or standalone /repo at word boundary.
+    # Negative lookahead prevents matching /repo as a prefix of e.g. /repository.
+    return re.sub(r"/repo(?:/[\w.+\-/]*)?(?![\w.+\-])", _replace, command)
 
 
 def bash_handler(command: str, base_dir: str) -> str:
