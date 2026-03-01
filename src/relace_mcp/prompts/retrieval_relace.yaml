@@ -1,4 +1,4 @@
-# Agentic Search Prompts (Relace native endpoint)
+# Agentic Retrieval Prompts (Relace native endpoint)
 
 system_prompt: |
   <role>
@@ -74,8 +74,7 @@ user_prompt_template: |
   When confident, output ONLY the `report_back` tool_call with nothing else.
   </task>
 
-# Unified turn hint (replaces budget_hint + convergence_hint + strategies)
-# Injected as user message from turn 2 onwards
+# Unified turn hint — injected as user message from turn 2 onwards
 turn_hint_template: |
   <status turn="{turn}/{max_turns}" context="{chars_pct}%">{instruction}</status>
 

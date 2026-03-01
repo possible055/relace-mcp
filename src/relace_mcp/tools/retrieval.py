@@ -413,7 +413,7 @@ async def agentic_retrieval_logic(
     # Stage 2: Build semantic hints section
     hints_section = build_semantic_hints_section(cloud_results, max_hints)
 
-    # Stage 3: Run agentic search with retrieval mode (shared template, hints injected)
+    # Stage 3: Run agentic search in retrieval mode (retrieval prompt, hints injected)
     from dataclasses import replace
     from pathlib import Path
 
