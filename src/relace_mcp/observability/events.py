@@ -74,10 +74,7 @@ def _sanitize_value(key: str, value: Any, depth: int) -> Any:
         result: list[Any] = []
         for item in value[:_SANITIZE_LIST_LIMIT]:
             if isinstance(item, str) and is_sensitive:
-                if item.startswith("[REDACTED "):
-                    result.append(item)
-                else:
-                    result.append(_make_placeholder(item))
+                result.append(_make_placeholder(item))
             elif isinstance(item, dict):
                 result.append(_sanitize_event_inner(item, depth + 1))
             elif isinstance(item, list):
@@ -90,8 +87,6 @@ def _sanitize_value(key: str, value: Any, depth: int) -> Any:
     if isinstance(value, str):
         k = key.lower()
         if k in _SENSITIVE_KEYS and k not in _NEVER_REDACT_KEYS:
-            if value.startswith("[REDACTED "):
-                return value
             return _make_placeholder(value)
     return value
 

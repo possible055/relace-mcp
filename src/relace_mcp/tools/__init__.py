@@ -86,7 +86,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     _encoding_lock = threading.Lock()
     _encoding_done = False
 
-    def _ensure_encoding_detected() -> None:
+    def _ensure_encoding_detected(resolved_base_dir: str | None = None) -> None:
         nonlocal _encoding_done
         if _encoding_done:
             return
@@ -100,19 +100,22 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             if config.default_encoding:
                 logger.debug("Using configured project encoding: %s", config.default_encoding)
                 set_project_encoding(config.default_encoding)
-            elif config.base_dir:
-                detected = detect_project_encoding(
-                    Path(config.base_dir),
-                    sample_limit=ENCODING_DETECTION_SAMPLE_LIMIT,
-                )
-                if detected:
-                    logger.debug("Auto-detected project encoding: %s", detected)
-                    set_project_encoding(detected)
-                else:
-                    logger.debug("No regional encoding detected, using UTF-8 as default")
+                _encoding_done = True
             else:
-                logger.debug("Skipping encoding detection: base_dir not set")
-            _encoding_done = True
+                base = resolved_base_dir or config.base_dir
+                if base:
+                    detected = detect_project_encoding(
+                        Path(base),
+                        sample_limit=ENCODING_DETECTION_SAMPLE_LIMIT,
+                    )
+                    if detected:
+                        logger.debug("Auto-detected project encoding: %s", detected)
+                        set_project_encoding(detected)
+                    else:
+                        logger.debug("No regional encoding detected, using UTF-8 as default")
+                    _encoding_done = True
+                else:
+                    logger.debug("Skipping encoding detection: base_dir not yet resolved")
 
     # -- Helpers --
 
@@ -164,8 +167,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         If anchors cannot be located, returns NEEDS_MORE_CONTEXT error—provide complete
         file content to fully overwrite, or add context lines to help locate the edit point.
         """
-        _ensure_encoding_detected()
-
         from .apply import apply_file_logic
 
         progress_task = None
@@ -175,6 +176,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             )
         try:
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+            _ensure_encoding_detected(base_dir)
             if ctx is not None:
                 await ctx.info(f"Applying edit to {path}")
             result = await apply_file_logic(
@@ -234,8 +236,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         Returns file paths with line ranges and an explanation of findings.
         """
-        _ensure_encoding_detected()
-
         from .search import FastAgenticSearchHarness
 
         await ctx.info(f"Searching: {query[:100]}")
@@ -245,6 +245,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         try:
             # Resolve base_dir dynamically from MCP Roots if not configured
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+            _ensure_encoding_detected(base_dir)
 
             # Get cached LSP languages (auto-detects on first call per base_dir)
             from ..lsp.languages import get_lsp_languages
@@ -675,7 +676,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 )
             try:
                 base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-                _ensure_encoding_detected()
+                _ensure_encoding_detected(base_dir)
                 result = await agentic_retrieval_logic(
                     _get_repo_client(),
                     _get_search_client(),
