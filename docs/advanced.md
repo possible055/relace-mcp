@@ -43,6 +43,8 @@ All environment variables can be set in your shell or in the `env` section of yo
 
 > **Note:** `RELACE_API_KEY` can be omitted if **both**: (1) using non-Relace providers for `APPLY_PROVIDER` and `SEARCH_PROVIDER`, and (2) `RELACE_CLOUD_TOOLS=false`. Otherwise it is required.
 
+> **Warning:** `MCP_LOGGING=full` writes **all** content to disk unredacted, including source code snippets, LLM instructions, tool arguments, search queries, command output, and error messages with stack traces. Use `full` only for debugging in trusted environments. `safe` mode replaces sensitive field values with `[REDACTED len=<N> sha256=<HEX12>]` placeholders — the sha256 prefix allows correlating redacted values across events without revealing content.
+
 ### Fast Apply
 
 | Variable | Default | Description |
@@ -252,6 +254,8 @@ Trace logs are also JSONL. Each line is one event.
 | `cli_request` | External CLI invocation |
 | `cli_response` | External CLI stdout/stderr |
 | `cli_error` | External CLI failure details |
+| `lsp_server_start` | LSP server start with full command |
+| `lsp_server_error` | LSP server error with full details |
 
 ### Event Types
 
@@ -276,6 +280,25 @@ Trace logs are also JSONL. Each line is one event.
 | `retrieval_hints_error` | Retrieval hints failed (fallback continues) |
 | `retrieval_auto_sync_complete` | Relace auto-sync completed |
 | `retrieval_auto_sync_error` | Relace auto-sync failed |
+
+### Tool Lifecycle Events
+
+| Event Kind | Description |
+|------------|-------------|
+| `tool_start` | MCP tool invocation started (debug level) |
+| `tool_complete` | MCP tool invocation completed |
+| `tool_error` | MCP tool invocation failed |
+
+### LSP Events
+
+| Event Kind | Description |
+|------------|-------------|
+| `lsp_server_start` | LSP server process started |
+| `lsp_server_stop` | LSP server process stopped |
+| `lsp_server_error` | LSP server failed to start or crashed |
+| `lsp_request_error` | LSP request handler error |
+| `lsp_client_created` | LSP client added to pool |
+| `lsp_client_evicted` | LSP client evicted from pool |
 
 ### Cloud Event Types
 

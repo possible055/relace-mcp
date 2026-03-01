@@ -179,6 +179,7 @@ def _ensure_chunkhound_index(base_dir: str, env: dict[str, str]) -> None:
                 "mode": "text",
                 "error_type": type(exc).__name__,
                 "error": str(exc),
+                "background": False,
             }
         )
         log_event(
@@ -208,6 +209,7 @@ def _ensure_chunkhound_index(base_dir: str, env: dict[str, str]) -> None:
                 "mode": "text",
                 "error_type": type(exc).__name__,
                 "error": str(exc),
+                "background": False,
             }
         )
         log_event(
@@ -237,6 +239,7 @@ def _ensure_chunkhound_index(base_dir: str, env: dict[str, str]) -> None:
                 "mode": "text",
                 "error_type": type(exc).__name__,
                 "error": str(exc),
+                "background": False,
             }
         )
         log_event(
@@ -271,6 +274,7 @@ def _ensure_chunkhound_index(base_dir: str, env: dict[str, str]) -> None:
                 "stdout": result.stdout,
                 "stderr": result.stderr,
                 "detail": stderr,
+                "background": False,
             }
         )
         log_event(
@@ -300,6 +304,7 @@ def _ensure_chunkhound_index(base_dir: str, env: dict[str, str]) -> None:
             "returncode": result.returncode,
             "stdout": result.stdout,
             "stderr": result.stderr,
+            "background": False,
         }
     )
     log_event(

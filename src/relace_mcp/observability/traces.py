@@ -114,7 +114,16 @@ def log_trace_event(event: dict[str, Any]) -> None:
                 logger.warning("Trace path is a directory, skipping trace write")
                 return
             settings.TRACE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                settings.TRACE_PATH.parent.chmod(0o700)
+            except OSError:
+                pass
             rotate_trace_if_needed()
+            if settings.TRACE_PATH.exists():
+                try:
+                    settings.TRACE_PATH.chmod(0o600)
+                except OSError:
+                    pass
             with open(settings.TRACE_PATH, "a", encoding="utf-8") as f:
                 f.write(json.dumps(event, ensure_ascii=False, default=str) + "\n")
     except Exception as exc:

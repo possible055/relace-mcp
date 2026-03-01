@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from relace_mcp.lsp.languages.base import LanguageServerConfig
+from relace_mcp.lsp.logging import log_lsp_client_created, log_lsp_client_evicted
 
 if TYPE_CHECKING:
     from relace_mcp.lsp.client import LSPClient
@@ -115,8 +116,14 @@ class LSPClientManager:
                 self._lease_counts.setdefault(evicted_key, 0)
             raise
 
+        # Log eviction only after successful start — if start() fails above,
+        # evicted clients are restored and no misleading events are emitted.
+        for evicted_key, _ in evicted:
+            log_lsp_client_evicted(evicted_key[1], evicted_key[0], len(self._clients), "pool_full")
+
         self._clients[key] = client
         self._lease_counts[key] = 1 if lease else 0
+        log_lsp_client_created(config.language_id, workspace, len(self._clients))
         return (client, evicted)
 
     @contextmanager
@@ -148,7 +155,7 @@ class LSPClientManager:
         try:
             yield client
         finally:
-            clients_to_shutdown = []
+            evicted_in_finally: list[tuple[tuple[str, str], LSPClient]] = []
             with self._lock:
                 self._lease_counts[key] = max(0, self._lease_counts.get(key, 0) - 1)
                 if self._max_clients > 0:
@@ -156,9 +163,12 @@ class LSPClientManager:
                         popped = self._pop_oldest_idle_client_locked()
                         if popped is None:
                             break
-                        clients_to_shutdown.append(popped[1])
+                        log_lsp_client_evicted(
+                            popped[0][1], popped[0][0], len(self._clients), "pool_full"
+                        )
+                        evicted_in_finally.append(popped)
 
-            for old_client in clients_to_shutdown:
+            for _, old_client in evicted_in_finally:
                 try:
                     old_client.shutdown()
                 except Exception:  # nosec B110 - best-effort cleanup
