@@ -81,7 +81,7 @@ uv run python -m benchmark.cli.grid \
 |--------|----------|-------------|
 | `--turns` | ✓ | Grid values for `SEARCH_MAX_TURNS` (repeatable) |
 | `--temperatures` | ✓ | Grid values for `SEARCH_TEMPERATURE` (repeatable) |
-| `--search-prompt-file` | | Override prompt file for all runs |
+| `--search-prompt-file` | | Override `SEARCH_PROMPT_FILE` for all runs |
 | `--output` | | Output directory prefix |
 | `--dry-run` | | Print planned runs without executing |
 

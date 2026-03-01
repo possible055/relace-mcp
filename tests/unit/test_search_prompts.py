@@ -1,6 +1,3 @@
-import os
-from unittest import mock
-
 import pytest
 
 from relace_mcp.config import load_prompt_file
@@ -113,24 +110,3 @@ def test_load_prompt_file_returns_all_keys() -> None:
 def test_load_prompt_file_unknown_name_raises() -> None:
     with pytest.raises(ValueError, match="Unknown prompt name"):
         load_prompt_file("nonexistent_prompt")
-
-
-# --- Environment variable override tests ---
-
-
-def test_env_var_system_prompt_relace_override() -> None:
-    custom_prompt = "Custom relace system prompt"
-    with mock.patch.dict(os.environ, {"SEARCH_SYSTEM_PROMPT_RELACE": custom_prompt}):
-        from relace_mcp.config import _resolve_system_prompt
-
-        result = _resolve_system_prompt("original yaml value", "SEARCH_SYSTEM_PROMPT_RELACE")
-        assert result == custom_prompt
-
-
-def test_env_var_system_prompt_falls_back_to_yaml() -> None:
-    with mock.patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("SEARCH_SYSTEM_PROMPT_RELACE", None)
-        from relace_mcp.config import _resolve_system_prompt
-
-        result = _resolve_system_prompt("  original yaml value  ", "SEARCH_SYSTEM_PROMPT_RELACE")
-        assert result == "original yaml value"

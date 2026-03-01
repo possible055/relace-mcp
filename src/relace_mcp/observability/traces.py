@@ -119,12 +119,13 @@ def log_trace_event(event: dict[str, Any]) -> None:
             except OSError:
                 pass
             rotate_trace_if_needed()
-            if settings.TRACE_PATH.exists():
-                try:
-                    settings.TRACE_PATH.chmod(0o600)
-                except OSError:
-                    pass
             with open(settings.TRACE_PATH, "a", encoding="utf-8") as f:
                 f.write(json.dumps(event, ensure_ascii=False, default=str) + "\n")
+            # Ensure trace file has restrictive permissions (covers both
+            # newly-created files and pre-existing ones).
+            try:
+                settings.TRACE_PATH.chmod(0o600)
+            except OSError:
+                pass
     except Exception as exc:
         logger.warning("Failed to write trace event: %s", exc)

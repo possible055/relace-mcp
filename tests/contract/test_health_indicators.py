@@ -94,7 +94,7 @@ class TestHealthIndicators:
             return {"files": {}, "explanation": "test"}
 
         # Mock the LLM client to avoid real API calls
-        with patch("relace_mcp.tools.SearchLLMClient") as mock_search_cls:
+        with patch("relace_mcp.clients.search.SearchLLMClient") as mock_search_cls:
             mock_client = MagicMock()
             mock_client.search = mock_search
             mock_search_cls.return_value = mock_client

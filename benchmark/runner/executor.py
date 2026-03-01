@@ -259,7 +259,7 @@ class BenchmarkRunner:
                     result_preview = ""
 
                 success = ev.get("success", True)
-                if not success and not result_preview.startswith("Error:"):
+                if not success:
                     result_preview = "Error: [REDACTED]"
 
                 entry["tool_results"].append(

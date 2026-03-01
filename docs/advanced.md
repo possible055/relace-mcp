@@ -24,6 +24,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 |----------|---------|-------------|
 | `RELACE_API_KEY` | — | **Required.** Your Relace API key |
 | `MCP_BASE_DIR` | cwd | Restrict file access to this directory |
+| `MCP_EXTRA_PATHS` | — | Additional allowed paths (comma-separated absolute/`~` paths) for file operations |
 | `MCP_DOTENV_PATH` | — | Path to a `.env` file to load at startup |
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
 | `MCP_LOGGING` | `off` | File logging: `off`, `safe` (with redaction), `full` (no redaction) |
@@ -66,7 +67,8 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `SEARCH_ENDPOINT` | (Relace official) | Override base URL |
 | `SEARCH_MODEL` | `relace-search` | Override model name |
 | `SEARCH_API_KEY` | — | API key for non-Relace providers |
-| `SEARCH_PROMPT_FILE` | — | Override search prompt YAML path |
+| `SEARCH_PROMPT_FILE` | — | Override search prompt YAML for the active provider |
+| `RETRIEVAL_PROMPT_FILE` | — | Override retrieval prompt YAML for the active provider |
 | `SEARCH_TIMEOUT_SECONDS` | `120` | Request timeout (also used as `agentic_search` wall-clock budget; returns `partial=true` on timeout) |
 | `SEARCH_TEMPERATURE` | `1.0` | LLM sampling temperature (0.0-2.0) |
 | `SEARCH_TOP_P` | — | Optional top_p sampling (e.g., set to `1` for providers requiring explicit top_p like Mistral) |

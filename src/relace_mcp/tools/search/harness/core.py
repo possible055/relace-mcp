@@ -4,9 +4,11 @@ import re
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ....clients import SearchLLMClient
+if TYPE_CHECKING:
+    from ....clients.search import SearchLLMClient
+
 from ....config import RelaceConfig, load_prompt_file
 from ....config.settings import RELACE_PROVIDER, SEARCH_MAX_TURNS, SEARCH_TIMEOUT_SECONDS
 from .._impl import estimate_context_size
@@ -49,7 +51,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
     def __init__(
         self,
         config: RelaceConfig,
-        client: SearchLLMClient,
+        client: "SearchLLMClient",
         *,
         lsp_languages: frozenset[str] | None = None,
         user_prompt_override: str | None = None,

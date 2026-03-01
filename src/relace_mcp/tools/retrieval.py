@@ -3,9 +3,8 @@ import logging
 import shutil
 import time
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ..clients import RelaceRepoClient, SearchLLMClient
 from ..config import RelaceConfig
 from ..config.settings import AGENTIC_AUTO_SYNC, RETRIEVAL_BACKEND
 from ..observability import get_trace_id, log_event, redact_value
@@ -21,8 +20,14 @@ from ..repo.backends import (
     schedule_bg_chunkhound_index,
     schedule_bg_codanna_full_index,
 )
-from ..repo.cloud import cloud_info_logic, cloud_search_logic, cloud_sync_logic
+from ..repo.cloud.info import cloud_info_logic
+from ..repo.cloud.search import cloud_search_logic
+from ..repo.cloud.sync import cloud_sync_logic
 from .search import FastAgenticSearchHarness
+
+if TYPE_CHECKING:
+    from ..clients.repo import RelaceRepoClient
+    from ..clients.search import SearchLLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +83,8 @@ def build_semantic_hints_section(cloud_results: list[dict[str, Any]], max_hints:
 
 
 async def agentic_retrieval_logic(
-    repo_client: RelaceRepoClient | None,
-    search_client: SearchLLMClient,
+    repo_client: "RelaceRepoClient | None",
+    search_client: "SearchLLMClient",
     config: RelaceConfig,
     base_dir: str,
     query: str,

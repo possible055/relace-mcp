@@ -83,7 +83,7 @@ def _load_benchmark_config():
 @click.option("--shuffle", is_flag=True, help="Shuffle cases before selecting --limit")
 @click.option("--max-turns", default=None, type=int, help="Override SEARCH_MAX_TURNS")
 @click.option("--temperature", default=None, type=float, help="Override SEARCH_TEMPERATURE")
-@click.option("--prompt-file", default=None, help="Override SEARCH_PROMPT_FILE_RELACE (YAML)")
+@click.option("--prompt-file", default=None, help="Override SEARCH_PROMPT_FILE (YAML)")
 @click.option("--timeout", default=None, type=int, help="Per-case timeout in seconds")
 @click.option("--fail-fast", default=None, type=int, help="Stop after N consecutive failures")
 @click.option("--resume", is_flag=True, help="Resume from checkpoint")
@@ -138,7 +138,7 @@ def main(
     _load_dotenv_from_env_path()
 
     if prompt_file:
-        os.environ["SEARCH_PROMPT_FILE_RELACE"] = prompt_file
+        os.environ["SEARCH_PROMPT_FILE"] = prompt_file
     if max_turns is not None:
         os.environ["SEARCH_MAX_TURNS"] = str(max_turns)
     if temperature is not None:

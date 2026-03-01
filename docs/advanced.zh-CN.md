@@ -24,6 +24,7 @@
 |------|--------|------|
 | `RELACE_API_KEY` | — | **必需。** 你的 Relace API key |
 | `MCP_BASE_DIR` | 当前目录 | 限制文件访问范围 |
+| `MCP_EXTRA_PATHS` | — | 文件操作额外允许路径（逗号分隔，支持绝对路径与 `~`） |
 | `MCP_DOTENV_PATH` | — | 启动时加载的 `.env` 文件路径（集中配置） |
 | `RELACE_DEFAULT_ENCODING` | — | 强制项目文件编码（如 `gbk`、`big5`） |
 | `MCP_LOGGING` | `off` | 文件日志：`off`、`safe`（启用并遮蔽）、`full`（启用不遮蔽） |
@@ -66,7 +67,8 @@
 | `SEARCH_ENDPOINT` | (Relace 官方) | 覆盖 base URL |
 | `SEARCH_MODEL` | `relace-search` | 覆盖模型名称 |
 | `SEARCH_API_KEY` | — | 非 Relace 提供商的 API key |
-| `SEARCH_PROMPT_FILE` | — | 覆盖 search prompt YAML 路径 |
+| `SEARCH_PROMPT_FILE` | — | 覆盖当前提供商的 search prompt YAML |
+| `RETRIEVAL_PROMPT_FILE` | — | 覆盖当前提供商的 retrieval prompt YAML |
 | `SEARCH_TIMEOUT_SECONDS` | `120` | 请求超时（同时作为 `agentic_search` 的总耗时预算；超时会返回 `partial=true`） |
 | `SEARCH_TEMPERATURE` | `1.0` | 采样温度（0.0-2.0） |
 | `SEARCH_TOP_P` | — | 可选的 top_p 采样（如需显式设置 top_p 的提供商如 Mistral，可设为 `1`） |

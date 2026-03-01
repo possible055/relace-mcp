@@ -16,12 +16,12 @@ logger = logging.getLogger(__name__)
 # LLM prompts directory (relocated to prompts/)
 _LLM_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
-# Env var mapping: yaml file stem -> (file-level override, system_prompt text override)
-_PROMPT_ENV_VARS: dict[str, tuple[str, str]] = {
-    "search_relace": ("SEARCH_PROMPT_FILE_RELACE", "SEARCH_SYSTEM_PROMPT_RELACE"),
-    "search_openai": ("SEARCH_PROMPT_FILE_OPENAI", "SEARCH_SYSTEM_PROMPT_OPENAI"),
-    "retrieval_relace": ("RETRIEVAL_PROMPT_FILE_RELACE", "RETRIEVAL_SYSTEM_PROMPT_RELACE"),
-    "retrieval_openai": ("RETRIEVAL_PROMPT_FILE_OPENAI", "RETRIEVAL_SYSTEM_PROMPT_OPENAI"),
+# Env var mapping: yaml file stem -> file-level override env var
+_PROMPT_ENV_VARS: dict[str, str] = {
+    "search_relace": "SEARCH_PROMPT_FILE",
+    "search_openai": "SEARCH_PROMPT_FILE",
+    "retrieval_relace": "RETRIEVAL_PROMPT_FILE",
+    "retrieval_openai": "RETRIEVAL_PROMPT_FILE",
 }
 
 
@@ -57,15 +57,6 @@ def _load_prompt_file(default_path: Path, env_var: str) -> dict[str, Any]:
     return result
 
 
-def _resolve_system_prompt(yaml_value: str, env_var: str) -> str:
-    """Resolve system prompt: env var text override takes precedence over YAML value."""
-    override = os.getenv(env_var, "").strip()
-    if override:
-        logger.debug("Using system prompt override from %s", env_var)
-        return override
-    return yaml_value.strip()
-
-
 def load_prompt_file(name: str) -> dict[str, Any]:
     """Load a named prompt YAML file with env var overrides.
 
@@ -78,21 +69,14 @@ def load_prompt_file(name: str) -> dict[str, Any]:
         Dict with keys: system_prompt, user_prompt_template,
         turn_hint_template, turn_instructions, lsp_section.
     """
-    env_vars = _PROMPT_ENV_VARS.get(name)
-    if env_vars is None:
+    file_env = _PROMPT_ENV_VARS.get(name)
+    if file_env is None:
         raise ValueError(
             f"Unknown prompt name: {name!r}. Must be one of {sorted(_PROMPT_ENV_VARS)}"
         )
 
-    file_env, prompt_env = env_vars
     path = _LLM_PROMPTS_DIR / f"{name}.yaml"
-    data = _load_prompt_file(path, file_env)
-
-    # Apply text-level system_prompt override
-    if "system_prompt" in data:
-        data["system_prompt"] = _resolve_system_prompt(data["system_prompt"], prompt_env)
-
-    return data
+    return _load_prompt_file(path, file_env)
 
 
 # Load apply_openai.yaml (Fast Apply for OpenAI-compatible endpoints)

@@ -109,6 +109,10 @@ def detect_project_encoding(
             if file_path.is_symlink():
                 continue
 
+            # Skip non-regular files (FIFOs, devices, sockets, etc.)
+            if not file_path.is_file():
+                continue
+
             try:
                 # Read first 8KB for detection (enough for charset detection)
                 raw = file_path.read_bytes()[:8192]
