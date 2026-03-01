@@ -72,6 +72,8 @@ ENCODING_DETECTION_IGNORED_DIRS = frozenset(
         ".venv",
         "dist",
         "build",
+        "target",
+        "site-packages",
     }
 )
 
