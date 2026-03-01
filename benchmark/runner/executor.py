@@ -74,9 +74,6 @@ class CaseTimeoutError(Exception):
 _MCP_SETTINGS_KEYS = (
     "LOG_PATH",
     "MCP_LOGGING",
-    "MCP_LOG_FILE_LEVEL",
-    "MCP_LOG_INCLUDE_KINDS",
-    "MCP_LOG_EXCLUDE_KINDS",
     "MAX_LOG_SIZE_BYTES",
     "MCP_TRACE_LOGGING",
 )
@@ -111,8 +108,6 @@ class BenchmarkRunner:
 
         self._logs_dir: Path | None = None
         self._log_path: Path | None = None
-        self._log_offset: int = 0
-        self._log_remainder: bytes = b""
 
     def _configure_mcp_file_logging(self, log_path: Path) -> None:
         import relace_mcp.config.settings as mcp_settings
@@ -128,12 +123,8 @@ class BenchmarkRunner:
 
         mcp_settings.LOG_PATH = log_path
         mcp_settings.MCP_LOGGING = True
-        mcp_settings.MCP_LOG_FILE_LEVEL = "DEBUG"
-        mcp_settings.MCP_LOG_INCLUDE_KINDS = frozenset()
-        mcp_settings.MCP_LOG_EXCLUDE_KINDS = frozenset()
         mcp_settings.MAX_LOG_SIZE_BYTES = 1024 * 1024 * 1024
-
-        # Benchmark trace analysis uses relace.log only; keep the heavy trace log off by default.
+        # Benchmark trace analysis uses turns_log; keep the heavy trace log off.
         mcp_settings.MCP_TRACE_LOGGING = False
 
     def _restore_mcp_file_logging(self) -> None:
@@ -144,160 +135,6 @@ class BenchmarkRunner:
         for k, v in self._mcp_settings_snapshot.items():
             setattr(mcp_settings, k, v)
         del self._mcp_settings_snapshot
-
-    def _read_new_log_events(self) -> list[dict[str, Any]]:
-        if self._log_path is None or not self._log_path.exists():
-            return []
-
-        try:
-            with self._log_path.open("rb") as f:
-                f.seek(self._log_offset)
-                data = f.read()
-                self._log_offset = f.tell()
-        except Exception:
-            return []
-
-        if not data:
-            return []
-
-        buf = self._log_remainder + data
-        lines = buf.split(b"\n")
-        self._log_remainder = lines.pop() if lines else b""
-
-        events: list[dict[str, Any]] = []
-        for raw in lines:
-            raw = raw.strip()
-            if not raw:
-                continue
-            try:
-                events.append(json.loads(raw.decode("utf-8")))
-            except Exception:
-                continue
-        return events
-
-    def _write_case_trace_from_events(
-        self,
-        *,
-        case_id: str,
-        trace_id: str,
-        events: list[dict[str, Any]],
-        trace_file: Path,
-    ) -> str | None:
-        # Build per-turn trace objects compatible with benchmark.analysis.trace_analyzer
-        turn_map: dict[int, dict[str, Any]] = {}
-
-        for ev in events:
-            if ev.get("trace_id") != trace_id:
-                continue
-            kind = ev.get("kind")
-            if kind == "search_turn":
-                turn_raw = ev.get("turn")
-                try:
-                    turn = int(turn_raw)
-                except (TypeError, ValueError):
-                    continue
-
-                entry = turn_map.get(turn)
-                if entry is None:
-                    entry = {
-                        "turn": turn,
-                        "llm_latency_ms": 0.0,
-                        "llm_response": {"usage": {}},
-                        "tool_results": [],
-                        "report_back": None,
-                    }
-                    turn_map[turn] = entry
-
-                if "llm_latency_ms" in ev:
-                    try:
-                        entry["llm_latency_ms"] = float(ev["llm_latency_ms"])
-                    except (TypeError, ValueError):
-                        pass
-
-                usage: dict[str, int] = {}
-                if isinstance(ev.get("prompt_tokens"), int):
-                    usage["prompt_tokens"] = ev["prompt_tokens"]
-                elif isinstance(ev.get("prompt_tokens_est"), int):
-                    usage["prompt_tokens"] = ev["prompt_tokens_est"]
-
-                if isinstance(ev.get("completion_tokens"), int):
-                    usage["completion_tokens"] = ev["completion_tokens"]
-
-                if isinstance(ev.get("total_tokens"), int):
-                    usage["total_tokens"] = ev["total_tokens"]
-                else:
-                    usage["total_tokens"] = usage.get("prompt_tokens", 0) + usage.get(
-                        "completion_tokens", 0
-                    )
-
-                entry["llm_response"] = {"usage": usage}
-
-            elif kind == "tool_call":
-                turn_raw = ev.get("turn")
-                try:
-                    turn = int(turn_raw)
-                except (TypeError, ValueError):
-                    continue
-
-                entry = turn_map.get(turn)
-                if entry is None:
-                    entry = {
-                        "turn": turn,
-                        "llm_latency_ms": 0.0,
-                        "llm_response": {"usage": {}},
-                        "tool_results": [],
-                        "report_back": None,
-                    }
-                    turn_map[turn] = entry
-
-                tool_name = ev.get("tool_name")
-                if not isinstance(tool_name, str):
-                    tool_name = "unknown"
-
-                result_preview = ev.get("result_preview")
-                if not isinstance(result_preview, str):
-                    result_preview = ""
-
-                success = ev.get("success", True)
-                if not success:
-                    result_preview = "Error: [REDACTED]"
-
-                entry["tool_results"].append(
-                    {
-                        "name": tool_name,
-                        "result": result_preview,
-                    }
-                )
-
-                if tool_name == "report_back":
-                    entry["report_back"] = True
-
-        if not turn_map:
-            return None
-
-        total_turns = max(turn_map)
-        turns: list[dict[str, Any]] = []
-        for t in range(1, total_turns + 1):
-            turns.append(
-                turn_map.get(
-                    t,
-                    {
-                        "turn": t,
-                        "llm_latency_ms": 0.0,
-                        "llm_response": {"usage": {}},
-                        "tool_results": [],
-                        "report_back": None,
-                    },
-                )
-            )
-
-        try:
-            with trace_file.open("w", encoding="utf-8") as tf:
-                for turn_entry in turns:
-                    tf.write(json.dumps(turn_entry, ensure_ascii=False, default=str) + "\n")
-            return str(trace_file)
-        except Exception:
-            return None
 
     def _write_turns_log(self, turns_log: list[dict[str, Any]], trace_file: Path) -> str | None:
         try:
@@ -341,8 +178,6 @@ class BenchmarkRunner:
             self._logs_dir = logs_base / started_at.strftime("%Y%m%d_%H%M%S")
             self._logs_dir.mkdir(parents=True, exist_ok=True)
             self._log_path = self._logs_dir / "relace.log"
-            self._log_offset = 0
-            self._log_remainder = b""
             self._configure_mcp_file_logging(self._log_path)
 
         try:
@@ -589,19 +424,7 @@ class BenchmarkRunner:
             trace_file = self._traces_dir / f"{case.id}.jsonl"
             turns_log = result.get("turns_log")
             if turns_log:
-                # Primary: complete data from harness (full LLM response + tool results)
                 trace_path_str = self._write_turns_log(turns_log, trace_file)
-            else:
-                # Fallback: reconstruct from relace.log (truncated previews)
-                trace_id = result.get("trace_id") if isinstance(result, dict) else None
-                if isinstance(trace_id, str) and trace_id:
-                    new_events = self._read_new_log_events()
-                    trace_path_str = self._write_case_trace_from_events(
-                        case_id=case.id,
-                        trace_id=trace_id,
-                        events=new_events,
-                        trace_file=trace_file,
-                    )
 
         returned_files_raw = result.get("files", {})
         if not isinstance(returned_files_raw, dict):

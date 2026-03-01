@@ -28,16 +28,6 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `MCP_DOTENV_PATH` | — | Path to a `.env` file to load at startup |
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
 | `MCP_LOGGING` | `off` | File logging: `off`, `safe` (with redaction), `full` (no redaction) |
-| `MCP_TRACE` | `1` | Trace toggle (only relevant when `MCP_LOGGING=full`): set to `0` to disable `relace.trace.jsonl` even in full mode |
-| `MCP_LOG_FILE_LEVEL` | `DEBUG` | Minimum level written to `relace.log` (and `relace.trace.jsonl` when enabled): `DEBUG`, `INFO`, `WARNING`, `ERROR` |
-| `MCP_LOG_INCLUDE_KINDS` | — | Comma-separated allowlist for `relace.log` event `kind` (empty = allow all) |
-| `MCP_LOG_EXCLUDE_KINDS` | — | Comma-separated denylist for `relace.log` event `kind` |
-| `MCP_TRACE_INCLUDE_KINDS` | — | Comma-separated allowlist for `relace.trace.jsonl` trace `kind` (empty = allow all) |
-| `MCP_TRACE_EXCLUDE_KINDS` | — | Comma-separated denylist for `relace.trace.jsonl` trace `kind` |
-| `MCP_LOG_DIR` | — | Override base directory for `relace.log`/`traces/` (defaults to the platform state dir) |
-| `MCP_LOG_PATH` | — | Override full path for `relace.log` |
-| `MCP_TRACE_DIR` | — | Override trace directory (defaults to `${MCP_LOG_DIR}/traces`) |
-| `MCP_TRACE_PATH` | — | Override full path for `relace.trace.jsonl` |
 | `MCP_LOG_LEVEL` | `WARNING` | Stderr log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `RELACE_CLOUD_TOOLS` | `0` | Set to `1` to enable cloud tools (cloud_sync, cloud_search, etc.) |
 | `MCP_SEARCH_RETRIEVAL` | `0` | Set to `1` to enable `agentic_retrieval` tool |

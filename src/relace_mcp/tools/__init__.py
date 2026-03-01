@@ -388,7 +388,11 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             else:
                 from ..repo.cloud.info import cloud_info_logic
 
-                relace_status["probe"] = cloud_info_logic(_get_repo_client(), base_dir)
+                relace_status["probe"] = await asyncio.to_thread(
+                    cloud_info_logic,
+                    _get_repo_client(),
+                    base_dir,
+                )
 
         # --- Local backends (Codanna / ChunkHound) ---
         codanna_cli_path = shutil.which("codanna")
@@ -428,7 +432,11 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     continue
 
                 try:
-                    probe_status = check_backend_health(backend_name, base_dir)
+                    probe_status = await asyncio.to_thread(
+                        check_backend_health,
+                        backend_name,
+                        base_dir,
+                    )
                     status_obj["probe"] = {"status": probe_status}
                 except ExternalCLIError as exc:
                     status_obj["probe"] = {
@@ -525,7 +533,13 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             from ..repo.cloud.sync import cloud_sync_logic
 
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-            return cloud_sync_logic(_get_repo_client(), base_dir, force=force, mirror=mirror)
+            return await asyncio.to_thread(
+                cloud_sync_logic,
+                _get_repo_client(),
+                base_dir,
+                force=force,
+                mirror=mirror,
+            )
 
         @mcp.tool(
             annotations={
@@ -554,7 +568,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
             # Resolve base_dir dynamically from MCP Roots if not configured
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-            return cloud_search_logic(
+            return await asyncio.to_thread(
+                cloud_search_logic,
                 _get_repo_client(),
                 base_dir,
                 query,
@@ -589,7 +604,13 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             from ..repo.cloud.clear import cloud_clear_logic
 
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-            return cloud_clear_logic(_get_repo_client(), base_dir, confirm=confirm, repo_id=repo_id)
+            return await asyncio.to_thread(
+                cloud_clear_logic,
+                _get_repo_client(),
+                base_dir,
+                confirm=confirm,
+                repo_id=repo_id,
+            )
 
         @mcp.tool(
             annotations={
@@ -636,7 +657,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
             del reason  # LLM chain-of-thought only
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-            return cloud_info_logic(_get_repo_client(), base_dir)
+            return await asyncio.to_thread(cloud_info_logic, _get_repo_client(), base_dir)
 
     if AGENTIC_RETRIEVAL_ENABLED and RETRIEVAL_BACKEND != "none":
 

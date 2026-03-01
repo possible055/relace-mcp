@@ -6,27 +6,22 @@ import sys
 import tempfile
 import warnings
 from pathlib import Path
-
-# Suppress FastMCP's Rich console output for stdio transport
-# This MUST be set BEFORE fastmcp is imported
-if "FASTMCP_LOG_LEVEL" not in os.environ:
-    os.environ["FASTMCP_LOG_LEVEL"] = "ERROR"
+from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
-from fastmcp import FastMCP
 
-from .config import RelaceConfig
-from .config import settings as _settings
-from .config.settings import (
-    AGENTIC_RETRIEVAL_ENABLED,
-    RETRIEVAL_BACKEND,
-    reload_logging_settings,
-)
-from .middleware import RootsMiddleware, ToolTracingMiddleware
-from .observability import log_event
-from .tools import register_tools
+if TYPE_CHECKING:
+    from fastmcp import FastMCP
+
+    from .config import RelaceConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_fastmcp_log_level() -> None:
+    # Suppress FastMCP's Rich console output for stdio transport.
+    # This MUST be set BEFORE fastmcp is imported.
+    os.environ.setdefault("FASTMCP_LOG_LEVEL", "ERROR")
 
 
 def _configure_logging_for_stdio() -> None:
@@ -83,7 +78,10 @@ def _load_dotenv_from_path() -> None:
         load_dotenv()
 
 
-def check_health(config: RelaceConfig) -> dict[str, str]:
+def check_health(config: "RelaceConfig") -> dict[str, str]:
+    from .config import settings as _settings
+    from .config.settings import AGENTIC_RETRIEVAL_ENABLED, RETRIEVAL_BACKEND
+
     results: dict[str, str] = {}
     errors: list[str] = []
 
@@ -163,7 +161,18 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
     return results
 
 
-def build_server(config: RelaceConfig | None = None, run_health_check: bool = True) -> FastMCP:
+def build_server(
+    config: "RelaceConfig | None" = None,
+    run_health_check: bool = True,
+) -> "FastMCP":
+    _ensure_fastmcp_log_level()
+
+    from fastmcp import FastMCP
+
+    from .config import RelaceConfig
+    from .middleware import RootsMiddleware, ToolTracingMiddleware
+    from .tools import register_tools
+
     if config is None:
         config = RelaceConfig.from_env()
 
@@ -216,6 +225,17 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # Load dotenv first so settings constants reflect .env values.
+    _load_dotenv_from_path()
+
+    from .config import RelaceConfig
+    from .config import settings as _settings
+    from .config.settings import reload_logging_settings
+    from .observability import log_event
+
+    reload_logging_settings()
+    _ensure_fastmcp_log_level()
+
     # stdio-only fixes: must be applied before any output
     if args.transport == "stdio":
         # Fix Windows CRLF issue - Windows converts \n to \r\n, breaking JSON-RPC
@@ -227,13 +247,9 @@ def main() -> None:
         # Configure logging to avoid stdout pollution
         _configure_logging_for_stdio()
 
-    _load_dotenv_from_path()
-    reload_logging_settings()
-
     if _settings.MCP_LOGGING_MODE == "full":
         logger.warning(
-            "MCP_LOGGING=full: writing unredacted tool/LLM I/O to %s and %s. "
-            "Set MCP_TRACE=0 to disable trace logging.",
+            "MCP_LOGGING=full: writing unredacted tool/LLM I/O to %s and %s.",
             _settings.LOG_PATH,
             _settings.TRACE_PATH,
         )
@@ -247,11 +263,6 @@ def main() -> None:
             "mcp_log_level": os.getenv("MCP_LOG_LEVEL", "WARNING").upper(),
             "mcp_logging_mode": _settings.MCP_LOGGING_MODE,
             "mcp_trace_enabled": _settings.MCP_TRACE_LOGGING,
-            "mcp_log_file_level": _settings.MCP_LOG_FILE_LEVEL,
-            "mcp_log_include_kinds": sorted(_settings.MCP_LOG_INCLUDE_KINDS),
-            "mcp_log_exclude_kinds": sorted(_settings.MCP_LOG_EXCLUDE_KINDS),
-            "mcp_trace_include_kinds": sorted(_settings.MCP_TRACE_INCLUDE_KINDS),
-            "mcp_trace_exclude_kinds": sorted(_settings.MCP_TRACE_EXCLUDE_KINDS),
             "log_path": str(_settings.LOG_PATH),
             "trace_path": str(_settings.TRACE_PATH),
             "relace_cloud_tools": os.getenv("RELACE_CLOUD_TOOLS", "0"),
