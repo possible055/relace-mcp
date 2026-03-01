@@ -55,7 +55,7 @@ def _format_float_for_filename(value: float) -> str:
     "--prompt-file",
     "search_prompt_file",
     default=None,
-    help="Override SEARCH_PROMPT_FILE_RELACE for all runs (YAML)",
+    help="Override SEARCH_PROMPT_FILE for all runs (YAML)",
 )
 @click.option("--dry-run", is_flag=True, help="Print planned runs without executing")
 @click.option(
@@ -162,7 +162,7 @@ def main(
         env["SEARCH_MAX_TURNS"] = str(item["search_max_turns"])
         env["SEARCH_TEMPERATURE"] = str(item["search_temperature"])
         if search_prompt_file:
-            env["SEARCH_PROMPT_FILE_RELACE"] = search_prompt_file
+            env["SEARCH_PROMPT_FILE"] = search_prompt_file
 
         cmd = [
             sys.executable,

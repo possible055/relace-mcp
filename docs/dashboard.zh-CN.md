@@ -162,6 +162,35 @@ Turn 2 [████████████████████████
 | `search_complete` | 搜索会话完成 | `agentic_search` |
 | `search_error` | 搜索会话失败 | `agentic_search` |
 
+### 后端事件
+
+| 类型 | 说明 | 来源 |
+|------|------|------|
+| `indexing_status` | 索引后端汇总 | `agentic_retrieval` |
+| `backend_index_start` | CLI 索引开始 | `codanna` / `chunkhound` |
+| `backend_index_complete` | CLI 索引完成 | `codanna` / `chunkhound` |
+| `backend_index_error` | CLI 索引失败 | `codanna` / `chunkhound` |
+| `backend_disabled` | 后端已禁用 | 启动 |
+
+### LSP 事件
+
+| 类型 | 说明 | 来源 |
+|------|------|------|
+| `lsp_server_start` | LSP server 进程启动 | `agentic_search` (LSP) |
+| `lsp_server_stop` | LSP server 进程停止 | `agentic_search` (LSP) |
+| `lsp_server_error` | LSP server 启动失败 | `agentic_search` (LSP) |
+| `lsp_request_error` | LSP 请求处理器错误 | `agentic_search` (LSP) |
+| `lsp_client_created` | LSP 客户端加入连接池 | `agentic_search` (LSP) |
+| `lsp_client_evicted` | LSP 客户端从连接池移除 | `agentic_search` (LSP) |
+
+### 工具生命周期事件
+
+| 类型 | 说明 | 来源 |
+|------|------|------|
+| `tool_start` | MCP 工具调用开始 | 所有工具 |
+| `tool_complete` | MCP 工具调用完成 | 所有工具 |
+| `tool_error` | MCP 工具调用失败 | 所有工具 |
+
 ### Cloud 事件
 
 Cloud 操作会记录结构化事件：

@@ -1,4 +1,5 @@
 import logging
+import os
 from collections import Counter
 from pathlib import Path
 
@@ -71,6 +72,9 @@ def detect_project_encoding(
     Scans a sample of text files in the project directory to determine
     if a regional encoding (e.g., GBK, Big5, Shift_JIS) is predominantly used.
 
+    Uses os.walk with topdown=True to prune ignored directories early,
+    avoiding full traversal of .git, node_modules, etc.
+
     Args:
         base_dir: Project root directory to scan.
         sample_limit: Maximum number of files to sample.
@@ -82,41 +86,51 @@ def detect_project_encoding(
     encoding_counts: Counter[str] = Counter()
     files_sampled = 0
 
-    # Walk through files, prioritizing source code
-    for file_path in base_dir.rglob("*"):
-        if files_sampled >= sample_limit:
-            break
+    for dirpath, dirnames, filenames in os.walk(base_dir, topdown=True):
+        # Prune hidden and ignored dirs in-place so os.walk never descends
+        dirnames[:] = sorted(
+            d
+            for d in dirnames
+            if not d.startswith(".") and d not in ENCODING_DETECTION_IGNORED_DIRS
+        )
 
-        # Skip non-files, hidden files, and common non-source directories
-        # Skip symlinks to prevent path traversal attacks and infinite loops
-        if file_path.is_symlink():
-            continue
-        if not file_path.is_file():
-            continue
-        if any(part.startswith(".") for part in file_path.parts):
-            continue
-        if any(part in ENCODING_DETECTION_IGNORED_DIRS for part in file_path.parts):
-            continue
+        for fname in filenames:
+            if files_sampled >= sample_limit:
+                break
 
-        # Only sample known text file extensions
-        if file_path.suffix.lower() not in TEXT_FILE_EXTENSIONS:
-            continue
-
-        try:
-            # Read first 8KB for detection (enough for charset detection)
-            raw = file_path.read_bytes()[:8192]
-            if not raw:
+            # Only sample known text file extensions
+            ext = os.path.splitext(fname)[1].lower()
+            if ext not in TEXT_FILE_EXTENSIONS:
                 continue
 
-            result = from_bytes(raw).best()
-            if result and result.encoding:
-                enc = result.encoding.lower()
-                encoding_counts[enc] += 1
-                files_sampled += 1
-                logger.debug("Detected encoding %s for %s", enc, file_path)
-        except (OSError, PermissionError) as exc:
-            logger.debug("Skipping %s: %s", file_path, exc)
-            continue
+            file_path = Path(dirpath, fname)
+
+            # Skip symlinks to prevent path traversal attacks and infinite loops
+            if file_path.is_symlink():
+                continue
+
+            # Skip non-regular files (FIFOs, devices, sockets, etc.)
+            if not file_path.is_file():
+                continue
+
+            try:
+                # Read first 8KB for detection (enough for charset detection)
+                raw = file_path.read_bytes()[:8192]
+                if not raw:
+                    continue
+
+                result = from_bytes(raw).best()
+                if result and result.encoding:
+                    enc = result.encoding.lower()
+                    encoding_counts[enc] += 1
+                    files_sampled += 1
+                    logger.debug("Detected encoding %s for %s", enc, file_path)
+            except (OSError, PermissionError) as exc:
+                logger.debug("Skipping %s: %s", file_path, exc)
+                continue
+
+        if files_sampled >= sample_limit:
+            break
 
     if not encoding_counts:
         logger.debug("No files sampled for encoding detection")

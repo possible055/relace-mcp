@@ -30,10 +30,10 @@ class TestBuildServer:
         assert server is not None
 
     @pytest.mark.usefixtures("clean_env")
-    def test_build_fails_without_api_key(self) -> None:
-        """Should raise when RELACE_API_KEY is not set."""
-        with pytest.raises(RuntimeError, match="RELACE_API_KEY"):
-            build_server()
+    def test_build_succeeds_without_api_key(self) -> None:
+        """Server builds without RELACE_API_KEY; error deferred to first tool call."""
+        server = build_server()
+        assert server is not None
 
 
 class TestServerToolRegistration:
@@ -82,7 +82,7 @@ class TestServerToolExecution:
     ) -> None:
         """Should execute fast_apply tool successfully."""
         # Mock the ApplyLLMClient.apply method
-        with patch("relace_mcp.tools.ApplyLLMClient") as mock_backend_cls:
+        with patch("relace_mcp.clients.apply.ApplyLLMClient") as mock_backend_cls:
             mock_backend = AsyncMock()
             mock_backend.apply.return_value = ApplyResponse(
                 merged_code=successful_api_response["choices"][0]["message"]["content"],
@@ -221,7 +221,7 @@ class TestServerIntegration:
         # temp_source_file content: def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Goodbye')\n
         merged_code = "def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Modified!')\n"
 
-        with patch("relace_mcp.tools.ApplyLLMClient") as mock_backend_cls:
+        with patch("relace_mcp.clients.apply.ApplyLLMClient") as mock_backend_cls:
             mock_backend = AsyncMock()
             mock_backend.apply.return_value = ApplyResponse(
                 merged_code=merged_code,

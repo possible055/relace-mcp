@@ -27,7 +27,7 @@
 
 - **快速应用** — 通过 Relace API 以 10,000+ tokens/秒的速度应用代码编辑
 - **智能搜索** — 使用自然语言查询进行智能代码库探索
-- **智能检索** — 两阶段语义 + 智能代码检索（需设置 `RELACE_CLOUD_TOOLS=1` 及 `MCP_SEARCH_MODE=indexed` 或 `both`）
+- **智能检索** — 两阶段语义 + 智能代码检索（需设置 `MCP_SEARCH_RETRIEVAL=1`）
 - **云端搜索** — 对云端同步的仓库进行语义代码搜索
 
 ## 快速开始
@@ -140,7 +140,7 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 |------|------|------|
 | `RELACE_API_KEY` | ✅* | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥 |
 | `RELACE_CLOUD_TOOLS` | ❌ | 设为 `1` 启用云端工具 |
-| `MCP_SEARCH_MODE` | ❌ | 搜索模式：`agentic`（默认）、`indexed` 或 `both` |
+| `MCP_SEARCH_RETRIEVAL` | ❌ | 设为 `1` 启用 `agentic_retrieval` 工具 |
 | `SEARCH_BASH_TOOLS` | ❌ | Bash 工具开关：`1`（开）、`0`（关，默认） |
 | `SEARCH_LSP_TOOLS` | ❌ | LSP 工具开关：`1`（开）、`0`（关，默认） |
 | `MCP_BASE_DIR` | ❌ | 项目根目录（自动检测：MCP Roots → Git → CWD） |
@@ -153,7 +153,7 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 
 ## 工具
 
-核心工具（`fast_apply`、`agentic_search`）始终可用。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`agentic_retrieval` 需同时设置 `RELACE_CLOUD_TOOLS=1` 及 `MCP_SEARCH_MODE=indexed` 或 `both`。
+核心工具（`fast_apply`、`agentic_search`）始终可用。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`agentic_retrieval` 需设置 `MCP_SEARCH_RETRIEVAL=1`。
 
 详细参数请参见 [docs/tools.zh-CN.md](docs/tools.zh-CN.md)。
 

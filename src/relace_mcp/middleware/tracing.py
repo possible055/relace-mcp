@@ -13,6 +13,23 @@ from ..observability import (
     set_tool_context,
 )
 
+try:
+    from opentelemetry import trace as _otel_trace
+
+    _HAS_OTEL = True
+except ImportError:  # pragma: no cover
+    _HAS_OTEL = False
+
+
+def _get_otel_trace_id() -> str | None:
+    if not _HAS_OTEL:
+        return None
+    span = _otel_trace.get_current_span()
+    ctx = span.get_span_context()
+    if ctx and ctx.trace_id:
+        return format(ctx.trace_id, "032x")
+    return None
+
 
 def _classify_tool_result(result: Any) -> tuple[bool, str | None, str | None]:
     if not isinstance(result, dict):
@@ -51,11 +68,13 @@ class ToolTracingMiddleware(Middleware):
         params = getattr(context.message, "arguments", None)
 
         tid = set_tool_context(tool_name)
+        otel_tid = _get_otel_trace_id()
         log_tool_start(tool_name, params)
         log_trace_event(
             {
                 "kind": "mcp_tool_request",
                 "trace_id": tid,
+                "otel_trace_id": otel_tid,
                 "tool_name": tool_name,
                 "arguments": params,
             }
@@ -76,6 +95,7 @@ class ToolTracingMiddleware(Middleware):
                 {
                     "kind": "mcp_tool_response",
                     "trace_id": tid,
+                    "otel_trace_id": otel_tid,
                     "tool_name": tool_name,
                     "latency_ms": round(duration_ms, 1),
                     "success": success,
@@ -108,6 +128,7 @@ class ToolTracingMiddleware(Middleware):
                 {
                     "kind": "mcp_tool_exception",
                     "trace_id": tid,
+                    "otel_trace_id": otel_tid,
                     "tool_name": tool_name,
                     "latency_ms": round(duration_ms, 1),
                     "error": error_message,

@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -246,3 +247,33 @@ class TestChunkhoundHealthCheck:
         mock_head.return_value = None
         _chunkhound_health_probe("/project")
         mock_write.assert_not_called()
+
+
+class TestChunkHoundTraceBackgroundField:
+    """Verify sync-path trace events include the 'background' field."""
+
+    @patch("relace_mcp.repo.backends.chunkhound.subprocess.run")
+    def test_ensure_index_trace_events_have_background_field(
+        self, mock_run: MagicMock, tmp_path: "Path"
+    ) -> None:
+        import json
+
+        from relace_mcp.repo.backends.chunkhound import _ensure_chunkhound_index
+
+        trace_path = tmp_path / "relace.trace.jsonl"
+        mock_run.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
+
+        with (
+            patch("relace_mcp.config.settings.MCP_TRACE_LOGGING", True),
+            patch("relace_mcp.config.settings.TRACE_PATH", trace_path),
+        ):
+            _ensure_chunkhound_index(str(tmp_path), {"LANG": "C.UTF-8"})
+
+        events = [json.loads(line) for line in trace_path.read_text(encoding="utf-8").splitlines()]
+        cli_events = [e for e in events if e.get("cli") == "chunkhound"]
+        assert cli_events, "Expected at least one CLI trace event"
+        for event in cli_events:
+            assert "background" in event, (
+                f"Trace event kind={event.get('kind')} missing 'background' field"
+            )
+            assert event["background"] is False

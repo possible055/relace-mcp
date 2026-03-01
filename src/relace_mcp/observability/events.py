@@ -1,4 +1,5 @@
 import glob
+import hashlib
 import json
 import logging
 import threading
@@ -19,6 +20,85 @@ _LEVEL_RANK: dict[str, int] = {
     "warning": 30,
     "error": 40,
 }
+
+# Keys whose string values contain sensitive content and must be redacted in safe mode.
+_SENSITIVE_KEYS: frozenset[str] = frozenset(
+    {
+        "query",
+        "query_preview",
+        "edit_snippet",
+        "edit_snippet_preview",
+        "instruction",
+        "arguments",
+        "command",
+        "result",
+        "result_preview",
+        "stdout",
+        "stderr",
+        "traceback",
+        "error",
+        "detail",
+        "message",
+        "reason",
+        "explanation",
+        "recommended_action",
+        "payload_preview",
+    }
+)
+
+# Keys that are never redacted — they carry classification metadata for audit analysis.
+_NEVER_REDACT_KEYS: frozenset[str] = frozenset(
+    {
+        "error_type",
+        "error_code",
+        "status_code",
+    }
+)
+
+_SANITIZE_DEPTH_LIMIT = 6
+_SANITIZE_LIST_LIMIT = 20
+
+
+def _make_placeholder(value: str) -> str:
+    hex12 = hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+    return f"[REDACTED len={len(value)} sha256={hex12}]"
+
+
+def _sanitize_value(key: str, value: Any, depth: int) -> Any:
+    if depth > _SANITIZE_DEPTH_LIMIT:
+        return "[REDACTED depth_limit]"
+    if isinstance(value, dict):
+        return _sanitize_event_inner(value, depth + 1)
+    if isinstance(value, list):
+        is_sensitive = key.lower() in _SENSITIVE_KEYS and key.lower() not in _NEVER_REDACT_KEYS
+        result: list[Any] = []
+        for item in value[:_SANITIZE_LIST_LIMIT]:
+            if isinstance(item, str) and is_sensitive:
+                result.append(_make_placeholder(item))
+            elif isinstance(item, dict):
+                result.append(_sanitize_event_inner(item, depth + 1))
+            elif isinstance(item, list):
+                result.append(_sanitize_value(key, item, depth + 1))
+            else:
+                result.append(item)
+        if len(value) > _SANITIZE_LIST_LIMIT:
+            result.append(f"[REDACTED list_len={len(value)}]")
+        return result
+    if isinstance(value, str):
+        k = key.lower()
+        if k in _SENSITIVE_KEYS and k not in _NEVER_REDACT_KEYS:
+            return _make_placeholder(value)
+    return value
+
+
+def _sanitize_event_inner(event: dict[str, Any], depth: int) -> dict[str, Any]:
+    return {k: _sanitize_value(k, v, depth) for k, v in event.items()}
+
+
+def _sanitize_event(event: dict[str, Any]) -> dict[str, Any]:
+    if not settings.MCP_LOG_REDACT:
+        return event
+    return _sanitize_event_inner(event, depth=0)
 
 
 def _normalize_level(value: object, *, default: str) -> str:
@@ -59,8 +139,9 @@ def _should_log_event(kind: str, level: str) -> bool:
 def redact_value(value: str, max_len: int = 200) -> str:
     if not value:
         return value
-    if not settings.MCP_LOG_REDACT:
-        return value
+    if settings.MCP_LOG_REDACT:
+        return _make_placeholder(value)
+    # Full mode: truncate for readability but keep content
     if len(value) <= max_len:
         return value
     suffix = f"... [truncated, len={len(value)}]"
@@ -118,14 +199,25 @@ def log_event(event: dict[str, Any]) -> None:
         if not _should_log_event(kind, level):
             return
 
+        event = _sanitize_event(event)
+
         with _LOG_LOCK:
             if settings.LOG_PATH.is_dir():
                 logger.warning("Log path is a directory, skipping log write")
                 return
             settings.LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                settings.LOG_PATH.parent.chmod(0o700)
+            except OSError:
+                pass
             rotate_log_if_needed()
+            if settings.LOG_PATH.exists():
+                try:
+                    settings.LOG_PATH.chmod(0o600)
+                except OSError:
+                    pass
             with open(settings.LOG_PATH, "a", encoding="utf-8") as f:
-                f.write(json.dumps(event, ensure_ascii=False) + "\n")
+                f.write(json.dumps(event, ensure_ascii=False, default=str) + "\n")
     except Exception as exc:
         logger.warning("Failed to write event log: %s", exc)
 

@@ -162,6 +162,35 @@ Logs are stored using `platformdirs`:
 | `search_complete` | Search session completed | `agentic_search` |
 | `search_error` | Search session failed | `agentic_search` |
 
+### Backend Events
+
+| Kind | Description | Source |
+|------|-------------|--------|
+| `indexing_status` | Indexing backends summary | `agentic_retrieval` |
+| `backend_index_start` | CLI indexing started | `codanna` / `chunkhound` |
+| `backend_index_complete` | CLI indexing completed | `codanna` / `chunkhound` |
+| `backend_index_error` | CLI indexing failed | `codanna` / `chunkhound` |
+| `backend_disabled` | Backend disabled for session | startup |
+
+### LSP Events
+
+| Kind | Description | Source |
+|------|-------------|--------|
+| `lsp_server_start` | LSP server process started | `agentic_search` (LSP) |
+| `lsp_server_stop` | LSP server process stopped | `agentic_search` (LSP) |
+| `lsp_server_error` | LSP server failed to start | `agentic_search` (LSP) |
+| `lsp_request_error` | LSP request handler error | `agentic_search` (LSP) |
+| `lsp_client_created` | LSP client added to pool | `agentic_search` (LSP) |
+| `lsp_client_evicted` | LSP client evicted from pool | `agentic_search` (LSP) |
+
+### Tool Lifecycle Events
+
+| Kind | Description | Source |
+|------|-------------|--------|
+| `tool_start` | MCP tool invocation started | All tools |
+| `tool_complete` | MCP tool invocation completed | All tools |
+| `tool_error` | MCP tool invocation failed | All tools |
+
 ### Cloud Events
 
 Cloud operations emit structured events:

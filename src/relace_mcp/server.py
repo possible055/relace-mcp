@@ -5,7 +5,6 @@ import shutil
 import sys
 import tempfile
 import warnings
-from dataclasses import replace
 from pathlib import Path
 
 # Suppress FastMCP's Rich console output for stdio transport
@@ -20,16 +19,12 @@ from .config import RelaceConfig
 from .config import settings as _settings
 from .config.settings import (
     AGENTIC_RETRIEVAL_ENABLED,
-    ENCODING_DETECTION_SAMPLE_LIMIT,
     RETRIEVAL_BACKEND,
     reload_logging_settings,
 )
-from .encoding import set_project_encoding
 from .middleware import RootsMiddleware, ToolTracingMiddleware
 from .observability import log_event
-from .repo import load_sync_state
 from .tools import register_tools
-from .tools.apply.encoding import detect_project_encoding
 
 logger = logging.getLogger(__name__)
 
@@ -168,43 +163,6 @@ def check_health(config: RelaceConfig) -> dict[str, str]:
     return results
 
 
-def detect_and_set_encoding(config: RelaceConfig) -> RelaceConfig:
-    """Detect project encoding and update config.
-
-    If RELACE_DEFAULT_ENCODING is set, use it directly.
-    Otherwise, scan project files to auto-detect the dominant encoding.
-
-    Args:
-        config: Current configuration.
-
-    Returns:
-        Updated configuration with default_encoding set (if detected).
-    """
-    # If already set via environment, just apply it
-    if config.default_encoding:
-        logger.debug("Using configured project encoding: %s", config.default_encoding)
-        set_project_encoding(config.default_encoding)
-        return config
-
-    # Cannot auto-detect encoding without a base_dir
-    if not config.base_dir:
-        logger.debug("Skipping encoding detection: base_dir not set")
-        return config
-
-    # Auto-detect encoding from project files
-    base_dir = Path(config.base_dir)
-    detected = detect_project_encoding(base_dir, sample_limit=ENCODING_DETECTION_SAMPLE_LIMIT)
-
-    if detected:
-        logger.debug("Auto-detected project encoding: %s", detected)
-        set_project_encoding(detected)
-        # Return updated config with detected encoding
-        return replace(config, default_encoding=detected)
-
-    logger.debug("No regional encoding detected, using UTF-8 as default")
-    return config
-
-
 def build_server(config: RelaceConfig | None = None, run_health_check: bool = True) -> FastMCP:
     if config is None:
         config = RelaceConfig.from_env()
@@ -216,9 +174,6 @@ def build_server(config: RelaceConfig | None = None, run_health_check: bool = Tr
         except RuntimeError as exc:
             logger.error("Health check failed: %s", exc)
             raise
-
-    # Detect and set project encoding
-    config = detect_and_set_encoding(config)
 
     mcp = FastMCP("Relace Fast Apply MCP")
 
@@ -306,48 +261,6 @@ def main() -> None:
             "chunkhound_cli_found": bool(shutil.which("chunkhound")),
             "base_dir": config.base_dir,
         }
-        if config.base_dir:
-            base_dir = Path(config.base_dir)
-            codanna_dir = base_dir / ".codanna"
-            chunkhound_dir = base_dir / ".chunkhound"
-            codanna_head = codanna_dir / "last_indexed_head"
-            chunkhound_head = chunkhound_dir / "last_indexed_head"
-
-            server_start_event["codanna_index_dir_exists"] = codanna_dir.is_dir()
-            server_start_event["chunkhound_index_dir_exists"] = chunkhound_dir.is_dir()
-
-            try:
-                server_start_event["codanna_last_indexed_head"] = (
-                    codanna_head.read_text(encoding="utf-8", errors="replace").strip()
-                    if codanna_head.is_file()
-                    else None
-                )
-            except OSError:
-                server_start_event["codanna_last_indexed_head"] = None
-            try:
-                server_start_event["chunkhound_last_indexed_head"] = (
-                    chunkhound_head.read_text(encoding="utf-8", errors="replace").strip()
-                    if chunkhound_head.is_file()
-                    else None
-                )
-            except OSError:
-                server_start_event["chunkhound_last_indexed_head"] = None
-
-            try:
-                sync_state = load_sync_state(config.base_dir)
-            except Exception:
-                sync_state = None
-            if sync_state is None:
-                server_start_event["relace_sync_state_found"] = False
-            else:
-                server_start_event["relace_sync_state_found"] = True
-                server_start_event["relace_repo_id"] = sync_state.repo_id
-                server_start_event["relace_repo_head"] = (
-                    sync_state.repo_head[:8] if sync_state.repo_head else ""
-                )
-                server_start_event["relace_last_sync"] = sync_state.last_sync
-                server_start_event["relace_tracked_files"] = len(sync_state.files)
-                server_start_event["relace_skipped_files"] = len(sync_state.skipped_files)
 
         log_event(server_start_event)
     except Exception:
