@@ -2,6 +2,7 @@
 # Decorator-registered functions (@mcp.tool, @mcp.resource) are accessed by the framework
 import asyncio
 import inspect
+import json
 import shutil
 from contextlib import suppress
 from dataclasses import replace
@@ -68,7 +69,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             "destructiveHint": True,  # Can overwrite content
             "idempotentHint": False,  # Same edit twice = different results
             "openWorldHint": False,  # Only local filesystem
-        }
+        },
     )
     async def fast_apply(
         path: Annotated[
@@ -148,7 +149,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             "destructiveHint": False,  # Read-only = non-destructive
             "idempotentHint": True,  # Same query = same results
             "openWorldHint": False,  # Only local codebase
-        }
+        },
     )
     async def agentic_search(
         query: Annotated[
@@ -565,7 +566,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 "destructiveHint": False,
                 "idempotentHint": True,
                 "openWorldHint": RETRIEVAL_BACKEND == "relace",
-            }
+            },
         )
         async def agentic_retrieval(
             query: Annotated[
@@ -613,7 +614,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     # === MCP Resources ===
 
     @mcp.resource("relace://tools_list", mime_type="application/json")
-    def tools_list() -> list[dict[str, Any]]:
+    def tools_list() -> str:
         """List all registered Relace MCP tools with their enabled status.
 
         Returns: [{id, name, description, enabled}, ...] for each tool.
@@ -688,12 +689,12 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     "enabled": True,
                 }
             )
-        return tools
+        return json.dumps(tools)
 
     if RELACE_CLOUD_TOOLS:
 
         @mcp.resource("relace://cloud/status", mime_type="application/json")
-        async def cloud_status(ctx: Context | None = None) -> dict[str, Any]:
+        async def cloud_status(ctx: Context | None = None) -> str:
             """Current cloud sync status - lightweight read from local state file.
 
             Returns sync state without making API calls. Use this to quickly check
@@ -702,49 +703,57 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             try:
                 base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
             except RuntimeError:
-                return {
-                    "synced": False,
-                    "error": "base_dir not configured",
-                    "message": "Set MCP_BASE_DIR or use MCP Roots to enable cloud status",
-                }
+                return json.dumps(
+                    {
+                        "synced": False,
+                        "error": "base_dir not configured",
+                        "message": "Set MCP_BASE_DIR or use MCP Roots to enable cloud status",
+                    }
+                )
 
             from ..repo import get_repo_identity
 
             local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(base_dir)
             if not local_repo_name or not cloud_repo_name:
-                return {
-                    "synced": False,
-                    "error": "invalid base_dir",
-                    "message": "Cannot derive repository identity from base_dir; ensure MCP_BASE_DIR or MCP Roots points to a project directory.",
-                }
+                return json.dumps(
+                    {
+                        "synced": False,
+                        "error": "invalid base_dir",
+                        "message": "Cannot derive repository identity from base_dir; ensure MCP_BASE_DIR or MCP Roots points to a project directory.",
+                    }
+                )
 
             state = load_sync_state(base_dir)
 
             if state is None:
-                return {
-                    "synced": False,
-                    "repo_name": local_repo_name,
-                    "cloud_repo_name": cloud_repo_name,
-                    "message": "No sync state found. Run cloud_sync to upload codebase.",
-                }
+                return json.dumps(
+                    {
+                        "synced": False,
+                        "repo_name": local_repo_name,
+                        "cloud_repo_name": cloud_repo_name,
+                        "message": "No sync state found. Run cloud_sync to upload codebase.",
+                    }
+                )
 
-            return {
-                "synced": True,
-                "repo_id": state.repo_id,
-                "repo_name": state.repo_name or local_repo_name,
-                "cloud_repo_name": state.cloud_repo_name or cloud_repo_name,
-                "git_ref": (
-                    f"{state.git_branch}@{state.git_head_sha[:8]}"
-                    if state.git_branch and state.git_head_sha
-                    else state.git_head_sha[:8]
-                    if state.git_head_sha
-                    else ""
-                ),
-                "files_count": len(state.files),
-                "skipped_files_count": len(state.skipped_files),
-                "files_found": state.files_found,
-                "files_selected": state.files_selected,
-                "file_limit": state.file_limit,
-                "files_truncated": state.files_truncated,
-                "last_sync": state.last_sync,
-            }
+            return json.dumps(
+                {
+                    "synced": True,
+                    "repo_id": state.repo_id,
+                    "repo_name": state.repo_name or local_repo_name,
+                    "cloud_repo_name": state.cloud_repo_name or cloud_repo_name,
+                    "git_ref": (
+                        f"{state.git_branch}@{state.git_head_sha[:8]}"
+                        if state.git_branch and state.git_head_sha
+                        else state.git_head_sha[:8]
+                        if state.git_head_sha
+                        else ""
+                    ),
+                    "files_count": len(state.files),
+                    "skipped_files_count": len(state.skipped_files),
+                    "files_found": state.files_found,
+                    "files_selected": state.files_selected,
+                    "file_limit": state.file_limit,
+                    "files_truncated": state.files_truncated,
+                    "last_sync": state.last_sync,
+                }
+            )
