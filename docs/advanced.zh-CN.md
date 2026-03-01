@@ -24,14 +24,27 @@
 |------|--------|------|
 | `RELACE_API_KEY` | — | **必需。** 你的 Relace API key |
 | `MCP_BASE_DIR` | 当前目录 | 限制文件访问范围 |
+| `MCP_EXTRA_PATHS` | — | 文件操作额外允许路径（逗号分隔，支持绝对路径与 `~`） |
 | `MCP_DOTENV_PATH` | — | 启动时加载的 `.env` 文件路径（集中配置） |
 | `RELACE_DEFAULT_ENCODING` | — | 强制项目文件编码（如 `gbk`、`big5`） |
 | `MCP_LOGGING` | `off` | 文件日志：`off`、`safe`（启用并遮蔽）、`full`（启用不遮蔽） |
+| `MCP_TRACE` | `1` | Trace 开关（仅在 `MCP_LOGGING=full` 時生效）：设为 `0` 可禁用 `relace.trace.jsonl` |
+| `MCP_LOG_FILE_LEVEL` | `DEBUG` | 写入 `relace.log`（及启用时的 `relace.trace.jsonl`）的最低级别：`DEBUG`、`INFO`、`WARNING`、`ERROR` |
+| `MCP_LOG_INCLUDE_KINDS` | — | 逗号分隔的 `relace.log` 事件 `kind` 白名单（空 = 全部允许） |
+| `MCP_LOG_EXCLUDE_KINDS` | — | 逗号分隔的 `relace.log` 事件 `kind` 黑名单 |
+| `MCP_TRACE_INCLUDE_KINDS` | — | 逗号分隔的 `relace.trace.jsonl` trace `kind` 白名单（空 = 全部允许） |
+| `MCP_TRACE_EXCLUDE_KINDS` | — | 逗号分隔的 `relace.trace.jsonl` trace `kind` 黑名单 |
+| `MCP_LOG_DIR` | — | 覆盖 `relace.log`/`traces/` 基础目录（默认为平台状态目录） |
+| `MCP_LOG_PATH` | — | 覆盖 `relace.log` 完整路径 |
+| `MCP_TRACE_DIR` | — | 覆盖 trace 目录（默认为 `${MCP_LOG_DIR}/traces`） |
+| `MCP_TRACE_PATH` | — | 覆盖 `relace.trace.jsonl` 完整路径 |
 | `MCP_LOG_LEVEL` | `WARNING` | stderr 日志级别：`DEBUG`、`INFO`、`WARNING`、`ERROR` |
 | `RELACE_CLOUD_TOOLS` | `0` | 设为 `1` 启用云工具（cloud_sync、cloud_search 等） |
 | `MCP_SEARCH_RETRIEVAL` | `0` | 设为 `1` 启用 `agentic_retrieval` 工具 |
 
 > **注意：** 仅当**同时满足**以下条件时可省略 `RELACE_API_KEY`：(1) `APPLY_PROVIDER` 和 `SEARCH_PROVIDER` 均使用非 Relace 提供商，且 (2) `RELACE_CLOUD_TOOLS=false`。否则必须设置。
+
+> **警告：** `MCP_LOGGING=full` 會將**所有**內容以明文寫入磁碟，包括原始碼片段、LLM 指令、工具引數、搜尋查詢、命令輸出及含堆疊追蹤的錯誤訊息。請僅在可信環境除錯時使用 `full` 模式。`safe` 模式會將敏感欄位值替換為 `[REDACTED len=<N> sha256=<HEX12>]` 佔位符——sha256 前綴可在不暴露內容的情況下跨事件關聯被遮蔽的值。
 
 ### Fast Apply
 
@@ -54,7 +67,8 @@
 | `SEARCH_ENDPOINT` | (Relace 官方) | 覆盖 base URL |
 | `SEARCH_MODEL` | `relace-search` | 覆盖模型名称 |
 | `SEARCH_API_KEY` | — | 非 Relace 提供商的 API key |
-| `SEARCH_PROMPT_FILE` | — | 覆盖 search prompt YAML 路径 |
+| `SEARCH_PROMPT_FILE` | — | 覆盖当前提供商的 search prompt YAML |
+| `RETRIEVAL_PROMPT_FILE` | — | 覆盖当前提供商的 retrieval prompt YAML |
 | `SEARCH_TIMEOUT_SECONDS` | `120` | 请求超时（同时作为 `agentic_search` 的总耗时预算；超时会返回 `partial=true`） |
 | `SEARCH_TEMPERATURE` | `1.0` | 采样温度（0.0-2.0） |
 | `SEARCH_TOP_P` | — | 可选的 top_p 采样（如需显式设置 top_p 的提供商如 Mistral，可设为 `1`） |
@@ -197,6 +211,27 @@ Server 按优先级自动选择当前 session 可用的后端：`codanna` → `c
 | macOS | `~/Library/Application Support/relace/relace.log` |
 | Windows | `%LOCALAPPDATA%\relace\relace.log` |
 
+> 可以使用 `MCP_LOG_DIR` / `MCP_LOG_PATH` 覆盖位置。
+
+### Trace 位置 (MCP_LOGGING=full)
+
+当 `MCP_LOGGING=full` 时，server 还会写入重量级 trace 日志，包含完整的工具 I/O
+（含 LLM 请求/响应载荷和外部 CLI stdout/stderr）。
+
+| 平台 | 路径 |
+|------|------|
+| Linux | `~/.local/state/relace/traces/relace.trace.jsonl` |
+| macOS | `~/Library/Application Support/relace/traces/relace.trace.jsonl` |
+| Windows | `%LOCALAPPDATA%\relace\traces\relace.trace.jsonl` |
+
+> 可以使用 `MCP_TRACE_DIR` / `MCP_TRACE_PATH` 覆盖位置。使用 `MCP_TRACE=0` 禁用 trace 写入。
+
+### 过滤
+
+- **最低事件/trace 级别：** `MCP_LOG_FILE_LEVEL=INFO`（或 `WARNING`、`ERROR`）。
+- **事件 kind 白名单/黑名单：** `MCP_LOG_INCLUDE_KINDS=search_turn,tool_call` 和/或 `MCP_LOG_EXCLUDE_KINDS=tool_start`。
+- **Trace kind 白名单/黑名单：** `MCP_TRACE_INCLUDE_KINDS=llm_request,llm_response`（或使用 `MCP_TRACE_EXCLUDE_KINDS` 排除）。
+
 ### 日志格式
 
 日志以 JSON Lines (JSONL) 格式写入：
@@ -204,6 +239,25 @@ Server 按优先级自动选择当前 session 可用的后端：`codanna` → `c
 ```json
 {"kind":"apply_success","level":"info","trace_id":"a1b2c3d4","latency_ms":150,"file_path":"/path/to/file.py",...}
 ```
+
+### Trace 事件类型 (MCP_LOGGING=full)
+
+Trace 日志也是 JSONL 格式，每行一个事件。
+
+| 类型 | 说明 |
+|------|------|
+| `mcp_tool_request` | MCP 工具调用参数（完整） |
+| `mcp_tool_response` | MCP 工具调用结果（完整） |
+| `mcp_tool_exception` | MCP 工具调用异常（完整） |
+| `agent_tool_call` | `agentic_search` 内部工具 I/O（完整） |
+| `llm_request` | LLM 请求载荷（完整 messages + extra_body） |
+| `llm_response` | LLM 响应载荷（完整） |
+| `llm_error` | LLM API 错误载荷 |
+| `cli_request` | 外部 CLI 调用 |
+| `cli_response` | 外部 CLI stdout/stderr |
+| `cli_error` | 外部 CLI 失败详情 |
+| `lsp_server_start` | LSP server 启动，含完整命令 |
+| `lsp_server_error` | LSP server 错误，含完整详情 |
 
 ### 事件类型
 
@@ -217,6 +271,36 @@ Server 按优先级自动选择当前 session 可用的后端：`codanna` → `c
 | `tool_call` | 工具调用（含计时） |
 | `search_complete` | 搜索完成 |
 | `search_error` | 搜索失败 |
+| `indexing_status` | 索引后端汇总（relace/codanna/chunkhound） |
+| `indexing_status_error` | 索引状态错误（如 base_dir 解析失败） |
+| `backend_index_start` | Codanna/ChunkHound 索引开始 |
+| `backend_index_complete` | Codanna/ChunkHound 索引完成 |
+| `backend_index_error` | Codanna/ChunkHound 索引失败 |
+| `backend_disabled` | 后端已禁用（如 CLI 缺失） |
+| `retrieval_backend_selected` | 检索后端选择（含 auto） |
+| `retrieval_hints_complete` | 检索提示完成 |
+| `retrieval_hints_error` | 检索提示失败（兜底继续） |
+| `retrieval_auto_sync_complete` | Relace 自动同步完成 |
+| `retrieval_auto_sync_error` | Relace 自动同步失败 |
+
+### 工具生命周期事件
+
+| 事件类型 | 描述 |
+|----------|------|
+| `tool_start` | MCP 工具调用开始（debug 级别） |
+| `tool_complete` | MCP 工具调用完成 |
+| `tool_error` | MCP 工具调用失败 |
+
+### LSP 事件
+
+| 事件类型 | 描述 |
+|----------|------|
+| `lsp_server_start` | LSP server 进程启动 |
+| `lsp_server_stop` | LSP server 进程停止 |
+| `lsp_server_error` | LSP server 启动失败或崩溃 |
+| `lsp_request_error` | LSP 请求处理器错误 |
+| `lsp_client_created` | LSP 客户端加入连接池 |
+| `lsp_client_evicted` | LSP 客户端从连接池移除 |
 
 ### Cloud 事件类型
 
@@ -243,6 +327,12 @@ Server 按优先级自动选择当前 session 可用的后端：`codanna` → `c
 - 超过 **10 MB** 时自动轮转
 - 最多保留 **5** 个轮转文件
 - 命名格式：`relace.YYYYMMDD_HHMMSS.log`
+
+### Trace 轮转 (MCP_LOGGING=full)
+
+- 超过 **50 MB** 时自动轮转
+- 最多保留 **5** 个轮转文件
+- 命名格式：`relace.trace.YYYYMMDD_HHMMSS.jsonl`
 
 ---
 

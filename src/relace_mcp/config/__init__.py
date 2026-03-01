@@ -16,6 +16,14 @@ logger = logging.getLogger(__name__)
 # LLM prompts directory (relocated to prompts/)
 _LLM_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
+# Env var mapping: yaml file stem -> file-level override env var
+_PROMPT_ENV_VARS: dict[str, str] = {
+    "search_relace": "SEARCH_PROMPT_FILE",
+    "search_openai": "SEARCH_PROMPT_FILE",
+    "retrieval_relace": "RETRIEVAL_PROMPT_FILE",
+    "retrieval_openai": "RETRIEVAL_PROMPT_FILE",
+}
+
 
 def _load_prompt_file(default_path: Path, env_var: str) -> dict[str, Any]:
     """Load prompt file from custom path (env var) or default path."""
@@ -49,52 +57,27 @@ def _load_prompt_file(default_path: Path, env_var: str) -> dict[str, Any]:
     return result
 
 
-def _resolve_system_prompt(yaml_value: str, env_var: str) -> str:
-    """Resolve system prompt: env var text override takes precedence over YAML value."""
-    override = os.getenv(env_var, "").strip()
-    if override:
-        logger.debug("Using system prompt override from %s", env_var)
-        return override
-    return yaml_value.strip()
+def load_prompt_file(name: str) -> dict[str, Any]:
+    """Load a named prompt YAML file with env var overrides.
 
+    Args:
+        name: Prompt file stem, one of:
+            'search_relace', 'search_openai',
+            'retrieval_relace', 'retrieval_openai'.
 
-# Load search_relace.yaml (Relace native - shared by search & retrieval)
-# File-level override: SEARCH_PROMPT_FILE_RELACE
-_PROMPTS_PATH = _LLM_PROMPTS_DIR / "search_relace.yaml"
-_PROMPTS = _load_prompt_file(_PROMPTS_PATH, "SEARCH_PROMPT_FILE_RELACE")
+    Returns:
+        Dict with keys: system_prompt, user_prompt_template,
+        turn_hint_template, turn_instructions, lsp_section.
+    """
+    file_env = _PROMPT_ENV_VARS.get(name)
+    if file_env is None:
+        raise ValueError(
+            f"Unknown prompt name: {name!r}. Must be one of {sorted(_PROMPT_ENV_VARS)}"
+        )
 
-# Relace prompt constants (text-level override: SEARCH_SYSTEM_PROMPT_RELACE)
-SEARCH_SYSTEM_PROMPT: str = _resolve_system_prompt(
-    _PROMPTS["system_prompt"], "SEARCH_SYSTEM_PROMPT_RELACE"
-)
-SEARCH_USER_PROMPT_TEMPLATE: str = _PROMPTS["user_prompt_template"].strip()
-SEARCH_TURN_HINT_TEMPLATE: str = _PROMPTS["turn_hint_template"].strip()
-SEARCH_TURN_INSTRUCTIONS: dict[str, str] = _PROMPTS["turn_instructions"]
+    path = _LLM_PROMPTS_DIR / f"{name}.yaml"
+    return _load_prompt_file(path, file_env)
 
-# Load search_openai.yaml (base, no LSP tools)
-# File-level override: SEARCH_PROMPT_FILE_OPENAI
-_PROMPTS_OPENAI_PATH = _LLM_PROMPTS_DIR / "search_openai.yaml"
-_PROMPTS_OPENAI = _load_prompt_file(_PROMPTS_OPENAI_PATH, "SEARCH_PROMPT_FILE_OPENAI")
-
-# OpenAI-compatible prompt constants (text-level override: SEARCH_SYSTEM_PROMPT_OPENAI)
-SEARCH_SYSTEM_PROMPT_OPENAI: str = _resolve_system_prompt(
-    _PROMPTS_OPENAI["system_prompt"], "SEARCH_SYSTEM_PROMPT_OPENAI"
-)
-SEARCH_USER_PROMPT_TEMPLATE_OPENAI: str = _PROMPTS_OPENAI["user_prompt_template"].strip()
-SEARCH_TURN_HINT_TEMPLATE_OPENAI: str = _PROMPTS_OPENAI["turn_hint_template"].strip()
-SEARCH_TURN_INSTRUCTIONS_OPENAI: dict[str, str] = _PROMPTS_OPENAI["turn_instructions"]
-
-# Load search_openai_lsp.yaml (LSP-enabled variant)
-# File-level override: SEARCH_PROMPT_FILE_OPENAI_LSP
-_PROMPTS_OPENAI_LSP_PATH = _LLM_PROMPTS_DIR / "search_openai_lsp.yaml"
-_PROMPTS_OPENAI_LSP = _load_prompt_file(_PROMPTS_OPENAI_LSP_PATH, "SEARCH_PROMPT_FILE_OPENAI_LSP")
-
-SEARCH_SYSTEM_PROMPT_OPENAI_LSP: str = _resolve_system_prompt(
-    _PROMPTS_OPENAI_LSP["system_prompt"], "SEARCH_SYSTEM_PROMPT_OPENAI_LSP"
-)
-SEARCH_USER_PROMPT_TEMPLATE_OPENAI_LSP: str = _PROMPTS_OPENAI_LSP["user_prompt_template"].strip()
-SEARCH_TURN_HINT_TEMPLATE_OPENAI_LSP: str = _PROMPTS_OPENAI_LSP["turn_hint_template"].strip()
-SEARCH_TURN_INSTRUCTIONS_OPENAI_LSP: dict[str, str] = _PROMPTS_OPENAI_LSP["turn_instructions"]
 
 # Load apply_openai.yaml (Fast Apply for OpenAI-compatible endpoints)
 # Override with APPLY_PROMPT_FILE if set
@@ -112,21 +95,8 @@ __all__ = [
     "create_provider_config",
     "resolve_base_dir",
     "invalidate_roots_cache",
-    # Prompts - Relace native
-    "SEARCH_SYSTEM_PROMPT",
-    "SEARCH_USER_PROMPT_TEMPLATE",
-    "SEARCH_TURN_HINT_TEMPLATE",
-    "SEARCH_TURN_INSTRUCTIONS",
-    # Prompts - OpenAI-compatible (base)
-    "SEARCH_SYSTEM_PROMPT_OPENAI",
-    "SEARCH_USER_PROMPT_TEMPLATE_OPENAI",
-    "SEARCH_TURN_HINT_TEMPLATE_OPENAI",
-    "SEARCH_TURN_INSTRUCTIONS_OPENAI",
-    # Prompts - OpenAI-compatible (LSP-enabled)
-    "SEARCH_SYSTEM_PROMPT_OPENAI_LSP",
-    "SEARCH_USER_PROMPT_TEMPLATE_OPENAI_LSP",
-    "SEARCH_TURN_HINT_TEMPLATE_OPENAI_LSP",
-    "SEARCH_TURN_INSTRUCTIONS_OPENAI_LSP",
+    # Prompt loading
+    "load_prompt_file",
     # Apply prompt
     "APPLY_SYSTEM_PROMPT",
 ]

@@ -3,11 +3,18 @@ import logging
 import os
 import subprocess  # nosec B404 - required for LSP server communication
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
 from relace_mcp.config.fs_policy import LSP_IGNORED_DIR_NAMES
 from relace_mcp.lsp.languages.base import LanguageServerConfig
+from relace_mcp.lsp.logging import (
+    log_lsp_request_error,
+    log_lsp_server_error,
+    log_lsp_server_start,
+    log_lsp_server_stop,
+)
 from relace_mcp.lsp.process_runtime import (
     close_process_streams,
     kill_process_tree,
@@ -259,8 +266,17 @@ class LSPClient:
                 return
 
             self._send_error_response(req_id, -32601, f"Method not found: {method}")
-        except Exception:
-            logger.debug("Failed to handle server request")
+        except Exception as exc:
+            logger.debug(
+                "Failed to handle server request method=%s",
+                method if isinstance(method, str) else "<invalid>",
+                exc_info=True,
+            )
+            log_lsp_request_error(
+                method if isinstance(method, str) else "<unknown>",
+                str(exc),
+                type(exc).__name__,
+            )
             try:
                 self._send_error_response(req_id, -32603, "Internal error")
             except Exception:
@@ -295,16 +311,24 @@ class LSPClient:
 
                 command = resolve_server_command(self._config.command, self._config.install_hint)
                 self._stop_event.clear()
+                started = time.perf_counter()
                 try:
                     self._process = start_server_process(command, self._workspace)
                 except FileNotFoundError:
                     executable = command[0] if command else ""
                     install_hint = self._config.install_hint.strip()
-                    if install_hint:
-                        raise LSPError(
-                            f"Language server '{executable}' not found. Install with: {install_hint}"
-                        ) from None
-                    raise LSPError(f"Language server '{executable}' not found") from None
+                    error_msg = (
+                        f"Language server '{executable}' not found. Install with: {install_hint}"
+                        if install_hint
+                        else f"Language server '{executable}' not found"
+                    )
+                    log_lsp_server_error(
+                        self._config.language_id,
+                        self._workspace,
+                        error_msg,
+                        "FileNotFoundError",
+                    )
+                    raise LSPError(error_msg) from None
 
                 self._stdout_thread = threading.Thread(target=self._read_stdout, daemon=True)
                 self._stderr_thread = threading.Thread(target=self._drain_stderr, daemon=True)
@@ -313,12 +337,25 @@ class LSPClient:
 
             try:
                 self._initialize()
-            except Exception:
+            except Exception as exc:
+                log_lsp_server_error(
+                    self._config.language_id,
+                    self._workspace,
+                    str(exc),
+                    type(exc).__name__,
+                )
                 self._cleanup()
                 raise
 
+            latency_ms = (time.perf_counter() - started) * 1000
             with self._lock:
                 self._initialized = True
+            log_lsp_server_start(
+                self._config.language_id,
+                self._workspace,
+                command,
+                latency_ms,
+            )
 
     def _initialize(self) -> None:
         """Send initialize request."""
@@ -575,3 +612,4 @@ class LSPClient:
                 logger.debug("Shutdown error: %s", e)
             finally:
                 self._cleanup()
+                log_lsp_server_stop(self._config.language_id, self._workspace)

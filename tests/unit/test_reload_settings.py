@@ -94,14 +94,18 @@ class TestReloadLoggingSettings:
 
         long_value = "x" * 500
 
-        # Redaction on (safe mode)
+        # Redaction on (safe mode): always returns placeholder, never content
         monkeypatch.setenv("MCP_LOGGING", "safe")
         reload_logging_settings()
         assert settings_mod.MCP_LOG_REDACT is True
-        assert len(redact_value(long_value, max_len=200)) <= 200
+        result = redact_value(long_value, max_len=200)
+        assert "REDACTED" in result
+        assert "x" * 10 not in result
 
-        # Redaction off (full mode)
+        # Redaction off (full mode): truncates to max_len
         monkeypatch.setenv("MCP_LOGGING", "full")
         reload_logging_settings()
         assert settings_mod.MCP_LOG_REDACT is False
-        assert redact_value(long_value, max_len=200) == long_value
+        result_full = redact_value(long_value, max_len=200)
+        assert len(result_full) <= 200
+        assert result_full.startswith("x")

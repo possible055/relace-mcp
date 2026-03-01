@@ -81,7 +81,7 @@ uv run python -m benchmark.cli.grid \
 |------|------|------|
 | `--turns` | ✓ | `SEARCH_MAX_TURNS` 网格值 (可重复) |
 | `--temperatures` | ✓ | `SEARCH_TEMPERATURE` 网格值 (可重复) |
-| `--search-prompt-file` | | 覆盖所有 run 的提示文件 |
+| `--search-prompt-file` | | 覆盖所有 run 的 `SEARCH_PROMPT_FILE` |
 | `--output` | | 输出目录前缀 |
 | `--dry-run` | | 仅打印计划的 run，不执行 |
 

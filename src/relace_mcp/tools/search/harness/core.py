@@ -4,10 +4,12 @@ import re
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ....clients import SearchLLMClient
-from ....config import RelaceConfig
+if TYPE_CHECKING:
+    from ....clients.search import SearchLLMClient
+
+from ....config import RelaceConfig, load_prompt_file
 from ....config.settings import RELACE_PROVIDER, SEARCH_MAX_TURNS, SEARCH_TIMEOUT_SECONDS
 from .._impl import estimate_context_size
 from ..logging import (
@@ -17,18 +19,6 @@ from ..logging import (
     log_search_turn,
 )
 from ..schemas import (
-    SYSTEM_PROMPT,
-    SYSTEM_PROMPT_OPENAI,
-    SYSTEM_PROMPT_OPENAI_LSP,
-    TURN_HINT_TEMPLATE,
-    TURN_HINT_TEMPLATE_OPENAI,
-    TURN_HINT_TEMPLATE_OPENAI_LSP,
-    TURN_INSTRUCTIONS,
-    TURN_INSTRUCTIONS_OPENAI,
-    TURN_INSTRUCTIONS_OPENAI_LSP,
-    USER_PROMPT_TEMPLATE,
-    USER_PROMPT_TEMPLATE_OPENAI,
-    USER_PROMPT_TEMPLATE_OPENAI_LSP,
     build_system_prompt,
     get_tool_schemas,
 )
@@ -42,6 +32,14 @@ from .tool_calls import ToolCallsMixin
 
 logger = logging.getLogger(__name__)
 
+# YAML file selection: (tool_kind, backend) -> file stem
+_PROMPT_FILES = {
+    ("search", "relace"): "search_relace",
+    ("search", "openai"): "search_openai",
+    ("retrieval", "relace"): "retrieval_relace",
+    ("retrieval", "openai"): "retrieval_openai",
+}
+
 
 class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCallsMixin):
     """Fast Agentic Search Agent Harness.
@@ -53,7 +51,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
     def __init__(
         self,
         config: RelaceConfig,
-        client: SearchLLMClient,
+        client: "SearchLLMClient",
         *,
         lsp_languages: frozenset[str] | None = None,
         user_prompt_override: str | None = None,
@@ -73,25 +71,21 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         _lsp_tool_names = {"find_symbol", "search_symbol", "get_type", "list_symbols", "call_graph"}
         has_lsp = bool(enabled_tools & _lsp_tool_names)
 
-        # Select base prompts based on API compatibility mode
-        if client.api_compat == RELACE_PROVIDER:
-            base_prompt = SYSTEM_PROMPT
-            self._user_prompt_template = USER_PROMPT_TEMPLATE
-            self._turn_hint_template = TURN_HINT_TEMPLATE
-            self._turn_instructions = TURN_INSTRUCTIONS
-        elif has_lsp:
-            base_prompt = SYSTEM_PROMPT_OPENAI_LSP
-            self._user_prompt_template = USER_PROMPT_TEMPLATE_OPENAI_LSP
-            self._turn_hint_template = TURN_HINT_TEMPLATE_OPENAI_LSP
-            self._turn_instructions = TURN_INSTRUCTIONS_OPENAI_LSP
-        else:
-            base_prompt = SYSTEM_PROMPT_OPENAI
-            self._user_prompt_template = USER_PROMPT_TEMPLATE_OPENAI
-            self._turn_hint_template = TURN_HINT_TEMPLATE_OPENAI
-            self._turn_instructions = TURN_INSTRUCTIONS_OPENAI
-        context = {"retrieval": True} if retrieval else None
+        # Select prompt YAML: (tool_kind, backend) → file stem
+        tool_kind = "retrieval" if retrieval else "search"
+        backend = "relace" if client.api_compat == RELACE_PROVIDER else "openai"
+        prompt_name = _PROMPT_FILES[(tool_kind, backend)]
+        prompts = load_prompt_file(prompt_name)
+
+        self._user_prompt_template = prompts["user_prompt_template"].strip()
+        self._turn_hint_template = prompts["turn_hint_template"].strip()
+        self._turn_instructions = prompts["turn_instructions"]
+
         self._system_prompt = build_system_prompt(
-            base_prompt, self._lsp_languages, enabled_tools, context
+            prompts["system_prompt"],
+            enabled_tools=enabled_tools,
+            has_lsp=has_lsp,
+            lsp_section=prompts.get("lsp_section", ""),
         )
 
     def _get_turn_hint(self, turn: int, max_turns: int, chars_used: int) -> str:
@@ -109,7 +103,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         instruction = self._turn_instructions[mode]
         chars_pct = int((chars_used / MAX_CONTEXT_BUDGET_CHARS) * 100)
 
-        return self._turn_hint_template.format(
+        return str(self._turn_hint_template).format(
             turn=turn + 1,
             max_turns=max_turns,
             chars_pct=chars_pct,
