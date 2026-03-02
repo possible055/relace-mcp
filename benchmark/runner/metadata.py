@@ -45,6 +45,20 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _safe_float(value: str | None, default: float) -> float:
+    try:
+        return float(value) if value is not None else default
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_int(value: str | None, default: int) -> int:
+    try:
+        return int(value) if value is not None else default
+    except (ValueError, TypeError):
+        return default
+
+
 def build_run_metadata(
     *,
     config: "RelaceConfig",
@@ -125,9 +139,9 @@ def build_run_metadata(
             "provider": provider,
             "model": model,
             "base_url": sanitize_endpoint_url(base_url) if base_url else None,
-            "timeout_seconds": float(os.getenv("SEARCH_TIMEOUT_SECONDS", "") or "120.0"),
-            "max_turns": int(os.getenv("SEARCH_MAX_TURNS", "") or "6"),
-            "temperature": float(os.getenv("SEARCH_TEMPERATURE", "1.0")),
+            "timeout_seconds": _safe_float(os.getenv("SEARCH_TIMEOUT_SECONDS", ""), 120.0),
+            "max_turns": _safe_int(os.getenv("SEARCH_MAX_TURNS", ""), 6),
+            "temperature": _safe_float(os.getenv("SEARCH_TEMPERATURE", ""), 1.0),
             "prompt_file": prompt_file,
         },
         "retrieval": {

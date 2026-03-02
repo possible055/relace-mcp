@@ -79,8 +79,16 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     _repo_inst = RelaceRepoClient(config)
         return _repo_inst
 
+    _encoding_done: bool = False
+    _encoding_lock_ctx_none = threading.Lock()
+
     async def _ensure_encoding_detected(ctx: Context | None, resolved_base_dir: str) -> None:
+        nonlocal _encoding_done
+
         if ctx is None:
+            if _encoding_done:
+                return
+
             base = resolved_base_dir or config.base_dir
             if not base:
                 return
@@ -91,6 +99,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             if config.default_encoding:
                 logger.debug("Using configured project encoding: %s", config.default_encoding)
                 set_project_encoding(config.default_encoding)
+                with _encoding_lock_ctx_none:
+                    _encoding_done = True
                 return
 
             detected = await asyncio.to_thread(
@@ -103,6 +113,9 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 set_project_encoding(detected)
             else:
                 logger.debug("No regional encoding detected, using UTF-8 as default")
+
+            with _encoding_lock_ctx_none:
+                _encoding_done = True
             return
 
         base_dir_key = "relace.encoding.base_dir"

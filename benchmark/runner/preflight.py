@@ -1,8 +1,9 @@
 import logging
 import os
 import shutil
-import subprocess  # nosec B404
 from typing import Any
+
+from relace_mcp.repo.core.git import get_git_head
 
 logger = logging.getLogger(__name__)
 
@@ -19,22 +20,6 @@ def _read_indexed_head(base_dir: str, head_file: str) -> str | None:
             return f.read().strip()
     except OSError:
         return None
-
-
-def _get_git_head(base_dir: str) -> str:
-    try:
-        result = subprocess.run(  # nosec B603 B607
-            ["git", "rev-parse", "HEAD"],
-            cwd=base_dir,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        pass
-    return ""
 
 
 def check_retrieval_backend(backend: str, base_dir: str) -> dict[str, Any]:
@@ -66,7 +51,7 @@ def check_retrieval_backend(backend: str, base_dir: str) -> dict[str, Any]:
             info["error"] = f"{backend} CLI not found in PATH"
             raise RuntimeError(info["error"])
 
-        git_head = _get_git_head(base_dir)
+        git_head = get_git_head(base_dir) or ""
         head_file = _HEAD_FILES[backend]
         index_head = _read_indexed_head(base_dir, head_file)
 
