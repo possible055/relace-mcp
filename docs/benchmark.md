@@ -45,6 +45,8 @@ uv run python -m benchmark.cli.run \
 **Outputs**:
 - Results: `benchmark/artifacts/results/<name>.jsonl`
 - Report: `benchmark/artifacts/reports/<name>.report.json`
+- Traces (when `--trace`): `benchmark/artifacts/traces/<run_id>/<case_id>.jsonl`
+- Events (when `--trace`): `benchmark/artifacts/events/<run_id>.jsonl`
 
 **Key options**:
 | Option | Default | Description |
@@ -63,6 +65,7 @@ uv run python -m benchmark.cli.run \
 | `-v, --verbose` | off | Detailed logging |
 | `-q, --quiet` | off | Disable progress bar |
 | `--dry-run` | off | Preview only |
+| `--trace` | off | Save per-case trace JSONL and run-level events JSONL |
 
 ## 3. Grid Search (Hyperparameter Tuning)
 
@@ -182,7 +185,9 @@ benchmark/
 ├── schemas.py           # Data structure definitions
 └── artifacts/           # (runtime generated, not in version control)
     ├── data/            # Dataset files
+    ├── events/          # Run-level events (.jsonl)
     ├── repos/           # Cached repositories
     ├── results/         # Run outputs (.jsonl)
-    └── reports/         # Summary reports (.report.json, .grid.json)
+    ├── reports/         # Summary reports (.report.json, .grid.json)
+    └── traces/          # Per-case traces (.jsonl)
 ```

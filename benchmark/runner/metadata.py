@@ -9,8 +9,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit, urlunsplit
 
-from relace_mcp.config import settings as relace_settings
-
 if TYPE_CHECKING:
     from benchmark.schemas import DatasetCase
     from relace_mcp.config import RelaceConfig
@@ -127,9 +125,9 @@ def build_run_metadata(
             "provider": provider,
             "model": model,
             "base_url": sanitize_endpoint_url(base_url) if base_url else None,
-            "timeout_seconds": relace_settings.SEARCH_TIMEOUT_SECONDS,
-            "max_turns": relace_settings.SEARCH_MAX_TURNS,
-            "temperature": relace_settings.SEARCH_TEMPERATURE,
+            "timeout_seconds": float(os.getenv("SEARCH_TIMEOUT_SECONDS", "") or "120.0"),
+            "max_turns": int(os.getenv("SEARCH_MAX_TURNS", "") or "6"),
+            "temperature": float(os.getenv("SEARCH_TEMPERATURE", "1.0")),
             "prompt_file": prompt_file,
         },
         "retrieval": {

@@ -45,6 +45,8 @@ uv run python -m benchmark.cli.run \
 **输出**:
 - Results: `benchmark/artifacts/results/<name>.jsonl`
 - Report: `benchmark/artifacts/reports/<name>.report.json`
+- Traces (启用 `--trace`): `benchmark/artifacts/traces/<run_id>/<case_id>.jsonl`
+- Events (启用 `--trace`): `benchmark/artifacts/events/<run_id>.jsonl`
 
 **常用参数**:
 | 参数 | 默认值 | 说明 |
@@ -63,6 +65,7 @@ uv run python -m benchmark.cli.run \
 | `-v, --verbose` | 关闭 | 详细日志 |
 | `-q, --quiet` | 关闭 | 禁用进度条 |
 | `--dry-run` | 关闭 | 仅预览 |
+| `--trace` | 关闭 | 保存逐 case trace JSONL 和 run 级别 events JSONL |
 
 ## 3. 网格搜索 (超参数调优)
 
@@ -182,7 +185,9 @@ benchmark/
 ├── schemas.py           # 数据结构定义
 └── artifacts/           # (运行时生成，不在版控中)
     ├── data/            # 数据集文件
+    ├── events/          # Run 级别 events (.jsonl)
     ├── repos/           # 缓存仓库
     ├── results/         # 运行输出 (.jsonl)
-    └── reports/         # 汇总报告 (.report.json, .grid.json)
+    ├── reports/         # 汇总报告 (.report.json, .grid.json)
+    └── traces/          # 逐 case traces (.jsonl)
 ```

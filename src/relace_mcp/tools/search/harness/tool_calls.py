@@ -118,7 +118,11 @@ class ToolCallsMixin:
 
     def _execute_tools_parallel(
         self, tool_calls: list[dict[str, Any]], trace_id: str, turn: int | None = None
-    ) -> tuple[list[tuple[str, str, str | dict[str, Any]]], dict[str, Any] | None]:
+    ) -> tuple[
+        list[tuple[str, str, str | dict[str, Any]]],
+        list[dict[str, Any]],
+        dict[str, Any] | None,
+    ]:
         """Execute read-only tools in parallel, other tools sequentially.
 
         Args:
@@ -127,21 +131,26 @@ class ToolCallsMixin:
             turn: Current turn number (1-indexed) for logging.
 
         Returns:
-            (tool_results, report_back_result) tuple.
+            (tool_results, tool_traces, report_back_result) tuple.
         """
         parallel_calls, sequential_calls = self._parse_and_classify_tool_calls(tool_calls, trace_id)
 
-        tool_results = self._execute_parallel_batch(parallel_calls, trace_id, turn)
-        seq_results, report_back_result = self._execute_sequential_batch(
+        tool_traces = self._execute_parallel_batch(parallel_calls, trace_id, turn)
+        seq_traces, report_back_result = self._execute_sequential_batch(
             sequential_calls, trace_id, turn
         )
-        tool_results.extend(seq_results)
+        tool_traces.extend(seq_traces)
 
         # Sort by original order (maintain API protocol consistency)
         original_order = {tc.get("id", ""): i for i, tc in enumerate(tool_calls)}
-        tool_results.sort(key=lambda x: original_order.get(x[0], 999))
+        tool_traces.sort(key=lambda x: original_order.get(str(x.get("id", "")), 999))
 
-        return tool_results, report_back_result
+        tool_results: list[tuple[str, str, str | dict[str, Any]]] = [
+            (str(item.get("id", "")), str(item.get("name", "")), item.get("result", ""))
+            for item in tool_traces
+        ]
+
+        return tool_results, tool_traces, report_back_result
 
     @staticmethod
     def _strip_mixed_report_back(
@@ -189,7 +198,7 @@ class ToolCallsMixin:
         parallel_calls: list[tuple[str, str, str, dict[str, Any] | None]],
         trace_id: str,
         turn: int | None = None,
-    ) -> list[tuple[str, str, str | dict[str, Any]]]:
+    ) -> list[dict[str, Any]]:
         """Execute read-only tools in parallel.
 
         Args:
@@ -198,9 +207,9 @@ class ToolCallsMixin:
             turn: Current turn number (1-indexed) for logging.
 
         Returns:
-            Tool results list.
+            Tool trace list (includes latency + success).
         """
-        tool_results: list[tuple[str, str, str | dict[str, Any]]] = []
+        tool_traces: list[dict[str, Any]] = []
 
         if parallel_calls:
             logger.debug("[%s] Executing %d tools in parallel", trace_id, len(parallel_calls))
@@ -209,32 +218,48 @@ class ToolCallsMixin:
                 for tc_id, func_name, _, func_args in parallel_calls:
                     # Defense: if func_args is not dict (shouldn't happen as errors go to sequential)
                     if func_args is None:
-                        tool_results.append((tc_id, func_name, "Error: Missing arguments"))
+                        tool_traces.append(
+                            self._build_tool_trace(
+                                tc_id,
+                                func_name,
+                                "Error: Missing arguments",
+                                latency_ms=0.0,
+                                success=False,
+                            )
+                        )
                         continue
                     logger.debug("[%s] Tool call (parallel): %s", trace_id, func_name)
                     future = executor.submit(
-                        self._dispatch_tool_with_logging, func_name, func_args, trace_id, turn
+                        self._dispatch_tool_timed, func_name, func_args, trace_id, turn
                     )
                     futures[future] = (tc_id, func_name, func_args)
 
                 for future in as_completed(futures):
                     tc_id, func_name, func_args = futures[future]
                     try:
-                        result = future.result()
+                        result, latency_ms, success = future.result()
                     except Exception as exc:
                         logger.error("[%s] Tool %s raised exception: %s", trace_id, func_name, exc)
-                        result = f"Error: {exc}"
+                        result, latency_ms, success = (f"Error: {exc}", 0.0, False)
                     self._maybe_record_observed(func_name, func_args, result)
-                    tool_results.append((tc_id, func_name, result))
+                    tool_traces.append(
+                        self._build_tool_trace(
+                            tc_id,
+                            func_name,
+                            result,
+                            latency_ms=latency_ms,
+                            success=success,
+                        )
+                    )
 
-        return tool_results
+        return tool_traces
 
     def _execute_sequential_batch(
         self,
         sequential_calls: list[tuple[str, str, str, dict[str, Any] | None]],
         trace_id: str,
         turn: int | None = None,
-    ) -> tuple[list[tuple[str, str, str | dict[str, Any]]], dict[str, Any] | None]:
+    ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
         """Execute tool calls sequentially and detect report_back.
 
         Args:
@@ -243,72 +268,121 @@ class ToolCallsMixin:
             turn: Current turn number (1-indexed) for logging.
 
         Returns:
-            (tool_results, report_back_result) tuple.
+            (tool_traces, report_back_result) tuple.
         """
-        tool_results: list[tuple[str, str, str | dict[str, Any]]] = []
+        tool_traces: list[dict[str, Any]] = []
         report_back_result: dict[str, Any] | None = None
 
         for tc_id, func_name, error, func_args in sequential_calls:
             if error:
-                tool_results.append((tc_id, func_name, error))
+                tool_traces.append(
+                    self._build_tool_trace(
+                        tc_id,
+                        func_name,
+                        error,
+                        latency_ms=0.0,
+                        success=False,
+                    )
+                )
                 continue
 
             if func_args is None:
-                tool_results.append((tc_id, func_name, "Error: Missing arguments"))
+                tool_traces.append(
+                    self._build_tool_trace(
+                        tc_id,
+                        func_name,
+                        "Error: Missing arguments",
+                        latency_ms=0.0,
+                        success=False,
+                    )
+                )
                 continue
 
             logger.debug("[%s] Tool call (sequential): %s", trace_id, func_name)
-            try:
-                result = self._dispatch_tool_with_logging(func_name, func_args, trace_id, turn)
-            except Exception as exc:
-                logger.error("[%s] Tool %s raised exception: %s", trace_id, func_name, exc)
-                result = f"Error: {exc}"
+            result, latency_ms, success = self._dispatch_tool_timed(
+                func_name, func_args, trace_id, turn
+            )
 
             self._maybe_record_observed(func_name, func_args, result)
 
             if func_name == "report_back" and isinstance(result, dict):
                 report_back_result = result
 
-            tool_results.append((tc_id, func_name, result))
-
-        return tool_results, report_back_result
-
-    def _dispatch_tool_with_logging(
-        self, name: str, args: dict[str, Any], trace_id: str, turn: int | None = None
-    ) -> str | dict[str, Any]:
-        """Dispatch tool call with timing and logging."""
-        if not settings.MCP_LOGGING:
-            return self._dispatch_tool(name, args)
-
-        start = time.perf_counter()
-        result = self._dispatch_tool(name, args)
-        latency_ms = (time.perf_counter() - start) * 1000
-
-        try:
-            success = not (isinstance(result, str) and result.startswith("Error:"))
-
-            if isinstance(result, str):
-                result_preview = result[:300]
-            else:
-                result_preview = json.dumps(result, ensure_ascii=False, default=str)[:300]
-
-            log_tool_call(trace_id, name, args, result_preview, latency_ms, success, turn=turn)
-            log_trace_event(
-                {
-                    "kind": "agent_tool_call",
-                    "trace_id": trace_id,
-                    "turn": turn,
-                    "tool_name": name,
-                    "args": args,
-                    "result": result,
-                    "latency_ms": round(latency_ms, 1),
-                    "success": success,
-                }
+            tool_traces.append(
+                self._build_tool_trace(
+                    tc_id,
+                    func_name,
+                    result,
+                    latency_ms=latency_ms,
+                    success=success,
+                )
             )
-        except Exception:
-            # Logging failure should never break tool execution
-            logger.debug("Failed to log tool call for %s", name, exc_info=True)
-        return result
+
+        return tool_traces, report_back_result
+
+    @staticmethod
+    def _build_tool_trace(
+        tool_call_id: str,
+        tool_name: str,
+        result: str | dict[str, Any],
+        *,
+        latency_ms: float,
+        success: bool,
+    ) -> dict[str, Any]:
+        return {
+            "id": tool_call_id,
+            "name": tool_name,
+            "result": result,
+            "latency_ms": round(float(latency_ms), 1),
+            "success": bool(success),
+        }
+
+    def _dispatch_tool_timed(
+        self, name: str, args: dict[str, Any], trace_id: str, turn: int | None = None
+    ) -> tuple[str | dict[str, Any], float, bool]:
+        """Dispatch tool call with timing (always) and optional logging."""
+        start = time.perf_counter()
+        try:
+            result = self._dispatch_tool(name, args)
+        except Exception as exc:
+            logger.error("[%s] Tool %s raised exception: %s", trace_id, name, exc)
+            result = f"Error: {exc}"
+        latency_ms = (time.perf_counter() - start) * 1000
+        success = not (isinstance(result, str) and result.startswith("Error:"))
+
+        if settings.MCP_LOGGING:
+            try:
+                if isinstance(result, str):
+                    result_preview = result[:300]
+                else:
+                    result_preview = json.dumps(result, ensure_ascii=False, default=str)[:300]
+
+                log_tool_call(
+                    trace_id,
+                    name,
+                    args,
+                    result_preview,
+                    latency_ms,
+                    success,
+                    turn=turn,
+                )
+                log_trace_event(
+                    {
+                        "kind": "agent_tool_call",
+                        "trace_id": trace_id,
+                        "turn": turn,
+                        "tool_name": name,
+                        "args": args,
+                        "result": result,
+                        "latency_ms": round(latency_ms, 1),
+                        "success": success,
+                    }
+                )
+            except Exception:
+                # Logging failure should never break tool execution
+                logger.debug("Failed to log tool call for %s", name, exc_info=True)
+
+        return result, latency_ms, success
 
     def _dispatch_tool(self, name: str, args: dict[str, Any]) -> str | dict[str, Any]:
         """Dispatch tool call to corresponding handler and accumulate observed_files."""

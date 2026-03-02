@@ -13,7 +13,7 @@ from relace_mcp.config import RelaceConfig
 from relace_mcp.lsp.languages import get_lsp_languages
 from relace_mcp.tools.search import FastAgenticSearchHarness
 
-from ..config import get_repos_dir
+from ..config import get_events_dir, get_repos_dir
 from ..metrics import (
     compute_file_precision,
     compute_file_recall,
@@ -71,14 +71,6 @@ class CaseTimeoutError(Exception):
     pass
 
 
-_MCP_SETTINGS_KEYS = (
-    "LOG_PATH",
-    "MCP_LOGGING",
-    "MAX_LOG_SIZE_BYTES",
-    "MCP_TRACE_LOGGING",
-)
-
-
 class BenchmarkRunner:
     def __init__(
         self,
@@ -105,36 +97,9 @@ class BenchmarkRunner:
         self.resume = resume
         self.trace = trace
         self._traces_dir: Path | None = None
-
-        self._logs_dir: Path | None = None
-        self._log_path: Path | None = None
-
-    def _configure_mcp_file_logging(self, log_path: Path) -> None:
-        import relace_mcp.config.settings as mcp_settings
-
-        # Snapshot current settings for later restoration
-        self._mcp_settings_snapshot = {k: getattr(mcp_settings, k) for k in _MCP_SETTINGS_KEYS}
-
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            log_path.unlink(missing_ok=True)
-        except Exception:
-            pass
-
-        mcp_settings.LOG_PATH = log_path
-        mcp_settings.MCP_LOGGING = True
-        mcp_settings.MAX_LOG_SIZE_BYTES = 1024 * 1024 * 1024
-        # Benchmark trace analysis uses turns_log; keep the heavy trace log off.
-        mcp_settings.MCP_TRACE_LOGGING = False
-
-    def _restore_mcp_file_logging(self) -> None:
-        if not hasattr(self, "_mcp_settings_snapshot"):
-            return
-        import relace_mcp.config.settings as mcp_settings
-
-        for k, v in self._mcp_settings_snapshot.items():
-            setattr(mcp_settings, k, v)
-        del self._mcp_settings_snapshot
+        self._run_id: str | None = None
+        self._events_path: Path | None = None
+        self._events_file: Any | None = None
 
     def _write_turns_log(self, turns_log: list[dict[str, Any]], trace_file: Path) -> str | None:
         try:
@@ -144,6 +109,20 @@ class BenchmarkRunner:
             return str(trace_file)
         except Exception:
             return None
+
+    def _emit_event(self, event: dict[str, Any]) -> None:
+        if self._events_file is None:
+            return
+
+        payload = dict(event)
+        payload.setdefault("timestamp", datetime.now(UTC).isoformat())
+        payload.setdefault("run_id", self._run_id or "")
+
+        try:
+            self._events_file.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
+        except Exception:
+            # Benchmark reporting must never crash the run.
+            return
 
     def run_benchmark(
         self,
@@ -168,22 +147,33 @@ class BenchmarkRunner:
         run_config: dict[str, Any] | None = None,
     ) -> BenchmarkSummary:
         started_at = datetime.now(UTC)
+        run_id = started_at.strftime("%Y%m%d_%H%M%S")
+        self._run_id = run_id
+        events_file = None
 
         if self.trace:
             traces_base = self.repos_dir.parent / "traces"
-            self._traces_dir = traces_base / started_at.strftime("%Y%m%d_%H%M%S")
+            self._traces_dir = traces_base / run_id
             self._traces_dir.mkdir(parents=True, exist_ok=True)
 
-            logs_base = self.repos_dir.parent / "logs"
-            self._logs_dir = logs_base / started_at.strftime("%Y%m%d_%H%M%S")
-            self._logs_dir.mkdir(parents=True, exist_ok=True)
-            self._log_path = self._logs_dir / "relace.log"
-            self._configure_mcp_file_logging(self._log_path)
+            events_dir = get_events_dir()
+            events_dir.mkdir(parents=True, exist_ok=True)
+            self._events_path = events_dir / f"{run_id}.jsonl"
+            try:
+                self._events_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            events_file = self._events_path.open("w", encoding="utf-8")
+            self._events_file = events_file
 
         try:
             return self._run_benchmark_loop(cases, started_at=started_at, run_config=run_config)
         finally:
-            self._restore_mcp_file_logging()
+            if events_file is not None:
+                try:
+                    events_file.close()
+                finally:
+                    self._events_file = None
 
     def _run_benchmark_loop(
         self,
@@ -201,30 +191,38 @@ class BenchmarkRunner:
         completed_ids: set[str] = set()
         if self.resume and self.checkpoint_path and self.checkpoint_path.exists():
             with self.checkpoint_path.open("r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
+                for lineno, line in enumerate(f, 1):
+                    stripped = line.strip()
+                    if not stripped:
                         continue
+
                     try:
-                        data = json.loads(line)
-                        # Backward compatibility: map old 'success' field to 'completed'
-                        if "success" in data and "completed" not in data:
-                            data["completed"] = data.pop("success")
-                        # Backward compatibility: map old 'latency_ms' to 'latency_s'
-                        if "latency_ms" in data and "latency_s" not in data:
-                            data["latency_s"] = data.pop("latency_ms") / 1000.0
-                        completed_ids.add(data["case_id"])
-                        results.append(
-                            BenchmarkResult(
-                                **{
-                                    k: v
-                                    for k, v in data.items()
-                                    if k in BenchmarkResult.__dataclass_fields__
-                                }
-                            )
+                        data = json.loads(stripped)
+                    except json.JSONDecodeError as exc:
+                        raise RuntimeError(
+                            f"Unsupported checkpoint schema: invalid JSON "
+                            f"(path={self.checkpoint_path}, line={lineno}): {exc}"
+                        ) from exc
+
+                    if not isinstance(data, dict):
+                        raise RuntimeError(
+                            f"Unsupported checkpoint schema: expected JSON object "
+                            f"(path={self.checkpoint_path}, line={lineno})"
                         )
-                    except (json.JSONDecodeError, KeyError):
-                        continue
+
+                    filtered = {
+                        k: v for k, v in data.items() if k in BenchmarkResult.__dataclass_fields__
+                    }
+                    try:
+                        result_obj = BenchmarkResult(**filtered)
+                    except TypeError as exc:
+                        raise RuntimeError(
+                            f"Unsupported checkpoint schema (path={self.checkpoint_path}, line={lineno}): {exc}. "
+                            "Delete the checkpoint or rerun without --resume."
+                        ) from exc
+
+                    completed_ids.add(result_obj.case_id)
+                    results.append(result_obj)
             if completed_ids:
                 print(f"Resumed {len(completed_ids)} completed cases from checkpoint")
 
@@ -382,6 +380,17 @@ class BenchmarkRunner:
         effective_config = replace(self.config, base_dir=str(repo_path))
         client = SearchLLMClient(effective_config)
 
+        if self._events_file is not None:
+            self._emit_event(
+                {
+                    "kind": "search_start",
+                    "case_id": case.id,
+                    "repo": case.repo,
+                    "search_mode": self.search_mode,
+                    "query_preview": (case.query or "")[:500],
+                }
+            )
+
         start_time = time.perf_counter()
         lsp_languages = get_lsp_languages(repo_path)
 
@@ -420,9 +429,12 @@ class BenchmarkRunner:
 
         # Write trace file if tracing is enabled
         trace_path_str: str | None = None
+        turns_log: list[dict[str, Any]] | None = None
         if self.trace and self._traces_dir:
             trace_file = self._traces_dir / f"{case.id}.jsonl"
-            turns_log = result.get("turns_log")
+            raw_turns_log = result.get("turns_log")
+            if isinstance(raw_turns_log, list):
+                turns_log = raw_turns_log
             if turns_log:
                 trace_path_str = self._write_turns_log(turns_log, trace_file)
 
@@ -481,7 +493,7 @@ class BenchmarkRunner:
         error = result.get("error") if isinstance(result.get("error"), str) else None
         partial = bool(result.get("partial", False))
 
-        return BenchmarkResult(
+        benchmark_result = BenchmarkResult(
             case_id=case.id,
             repo=case.repo,
             completed=not partial,
@@ -509,6 +521,82 @@ class BenchmarkRunner:
             retrieval_latency_s=result.get("retrieval_latency_s"),
             reindex_action=result.get("reindex_action"),
         )
+
+        if self._events_file is not None:
+            base = {
+                "case_id": case.id,
+                "repo": case.repo,
+                "search_mode": benchmark_result.search_mode,
+            }
+
+            if turns_log:
+                for entry in turns_log:
+                    if not isinstance(entry, dict):
+                        continue
+                    turn = entry.get("turn")
+                    if not isinstance(turn, int) or turn <= 0:
+                        continue
+
+                    turn_event: dict[str, Any] = {
+                        **base,
+                        "kind": "search_turn",
+                        "turn": turn,
+                        "llm_latency_ms": entry.get("llm_latency_ms"),
+                    }
+
+                    llm_response = entry.get("llm_response")
+                    if isinstance(llm_response, dict):
+                        usage = llm_response.get("usage")
+                        if isinstance(usage, dict):
+                            for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+                                value = usage.get(key)
+                                if isinstance(value, int):
+                                    turn_event[key] = value
+
+                    self._emit_event(turn_event)
+
+                    tool_results = entry.get("tool_results")
+                    if not isinstance(tool_results, list):
+                        continue
+                    for tr in tool_results:
+                        if not isinstance(tr, dict):
+                            continue
+                        self._emit_event(
+                            {
+                                **base,
+                                "kind": "tool_call",
+                                "turn": turn,
+                                "tool_call_id": tr.get("id"),
+                                "tool_name": tr.get("name"),
+                                "latency_ms": tr.get("latency_ms"),
+                                "success": tr.get("success"),
+                            }
+                        )
+
+            self._emit_event(
+                {
+                    **base,
+                    "kind": "search_complete",
+                    "turns_used": benchmark_result.turns_used,
+                    "partial": benchmark_result.partial,
+                    "files_found": benchmark_result.returned_files_count,
+                }
+            )
+            if benchmark_result.error:
+                self._emit_event(
+                    {
+                        **base,
+                        "kind": "search_error",
+                        "error": benchmark_result.error[:1000],
+                    }
+                )
+
+            try:
+                self._events_file.flush()
+            except Exception:
+                pass
+
+        return benchmark_result
 
     def _compute_summary(
         self,
