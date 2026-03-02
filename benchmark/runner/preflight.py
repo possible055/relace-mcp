@@ -1,20 +1,25 @@
 import logging
+import os
 import shutil
 from typing import Any
 
-from relace_mcp.repo.backends.index_state import (
-    _CHUNKHOUND_HEAD_FILE,
-    _CODANNA_HEAD_FILE,
-    _read_indexed_head,
-)
-from relace_mcp.repo.core import get_current_git_info, load_sync_state
+from relace_mcp.repo.core.git import get_git_head
 
 logger = logging.getLogger(__name__)
 
 _HEAD_FILES = {
-    "chunkhound": _CHUNKHOUND_HEAD_FILE,
-    "codanna": _CODANNA_HEAD_FILE,
+    "chunkhound": ".chunkhound/last_indexed_head",
+    "codanna": ".codanna/last_indexed_head",
 }
+
+
+def _read_indexed_head(base_dir: str, head_file: str) -> str | None:
+    path = os.path.join(base_dir, head_file)
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return None
 
 
 def check_retrieval_backend(backend: str, base_dir: str) -> dict[str, Any]:
@@ -46,7 +51,7 @@ def check_retrieval_backend(backend: str, base_dir: str) -> dict[str, Any]:
             info["error"] = f"{backend} CLI not found in PATH"
             raise RuntimeError(info["error"])
 
-        _, git_head = get_current_git_info(base_dir)
+        git_head = get_git_head(base_dir) or ""
         head_file = _HEAD_FILES[backend]
         index_head = _read_indexed_head(base_dir, head_file)
 
@@ -68,6 +73,8 @@ def check_retrieval_backend(backend: str, base_dir: str) -> dict[str, Any]:
         return info
 
     # relace backend
+    from relace_mcp.repo.core import get_current_git_info, load_sync_state
+
     _, git_head = get_current_git_info(base_dir)
     sync_state = load_sync_state(base_dir)
 

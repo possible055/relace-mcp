@@ -136,10 +136,10 @@ async def agentic_retrieval_logic(
     # Stage 0a: Auto-sync if enabled and needed (Relace backend only)
     if AGENTIC_AUTO_SYNC and backend == "relace" and repo_client is not None:
         try:
-            info = cloud_info_logic(repo_client, base_dir)
+            info = await asyncio.to_thread(cloud_info_logic, repo_client, base_dir)
             if info.get("status", {}).get("needs_sync"):
                 logger.debug("[%s] Auto-sync triggered (needs_sync=True)", trace_id)
-                sync_result = cloud_sync_logic(repo_client, base_dir)
+                sync_result = await asyncio.to_thread(cloud_sync_logic, repo_client, base_dir)
                 if sync_result.get("error"):
                     warnings_list.append(f"Auto-sync failed: {sync_result['error']}")
                     logger.warning("[%s] Auto-sync failed, see warnings", trace_id)
@@ -311,7 +311,8 @@ async def agentic_retrieval_logic(
         else:
             search_fn = chunkhound_search if backend == "chunkhound" else codanna_search
             try:
-                cloud_results = search_fn(
+                cloud_results = await asyncio.to_thread(
+                    search_fn,
                     query,
                     base_dir=base_dir,
                     limit=max_hints,
@@ -382,7 +383,8 @@ async def agentic_retrieval_logic(
             )
         else:
             try:
-                cloud_result = cloud_search_logic(
+                cloud_result = await asyncio.to_thread(
+                    cloud_search_logic,
                     repo_client,
                     base_dir,
                     query,

@@ -382,7 +382,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             messages.append(self._sanitize_assistant_message(message))
 
             # Execute tool calls in parallel and collect results
-            tool_results, report_back_result = self._execute_tools_parallel(
+            tool_results, tool_traces, report_back_result = self._execute_tools_parallel(
                 tool_calls, trace_id, turn=turn + 1
             )
 
@@ -395,14 +395,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                     "llm_latency_ms": round(llm_latency_ms, 1),
                     "llm_response": response,
                     "tool_calls_raw": tool_calls,
-                    "tool_results": [
-                        {
-                            "id": tc_id,
-                            "name": tc_name,
-                            "result": tc_result if isinstance(tc_result, str) else tc_result,
-                        }
-                        for tc_id, tc_name, tc_result in tool_results
-                    ],
+                    "tool_results": tool_traces,
                     "report_back": report_back_result,
                 }
                 turns_log.append(trace_entry)
@@ -603,7 +596,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 messages.append(self._sanitize_assistant_message(message))
 
                 # Execute tool calls off the event loop to avoid blocking.
-                tool_results, report_back_result = await loop.run_in_executor(
+                tool_results, tool_traces, report_back_result = await loop.run_in_executor(
                     executor,
                     self._execute_tools_parallel,
                     tool_calls,
@@ -620,14 +613,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                         "llm_latency_ms": round(llm_latency_ms, 1),
                         "llm_response": response,
                         "tool_calls_raw": tool_calls,
-                        "tool_results": [
-                            {
-                                "id": tc_id,
-                                "name": tc_name,
-                                "result": tc_result if isinstance(tc_result, str) else tc_result,
-                            }
-                            for tc_id, tc_name, tc_result in tool_results
-                        ],
+                        "tool_results": tool_traces,
                         "report_back": report_back_result,
                     }
                     turns_log.append(trace_entry)

@@ -1,5 +1,4 @@
 import json
-import os
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -16,12 +15,6 @@ ALL_KINDS = APPLY_KINDS | SEARCH_KINDS
 
 
 def get_log_path() -> Path:
-    raw = os.getenv("MCP_LOG_PATH", "").strip()
-    if raw:
-        return Path(raw).expanduser()
-    raw_dir = os.getenv("MCP_LOG_DIR", "").strip()
-    if raw_dir:
-        return Path(raw_dir).expanduser() / "relace.log"
     return Path(user_state_dir("relace", appauthor=False)) / "relace.log"
 
 

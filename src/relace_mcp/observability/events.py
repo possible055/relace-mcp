@@ -124,16 +124,7 @@ def _normalize_kind(value: object) -> str:
 
 
 def _should_log_event(kind: str, level: str) -> bool:
-    include = settings.MCP_LOG_INCLUDE_KINDS
-    if include and kind not in include:
-        return False
-
-    exclude = settings.MCP_LOG_EXCLUDE_KINDS
-    if exclude and kind in exclude:
-        return False
-
-    min_level = _normalize_level(settings.MCP_LOG_FILE_LEVEL, default="debug")
-    return _level_rank(level) >= _level_rank(min_level)
+    return True
 
 
 def redact_value(value: str, max_len: int = 200) -> str:

@@ -91,7 +91,9 @@ def _load_benchmark_config():
 @click.option("-q", "--quiet", is_flag=True, help="Disable progress bar")
 @click.option("--dry-run", is_flag=True, help="Only load data, don't run searches")
 @click.option(
-    "--trace", is_flag=True, help="Save per-case trace JSONL (reconstructed from relace.log)"
+    "--trace",
+    is_flag=True,
+    help="Save per-case trace JSONL (turns_log) and a run-level events JSONL derived from trace",
 )
 @click.option(
     "--search-mode",
@@ -272,6 +274,8 @@ def main(
     click.echo(f"  - {report_path}")
     if trace and hasattr(runner, "_traces_dir") and runner._traces_dir:
         click.echo(f"  - traces: {runner._traces_dir}")
+    if trace and hasattr(runner, "_events_path") and runner._events_path:
+        click.echo(f"  - events: {runner._events_path}")
 
     # Print summary
     click.echo("\n" + "=" * 50)
