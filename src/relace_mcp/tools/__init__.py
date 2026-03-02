@@ -1,12 +1,10 @@
 # pyright: reportUnusedFunction=false
 # Decorator-registered functions (@mcp.tool, @mcp.resource) are accessed by the framework
 import asyncio
-import inspect
 import json
 import logging
 import shutil
 import threading
-from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
@@ -81,17 +79,10 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     _repo_inst = RelaceRepoClient(config)
         return _repo_inst
 
-    # -- Lazy encoding detection (runs once on first tool call that needs it) --
-
-    _encoding_lock = threading.Lock()
-    _encoding_done = False
-
-    def _ensure_encoding_detected(resolved_base_dir: str | None = None) -> None:
-        nonlocal _encoding_done
-        if _encoding_done:
-            return
-        with _encoding_lock:
-            if _encoding_done:
+    async def _ensure_encoding_detected(ctx: Context | None, resolved_base_dir: str) -> None:
+        if ctx is None:
+            base = resolved_base_dir or config.base_dir
+            if not base:
                 return
             from ..config.settings import ENCODING_DETECTION_SAMPLE_LIMIT
             from ..encoding import set_project_encoding
@@ -100,38 +91,56 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             if config.default_encoding:
                 logger.debug("Using configured project encoding: %s", config.default_encoding)
                 set_project_encoding(config.default_encoding)
-                _encoding_done = True
-            else:
-                base = resolved_base_dir or config.base_dir
-                if base:
-                    detected = detect_project_encoding(
-                        Path(base),
-                        sample_limit=ENCODING_DETECTION_SAMPLE_LIMIT,
-                    )
-                    if detected:
-                        logger.debug("Auto-detected project encoding: %s", detected)
-                        set_project_encoding(detected)
-                    else:
-                        logger.debug("No regional encoding detected, using UTF-8 as default")
-                    _encoding_done = True
-                else:
-                    logger.debug("Skipping encoding detection: base_dir not yet resolved")
-
-    # -- Helpers --
-
-    async def _progress_heartbeat(ctx: Context, *, message: str) -> None:
-        while True:
-            try:
-                maybe = ctx.report_progress(progress=0, total=1.0, message=message)
-                if inspect.isawaitable(maybe):
-                    await maybe
-            except Exception:
                 return
-            await asyncio.sleep(5)
+
+            detected = await asyncio.to_thread(
+                detect_project_encoding,
+                Path(base),
+                sample_limit=ENCODING_DETECTION_SAMPLE_LIMIT,
+            )
+            if detected:
+                logger.debug("Auto-detected project encoding: %s", detected)
+                set_project_encoding(detected)
+            else:
+                logger.debug("No regional encoding detected, using UTF-8 as default")
+            return
+
+        base_dir_key = "relace.encoding.base_dir"
+        done_key = "relace.encoding.done"
+
+        prev_base_dir = (await ctx.get_state(base_dir_key)) or ""
+        if prev_base_dir != resolved_base_dir:
+            await ctx.set_state(base_dir_key, resolved_base_dir)
+            await ctx.set_state(done_key, False)
+
+        if await ctx.get_state(done_key):
+            return
+
+        from ..config.settings import ENCODING_DETECTION_SAMPLE_LIMIT
+        from ..encoding import set_project_encoding
+        from .apply.encoding import detect_project_encoding
+
+        if config.default_encoding:
+            logger.debug("Using configured project encoding: %s", config.default_encoding)
+            set_project_encoding(config.default_encoding)
+        else:
+            detected = await asyncio.to_thread(
+                detect_project_encoding,
+                Path(resolved_base_dir),
+                sample_limit=ENCODING_DETECTION_SAMPLE_LIMIT,
+            )
+            if detected:
+                logger.debug("Auto-detected project encoding: %s", detected)
+                set_project_encoding(detected)
+            else:
+                logger.debug("No regional encoding detected, using UTF-8 as default")
+
+        await ctx.set_state(done_key, True)
 
     # -- Tools --
 
     @mcp.tool(
+        timeout=300.0,
         annotations={
             "readOnlyHint": False,  # Modifies files
             "destructiveHint": True,  # Can overwrite content
@@ -169,49 +178,39 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         """
         from .apply import apply_file_logic
 
-        progress_task = None
+        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+        await _ensure_encoding_detected(ctx, base_dir)
         if ctx is not None:
-            progress_task = asyncio.create_task(
-                _progress_heartbeat(ctx, message="fast_apply in progress")
-            )
-        try:
-            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-            _ensure_encoding_detected(base_dir)
-            if ctx is not None:
-                await ctx.info(f"Applying edit to {path}")
-            result = await apply_file_logic(
-                backend=_get_apply_client(),
-                file_path=path,
-                edit_snippet=edit_snippet,
-                instruction=instruction or None,  # Convert empty string to None internally
-                base_dir=base_dir,
-                extra_paths=config.extra_paths,
-            )
-            if ctx is not None and result and result.get("status") == "ok":
-                diff_preview = (result.get("diff") or "")[:200]
-                await ctx.debug(f"Edit applied: {diff_preview}...")
-            if result and result.get("status") == "ok":
-                import shutil as _shutil
+            await ctx.info(f"Applying edit to {path}")
+        result = await apply_file_logic(
+            backend=_get_apply_client(),
+            file_path=path,
+            edit_snippet=edit_snippet,
+            instruction=instruction or None,  # Convert empty string to None internally
+            base_dir=base_dir,
+            extra_paths=config.extra_paths,
+        )
+        if ctx is not None and result and result.get("status") == "ok":
+            diff_preview = (result.get("diff") or "")[:200]
+            await ctx.debug(f"Edit applied: {diff_preview}...")
+        if result and result.get("status") == "ok":
+            import shutil as _shutil
 
-                from ..repo.backends import (
-                    is_backend_disabled,
-                    schedule_bg_chunkhound_index,
-                    schedule_bg_codanna_index,
-                )
+            from ..repo.backends import (
+                is_backend_disabled,
+                schedule_bg_chunkhound_index,
+                schedule_bg_codanna_index,
+            )
 
-                if _shutil.which("chunkhound") and not is_backend_disabled("chunkhound"):
-                    schedule_bg_chunkhound_index(base_dir)
-                if _shutil.which("codanna") and not is_backend_disabled("codanna"):
-                    schedule_bg_codanna_index(result.get("path", path), base_dir)
-            return result
-        finally:
-            if progress_task is not None:
-                progress_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await progress_task
+            if _shutil.which("chunkhound") and not is_backend_disabled("chunkhound"):
+                schedule_bg_chunkhound_index(base_dir)
+            if _shutil.which("codanna") and not is_backend_disabled("codanna"):
+                schedule_bg_codanna_index(result.get("path", path), base_dir)
+        return result
 
     # Register agentic_search (always enabled)
     @mcp.tool(
+        timeout=600.0,
         annotations={
             "readOnlyHint": True,  # Does not modify environment
             "destructiveHint": False,  # Read-only = non-destructive
@@ -239,38 +238,32 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         from .search import FastAgenticSearchHarness
 
         await ctx.info(f"Searching: {query[:100]}")
-        progress_task = asyncio.create_task(
-            _progress_heartbeat(ctx, message="agentic_search in progress")
-        )
-        try:
-            # Resolve base_dir dynamically from MCP Roots if not configured
-            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-            _ensure_encoding_detected(base_dir)
 
-            # Get cached LSP languages (auto-detects on first call per base_dir)
-            from ..lsp.languages import get_lsp_languages
+        # Resolve base_dir dynamically from MCP Roots if not configured
+        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+        await _ensure_encoding_detected(ctx, base_dir)
 
-            lsp_languages = get_lsp_languages(Path(base_dir))
+        # Get cached LSP languages (auto-detects on first call per base_dir)
+        from ..lsp.languages import get_lsp_languages
 
-            effective_config = replace(config, base_dir=base_dir)
-            result = await FastAgenticSearchHarness(
-                effective_config, _get_search_client(), lsp_languages=lsp_languages
-            ).run_async(query=query, trace_id=get_trace_id())
-            files_found = len(result.get("files", {}))
-            await ctx.debug(f"Search found {files_found} files")
-            return result
-        finally:
-            progress_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await progress_task
+        lsp_languages = get_lsp_languages(Path(base_dir))
+
+        effective_config = replace(config, base_dir=base_dir)
+        result = await FastAgenticSearchHarness(
+            effective_config, _get_search_client(), lsp_languages=lsp_languages
+        ).run_async(query=query, trace_id=get_trace_id())
+        files_found = len(result.get("files", {}))
+        await ctx.debug(f"Search found {files_found} files")
+        return result
 
     @mcp.tool(
+        timeout=120.0,
         annotations={
             "readOnlyHint": False,  # probe=True may auto-index via external CLIs
             "destructiveHint": False,
             "idempotentHint": True,
             "openWorldHint": RELACE_CLOUD_TOOLS,  # probe may call cloud_info
-        }
+        },
     )
     async def indexing_status(
         probe: Annotated[
@@ -504,6 +497,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
     @mcp.tool(
         tags={"cloud"},
+        timeout=900.0,
         annotations={
             "readOnlyHint": False,
             "destructiveHint": False,
@@ -541,6 +535,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
     @mcp.tool(
         tags={"cloud"},
+        timeout=300.0,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -579,6 +574,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
     @mcp.tool(
         tags={"cloud"},
+        timeout=300.0,
         annotations={
             "readOnlyHint": False,
             "destructiveHint": True,
@@ -614,6 +610,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
     @mcp.tool(
         tags={"cloud"},
+        timeout=120.0,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -637,6 +634,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
     @mcp.tool(
         tags={"cloud"},
+        timeout=300.0,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -664,6 +662,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     if AGENTIC_RETRIEVAL_ENABLED and RETRIEVAL_BACKEND != "none":
 
         @mcp.tool(
+            timeout=900.0,
             annotations={
                 "readOnlyHint": True,
                 "destructiveHint": False,
@@ -691,31 +690,22 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             """
             from .retrieval import agentic_retrieval_logic
 
-            progress_task = None
             if ctx is not None:
                 await ctx.info(f"Retrieval: {query[:100]}")
-                progress_task = asyncio.create_task(
-                    _progress_heartbeat(ctx, message="agentic_retrieval in progress")
-                )
-            try:
-                base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-                _ensure_encoding_detected(base_dir)
-                result = await agentic_retrieval_logic(
-                    _get_repo_client(),
-                    _get_search_client(),
-                    config,
-                    base_dir,
-                    query,
-                )
-                if ctx is not None:
-                    files_found = len(result.get("files", {}))
-                    await ctx.debug(f"Retrieval found {files_found} files")
-                return result
-            finally:
-                if progress_task is not None:
-                    progress_task.cancel()
-                    with suppress(asyncio.CancelledError):
-                        await progress_task
+
+            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+            await _ensure_encoding_detected(ctx, base_dir)
+            result = await agentic_retrieval_logic(
+                _get_repo_client(),
+                _get_search_client(),
+                config,
+                base_dir,
+                query,
+            )
+            if ctx is not None:
+                files_found = len(result.get("files", {}))
+                await ctx.debug(f"Retrieval found {files_found} files")
+            return result
 
     # === MCP Resources ===
 

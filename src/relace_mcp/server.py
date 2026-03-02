@@ -171,7 +171,12 @@ def build_server(
 
     from .config import RelaceConfig
     from .config import settings as _settings
-    from .middleware import CloudVisibilityMiddleware, RootsMiddleware, ToolTracingMiddleware
+    from .middleware import (
+        CloudVisibilityMiddleware,
+        ProgressHeartbeatMiddleware,
+        RootsMiddleware,
+        ToolTracingMiddleware,
+    )
     from .tools import register_tools
 
     if config is None:
@@ -190,6 +195,7 @@ def build_server(
     # Register middleware to handle MCP notifications (e.g., roots/list_changed)
     mcp.add_middleware(RootsMiddleware())
     mcp.add_middleware(CloudVisibilityMiddleware(cloud_tools_enabled=_settings.RELACE_CLOUD_TOOLS))
+    mcp.add_middleware(ProgressHeartbeatMiddleware())
     mcp.add_middleware(ToolTracingMiddleware())
 
     register_tools(mcp, config)
