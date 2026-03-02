@@ -150,6 +150,25 @@ def reload_logging_settings() -> None:
     MCP_TRACE_LOGGING = MCP_LOGGING_MODE == "full"
 
 
+def reload_tool_settings() -> None:
+    """Re-read tool-registration environment variables after dotenv loading.
+
+    Module-level constants (``RELACE_CLOUD_TOOLS``, ``RETRIEVAL_BACKEND``,
+    ``AGENTIC_RETRIEVAL_ENABLED``, ``AGENTIC_AUTO_SYNC``) are bound at import
+    time.  If ``settings`` is imported before ``load_dotenv()`` populates
+    ``os.environ``, these constants will hold stale defaults.
+
+    Call this once after ``_load_dotenv_from_path()`` to ensure ``.env``
+    values take effect.
+    """
+    global RELACE_CLOUD_TOOLS, RETRIEVAL_BACKEND, AGENTIC_RETRIEVAL_ENABLED, AGENTIC_AUTO_SYNC
+
+    RELACE_CLOUD_TOOLS = env_bool("RELACE_CLOUD_TOOLS", default=False)
+    RETRIEVAL_BACKEND = _parse_retrieval_backend()
+    AGENTIC_RETRIEVAL_ENABLED = env_bool("MCP_SEARCH_RETRIEVAL", default=False)
+    AGENTIC_AUTO_SYNC = env_bool("RELACE_AGENTIC_AUTO_SYNC", default=True)
+
+
 # File size limit (10MB) to prevent memory exhaustion on file read/write operations
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 

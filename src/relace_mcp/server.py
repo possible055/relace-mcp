@@ -234,14 +234,18 @@ def main() -> None:
     args = parser.parse_args()
 
     # Load dotenv first so settings constants reflect .env values.
+    # IMPORTANT: _load_dotenv_from_path() MUST run before any import of
+    # relace_mcp.config.settings — the module-level os.getenv() calls in
+    # settings.py bind constants at import time.
     _load_dotenv_from_path()
 
     from .config import RelaceConfig
     from .config import settings as _settings
-    from .config.settings import reload_logging_settings
+    from .config.settings import reload_logging_settings, reload_tool_settings
     from .observability import log_event
 
     reload_logging_settings()
+    reload_tool_settings()
     _ensure_fastmcp_log_level()
 
     # stdio-only fixes: must be applied before any output
