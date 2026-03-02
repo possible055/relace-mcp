@@ -9,8 +9,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit, urlunsplit
 
-from relace_mcp.config import settings as relace_settings
-
 if TYPE_CHECKING:
     from benchmark.schemas import DatasetCase
     from relace_mcp.config import RelaceConfig
@@ -45,6 +43,20 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _safe_float(value: str | None, default: float) -> float:
+    try:
+        return float(value) if value is not None else default
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_int(value: str | None, default: int) -> int:
+    try:
+        return int(value) if value is not None else default
+    except (ValueError, TypeError):
+        return default
 
 
 def build_run_metadata(
@@ -127,9 +139,9 @@ def build_run_metadata(
             "provider": provider,
             "model": model,
             "base_url": sanitize_endpoint_url(base_url) if base_url else None,
-            "timeout_seconds": relace_settings.SEARCH_TIMEOUT_SECONDS,
-            "max_turns": relace_settings.SEARCH_MAX_TURNS,
-            "temperature": relace_settings.SEARCH_TEMPERATURE,
+            "timeout_seconds": _safe_float(os.getenv("SEARCH_TIMEOUT_SECONDS", ""), 120.0),
+            "max_turns": _safe_int(os.getenv("SEARCH_MAX_TURNS", ""), 6),
+            "temperature": _safe_float(os.getenv("SEARCH_TEMPERATURE", ""), 1.0),
             "prompt_file": prompt_file,
         },
         "retrieval": {

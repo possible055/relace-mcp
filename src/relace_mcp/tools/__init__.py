@@ -1,12 +1,10 @@
 # pyright: reportUnusedFunction=false
 # Decorator-registered functions (@mcp.tool, @mcp.resource) are accessed by the framework
 import asyncio
-import inspect
 import json
 import logging
 import shutil
 import threading
-from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
@@ -81,17 +79,18 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     _repo_inst = RelaceRepoClient(config)
         return _repo_inst
 
-    # -- Lazy encoding detection (runs once on first tool call that needs it) --
+    _encoding_done: bool = False
+    _encoding_lock_ctx_none = threading.Lock()
 
-    _encoding_lock = threading.Lock()
-    _encoding_done = False
-
-    def _ensure_encoding_detected(resolved_base_dir: str | None = None) -> None:
+    async def _ensure_encoding_detected(ctx: Context | None, resolved_base_dir: str) -> None:
         nonlocal _encoding_done
-        if _encoding_done:
-            return
-        with _encoding_lock:
+
+        if ctx is None:
             if _encoding_done:
+                return
+
+            base = resolved_base_dir or config.base_dir
+            if not base:
                 return
             from ..config.settings import ENCODING_DETECTION_SAMPLE_LIMIT
             from ..encoding import set_project_encoding
@@ -100,38 +99,61 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             if config.default_encoding:
                 logger.debug("Using configured project encoding: %s", config.default_encoding)
                 set_project_encoding(config.default_encoding)
-                _encoding_done = True
-            else:
-                base = resolved_base_dir or config.base_dir
-                if base:
-                    detected = detect_project_encoding(
-                        Path(base),
-                        sample_limit=ENCODING_DETECTION_SAMPLE_LIMIT,
-                    )
-                    if detected:
-                        logger.debug("Auto-detected project encoding: %s", detected)
-                        set_project_encoding(detected)
-                    else:
-                        logger.debug("No regional encoding detected, using UTF-8 as default")
+                with _encoding_lock_ctx_none:
                     _encoding_done = True
-                else:
-                    logger.debug("Skipping encoding detection: base_dir not yet resolved")
-
-    # -- Helpers --
-
-    async def _progress_heartbeat(ctx: Context, *, message: str) -> None:
-        while True:
-            try:
-                maybe = ctx.report_progress(progress=0, total=1.0, message=message)
-                if inspect.isawaitable(maybe):
-                    await maybe
-            except Exception:
                 return
-            await asyncio.sleep(5)
+
+            detected = await asyncio.to_thread(
+                detect_project_encoding,
+                Path(base),
+                sample_limit=ENCODING_DETECTION_SAMPLE_LIMIT,
+            )
+            if detected:
+                logger.debug("Auto-detected project encoding: %s", detected)
+                set_project_encoding(detected)
+            else:
+                logger.debug("No regional encoding detected, using UTF-8 as default")
+
+            with _encoding_lock_ctx_none:
+                _encoding_done = True
+            return
+
+        base_dir_key = "relace.encoding.base_dir"
+        done_key = "relace.encoding.done"
+
+        prev_base_dir = (await ctx.get_state(base_dir_key)) or ""
+        if prev_base_dir != resolved_base_dir:
+            await ctx.set_state(base_dir_key, resolved_base_dir)
+            await ctx.set_state(done_key, False)
+
+        if await ctx.get_state(done_key):
+            return
+
+        from ..config.settings import ENCODING_DETECTION_SAMPLE_LIMIT
+        from ..encoding import set_project_encoding
+        from .apply.encoding import detect_project_encoding
+
+        if config.default_encoding:
+            logger.debug("Using configured project encoding: %s", config.default_encoding)
+            set_project_encoding(config.default_encoding)
+        else:
+            detected = await asyncio.to_thread(
+                detect_project_encoding,
+                Path(resolved_base_dir),
+                sample_limit=ENCODING_DETECTION_SAMPLE_LIMIT,
+            )
+            if detected:
+                logger.debug("Auto-detected project encoding: %s", detected)
+                set_project_encoding(detected)
+            else:
+                logger.debug("No regional encoding detected, using UTF-8 as default")
+
+        await ctx.set_state(done_key, True)
 
     # -- Tools --
 
     @mcp.tool(
+        timeout=300.0,
         annotations={
             "readOnlyHint": False,  # Modifies files
             "destructiveHint": True,  # Can overwrite content
@@ -169,49 +191,39 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         """
         from .apply import apply_file_logic
 
-        progress_task = None
+        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+        await _ensure_encoding_detected(ctx, base_dir)
         if ctx is not None:
-            progress_task = asyncio.create_task(
-                _progress_heartbeat(ctx, message="fast_apply in progress")
-            )
-        try:
-            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-            _ensure_encoding_detected(base_dir)
-            if ctx is not None:
-                await ctx.info(f"Applying edit to {path}")
-            result = await apply_file_logic(
-                backend=_get_apply_client(),
-                file_path=path,
-                edit_snippet=edit_snippet,
-                instruction=instruction or None,  # Convert empty string to None internally
-                base_dir=base_dir,
-                extra_paths=config.extra_paths,
-            )
-            if ctx is not None and result and result.get("status") == "ok":
-                diff_preview = (result.get("diff") or "")[:200]
-                await ctx.debug(f"Edit applied: {diff_preview}...")
-            if result and result.get("status") == "ok":
-                import shutil as _shutil
+            await ctx.info(f"Applying edit to {path}")
+        result = await apply_file_logic(
+            backend=_get_apply_client(),
+            file_path=path,
+            edit_snippet=edit_snippet,
+            instruction=instruction or None,  # Convert empty string to None internally
+            base_dir=base_dir,
+            extra_paths=config.extra_paths,
+        )
+        if ctx is not None and result and result.get("status") == "ok":
+            diff_preview = (result.get("diff") or "")[:200]
+            await ctx.debug(f"Edit applied: {diff_preview}...")
+        if result and result.get("status") == "ok":
+            import shutil as _shutil
 
-                from ..repo.backends import (
-                    is_backend_disabled,
-                    schedule_bg_chunkhound_index,
-                    schedule_bg_codanna_index,
-                )
+            from ..repo.backends import (
+                is_backend_disabled,
+                schedule_bg_chunkhound_index,
+                schedule_bg_codanna_index,
+            )
 
-                if _shutil.which("chunkhound") and not is_backend_disabled("chunkhound"):
-                    schedule_bg_chunkhound_index(base_dir)
-                if _shutil.which("codanna") and not is_backend_disabled("codanna"):
-                    schedule_bg_codanna_index(result.get("path", path), base_dir)
-            return result
-        finally:
-            if progress_task is not None:
-                progress_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await progress_task
+            if _shutil.which("chunkhound") and not is_backend_disabled("chunkhound"):
+                schedule_bg_chunkhound_index(base_dir)
+            if _shutil.which("codanna") and not is_backend_disabled("codanna"):
+                schedule_bg_codanna_index(result.get("path", path), base_dir)
+        return result
 
     # Register agentic_search (always enabled)
     @mcp.tool(
+        timeout=600.0,
         annotations={
             "readOnlyHint": True,  # Does not modify environment
             "destructiveHint": False,  # Read-only = non-destructive
@@ -239,38 +251,32 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         from .search import FastAgenticSearchHarness
 
         await ctx.info(f"Searching: {query[:100]}")
-        progress_task = asyncio.create_task(
-            _progress_heartbeat(ctx, message="agentic_search in progress")
-        )
-        try:
-            # Resolve base_dir dynamically from MCP Roots if not configured
-            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-            _ensure_encoding_detected(base_dir)
 
-            # Get cached LSP languages (auto-detects on first call per base_dir)
-            from ..lsp.languages import get_lsp_languages
+        # Resolve base_dir dynamically from MCP Roots if not configured
+        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+        await _ensure_encoding_detected(ctx, base_dir)
 
-            lsp_languages = get_lsp_languages(Path(base_dir))
+        # Get cached LSP languages (auto-detects on first call per base_dir)
+        from ..lsp.languages import get_lsp_languages
 
-            effective_config = replace(config, base_dir=base_dir)
-            result = await FastAgenticSearchHarness(
-                effective_config, _get_search_client(), lsp_languages=lsp_languages
-            ).run_async(query=query, trace_id=get_trace_id())
-            files_found = len(result.get("files", {}))
-            await ctx.debug(f"Search found {files_found} files")
-            return result
-        finally:
-            progress_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await progress_task
+        lsp_languages = get_lsp_languages(Path(base_dir))
+
+        effective_config = replace(config, base_dir=base_dir)
+        result = await FastAgenticSearchHarness(
+            effective_config, _get_search_client(), lsp_languages=lsp_languages
+        ).run_async(query=query, trace_id=get_trace_id())
+        files_found = len(result.get("files", {}))
+        await ctx.debug(f"Search found {files_found} files")
+        return result
 
     @mcp.tool(
+        timeout=120.0,
         annotations={
             "readOnlyHint": False,  # probe=True may auto-index via external CLIs
             "destructiveHint": False,
             "idempotentHint": True,
             "openWorldHint": RELACE_CLOUD_TOOLS,  # probe may call cloud_info
-        }
+        },
     )
     async def indexing_status(
         probe: Annotated[
@@ -388,7 +394,11 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             else:
                 from ..repo.cloud.info import cloud_info_logic
 
-                relace_status["probe"] = cloud_info_logic(_get_repo_client(), base_dir)
+                relace_status["probe"] = await asyncio.to_thread(
+                    cloud_info_logic,
+                    _get_repo_client(),
+                    base_dir,
+                )
 
         # --- Local backends (Codanna / ChunkHound) ---
         codanna_cli_path = shutil.which("codanna")
@@ -428,7 +438,11 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     continue
 
                 try:
-                    probe_status = check_backend_health(backend_name, base_dir)
+                    probe_status = await asyncio.to_thread(
+                        check_backend_health,
+                        backend_name,
+                        base_dir,
+                    )
                     status_obj["probe"] = {"status": probe_status}
                 except ExternalCLIError as exc:
                     status_obj["probe"] = {
@@ -492,155 +506,176 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         return payload
 
-    # Cloud Repos (Semantic Search & Sync) - only register if enabled
-    if RELACE_CLOUD_TOOLS:
+    # Cloud Repos (Semantic Search & Sync) - registered always (visibility is session-scoped)
 
-        @mcp.tool(
-            annotations={
-                "readOnlyHint": False,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
+    @mcp.tool(
+        tags={"cloud"},
+        timeout=900.0,
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
+    )
+    async def cloud_sync(
+        force: Annotated[
+            bool, Field(description="Ignore cache, upload all files (default: false).")
+        ] = False,
+        mirror: Annotated[
+            bool,
+            Field(description="With force=True, delete cloud files not in local (default: false)."),
+        ] = False,
+        ctx: Context | None = None,
+    ) -> dict[str, Any]:
+        """Upload codebase to Relace Cloud for semantic search.
+
+        Syncs git-tracked files to enable cloud_search. Incremental by default—only
+        uploads changed files. Run once per session before using cloud_search.
+
+        Fails if not in a git repository or RELACE_API_KEY is not set.
+        """
+        from ..repo.cloud.sync import cloud_sync_logic
+
+        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+        return await asyncio.to_thread(
+            cloud_sync_logic,
+            _get_repo_client(),
+            base_dir,
+            force=force,
+            mirror=mirror,
         )
-        async def cloud_sync(
-            force: Annotated[
-                bool, Field(description="Ignore cache, upload all files (default: false).")
-            ] = False,
-            mirror: Annotated[
-                bool,
-                Field(
-                    description="With force=True, delete cloud files not in local (default: false)."
-                ),
-            ] = False,
-            ctx: Context | None = None,
-        ) -> dict[str, Any]:
-            """Upload codebase to Relace Cloud for semantic search.
 
-            Syncs git-tracked files to enable cloud_search. Incremental by default—only
-            uploads changed files. Run once per session before using cloud_search.
+    @mcp.tool(
+        tags={"cloud"},
+        timeout=300.0,
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
+    )
+    async def cloud_search(
+        query: Annotated[str, Field(description="Natural language search query.")],
+        branch: Annotated[
+            str, Field(description="Branch to search (empty = default branch).")
+        ] = "",
+        ctx: Context | None = None,
+    ) -> dict[str, Any]:
+        """Semantic code search using AI embeddings. Requires cloud_sync first.
 
-            Fails if not in a git repository or RELACE_API_KEY is not set.
-            """
-            from ..repo.cloud.sync import cloud_sync_logic
+        Finds code by meaning, not just keywords. Returns ranked results with relevance scores.
+        """
+        from ..repo.cloud.search import cloud_search_logic
 
-            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-            return cloud_sync_logic(_get_repo_client(), base_dir, force=force, mirror=mirror)
+        # Fixed internal parameters (not exposed to LLM)
+        score_threshold = 0.3
+        token_limit = 30000
 
-        @mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
+        # Resolve base_dir dynamically from MCP Roots if not configured
+        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+        return await asyncio.to_thread(
+            cloud_search_logic,
+            _get_repo_client(),
+            base_dir,
+            query,
+            branch=branch,
+            score_threshold=score_threshold,
+            token_limit=token_limit,
         )
-        async def cloud_search(
-            query: Annotated[str, Field(description="Natural language search query.")],
-            branch: Annotated[
-                str, Field(description="Branch to search (empty = default branch).")
-            ] = "",
-            ctx: Context | None = None,
-        ) -> dict[str, Any]:
-            """Semantic code search using AI embeddings. Requires cloud_sync first.
 
-            Finds code by meaning, not just keywords. Returns ranked results with relevance scores.
-            """
-            from ..repo.cloud.search import cloud_search_logic
+    @mcp.tool(
+        tags={"cloud"},
+        timeout=300.0,
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": True,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
+    )
+    async def cloud_clear(
+        confirm: Annotated[bool, Field(description="Must be True to proceed.")] = False,
+        repo_id: Annotated[
+            str | None,
+            Field(
+                description="Optional repo ID to delete directly (use cloud_list to find). "
+                "If not provided, deletes the repo associated with current directory."
+            ),
+        ] = None,
+        ctx: Context | None = None,
+    ) -> dict[str, Any]:
+        """Delete cloud repository and local sync state. IRREVERSIBLE.
 
-            # Fixed internal parameters (not exposed to LLM)
-            score_threshold = 0.3
-            token_limit = 30000
+        Removes all indexed data from Relace Cloud. Use cloud_list to find repo IDs.
+        """
+        from ..repo.cloud.clear import cloud_clear_logic
 
-            # Resolve base_dir dynamically from MCP Roots if not configured
-            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-            return cloud_search_logic(
-                _get_repo_client(),
-                base_dir,
-                query,
-                branch=branch,
-                score_threshold=score_threshold,
-                token_limit=token_limit,
-            )
-
-        @mcp.tool(
-            annotations={
-                "readOnlyHint": False,
-                "destructiveHint": True,
-                "idempotentHint": False,
-                "openWorldHint": True,
-            }
+        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+        return await asyncio.to_thread(
+            cloud_clear_logic,
+            _get_repo_client(),
+            base_dir,
+            confirm=confirm,
+            repo_id=repo_id,
         )
-        async def cloud_clear(
-            confirm: Annotated[bool, Field(description="Must be True to proceed.")] = False,
-            repo_id: Annotated[
-                str | None,
-                Field(
-                    description="Optional repo ID to delete directly (use cloud_list to find). "
-                    "If not provided, deletes the repo associated with current directory."
-                ),
-            ] = None,
-            ctx: Context | None = None,
-        ) -> dict[str, Any]:
-            """Delete cloud repository and local sync state. IRREVERSIBLE.
 
-            Removes all indexed data from Relace Cloud. Use cloud_list to find repo IDs.
-            """
-            from ..repo.cloud.clear import cloud_clear_logic
+    @mcp.tool(
+        tags={"cloud"},
+        timeout=120.0,
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
+    )
+    def cloud_list(
+        reason: Annotated[
+            str, Field(description="Why you need this list (helps with debugging).")
+        ] = "",
+    ) -> dict[str, Any]:
+        """List all repositories in your Relace Cloud account.
 
-            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-            return cloud_clear_logic(_get_repo_client(), base_dir, confirm=confirm, repo_id=repo_id)
+        Returns repository IDs, names, and indexing status. Use to find repo_id for cloud_clear.
+        """
+        from ..repo.cloud.list import cloud_list_logic
 
-        @mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
-        def cloud_list(
-            reason: Annotated[
-                str, Field(description="Why you need this list (helps with debugging).")
-            ] = "",
-        ) -> dict[str, Any]:
-            """List all repositories in your Relace Cloud account.
+        del reason  # LLM chain-of-thought only
+        return cloud_list_logic(_get_repo_client())
 
-            Returns repository IDs, names, and indexing status. Use to find repo_id for cloud_clear.
-            """
-            from ..repo.cloud.list import cloud_list_logic
+    @mcp.tool(
+        tags={"cloud"},
+        timeout=300.0,
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
+    )
+    async def cloud_info(
+        reason: Annotated[
+            str, Field(description="Why you need sync status (helps with debugging).")
+        ] = "",
+        ctx: Context | None = None,
+    ) -> dict[str, Any]:
+        """Check sync status before running cloud_sync.
 
-            del reason  # LLM chain-of-thought only
-            return cloud_list_logic(_get_repo_client())
+        Shows local git state, last sync info, and whether re-sync is needed.
+        Helps decide if cloud_sync should be called.
+        """
+        from ..repo.cloud.info import cloud_info_logic
 
-        @mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
-        async def cloud_info(
-            reason: Annotated[
-                str, Field(description="Why you need sync status (helps with debugging).")
-            ] = "",
-            ctx: Context | None = None,
-        ) -> dict[str, Any]:
-            """Check sync status before running cloud_sync.
-
-            Shows local git state, last sync info, and whether re-sync is needed.
-            Helps decide if cloud_sync should be called.
-            """
-            from ..repo.cloud.info import cloud_info_logic
-
-            del reason  # LLM chain-of-thought only
-            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-            return cloud_info_logic(_get_repo_client(), base_dir)
+        del reason  # LLM chain-of-thought only
+        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+        return await asyncio.to_thread(cloud_info_logic, _get_repo_client(), base_dir)
 
     if AGENTIC_RETRIEVAL_ENABLED and RETRIEVAL_BACKEND != "none":
 
         @mcp.tool(
+            timeout=900.0,
             annotations={
                 "readOnlyHint": True,
                 "destructiveHint": False,
@@ -668,31 +703,22 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             """
             from .retrieval import agentic_retrieval_logic
 
-            progress_task = None
             if ctx is not None:
                 await ctx.info(f"Retrieval: {query[:100]}")
-                progress_task = asyncio.create_task(
-                    _progress_heartbeat(ctx, message="agentic_retrieval in progress")
-                )
-            try:
-                base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-                _ensure_encoding_detected(base_dir)
-                result = await agentic_retrieval_logic(
-                    _get_repo_client(),
-                    _get_search_client(),
-                    config,
-                    base_dir,
-                    query,
-                )
-                if ctx is not None:
-                    files_found = len(result.get("files", {}))
-                    await ctx.debug(f"Retrieval found {files_found} files")
-                return result
-            finally:
-                if progress_task is not None:
-                    progress_task.cancel()
-                    with suppress(asyncio.CancelledError):
-                        await progress_task
+
+            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+            await _ensure_encoding_detected(ctx, base_dir)
+            result = await agentic_retrieval_logic(
+                _get_repo_client(),
+                _get_search_client(),
+                config,
+                base_dir,
+                query,
+            )
+            if ctx is not None:
+                files_found = len(result.get("files", {}))
+                await ctx.debug(f"Retrieval found {files_found} files")
+            return result
 
     # === MCP Resources ===
 
@@ -774,72 +800,77 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             )
         return json.dumps(tools)
 
-    if RELACE_CLOUD_TOOLS:
+    @mcp.resource(
+        "relace://cloud/status",
+        mime_type="application/json",
+        tags={"cloud"},
+    )
+    async def cloud_status(ctx: Context | None = None) -> str:
+        """Current cloud sync status - lightweight read from local state file.
 
-        @mcp.resource("relace://cloud/status", mime_type="application/json")
-        async def cloud_status(ctx: Context | None = None) -> str:
-            """Current cloud sync status - lightweight read from local state file.
-
-            Returns sync state without making API calls. Use this to quickly check
-            if cloud_sync has been run and what the current sync status is.
-            """
-            try:
-                base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-            except RuntimeError:
-                return json.dumps(
-                    {
-                        "synced": False,
-                        "error": "base_dir not configured",
-                        "message": "Set MCP_BASE_DIR or use MCP Roots to enable cloud status",
-                    }
-                )
-
-            from ..repo.core.state import get_repo_identity, load_sync_state
-
-            local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(base_dir)
-            if not local_repo_name or not cloud_repo_name:
-                return json.dumps(
-                    {
-                        "synced": False,
-                        "error": "invalid base_dir",
-                        "message": "Cannot derive repository identity from base_dir; ensure MCP_BASE_DIR or MCP Roots points to a project directory.",
-                    }
-                )
-
-            state = load_sync_state(base_dir)
-
-            if state is None:
-                return json.dumps(
-                    {
-                        "synced": False,
-                        "repo_name": local_repo_name,
-                        "cloud_repo_name": cloud_repo_name,
-                        "message": "No sync state found. Run cloud_sync to upload codebase.",
-                    }
-                )
-
+        Returns sync state without making API calls. Use this to quickly check
+        if cloud_sync has been run and what the current sync status is.
+        """
+        try:
+            base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
+        except RuntimeError:
             return json.dumps(
                 {
-                    "synced": True,
-                    "repo_id": state.repo_id,
-                    "repo_name": state.repo_name or local_repo_name,
-                    "cloud_repo_name": state.cloud_repo_name or cloud_repo_name,
-                    "git_ref": (
-                        f"{state.git_branch}@{state.git_head_sha[:8]}"
-                        if state.git_branch and state.git_head_sha
-                        else state.git_head_sha[:8]
-                        if state.git_head_sha
-                        else ""
-                    ),
-                    "files_count": len(state.files),
-                    "skipped_files_count": len(state.skipped_files),
-                    "files_found": state.files_found,
-                    "files_selected": state.files_selected,
-                    "file_limit": state.file_limit,
-                    "files_truncated": state.files_truncated,
-                    "last_sync": state.last_sync,
+                    "synced": False,
+                    "error": "base_dir not configured",
+                    "message": "Set MCP_BASE_DIR or use MCP Roots to enable cloud status",
                 }
             )
+
+        from ..repo.core.state import get_repo_identity, load_sync_state
+
+        local_repo_name, cloud_repo_name, _project_fingerprint = get_repo_identity(base_dir)
+        if not local_repo_name or not cloud_repo_name:
+            return json.dumps(
+                {
+                    "synced": False,
+                    "error": "invalid base_dir",
+                    "message": "Cannot derive repository identity from base_dir; ensure MCP_BASE_DIR or MCP Roots points to a project directory.",
+                }
+            )
+
+        state = load_sync_state(base_dir)
+
+        if state is None:
+            return json.dumps(
+                {
+                    "synced": False,
+                    "repo_name": local_repo_name,
+                    "cloud_repo_name": cloud_repo_name,
+                    "message": "No sync state found. Run cloud_sync to upload codebase.",
+                }
+            )
+
+        return json.dumps(
+            {
+                "synced": True,
+                "repo_id": state.repo_id,
+                "repo_name": state.repo_name or local_repo_name,
+                "cloud_repo_name": state.cloud_repo_name or cloud_repo_name,
+                "git_ref": (
+                    f"{state.git_branch}@{state.git_head_sha[:8]}"
+                    if state.git_branch and state.git_head_sha
+                    else state.git_head_sha[:8]
+                    if state.git_head_sha
+                    else ""
+                ),
+                "files_count": len(state.files),
+                "skipped_files_count": len(state.skipped_files),
+                "files_found": state.files_found,
+                "files_selected": state.files_selected,
+                "file_limit": state.file_limit,
+                "files_truncated": state.files_truncated,
+                "last_sync": state.last_sync,
+            }
+        )
+
+    # Default: hide cloud components unless explicitly enabled for the session.
+    mcp.disable(tags={"cloud"})
 
 
 if TYPE_CHECKING:

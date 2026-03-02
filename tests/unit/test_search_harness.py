@@ -21,6 +21,17 @@ def _make_view_file_call(call_id: str, path: str) -> dict:
     }
 
 
+def _make_view_directory_call(call_id: str, path: str) -> dict:
+    """Build view_directory tool call for tests."""
+    return {
+        "id": call_id,
+        "function": {
+            "name": "view_directory",
+            "arguments": json.dumps({"path": path, "include_hidden": False}),
+        },
+    }
+
+
 def _make_report_back_call(call_id: str, explanation: str, files: dict) -> dict:
     """Build report_back tool call for tests."""
     return {
@@ -246,6 +257,46 @@ class TestFastAgenticSearchHarness:
         result = harness.run("Find files")
 
         assert len(result["files"]) == 2
+
+    def test_turns_log_includes_tool_latency_without_mcp_logging(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """turns_log should include tool latency/success even when MCP_LOGGING is off."""
+        import relace_mcp.config.settings as settings
+
+        monkeypatch.setattr(settings, "MCP_LOGGING", False)
+        (tmp_path / "test.py").write_text("def hello(): pass\n")
+
+        mock_client.chat.side_effect = [
+            {
+                "choices": [
+                    {"message": {"tool_calls": [_make_view_directory_call("call_1", "/repo")]}}
+                ]
+            },
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [_make_report_back_call("call_2", "Done", {})],
+                        }
+                    }
+                ]
+            },
+        ]
+
+        harness = FastAgenticSearchHarness(mock_config, mock_client, trace=True)
+        result = harness.run("List directory")
+
+        turns_log = result["turns_log"]
+        tool_results = turns_log[0]["tool_results"]
+        assert tool_results
+        assert tool_results[0]["name"] == "view_directory"
+        assert isinstance(tool_results[0]["latency_ms"], (int, float))
+        assert tool_results[0]["success"] is True
 
     def test_returns_partial_on_max_turns_exceeded(
         self,

@@ -28,16 +28,6 @@
 | `MCP_DOTENV_PATH` | — | 启动时加载的 `.env` 文件路径（集中配置） |
 | `RELACE_DEFAULT_ENCODING` | — | 强制项目文件编码（如 `gbk`、`big5`） |
 | `MCP_LOGGING` | `off` | 文件日志：`off`、`safe`（启用并遮蔽）、`full`（启用不遮蔽） |
-| `MCP_TRACE` | `1` | Trace 开关（仅在 `MCP_LOGGING=full` 時生效）：设为 `0` 可禁用 `relace.trace.jsonl` |
-| `MCP_LOG_FILE_LEVEL` | `DEBUG` | 写入 `relace.log`（及启用时的 `relace.trace.jsonl`）的最低级别：`DEBUG`、`INFO`、`WARNING`、`ERROR` |
-| `MCP_LOG_INCLUDE_KINDS` | — | 逗号分隔的 `relace.log` 事件 `kind` 白名单（空 = 全部允许） |
-| `MCP_LOG_EXCLUDE_KINDS` | — | 逗号分隔的 `relace.log` 事件 `kind` 黑名单 |
-| `MCP_TRACE_INCLUDE_KINDS` | — | 逗号分隔的 `relace.trace.jsonl` trace `kind` 白名单（空 = 全部允许） |
-| `MCP_TRACE_EXCLUDE_KINDS` | — | 逗号分隔的 `relace.trace.jsonl` trace `kind` 黑名单 |
-| `MCP_LOG_DIR` | — | 覆盖 `relace.log`/`traces/` 基础目录（默认为平台状态目录） |
-| `MCP_LOG_PATH` | — | 覆盖 `relace.log` 完整路径 |
-| `MCP_TRACE_DIR` | — | 覆盖 trace 目录（默认为 `${MCP_LOG_DIR}/traces`） |
-| `MCP_TRACE_PATH` | — | 覆盖 `relace.trace.jsonl` 完整路径 |
 | `MCP_LOG_LEVEL` | `WARNING` | stderr 日志级别：`DEBUG`、`INFO`、`WARNING`、`ERROR` |
 | `RELACE_CLOUD_TOOLS` | `0` | 设为 `1` 启用云工具（cloud_sync、cloud_search 等） |
 | `MCP_SEARCH_RETRIEVAL` | `0` | 设为 `1` 启用 `agentic_retrieval` 工具 |
