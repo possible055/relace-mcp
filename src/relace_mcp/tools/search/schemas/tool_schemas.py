@@ -423,7 +423,7 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
         - SEARCH_TOOL_STRICT: Set to 0/false to omit the non-standard `strict` field from tool schemas.
     """
     # LSP tool names for easy reference
-    lsp_tool_names = {"find_symbol", "search_symbol", "get_type", "list_symbols", "call_graph"}
+    lsp_tool_names = {"find_symbol", "search_symbol"}
 
     # Default: basic exploration tools only.
     enabled = {

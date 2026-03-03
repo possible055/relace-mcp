@@ -11,9 +11,6 @@ PARALLEL_SAFE_TOOLS = frozenset(
         "glob",
         "find_symbol",
         "search_symbol",
-        "list_symbols",
-        "get_type",
-        "call_graph",
     }
 )
 

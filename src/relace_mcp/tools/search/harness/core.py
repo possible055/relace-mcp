@@ -68,7 +68,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
 
         # Resolve enabled tools first (runtime LSP detection happens here)
         enabled_tools = self._enabled_tool_names()
-        _lsp_tool_names = {"find_symbol", "search_symbol", "get_type", "list_symbols", "call_graph"}
+        _lsp_tool_names = {"find_symbol", "search_symbol"}
         has_lsp = bool(enabled_tools & _lsp_tool_names)
 
         # Select prompt YAML: (tool_kind, backend) → file stem
