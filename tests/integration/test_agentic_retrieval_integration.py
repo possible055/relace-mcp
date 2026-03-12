@@ -7,6 +7,7 @@ from relace_mcp.config import RelaceConfig
 from relace_mcp.tools.retrieval import agentic_retrieval_logic
 
 _RETRIEVAL_MOD = "relace_mcp.tools.retrieval"
+_SETTINGS_MOD = "relace_mcp.config.settings"
 
 HARNESS_RESULT = {
     "explanation": "test",
@@ -22,7 +23,7 @@ CLOUD_SEARCH_RESULTS = [
 
 @pytest.fixture(autouse=True)
 def _force_relace_backend():  # pyright: ignore[reportUnusedFunction]
-    with patch(f"{_RETRIEVAL_MOD}.RETRIEVAL_BACKEND", "relace"):
+    with patch(f"{_SETTINGS_MOD}.RETRIEVAL_BACKEND", "relace"):
         yield
 
 
@@ -191,7 +192,7 @@ class TestRetrievalOrchestration:
         self, mock_config, mock_repo_client, mock_search_client, all_mocks
     ):
         all_mocks["cloud_info"].return_value = {"status": {"needs_sync": True}}
-        with patch(f"{_RETRIEVAL_MOD}.AGENTIC_AUTO_SYNC", True):
+        with patch(f"{_SETTINGS_MOD}.AGENTIC_AUTO_SYNC", True):
             await agentic_retrieval_logic(
                 mock_repo_client,
                 mock_search_client,
@@ -254,7 +255,7 @@ class TestRetrievalBackendDispatch:
     async def test_none_backend_skips_semantic_retrieval(
         self, mock_config, mock_repo_client, mock_search_client, all_mocks
     ):
-        with patch(f"{_RETRIEVAL_MOD}.RETRIEVAL_BACKEND", "none"):
+        with patch(f"{_SETTINGS_MOD}.RETRIEVAL_BACKEND", "none"):
             result = await agentic_retrieval_logic(
                 mock_repo_client,
                 mock_search_client,
@@ -270,7 +271,7 @@ class TestRetrievalBackendDispatch:
         self, mock_config, mock_repo_client, mock_search_client, all_mocks
     ):
         with (
-            patch(f"{_RETRIEVAL_MOD}.RETRIEVAL_BACKEND", "chunkhound"),
+            patch(f"{_SETTINGS_MOD}.RETRIEVAL_BACKEND", "chunkhound"),
             patch(
                 f"{_RETRIEVAL_MOD}.chunkhound_search", return_value=list(CLOUD_SEARCH_RESULTS)
             ) as m_ch,
@@ -291,7 +292,7 @@ class TestRetrievalBackendDispatch:
         self, mock_config, mock_repo_client, mock_search_client, all_mocks
     ):
         with (
-            patch(f"{_RETRIEVAL_MOD}.RETRIEVAL_BACKEND", "codanna"),
+            patch(f"{_SETTINGS_MOD}.RETRIEVAL_BACKEND", "codanna"),
             patch(
                 f"{_RETRIEVAL_MOD}.codanna_search", return_value=list(CLOUD_SEARCH_RESULTS)
             ) as m_cd,

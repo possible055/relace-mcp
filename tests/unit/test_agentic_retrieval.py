@@ -46,7 +46,7 @@ class TestBuildSemanticHintsSection:
 
 @pytest.fixture(autouse=True)
 def _force_relace_backend():  # pyright: ignore[reportUnusedFunction]
-    with patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "relace"):
+    with patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "relace"):
         yield
 
 
@@ -266,7 +266,7 @@ class TestAutoSync:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.tools.retrieval.AGENTIC_AUTO_SYNC", True),
+            patch("relace_mcp.config.settings.AGENTIC_AUTO_SYNC", True),
             patch("relace_mcp.tools.retrieval.cloud_info_logic") as mock_info,
             patch("relace_mcp.tools.retrieval.cloud_sync_logic") as mock_sync,
             patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
@@ -301,7 +301,7 @@ class TestAutoSync:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.tools.retrieval.AGENTIC_AUTO_SYNC", True),
+            patch("relace_mcp.config.settings.AGENTIC_AUTO_SYNC", True),
             patch("relace_mcp.tools.retrieval.cloud_info_logic") as mock_info,
             patch("relace_mcp.tools.retrieval.cloud_sync_logic") as mock_sync,
             patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
@@ -335,7 +335,7 @@ class TestAutoSync:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.tools.retrieval.AGENTIC_AUTO_SYNC", False),
+            patch("relace_mcp.config.settings.AGENTIC_AUTO_SYNC", False),
             patch("relace_mcp.tools.retrieval.cloud_info_logic") as mock_info,
             patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
             patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
@@ -366,7 +366,7 @@ class TestAutoSync:
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.tools.retrieval.AGENTIC_AUTO_SYNC", True),
+            patch("relace_mcp.config.settings.AGENTIC_AUTO_SYNC", True),
             patch("relace_mcp.tools.retrieval.cloud_info_logic") as mock_info,
             patch("relace_mcp.tools.retrieval.cloud_sync_logic") as mock_sync,
             patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
@@ -412,7 +412,7 @@ class TestChunkHoundAutoReindexSync:
         self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
     ) -> None:
         with (
-            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
+            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "chunkhound"),
             patch(
                 "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
                 return_value={"action": "skipped", "reason": "index up to date"},
@@ -438,7 +438,7 @@ class TestChunkHoundAutoReindexSync:
     ) -> None:
         """auto_reindex is called on every retrieval (HEAD check is internal)."""
         with (
-            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
+            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "chunkhound"),
             patch(
                 "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
                 return_value={"action": "skipped", "reason": "index up to date"},
@@ -465,7 +465,7 @@ class TestChunkHoundAutoReindexSync:
     ) -> None:
         """auto_reindex failure must degrade gracefully (warning only)."""
         with (
-            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
+            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "chunkhound"),
             patch(
                 "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
                 side_effect=RuntimeError("disk full"),
@@ -492,7 +492,7 @@ class TestChunkHoundAutoReindexSync:
     ) -> None:
         """auto_reindex returning action=error (internal catch) must still add a warning."""
         with (
-            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
+            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "chunkhound"),
             patch(
                 "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
                 return_value={"action": "error", "message": "CLI timeout"},
@@ -521,7 +521,7 @@ class TestChunkHoundAutoReindexSync:
         from relace_mcp.repo.backends import ExternalCLIError
 
         with (
-            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
+            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "chunkhound"),
             patch(
                 "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
                 return_value={"action": "skipped", "reason": "index up to date"},
@@ -558,7 +558,7 @@ class TestChunkHoundAutoReindexSync:
         from relace_mcp.repo.backends import ExternalCLIError
 
         with (
-            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "chunkhound"),
+            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "chunkhound"),
             patch(
                 "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
                 return_value={"action": "skipped", "reason": "index up to date"},
@@ -829,7 +829,7 @@ class TestCodannaAutoReindexSync:
         self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
     ) -> None:
         with (
-            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "codanna"),
+            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "codanna"),
             patch(
                 "relace_mcp.tools.retrieval.codanna_auto_reindex",
                 return_value={"action": "skipped", "reason": "index up to date"},
@@ -854,7 +854,7 @@ class TestCodannaAutoReindexSync:
         self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
     ) -> None:
         with (
-            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "codanna"),
+            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "codanna"),
             patch(
                 "relace_mcp.tools.retrieval.codanna_auto_reindex",
                 side_effect=RuntimeError("codanna CLI crashed"),
@@ -881,7 +881,7 @@ class TestCodannaAutoReindexSync:
     ) -> None:
         """auto_reindex returning action=error (internal catch) must still add a warning."""
         with (
-            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "codanna"),
+            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "codanna"),
             patch(
                 "relace_mcp.tools.retrieval.codanna_auto_reindex",
                 return_value={"action": "error", "message": "index failed"},
@@ -909,7 +909,7 @@ class TestCodannaAutoReindexSync:
         from relace_mcp.repo.backends import ExternalCLIError
 
         with (
-            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "codanna"),
+            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "codanna"),
             patch(
                 "relace_mcp.tools.retrieval.codanna_auto_reindex",
                 return_value={"action": "skipped", "reason": "index up to date"},
@@ -943,7 +943,7 @@ class TestCodannaAutoReindexSync:
     ) -> None:
         """When auto_reindex returns 'reindexed', search uses updated index."""
         with (
-            patch("relace_mcp.tools.retrieval.RETRIEVAL_BACKEND", "codanna"),
+            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "codanna"),
             patch(
                 "relace_mcp.tools.retrieval.codanna_auto_reindex",
                 return_value={"action": "reindexed", "old_head": "aaa", "new_head": "bbb"},

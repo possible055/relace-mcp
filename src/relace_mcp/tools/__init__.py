@@ -14,7 +14,7 @@ from fastmcp.server.context import Context
 from pydantic import Field
 
 from ..config import RelaceConfig, resolve_base_dir
-from ..config.settings import AGENTIC_RETRIEVAL_ENABLED, RELACE_CLOUD_TOOLS, RETRIEVAL_BACKEND
+from ..config import settings as _settings
 from ..observability import get_trace_id, log_event, redact_value
 
 __all__ = ["register_tools"]
@@ -262,9 +262,15 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         lsp_languages = get_lsp_languages(Path(base_dir))
 
         effective_config = replace(config, base_dir=base_dir)
+
+        async def _on_progress(turn: int, total: int) -> None:
+            await ctx.report_progress(
+                progress=turn, total=total, message=f"agentic_search turn {turn}/{total}"
+            )
+
         result = await FastAgenticSearchHarness(
             effective_config, _get_search_client(), lsp_languages=lsp_languages
-        ).run_async(query=query, trace_id=get_trace_id())
+        ).run_async(query=query, trace_id=get_trace_id(), on_progress=_on_progress)
         files_found = len(result.get("files", {}))
         await ctx.debug(f"Search found {files_found} files")
         return result
@@ -275,7 +281,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             "readOnlyHint": False,  # probe=True may auto-index via external CLIs
             "destructiveHint": False,
             "idempotentHint": True,
-            "openWorldHint": RELACE_CLOUD_TOOLS,  # probe may call cloud_info
+            "openWorldHint": _settings.RELACE_CLOUD_TOOLS,  # probe may call cloud_info
         },
     )
     async def indexing_status(
@@ -329,7 +335,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         sync_state = load_sync_state(base_dir)
 
         relace_status: dict[str, Any] = {
-            "cloud_tools_enabled": RELACE_CLOUD_TOOLS,
+            "cloud_tools_enabled": _settings.RELACE_CLOUD_TOOLS,
             "local_git": {
                 "git_branch": current_branch,
                 "git_head": current_head[:8] if current_head else "",
@@ -386,7 +392,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             }
 
         if probe:
-            if not RELACE_CLOUD_TOOLS:
+            if not _settings.RELACE_CLOUD_TOOLS:
                 relace_status["probe"] = {
                     "status": "skipped",
                     "reason": "RELACE_CLOUD_TOOLS is disabled",
@@ -464,7 +470,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             "probe": probe,
             "base_dir": base_dir,
             "base_dir_source": base_dir_source,
-            "retrieval_backend": RETRIEVAL_BACKEND,
+            "retrieval_backend": _settings.RETRIEVAL_BACKEND,
             "relace": relace_status,
             "codanna": codanna_status,
             "chunkhound": chunkhound_status,
@@ -484,7 +490,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 "probe": probe,
                 "base_dir": base_dir,
                 "base_dir_source": base_dir_source,
-                "retrieval_backend": RETRIEVAL_BACKEND,
+                "retrieval_backend": _settings.RETRIEVAL_BACKEND,
                 "relace_cloud_tools_enabled": bool(relace_status.get("cloud_tools_enabled")),
                 "relace_needs_sync": relace_needs_sync,
                 "relace_recommended_action": redact_value(
@@ -672,7 +678,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
         return await asyncio.to_thread(cloud_info_logic, _get_repo_client(), base_dir)
 
-    if AGENTIC_RETRIEVAL_ENABLED and RETRIEVAL_BACKEND != "none":
+    if _settings.AGENTIC_RETRIEVAL_ENABLED and _settings.RETRIEVAL_BACKEND != "none":
 
         @mcp.tool(
             timeout=900.0,
@@ -680,7 +686,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 "readOnlyHint": True,
                 "destructiveHint": False,
                 "idempotentHint": True,
-                "openWorldHint": RETRIEVAL_BACKEND == "relace",
+                "openWorldHint": _settings.RETRIEVAL_BACKEND == "relace",
             },
         )
         async def agentic_retrieval(
@@ -708,12 +714,22 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
             await _ensure_encoding_detected(ctx, base_dir)
+
+            async def _on_progress(turn: int, total: int) -> None:
+                if ctx is not None:
+                    await ctx.report_progress(
+                        progress=turn,
+                        total=total,
+                        message=f"agentic_retrieval turn {turn}/{total}",
+                    )
+
             result = await agentic_retrieval_logic(
                 _get_repo_client(),
                 _get_search_client(),
                 config,
                 base_dir,
                 query,
+                on_progress=_on_progress,
             )
             if ctx is not None:
                 files_found = len(result.get("files", {}))
@@ -723,82 +739,23 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     # === MCP Resources ===
 
     @mcp.resource("relace://tools_list", mime_type="application/json")
-    def tools_list() -> str:
-        """List all registered Relace MCP tools with their enabled status.
-
-        Returns: [{id, name, description, enabled}, ...] for each tool.
-        Use this to discover available capabilities before calling tools.
-        """
-        tools = [
-            {
-                "id": "fast_apply",
-                "name": "Fast Apply",
-                "description": "Edit or create files using fuzzy matching",
-                "enabled": True,
-            },
-        ]
-        # agentic_search is always enabled
-        tools.append(
-            {
-                "id": "agentic_search",
-                "name": "Agentic Search",
-                "description": "Agentic search over local codebase",
-                "enabled": True,
-            }
-        )
-        tools.append(
-            {
-                "id": "indexing_status",
-                "name": "Indexing Status",
-                "description": "Inspect indexing services status (relace/codanna/chunkhound)",
-                "enabled": True,
-            }
-        )
-        if RELACE_CLOUD_TOOLS:
-            tools.extend(
-                [
-                    {
-                        "id": "cloud_sync",
-                        "name": "Cloud Sync",
-                        "description": "Upload codebase for semantic indexing",
-                        "enabled": True,
-                    },
-                    {
-                        "id": "cloud_search",
-                        "name": "Cloud Search",
-                        "description": "Semantic code search using AI embeddings",
-                        "enabled": True,
-                    },
-                    {
-                        "id": "cloud_clear",
-                        "name": "Cloud Clear",
-                        "description": "Delete cloud repository and sync state",
-                        "enabled": True,
-                    },
-                    {
-                        "id": "cloud_list",
-                        "name": "Cloud List",
-                        "description": "List all repositories in Relace Cloud",
-                        "enabled": True,
-                    },
-                    {
-                        "id": "cloud_info",
-                        "name": "Cloud Info",
-                        "description": "Get sync status for current repository",
-                        "enabled": True,
-                    },
-                ]
-            )
-        if AGENTIC_RETRIEVAL_ENABLED and RETRIEVAL_BACKEND != "none":
-            tools.append(
+    async def tools_list() -> str:
+        """List all registered Relace MCP tools with their enabled status."""
+        raw_tools = await mcp.local_provider.list_tools()
+        cloud_enabled = bool(_settings.RELACE_CLOUD_TOOLS)
+        result = []
+        for t in raw_tools:
+            is_cloud = "cloud" in t.tags
+            enabled = cloud_enabled if is_cloud else True
+            result.append(
                 {
-                    "id": "agentic_retrieval",
-                    "name": "Agentic Retrieval",
-                    "description": "Two-stage semantic + agentic code retrieval",
-                    "enabled": True,
+                    "id": t.name,
+                    "name": t.name,
+                    "description": (t.description or "").split("\n")[0].strip(),
+                    "enabled": enabled,
                 }
             )
-        return json.dumps(tools)
+        return json.dumps(result)
 
     @mcp.resource(
         "relace://cloud/status",

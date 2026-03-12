@@ -33,8 +33,8 @@ async def test_tool_timeouts(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_agentic_retrieval_timeout(tmp_path) -> None:
     with (
-        patch("relace_mcp.tools.AGENTIC_RETRIEVAL_ENABLED", True),
-        patch("relace_mcp.tools.RETRIEVAL_BACKEND", "relace"),
+        patch("relace_mcp.config.settings.AGENTIC_RETRIEVAL_ENABLED", True),
+        patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "relace"),
     ):
         server = build_server(
             config=RelaceConfig(api_key="test-api-key", base_dir=str(tmp_path)),

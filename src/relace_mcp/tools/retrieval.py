@@ -3,10 +3,11 @@ import logging
 import shutil
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from ..config import RelaceConfig
-from ..config.settings import AGENTIC_AUTO_SYNC, RETRIEVAL_BACKEND
+from ..config import settings as _settings
 from ..observability import get_trace_id, log_event, redact_value
 from ..observability import tool_name as tool_name_ctx
 from ..repo.backends import (
@@ -90,6 +91,7 @@ async def agentic_retrieval_logic(
     query: str,
     *,
     trace: bool = False,
+    on_progress: Callable[[int, int], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     """Two-stage retrieval: semantic hints + agentic exploration.
 
@@ -100,6 +102,7 @@ async def agentic_retrieval_logic(
         base_dir: Repository base directory.
         query: Natural language query.
         trace: If True, collect per-turn trace data (turns_log) in the result.
+        on_progress: Optional async callback receiving (current_turn, max_turns).
 
     Returns:
         Dict with explanation, files, and metadata (same format as agentic_search).
@@ -114,7 +117,11 @@ async def agentic_retrieval_logic(
     logger.debug("[%s] Starting agentic retrieval", trace_id)
 
     # Resolve "auto" backend now that base_dir is known
-    backend = _resolve_auto_backend(base_dir) if RETRIEVAL_BACKEND == "auto" else RETRIEVAL_BACKEND
+    backend = (
+        _resolve_auto_backend(base_dir)
+        if _settings.RETRIEVAL_BACKEND == "auto"
+        else _settings.RETRIEVAL_BACKEND
+    )
 
     log_event(
         {
@@ -123,7 +130,7 @@ async def agentic_retrieval_logic(
             "trace_id": trace_id,
             "base_dir": base_dir,
             "retrieval_backend": backend,
-            "configured_backend": RETRIEVAL_BACKEND,
+            "configured_backend": _settings.RETRIEVAL_BACKEND,
         }
     )
 
@@ -134,7 +141,7 @@ async def agentic_retrieval_logic(
     reindex_t0 = time.perf_counter()
 
     # Stage 0a: Auto-sync if enabled and needed (Relace backend only)
-    if AGENTIC_AUTO_SYNC and backend == "relace" and repo_client is not None:
+    if _settings.AGENTIC_AUTO_SYNC and backend == "relace" and repo_client is not None:
         try:
             info = await asyncio.to_thread(cloud_info_logic, repo_client, base_dir)
             if info.get("status", {}).get("needs_sync"):
@@ -440,6 +447,7 @@ async def agentic_retrieval_logic(
         query=query,
         semantic_hints_section=hints_section,
         trace_id=trace_id,
+        on_progress=on_progress,
     )
 
     # Add metadata

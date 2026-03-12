@@ -119,8 +119,8 @@ class TestMCPToolSchemas:
         """All tool parameters must have non-empty descriptions in inputSchema."""
         with (
             patch("relace_mcp.config.settings.RELACE_CLOUD_TOOLS", True),
-            patch("relace_mcp.tools.AGENTIC_RETRIEVAL_ENABLED", True),
-            patch("relace_mcp.tools.RETRIEVAL_BACKEND", "relace"),
+            patch("relace_mcp.config.settings.AGENTIC_RETRIEVAL_ENABLED", True),
+            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "relace"),
         ):
             server = build_server(config=mock_config, run_health_check=False)
 
