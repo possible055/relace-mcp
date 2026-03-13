@@ -261,6 +261,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         ]
 
         turns_log: list[dict[str, Any]] = []
+        result_dict: dict[str, Any]
 
         for turn in range(SEARCH_MAX_TURNS):
             if (time.perf_counter() - start_time) > SEARCH_TIMEOUT_SECONDS:
@@ -483,6 +484,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         ]
 
         turns_log: list[dict[str, Any]] = []
+        result_dict: dict[str, Any]
 
         loop = asyncio.get_running_loop()
         # Use an explicit ThreadPoolExecutor for blocking tool execution.

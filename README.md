@@ -27,7 +27,7 @@ MCP server providing AI-powered code editing and intelligent codebase exploratio
 
 - **Fast Apply** — Apply code edits at 10,000+ tokens/sec via Relace API
 - **Agentic Search** — Agentic codebase exploration with natural language queries
-- **Agentic Retrieval** — Two-stage semantic + agentic code retrieval (requires `MCP_SEARCH_RETRIEVAL=1`)
+- **Agentic Retrieval** — Hybrid semantic hints + live code exploration, with stale-hint support and explicit cloud maintenance (requires `MCP_SEARCH_RETRIEVAL=1`)
 - **Cloud Search** — Semantic code search over cloud-synced repositories
 
 ## Quick Start
@@ -141,6 +141,7 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 | `RELACE_API_KEY` | ✅* | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
 | `RELACE_CLOUD_TOOLS` | ❌ | Set to `1` to enable cloud tools |
 | `MCP_SEARCH_RETRIEVAL` | ❌ | Set to `1` to enable `agentic_retrieval` tool |
+| `MCP_RETRIEVAL_HINT_POLICY` | ❌ | Retrieval hint policy: `prefer-stale` (default) or `strict` |
 | `SEARCH_BASH_TOOLS` | ❌ | Bash tool toggle: `1` (on), `0` (off, default) |
 | `SEARCH_LSP_TOOLS` | ❌ | LSP tools toggle: `1` (on), `0` (off, default) |
 | `MCP_BASE_DIR` | ❌ | Project root (auto-detected via MCP Roots → Git → CWD) |
@@ -153,7 +154,9 @@ For `.env` usage, encoding settings, custom LLM providers, and more, see [docs/a
 
 ## Tools
 
-Core tools (`fast_apply`, `agentic_search`) are always available. Cloud tools require `RELACE_CLOUD_TOOLS=1`. `agentic_retrieval` requires `MCP_SEARCH_RETRIEVAL=1`.
+Always-available tools: `fast_apply`, `agentic_search`, `indexing_status`. Cloud tools require `RELACE_CLOUD_TOOLS=1`. `agentic_retrieval` requires `MCP_SEARCH_RETRIEVAL=1`.
+
+`agentic_retrieval` can use stale semantic hints and then verify them against live code. It does not run `cloud_sync` implicitly; use `cloud_sync` as the explicit maintenance tool when you want to refresh the cloud index ahead of retrieval.
 
 For detailed parameters, see [docs/tools.md](docs/tools.md).
 

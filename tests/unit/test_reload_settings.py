@@ -15,8 +15,8 @@ _RELOAD_KEYS = (
 _TOOL_RELOAD_KEYS = (
     "RELACE_CLOUD_TOOLS",
     "RETRIEVAL_BACKEND",
+    "RETRIEVAL_HINT_POLICY",
     "AGENTIC_RETRIEVAL_ENABLED",
-    "AGENTIC_AUTO_SYNC",
 )
 
 
@@ -110,11 +110,11 @@ class TestReloadToolSettings:
 
         assert settings_mod.AGENTIC_RETRIEVAL_ENABLED is True
 
-    def test_agentic_auto_sync_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("RELACE_AGENTIC_AUTO_SYNC", "false")
+    def test_retrieval_hint_policy_strict(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_RETRIEVAL_HINT_POLICY", "strict")
         reload_tool_settings()
 
-        assert settings_mod.AGENTIC_AUTO_SYNC is False
+        assert settings_mod.RETRIEVAL_HINT_POLICY == "strict"
 
     def test_module_attribute_access_sees_reloaded_values(
         self, monkeypatch: pytest.MonkeyPatch

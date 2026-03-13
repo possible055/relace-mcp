@@ -6,7 +6,6 @@ PYTHON_CONFIG = LanguageServerConfig(
     command=["basedpyright-langserver", "--stdio"],
     config_files=("pyrightconfig.json", "pyproject.toml"),
     install_hint="pip install basedpyright",
-    initialization_options={},
     workspace_config={
         "basedpyright": {
             "analysis": {

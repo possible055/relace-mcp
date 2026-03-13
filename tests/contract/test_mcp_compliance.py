@@ -170,6 +170,26 @@ class TestMCPToolAnnotations:
             assert annotations.readOnlyHint is True
             assert annotations.destructiveHint is False
 
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("clean_env")
+    async def test_agentic_retrieval_is_not_readonly(self, mock_config: RelaceConfig) -> None:
+        """agentic_retrieval may schedule background refreshes, so it is not read-only."""
+        with (
+            patch("relace_mcp.config.settings.AGENTIC_RETRIEVAL_ENABLED", True),
+            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "relace"),
+        ):
+            server = build_server(config=mock_config, run_health_check=False)
+
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            retrieval = next((t for t in tools if t.name == "agentic_retrieval"), None)
+
+            assert retrieval is not None
+            annotations = retrieval.annotations
+            assert annotations is not None
+            assert annotations.readOnlyHint is False
+            assert annotations.destructiveHint is False
+
 
 class TestMCPToolResponseContract:
     @pytest.mark.asyncio

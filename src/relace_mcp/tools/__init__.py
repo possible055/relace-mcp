@@ -4,10 +4,9 @@ import asyncio
 import json
 import logging
 import shutil
-import threading
 from dataclasses import replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 
 from fastmcp import FastMCP
 from fastmcp.server.context import Context
@@ -16,6 +15,8 @@ from pydantic import Field
 from ..config import RelaceConfig, resolve_base_dir
 from ..config import settings as _settings
 from ..observability import get_trace_id, log_event, redact_value
+from ._clients import ToolClients
+from ._setup import EncodingState, ensure_encoding_detected
 
 __all__ = ["register_tools"]
 
@@ -38,117 +39,11 @@ def _read_text_safe(path: Path) -> str | None:
 def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     """Register Relace tools to the FastMCP instance."""
 
-    # -- Lazy client factories (thread-safe, constructed on first tool call) --
+    _clients = ToolClients(config)
+    _encoding_state = EncodingState()
 
-    _apply_lock = threading.Lock()
-    _apply_inst = None
-
-    def _get_apply_client() -> "ApplyLLMClient":
-        nonlocal _apply_inst
-        if _apply_inst is None:
-            with _apply_lock:
-                if _apply_inst is None:
-                    from ..clients.apply import ApplyLLMClient
-
-                    _apply_inst = ApplyLLMClient(config)
-        return _apply_inst
-
-    _search_lock = threading.Lock()
-    _search_inst = None
-
-    def _get_search_client() -> "SearchLLMClient":
-        nonlocal _search_inst
-        if _search_inst is None:
-            with _search_lock:
-                if _search_inst is None:
-                    from ..clients.search import SearchLLMClient
-
-                    _search_inst = SearchLLMClient(config)
-        return _search_inst
-
-    _repo_lock = threading.Lock()
-    _repo_inst = None
-
-    def _get_repo_client() -> "RelaceRepoClient":
-        nonlocal _repo_inst
-        if _repo_inst is None:
-            with _repo_lock:
-                if _repo_inst is None:
-                    from ..clients.repo import RelaceRepoClient
-
-                    _repo_inst = RelaceRepoClient(config)
-        return _repo_inst
-
-    _encoding_done: bool = False
-    _encoding_lock_ctx_none = threading.Lock()
-
-    async def _ensure_encoding_detected(ctx: Context | None, resolved_base_dir: str) -> None:
-        nonlocal _encoding_done
-
-        if ctx is None:
-            if _encoding_done:
-                return
-
-            base = resolved_base_dir or config.base_dir
-            if not base:
-                return
-            from ..config.settings import ENCODING_DETECTION_SAMPLE_LIMIT
-            from ..encoding import set_project_encoding
-            from .apply.encoding import detect_project_encoding
-
-            if config.default_encoding:
-                logger.debug("Using configured project encoding: %s", config.default_encoding)
-                set_project_encoding(config.default_encoding)
-                with _encoding_lock_ctx_none:
-                    _encoding_done = True
-                return
-
-            detected = await asyncio.to_thread(
-                detect_project_encoding,
-                Path(base),
-                sample_limit=ENCODING_DETECTION_SAMPLE_LIMIT,
-            )
-            if detected:
-                logger.debug("Auto-detected project encoding: %s", detected)
-                set_project_encoding(detected)
-            else:
-                logger.debug("No regional encoding detected, using UTF-8 as default")
-
-            with _encoding_lock_ctx_none:
-                _encoding_done = True
-            return
-
-        base_dir_key = "relace.encoding.base_dir"
-        done_key = "relace.encoding.done"
-
-        prev_base_dir = (await ctx.get_state(base_dir_key)) or ""
-        if prev_base_dir != resolved_base_dir:
-            await ctx.set_state(base_dir_key, resolved_base_dir)
-            await ctx.set_state(done_key, False)
-
-        if await ctx.get_state(done_key):
-            return
-
-        from ..config.settings import ENCODING_DETECTION_SAMPLE_LIMIT
-        from ..encoding import set_project_encoding
-        from .apply.encoding import detect_project_encoding
-
-        if config.default_encoding:
-            logger.debug("Using configured project encoding: %s", config.default_encoding)
-            set_project_encoding(config.default_encoding)
-        else:
-            detected = await asyncio.to_thread(
-                detect_project_encoding,
-                Path(resolved_base_dir),
-                sample_limit=ENCODING_DETECTION_SAMPLE_LIMIT,
-            )
-            if detected:
-                logger.debug("Auto-detected project encoding: %s", detected)
-                set_project_encoding(detected)
-            else:
-                logger.debug("No regional encoding detected, using UTF-8 as default")
-
-        await ctx.set_state(done_key, True)
+    async def _detect_encoding(ctx: Context | None, resolved_base_dir: str) -> None:
+        await ensure_encoding_detected(config, ctx, resolved_base_dir, _encoding_state)
 
     # -- Tools --
 
@@ -192,11 +87,11 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         from .apply import apply_file_logic
 
         base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-        await _ensure_encoding_detected(ctx, base_dir)
+        await _detect_encoding(ctx, base_dir)
         if ctx is not None:
             await ctx.info(f"Applying edit to {path}")
         result = await apply_file_logic(
-            backend=_get_apply_client(),
+            backend=_clients.get_apply(),
             file_path=path,
             edit_snippet=edit_snippet,
             instruction=instruction or None,  # Convert empty string to None internally
@@ -254,7 +149,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         # Resolve base_dir dynamically from MCP Roots if not configured
         base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-        await _ensure_encoding_detected(ctx, base_dir)
+        await _detect_encoding(ctx, base_dir)
 
         # Get cached LSP languages (auto-detects on first call per base_dir)
         from ..lsp.languages import get_lsp_languages
@@ -269,7 +164,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             )
 
         result = await FastAgenticSearchHarness(
-            effective_config, _get_search_client(), lsp_languages=lsp_languages
+            effective_config, _clients.get_search(), lsp_languages=lsp_languages
         ).run_async(query=query, trace_id=get_trace_id(), on_progress=_on_progress)
         files_found = len(result.get("files", {}))
         await ctx.debug(f"Search found {files_found} files")
@@ -305,6 +200,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         """
         from ..repo.core import get_current_git_info, is_git_dirty
         from ..repo.core.state import load_sync_state
+        from ..repo.freshness import classify_cloud_index_freshness, classify_local_index_freshness
 
         trace_id = get_trace_id()
 
@@ -334,6 +230,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         git_dirty = is_git_dirty(base_dir)
         sync_state = load_sync_state(base_dir)
 
+        relace_freshness = classify_cloud_index_freshness(base_dir)
+
         relace_status: dict[str, Any] = {
             "cloud_tools_enabled": _settings.RELACE_CLOUD_TOOLS,
             "local_git": {
@@ -341,6 +239,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 "git_head": current_head[:8] if current_head else "",
                 "git_dirty": git_dirty,
             },
+            "freshness": relace_freshness.freshness,
+            "hints_usable": relace_freshness.hints_usable,
             "sync_state": None,
             "status": None,
             "probe": None,
@@ -402,7 +302,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
                 relace_status["probe"] = await asyncio.to_thread(
                     cloud_info_logic,
-                    _get_repo_client(),
+                    _clients.get_repo(),
                     base_dir,
                 )
 
@@ -413,11 +313,16 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         codanna_head_path = base_path / ".codanna" / "last_indexed_head"
         chunkhound_head_path = base_path / ".chunkhound" / "last_indexed_head"
 
+        codanna_freshness = classify_local_index_freshness(base_dir, "codanna")
+        chunkhound_freshness = classify_local_index_freshness(base_dir, "chunkhound")
+
         codanna_status: dict[str, Any] = {
             "cli_found": bool(codanna_cli_path),
             "cli_path": codanna_cli_path,
             "index_dir_exists": (base_path / ".codanna").is_dir(),
             "last_indexed_head": _read_text_safe(codanna_head_path),
+            "freshness": codanna_freshness.freshness,
+            "hints_usable": codanna_freshness.hints_usable,
             "probe": None,
         }
         chunkhound_status: dict[str, Any] = {
@@ -425,6 +330,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             "cli_path": chunkhound_cli_path,
             "index_dir_exists": (base_path / ".chunkhound").is_dir(),
             "last_indexed_head": _read_text_safe(chunkhound_head_path),
+            "freshness": chunkhound_freshness.freshness,
+            "hints_usable": chunkhound_freshness.hints_usable,
             "probe": None,
         }
 
@@ -492,6 +399,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 "base_dir_source": base_dir_source,
                 "retrieval_backend": _settings.RETRIEVAL_BACKEND,
                 "relace_cloud_tools_enabled": bool(relace_status.get("cloud_tools_enabled")),
+                "relace_freshness": relace_status.get("freshness"),
+                "relace_hints_usable": relace_status.get("hints_usable"),
                 "relace_needs_sync": relace_needs_sync,
                 "relace_recommended_action": redact_value(
                     str(relace_recommended_action),
@@ -502,10 +411,14 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 "codanna_cli_found": bool(codanna_status.get("cli_found")),
                 "codanna_index_dir_exists": bool(codanna_status.get("index_dir_exists")),
                 "codanna_last_indexed_head": codanna_status.get("last_indexed_head"),
+                "codanna_freshness": codanna_status.get("freshness"),
+                "codanna_hints_usable": codanna_status.get("hints_usable"),
                 "codanna_probe": codanna_status.get("probe"),
                 "chunkhound_cli_found": bool(chunkhound_status.get("cli_found")),
                 "chunkhound_index_dir_exists": bool(chunkhound_status.get("index_dir_exists")),
                 "chunkhound_last_indexed_head": chunkhound_status.get("last_indexed_head"),
+                "chunkhound_freshness": chunkhound_status.get("freshness"),
+                "chunkhound_hints_usable": chunkhound_status.get("hints_usable"),
                 "chunkhound_probe": chunkhound_status.get("probe"),
             }
         )
@@ -546,7 +459,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
         return await asyncio.to_thread(
             cloud_sync_logic,
-            _get_repo_client(),
+            _clients.get_repo(),
             base_dir,
             force=force,
             mirror=mirror,
@@ -583,7 +496,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
         return await asyncio.to_thread(
             cloud_search_logic,
-            _get_repo_client(),
+            _clients.get_repo(),
             base_dir,
             query,
             branch=branch,
@@ -621,7 +534,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
         return await asyncio.to_thread(
             cloud_clear_logic,
-            _get_repo_client(),
+            _clients.get_repo(),
             base_dir,
             confirm=confirm,
             repo_id=repo_id,
@@ -649,7 +562,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         from ..repo.cloud.list import cloud_list_logic
 
         del reason  # LLM chain-of-thought only
-        return cloud_list_logic(_get_repo_client())
+        return cloud_list_logic(_clients.get_repo())
 
     @mcp.tool(
         tags={"cloud"},
@@ -676,17 +589,18 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         del reason  # LLM chain-of-thought only
         base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-        return await asyncio.to_thread(cloud_info_logic, _get_repo_client(), base_dir)
+        return await asyncio.to_thread(cloud_info_logic, _clients.get_repo(), base_dir)
 
-    if _settings.AGENTIC_RETRIEVAL_ENABLED and _settings.RETRIEVAL_BACKEND != "none":
+    if _settings.AGENTIC_RETRIEVAL_ENABLED:
 
         @mcp.tool(
             timeout=900.0,
             annotations={
-                "readOnlyHint": True,
+                "readOnlyHint": False,
                 "destructiveHint": False,
                 "idempotentHint": True,
-                "openWorldHint": _settings.RETRIEVAL_BACKEND == "relace",
+                "openWorldHint": _settings.RETRIEVAL_BACKEND in ("relace", "auto")
+                and _settings.RELACE_CLOUD_TOOLS,
             },
         )
         async def agentic_retrieval(
@@ -713,7 +627,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 await ctx.info(f"Retrieval: {query[:100]}")
 
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-            await _ensure_encoding_detected(ctx, base_dir)
+            await _detect_encoding(ctx, base_dir)
 
             async def _on_progress(turn: int, total: int) -> None:
                 if ctx is not None:
@@ -724,8 +638,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                     )
 
             result = await agentic_retrieval_logic(
-                _get_repo_client(),
-                _get_search_client(),
+                _clients.get_repo(),
+                _clients.get_search(),
                 config,
                 base_dir,
                 query,
@@ -828,9 +742,3 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
     # Default: hide cloud components unless explicitly enabled for the session.
     mcp.disable(tags={"cloud"})
-
-
-if TYPE_CHECKING:
-    from ..clients.apply import ApplyLLMClient
-    from ..clients.repo import RelaceRepoClient
-    from ..clients.search import SearchLLMClient

@@ -5,10 +5,8 @@ import pytest
 
 from relace_mcp.clients import RelaceRepoClient, SearchLLMClient
 from relace_mcp.config import RelaceConfig
-from relace_mcp.tools.retrieval import (
-    agentic_retrieval_logic,
-    build_semantic_hints_section,
-)
+from relace_mcp.repo.freshness import FreshnessStatus
+from relace_mcp.tools.retrieval import agentic_retrieval_logic, build_semantic_hints_section
 
 
 class TestBuildSemanticHintsSection:
@@ -25,8 +23,7 @@ class TestBuildSemanticHintsSection:
         assert "</semantic_hints>" in section
 
     def test_empty_results_returns_empty(self) -> None:
-        section = build_semantic_hints_section([])
-        assert section == ""
+        assert build_semantic_hints_section([]) == ""
 
     def test_respects_max_hints(self) -> None:
         results = [{"filename": f"file{i}.py", "score": 0.9 - i * 0.1} for i in range(10)]
@@ -44,12 +41,6 @@ class TestBuildSemanticHintsSection:
         assert "src/utils.py (score: 0.65)" in section
 
 
-@pytest.fixture(autouse=True)
-def _force_relace_backend():  # pyright: ignore[reportUnusedFunction]
-    with patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "relace"):
-        yield
-
-
 class TestAgenticRetrievalLogic:
     @pytest.fixture
     def mock_config(self, tmp_path: Path) -> RelaceConfig:
@@ -65,23 +56,32 @@ class TestAgenticRetrievalLogic:
         client.api_compat = "relace"
         return client
 
+    @pytest.fixture
+    def mock_harness(self) -> MagicMock:
+        harness = MagicMock()
+        harness.run_async = AsyncMock(
+            return_value={"explanation": "Found files", "files": {}, "turns_used": 1}
+        )
+        return harness
+
     @pytest.mark.asyncio
     async def test_fallback_on_cloud_error(
         self,
         mock_config: RelaceConfig,
         mock_repo_client: MagicMock,
         mock_search_client: MagicMock,
+        mock_harness: MagicMock,
         tmp_path: Path,
     ) -> None:
         with (
+            patch(
+                "relace_mcp.tools.retrieval.classify_cloud_index_freshness",
+                return_value=FreshnessStatus("fresh", True, False, "up_to_date"),
+            ),
             patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
             patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.return_value = {"error": "Network error", "results": []}
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "Found files", "files": {}, "turns_used": 1}
-            )
             mock_harness_cls.return_value = mock_harness
 
             result = await agentic_retrieval_logic(
@@ -93,39 +93,8 @@ class TestAgenticRetrievalLogic:
             )
 
             assert "warnings" in result
-            assert any("Cloud search failed" in w for w in result["warnings"])
-            assert result["cloud_hints_used"] == 0
-
-    @pytest.mark.asyncio
-    async def test_fallback_on_empty_cloud_results(
-        self,
-        mock_config: RelaceConfig,
-        mock_repo_client: MagicMock,
-        mock_search_client: MagicMock,
-        tmp_path: Path,
-    ) -> None:
-        with (
-            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
-        ):
-            mock_cloud.return_value = {"results": []}
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "Found files", "files": {}, "turns_used": 1}
-            )
-            mock_harness_cls.return_value = mock_harness
-
-            result = await agentic_retrieval_logic(
-                mock_repo_client,
-                mock_search_client,
-                mock_config,
-                str(tmp_path),
-                "find something",
-            )
-
-            assert "warnings" in result
-            assert any("no results" in w for w in result["warnings"])
-            assert result["cloud_hints_used"] == 0
+            assert any("Cloud search failed" in warning for warning in result["warnings"])
+            assert result["semantic_hints_used"] == 0
 
     @pytest.mark.asyncio
     async def test_hints_injected_in_prompt(
@@ -133,9 +102,14 @@ class TestAgenticRetrievalLogic:
         mock_config: RelaceConfig,
         mock_repo_client: MagicMock,
         mock_search_client: MagicMock,
+        mock_harness: MagicMock,
         tmp_path: Path,
     ) -> None:
         with (
+            patch(
+                "relace_mcp.tools.retrieval.classify_cloud_index_freshness",
+                return_value=FreshnessStatus("fresh", True, False, "up_to_date"),
+            ),
             patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
             patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
@@ -145,10 +119,6 @@ class TestAgenticRetrievalLogic:
                     {"filename": "src/login.py", "score": 0.72},
                 ]
             }
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "Found auth", "files": {}, "turns_used": 2}
-            )
             mock_harness_cls.return_value = mock_harness
 
             result = await agentic_retrieval_logic(
@@ -159,20 +129,19 @@ class TestAgenticRetrievalLogic:
                 "find authentication",
             )
 
-            # Verify harness was called with retrieval=True and hints via run_async
             mock_harness_cls.assert_called_once()
             call_kwargs = mock_harness_cls.call_args.kwargs
             assert call_kwargs.get("retrieval") is True
-            assert "user_prompt_override" not in call_kwargs
 
-            # Verify run_async received semantic_hints_section
             mock_harness.run_async.assert_called_once()
             run_kwargs = mock_harness.run_async.call_args.kwargs
             hints_section = run_kwargs.get("semantic_hints_section", "")
             assert "<semantic_hints>" in hints_section
             assert "src/auth.py" in hints_section
 
-            assert result["cloud_hints_used"] == 2
+            assert result["semantic_hints_used"] == 2
+            assert result["hint_policy"] == "prefer-stale"
+            assert result["hints_index_freshness"] == "fresh"
 
     @pytest.mark.asyncio
     async def test_happy_path(
@@ -183,6 +152,10 @@ class TestAgenticRetrievalLogic:
         tmp_path: Path,
     ) -> None:
         with (
+            patch(
+                "relace_mcp.tools.retrieval.classify_cloud_index_freshness",
+                return_value=FreshnessStatus("fresh", True, False, "up_to_date"),
+            ),
             patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
             patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
@@ -207,26 +180,28 @@ class TestAgenticRetrievalLogic:
 
             assert result["explanation"] == "Result"
             assert "src/core.py" in result["files"]
-            assert result["cloud_hints_used"] == 1
+            assert result["semantic_hints_used"] == 1
+            assert result["background_refresh_scheduled"] is False
             assert "trace_id" in result
 
     @pytest.mark.asyncio
-    async def test_cloud_search_exception_handling(
+    async def test_relace_stale_prefer_stale_uses_hints_without_sync(
         self,
         mock_config: RelaceConfig,
         mock_repo_client: MagicMock,
         mock_search_client: MagicMock,
+        mock_harness: MagicMock,
         tmp_path: Path,
     ) -> None:
         with (
+            patch(
+                "relace_mcp.tools.retrieval.classify_cloud_index_freshness",
+                return_value=FreshnessStatus("stale", True, True, "git_head_changed"),
+            ),
             patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
             patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
-            mock_cloud.side_effect = Exception("Fatal cloud error")
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "Fallback works", "files": {}, "turns_used": 1}
-            )
+            mock_cloud.return_value = {"results": [{"filename": "src/core.py", "score": 0.9}]}
             mock_harness_cls.return_value = mock_harness
 
             result = await agentic_retrieval_logic(
@@ -237,148 +212,31 @@ class TestAgenticRetrievalLogic:
                 "query",
             )
 
-            assert "warnings" in result
-            assert any("Cloud search error: Fatal cloud error" in w for w in result["warnings"])
-            assert result["cloud_hints_used"] == 0
-
-
-class TestAutoSync:
-    @pytest.fixture
-    def mock_config(self, tmp_path: Path) -> RelaceConfig:
-        return RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
-
-    @pytest.fixture
-    def mock_repo_client(self) -> MagicMock:
-        return MagicMock(spec=RelaceRepoClient)
-
-    @pytest.fixture
-    def mock_search_client(self) -> MagicMock:
-        client = MagicMock(spec=SearchLLMClient)
-        client.api_compat = "relace"
-        return client
+            mock_cloud.assert_called_once()
+            assert result["semantic_hints_used"] == 1
+            assert result["hints_index_freshness"] == "stale"
+            assert any(
+                "Using stale Relace semantic hints" in warning for warning in result["warnings"]
+            )
 
     @pytest.mark.asyncio
-    async def test_auto_sync_triggered_when_needs_sync(
+    async def test_relace_stale_strict_skips_hints(
         self,
         mock_config: RelaceConfig,
         mock_repo_client: MagicMock,
         mock_search_client: MagicMock,
+        mock_harness: MagicMock,
         tmp_path: Path,
     ) -> None:
         with (
-            patch("relace_mcp.config.settings.AGENTIC_AUTO_SYNC", True),
-            patch("relace_mcp.tools.retrieval.cloud_info_logic") as mock_info,
-            patch("relace_mcp.tools.retrieval.cloud_sync_logic") as mock_sync,
+            patch("relace_mcp.config.settings.RETRIEVAL_HINT_POLICY", "strict"),
+            patch(
+                "relace_mcp.tools.retrieval.classify_cloud_index_freshness",
+                return_value=FreshnessStatus("stale", True, True, "git_head_changed"),
+            ),
             patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
             patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
-            mock_info.return_value = {"status": {"needs_sync": True}}
-            mock_sync.return_value = {"repo_id": "test-repo"}
-            mock_cloud.return_value = {"results": []}
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "Done", "files": {}, "turns_used": 1}
-            )
-            mock_harness_cls.return_value = mock_harness
-
-            await agentic_retrieval_logic(
-                mock_repo_client,
-                mock_search_client,
-                mock_config,
-                str(tmp_path),
-                "query",
-            )
-
-            mock_info.assert_called_once()
-            mock_sync.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_auto_sync_skipped_when_not_needed(
-        self,
-        mock_config: RelaceConfig,
-        mock_repo_client: MagicMock,
-        mock_search_client: MagicMock,
-        tmp_path: Path,
-    ) -> None:
-        with (
-            patch("relace_mcp.config.settings.AGENTIC_AUTO_SYNC", True),
-            patch("relace_mcp.tools.retrieval.cloud_info_logic") as mock_info,
-            patch("relace_mcp.tools.retrieval.cloud_sync_logic") as mock_sync,
-            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
-        ):
-            mock_info.return_value = {"status": {"needs_sync": False}}
-            mock_cloud.return_value = {"results": []}
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "Done", "files": {}, "turns_used": 1}
-            )
-            mock_harness_cls.return_value = mock_harness
-
-            await agentic_retrieval_logic(
-                mock_repo_client,
-                mock_search_client,
-                mock_config,
-                str(tmp_path),
-                "query",
-            )
-
-            mock_info.assert_called_once()
-            mock_sync.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_auto_sync_disabled_via_env(
-        self,
-        mock_config: RelaceConfig,
-        mock_repo_client: MagicMock,
-        mock_search_client: MagicMock,
-        tmp_path: Path,
-    ) -> None:
-        with (
-            patch("relace_mcp.config.settings.AGENTIC_AUTO_SYNC", False),
-            patch("relace_mcp.tools.retrieval.cloud_info_logic") as mock_info,
-            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
-        ):
-            mock_cloud.return_value = {"results": []}
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "Done", "files": {}, "turns_used": 1}
-            )
-            mock_harness_cls.return_value = mock_harness
-
-            await agentic_retrieval_logic(
-                mock_repo_client,
-                mock_search_client,
-                mock_config,
-                str(tmp_path),
-                "query",
-            )
-
-            mock_info.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_auto_sync_failure_continues_search(
-        self,
-        mock_config: RelaceConfig,
-        mock_repo_client: MagicMock,
-        mock_search_client: MagicMock,
-        tmp_path: Path,
-    ) -> None:
-        with (
-            patch("relace_mcp.config.settings.AGENTIC_AUTO_SYNC", True),
-            patch("relace_mcp.tools.retrieval.cloud_info_logic") as mock_info,
-            patch("relace_mcp.tools.retrieval.cloud_sync_logic") as mock_sync,
-            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
-        ):
-            mock_info.return_value = {"status": {"needs_sync": True}}
-            mock_sync.return_value = {"error": "Network timeout"}
-            mock_cloud.return_value = {"results": []}
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "Still works", "files": {}, "turns_used": 1}
-            )
             mock_harness_cls.return_value = mock_harness
 
             result = await agentic_retrieval_logic(
@@ -389,201 +247,95 @@ class TestAutoSync:
                 "query",
             )
 
-            assert "warnings" in result
-            assert any("Auto-sync failed" in w for w in result["warnings"])
-            assert result["explanation"] == "Still works"
-
-
-class TestChunkHoundAutoReindexSync:
-    """Stage 0b: ChunkHound runs synchronous auto-reindex (HEAD-based staleness check) before search."""
-
-    @pytest.fixture
-    def mock_config(self, tmp_path: Path) -> RelaceConfig:
-        return RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
-
-    @pytest.fixture
-    def mock_search_client(self) -> MagicMock:
-        client = MagicMock(spec=SearchLLMClient)
-        client.api_compat = "relace"
-        return client
+            mock_cloud.assert_not_called()
+            assert result["semantic_hints_used"] == 0
+            assert result["hints_index_freshness"] == "stale"
+            assert any(
+                "MCP_RETRIEVAL_HINT_POLICY=strict" in warning for warning in result["warnings"]
+            )
 
     @pytest.mark.asyncio
-    async def test_auto_reindex_called_on_retrieval(
-        self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
+    async def test_chunkhound_stale_uses_hints_and_schedules_refresh(
+        self,
+        mock_config: RelaceConfig,
+        mock_search_client: MagicMock,
+        mock_harness: MagicMock,
+        tmp_path: Path,
     ) -> None:
         with (
             patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "chunkhound"),
             patch(
-                "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
-                return_value={"action": "skipped", "reason": "index up to date"},
-            ) as mock_reindex,
+                "relace_mcp.tools.retrieval.classify_local_index_freshness",
+                return_value=FreshnessStatus("stale", True, True, "git_head_changed"),
+            ),
             patch("relace_mcp.tools.retrieval.chunkhound_search", return_value=[]),
+            patch("relace_mcp.tools.retrieval.schedule_bg_chunkhound_index") as mock_schedule,
+            patch("relace_mcp.tools.retrieval.shutil.which", return_value="/usr/bin/chunkhound"),
             patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
             patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "done", "files": {}, "turns_used": 1}
-            )
             mock_harness_cls.return_value = mock_harness
 
-            await agentic_retrieval_logic(
+            result = await agentic_retrieval_logic(
                 None, mock_search_client, mock_config, str(tmp_path), "auth logic"
             )
-            mock_reindex.assert_called_once_with(str(tmp_path))
-
-    @pytest.mark.asyncio
-    async def test_auto_reindex_called_on_every_retrieval(
-        self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
-    ) -> None:
-        """auto_reindex is called on every retrieval (HEAD check is internal)."""
-        with (
-            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "chunkhound"),
-            patch(
-                "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
-                return_value={"action": "skipped", "reason": "index up to date"},
-            ) as mock_reindex,
-            patch("relace_mcp.tools.retrieval.chunkhound_search", return_value=[]),
-            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
-        ):
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "done", "files": {}, "turns_used": 1}
+            mock_schedule.assert_called_once_with(str(tmp_path))
+            assert result["background_refresh_scheduled"] is True
+            assert result["hints_index_freshness"] == "stale"
+            assert any(
+                "Using stale ChunkHound semantic hints" in warning for warning in result["warnings"]
             )
-            mock_harness_cls.return_value = mock_harness
-
-            for _ in range(2):
-                await agentic_retrieval_logic(
-                    None, mock_search_client, mock_config, str(tmp_path), "query"
-                )
-            assert mock_reindex.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_auto_reindex_failure_does_not_block_search(
-        self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
+    async def test_codanna_missing_strict_schedules_refresh_without_hints(
+        self,
+        mock_config: RelaceConfig,
+        mock_search_client: MagicMock,
+        mock_harness: MagicMock,
+        tmp_path: Path,
     ) -> None:
-        """auto_reindex failure must degrade gracefully (warning only)."""
         with (
-            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "chunkhound"),
+            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "codanna"),
+            patch("relace_mcp.config.settings.RETRIEVAL_HINT_POLICY", "strict"),
             patch(
-                "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
-                side_effect=RuntimeError("disk full"),
+                "relace_mcp.tools.retrieval.classify_local_index_freshness",
+                return_value=FreshnessStatus("missing", False, True, "index_dir_missing"),
             ),
-            patch("relace_mcp.tools.retrieval.chunkhound_search", return_value=[]),
+            patch("relace_mcp.tools.retrieval.schedule_bg_codanna_full_index") as mock_schedule,
+            patch("relace_mcp.tools.retrieval.codanna_search") as mock_search,
+            patch("relace_mcp.tools.retrieval.shutil.which", return_value="/usr/bin/codanna"),
             patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
             patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "still works", "files": {}, "turns_used": 1}
-            )
             mock_harness_cls.return_value = mock_harness
 
             result = await agentic_retrieval_logic(
                 None, mock_search_client, mock_config, str(tmp_path), "query"
             )
-            assert result["explanation"] == "still works"
-            assert any("auto-reindex failed" in w for w in result.get("warnings", []))
+            mock_schedule.assert_called_once_with(str(tmp_path))
+            mock_search.assert_not_called()
+            assert result["semantic_hints_used"] == 0
+            assert result["background_refresh_scheduled"] is True
+            assert result["hints_index_freshness"] == "missing"
 
     @pytest.mark.asyncio
-    async def test_auto_reindex_error_action_adds_warning(
-        self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
+    async def test_repo_client_none_still_works(
+        self,
+        mock_config: RelaceConfig,
+        mock_search_client: MagicMock,
+        mock_harness: MagicMock,
+        tmp_path: Path,
     ) -> None:
-        """auto_reindex returning action=error (internal catch) must still add a warning."""
-        with (
-            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "chunkhound"),
-            patch(
-                "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
-                return_value={"action": "error", "message": "CLI timeout"},
-            ),
-            patch("relace_mcp.tools.retrieval.chunkhound_search", return_value=[]),
-            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
-        ):
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "ok", "files": {}, "turns_used": 1}
-            )
+        with patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls:
             mock_harness_cls.return_value = mock_harness
 
             result = await agentic_retrieval_logic(
-                None, mock_search_client, mock_config, str(tmp_path), "query"
+                None, mock_search_client, mock_config, str(tmp_path), "find auth"
             )
-            assert result["explanation"] == "ok"
-            assert any("CLI timeout" in w for w in result.get("warnings", []))
 
-    @pytest.mark.asyncio
-    async def test_stage1_index_missing_does_not_disable_backend(
-        self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
-    ) -> None:
-        """index_missing in Stage 1 must NOT disable_backend (only cli_not_found should)."""
-        from relace_mcp.repo.backends import ExternalCLIError
-
-        with (
-            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "chunkhound"),
-            patch(
-                "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
-                return_value={"action": "skipped", "reason": "index up to date"},
-            ),
-            patch(
-                "relace_mcp.tools.retrieval.chunkhound_search",
-                side_effect=ExternalCLIError(
-                    backend="chunkhound", kind="index_missing", message="no index"
-                ),
-            ),
-            patch("relace_mcp.tools.retrieval.disable_backend") as mock_disable,
-            patch("relace_mcp.tools.retrieval.schedule_bg_chunkhound_index"),
-            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
-        ):
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "done", "files": {}, "turns_used": 1}
-            )
-            mock_harness_cls.return_value = mock_harness
-
-            result = await agentic_retrieval_logic(
-                None, mock_search_client, mock_config, str(tmp_path), "query"
-            )
-            mock_disable.assert_not_called()
-            assert "warnings" in result
-            assert result["explanation"] == "done"
-
-    @pytest.mark.asyncio
-    async def test_stage1_index_missing_reschedules_bg_index(
-        self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
-    ) -> None:
-        """index_missing in Stage 1 must re-schedule a background index build."""
-        from relace_mcp.repo.backends import ExternalCLIError
-
-        with (
-            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "chunkhound"),
-            patch(
-                "relace_mcp.tools.retrieval.chunkhound_auto_reindex",
-                return_value={"action": "skipped", "reason": "index up to date"},
-            ),
-            patch("relace_mcp.tools.retrieval.schedule_bg_chunkhound_index") as mock_sched,
-            patch(
-                "relace_mcp.tools.retrieval.chunkhound_search",
-                side_effect=ExternalCLIError(
-                    backend="chunkhound", kind="index_missing", message="no index"
-                ),
-            ),
-            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
-        ):
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "done", "files": {}, "turns_used": 1}
-            )
-            mock_harness_cls.return_value = mock_harness
-
-            await agentic_retrieval_logic(
-                None, mock_search_client, mock_config, str(tmp_path), "query"
-            )
-            # Stage 1 index_missing recovery schedules background re-index
-            mock_sched.assert_called_once_with(str(tmp_path))
+            assert "explanation" in result
+            assert result["semantic_hints_used"] == 0
+            assert result["hints_index_freshness"] == "missing"
 
 
 class TestResolveAutoBackendNoHealthProbe:
@@ -628,7 +380,6 @@ class TestChunkHoundIndexFileBug1:
             side_effect=RuntimeError("chunkhound CLI not found"),
         ) as mock_ensure:
             mock_ensure.side_effect.__cause__ = None
-            # Simulate FileNotFoundError as __cause__
             cause = FileNotFoundError("no such file")
             err = RuntimeError("chunkhound CLI not found")
             err.__cause__ = cause
@@ -686,7 +437,6 @@ class TestScheduleBgDedup:
         _bg_index_tasks.pop(key, None)
         _bg_index_rerun.pop(key, None)
 
-        # Install a fake running task
         async def _never_done() -> None:
             await asyncio.sleep(10)
 
@@ -727,16 +477,13 @@ class TestScheduleBgDedup:
             _bg_index_rerun[key] = True
             first_task = _bg_index_tasks[key]
             await first_task
-            # Yield multiple times so the done-callback fires and the
-            # re-scheduled second task also completes inside the mock scope.
             for _ in range(10):
                 await asyncio.sleep(0)
-            # Wait for the second task spawned by the done-callback.
             second_task = _bg_index_tasks.get(key)
             if second_task is not None and not second_task.done():
                 await asyncio.wait_for(second_task, timeout=2)
 
-        assert call_count == 2, "rerun flag should trigger a second schedule"
+        assert call_count == 2
 
         _bg_index_tasks.pop(key, None)
         _bg_index_rerun.pop(key, None)
@@ -772,15 +519,13 @@ class TestScheduleBgCodannaQueue:
             if fp == first_path:
                 await unblock.wait()
 
-        # Keep mock active for the entire test (including cleanup) so that
-        # done-callback re-scheduled tasks never escape into real subprocess.
         with patch(
             "relace_mcp.repo.backends.codanna._async_run_codanna_index",
             side_effect=_fake_index,
         ):
             try:
                 schedule_bg_codanna_index(first_path, base_dir)
-                await asyncio.sleep(0)  # let first task start
+                await asyncio.sleep(0)
                 schedule_bg_codanna_index(second_path, base_dir)
                 schedule_bg_codanna_index(third_path, base_dir)
 
@@ -809,166 +554,3 @@ class TestScheduleBgCodannaQueue:
                 _bg_codanna_pending.pop(key, None)
 
         assert set(started) == {first_path, second_path, third_path}
-
-
-class TestCodannaAutoReindexSync:
-    """Codanna retrieval must use synchronous codanna_auto_reindex (HEAD-based staleness check)."""
-
-    @pytest.fixture
-    def mock_config(self, tmp_path: Path) -> RelaceConfig:
-        return RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
-
-    @pytest.fixture
-    def mock_search_client(self) -> MagicMock:
-        client = MagicMock(spec=SearchLLMClient)
-        client.api_compat = "relace"
-        return client
-
-    @pytest.mark.asyncio
-    async def test_stage0c_calls_auto_reindex(
-        self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
-    ) -> None:
-        with (
-            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "codanna"),
-            patch(
-                "relace_mcp.tools.retrieval.codanna_auto_reindex",
-                return_value={"action": "skipped", "reason": "index up to date"},
-            ) as mock_reindex,
-            patch("relace_mcp.tools.retrieval.codanna_search", return_value=[]),
-            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
-        ):
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "done", "files": {}, "turns_used": 1}
-            )
-            mock_harness_cls.return_value = mock_harness
-
-            await agentic_retrieval_logic(
-                None, mock_search_client, mock_config, str(tmp_path), "query"
-            )
-            mock_reindex.assert_called_once_with(str(tmp_path))
-
-    @pytest.mark.asyncio
-    async def test_codanna_auto_reindex_failure_does_not_block_search(
-        self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
-    ) -> None:
-        with (
-            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "codanna"),
-            patch(
-                "relace_mcp.tools.retrieval.codanna_auto_reindex",
-                side_effect=RuntimeError("codanna CLI crashed"),
-            ),
-            patch("relace_mcp.tools.retrieval.codanna_search", return_value=[]),
-            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
-        ):
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "still works", "files": {}, "turns_used": 1}
-            )
-            mock_harness_cls.return_value = mock_harness
-
-            result = await agentic_retrieval_logic(
-                None, mock_search_client, mock_config, str(tmp_path), "query"
-            )
-            assert result["explanation"] == "still works"
-            assert any("auto-reindex failed" in w for w in result.get("warnings", []))
-
-    @pytest.mark.asyncio
-    async def test_codanna_auto_reindex_error_action_adds_warning(
-        self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
-    ) -> None:
-        """auto_reindex returning action=error (internal catch) must still add a warning."""
-        with (
-            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "codanna"),
-            patch(
-                "relace_mcp.tools.retrieval.codanna_auto_reindex",
-                return_value={"action": "error", "message": "index failed"},
-            ),
-            patch("relace_mcp.tools.retrieval.codanna_search", return_value=[]),
-            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
-        ):
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "ok", "files": {}, "turns_used": 1}
-            )
-            mock_harness_cls.return_value = mock_harness
-
-            result = await agentic_retrieval_logic(
-                None, mock_search_client, mock_config, str(tmp_path), "query"
-            )
-            assert result["explanation"] == "ok"
-            assert any("index failed" in w for w in result.get("warnings", []))
-
-    @pytest.mark.asyncio
-    async def test_codanna_index_missing_schedules_full_index(
-        self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
-    ) -> None:
-        from relace_mcp.repo.backends import ExternalCLIError
-
-        with (
-            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "codanna"),
-            patch(
-                "relace_mcp.tools.retrieval.codanna_auto_reindex",
-                return_value={"action": "skipped", "reason": "index up to date"},
-            ),
-            patch("relace_mcp.tools.retrieval.schedule_bg_codanna_full_index") as mock_full,
-            patch(
-                "relace_mcp.tools.retrieval.codanna_search",
-                side_effect=ExternalCLIError(
-                    backend="codanna", kind="index_missing", message="no index"
-                ),
-            ),
-            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
-        ):
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={"explanation": "done", "files": {}, "turns_used": 1}
-            )
-            mock_harness_cls.return_value = mock_harness
-
-            result = await agentic_retrieval_logic(
-                None, mock_search_client, mock_config, str(tmp_path), "query"
-            )
-            # Stage 1 recovery schedules background full-index
-            mock_full.assert_called_once_with(str(tmp_path))
-            assert "warnings" in result
-
-    @pytest.mark.asyncio
-    async def test_auto_reindex_detects_branch_switch(
-        self, mock_config: RelaceConfig, mock_search_client: MagicMock, tmp_path: Path
-    ) -> None:
-        """When auto_reindex returns 'reindexed', search uses updated index."""
-        with (
-            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "codanna"),
-            patch(
-                "relace_mcp.tools.retrieval.codanna_auto_reindex",
-                return_value={"action": "reindexed", "old_head": "aaa", "new_head": "bbb"},
-            ) as mock_reindex,
-            patch(
-                "relace_mcp.tools.retrieval.codanna_search",
-                return_value=[{"filename": "new_branch_file.py", "score": 0.9}],
-            ),
-            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
-        ):
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={
-                    "explanation": "found it",
-                    "files": {"new_branch_file.py": [[1, 10]]},
-                    "turns_used": 1,
-                }
-            )
-            mock_harness_cls.return_value = mock_harness
-
-            result = await agentic_retrieval_logic(
-                None, mock_search_client, mock_config, str(tmp_path), "query"
-            )
-            mock_reindex.assert_called_once_with(str(tmp_path))
-            assert result["cloud_hints_used"] == 1
-            # No warnings expected since auto_reindex succeeded
-            assert not result.get("warnings", [])

@@ -25,7 +25,6 @@ async def test_agentic_retrieval_cloud_search_does_not_block_event_loop(tmp_path
 
     with (
         patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "relace"),
-        patch("relace_mcp.config.settings.AGENTIC_AUTO_SYNC", False),
         patch("relace_mcp.tools.retrieval.cloud_search_logic", blocking_cloud_search_logic),
         patch("relace_mcp.lsp.languages.get_lsp_languages", return_value=[]),
         patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,

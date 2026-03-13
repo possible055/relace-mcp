@@ -1,6 +1,6 @@
+from relace_mcp.lsp.io.protocol import MessageBuffer, decode_header, decode_message, encode_message
 from relace_mcp.lsp.languages import LANGUAGE_CONFIGS, PYTHON_CONFIG, get_config_for_file
 from relace_mcp.lsp.languages.base import LanguageServerConfig
-from relace_mcp.lsp.protocol import MessageBuffer, decode_header, decode_message, encode_message
 from relace_mcp.lsp.types import Location, LSPError
 
 

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from relace_mcp.lsp.logging import (
+from relace_mcp.lsp.events import (
     log_lsp_client_created,
     log_lsp_client_evicted,
     log_lsp_request_error,
