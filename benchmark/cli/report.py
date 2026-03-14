@@ -27,6 +27,48 @@ def _load_grid_report(path: Path) -> list[dict]:
     return data.get("runs", [])
 
 
+def _is_report_file(path: Path) -> bool:
+    return path.name.endswith(".report.json")
+
+
+def _is_grid_file(path: Path) -> bool:
+    return path.name.endswith(".grid.json")
+
+
+def _is_results_jsonl(path: Path) -> bool:
+    return path.suffix == ".jsonl"
+
+
+def _validate_mode_inputs(
+    input_paths: list[Path],
+    *,
+    best: bool,
+    failures: bool,
+) -> None:
+    if failures:
+        if len(input_paths) != 1:
+            raise click.ClickException("--failures requires exactly one .jsonl file.")
+        if not _is_results_jsonl(input_paths[0]):
+            raise click.ClickException("--failures only accepts a single .jsonl result file.")
+        return
+
+    if best:
+        if len(input_paths) != 1:
+            raise click.ClickException("--best requires exactly one .grid.json file.")
+        if not _is_grid_file(input_paths[0]):
+            raise click.ClickException("--best only accepts a single .grid.json file.")
+        return
+
+    invalid_paths = [str(path) for path in input_paths if not _is_report_file(path)]
+    if invalid_paths:
+        invalid_display = ", ".join(invalid_paths)
+        raise click.ClickException(
+            "Comparison mode only accepts .report.json inputs. "
+            "Use --best for .grid.json or --failures for .jsonl. "
+            f"Invalid inputs: {invalid_display}"
+        )
+
+
 def _extract_metrics(report: dict) -> dict:
     if "runs" in report:
         return {}
@@ -172,7 +214,7 @@ def _generate_failures_report(results_path: Path) -> str:
     "--output",
     "-o",
     default=None,
-    help="Output file (default: stdout). Use .md for Markdown, .json for JSON.",
+    help="Output file (default: stdout). Writes plain text / Markdown content.",
 )
 @click.option(
     "--best",
@@ -195,7 +237,7 @@ def main(
 ) -> None:
     """Generate comparison reports from benchmark results.
 
-    INPUTS: One or more .report.json, .grid.json, or .jsonl files.
+    INPUTS: Accepted formats depend on mode.
 
     Examples:
 
@@ -234,15 +276,11 @@ def main(
         click.echo("Error: No valid input files found.", err=True)
         raise SystemExit(1)
 
+    _validate_mode_inputs(input_paths, best=best, failures=failures)
+
     if failures:
-        if len(input_paths) != 1:
-            click.echo("Error: --failures requires exactly one .jsonl file.", err=True)
-            raise SystemExit(1)
         content = _generate_failures_report(input_paths[0])
     elif best:
-        if len(input_paths) != 1:
-            click.echo("Error: --best requires exactly one .grid.json file.", err=True)
-            raise SystemExit(1)
         content = _generate_markdown_grid_best(input_paths[0], metric)
     else:
         reports = []

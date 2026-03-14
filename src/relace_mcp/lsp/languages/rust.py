@@ -6,6 +6,4 @@ RUST_CONFIG = LanguageServerConfig(
     command=["rust-analyzer"],
     config_files=("Cargo.toml", "Cargo.lock"),
     install_hint="rustup component add rust-analyzer",
-    initialization_options={},
-    workspace_config={},
 )

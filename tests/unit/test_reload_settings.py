@@ -3,7 +3,7 @@ from collections.abc import Generator
 import pytest
 
 import relace_mcp.config.settings as settings_mod
-from relace_mcp.config.settings import reload_logging_settings
+from relace_mcp.config.settings import reload_logging_settings, reload_tool_settings
 
 _RELOAD_KEYS = (
     "MCP_LOGGING_MODE",
@@ -12,11 +12,19 @@ _RELOAD_KEYS = (
     "MCP_TRACE_LOGGING",
 )
 
+_TOOL_RELOAD_KEYS = (
+    "RELACE_CLOUD_TOOLS",
+    "RETRIEVAL_BACKEND",
+    "RETRIEVAL_HINT_POLICY",
+    "AGENTIC_RETRIEVAL_ENABLED",
+)
+
 
 @pytest.fixture(autouse=True)
 def _restore_settings() -> Generator[None, None, None]:
-    """Snapshot and restore settings globals that reload_logging_settings() mutates."""
-    snapshot = {k: getattr(settings_mod, k) for k in _RELOAD_KEYS}
+    """Snapshot and restore settings globals that reload functions mutate."""
+    all_keys = _RELOAD_KEYS + _TOOL_RELOAD_KEYS
+    snapshot = {k: getattr(settings_mod, k) for k in all_keys}
     yield
     for k, v in snapshot.items():
         setattr(settings_mod, k, v)
@@ -69,3 +77,54 @@ class TestReloadLoggingSettings:
         result_full = redact_value(long_value, max_len=200)
         assert len(result_full) <= 200
         assert result_full.startswith("x")
+
+
+class TestReloadToolSettings:
+    def test_cloud_tools_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "true")
+        reload_tool_settings()
+
+        assert settings_mod.RELACE_CLOUD_TOOLS is True
+
+    def test_cloud_tools_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "false")
+        reload_tool_settings()
+
+        assert settings_mod.RELACE_CLOUD_TOOLS is False
+
+    def test_retrieval_backend_codanna(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "codanna")
+        reload_tool_settings()
+
+        assert settings_mod.RETRIEVAL_BACKEND == "codanna"
+
+    def test_retrieval_backend_auto(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "auto")
+        reload_tool_settings()
+
+        assert settings_mod.RETRIEVAL_BACKEND == "auto"
+
+    def test_agentic_retrieval_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_SEARCH_RETRIEVAL", "true")
+        reload_tool_settings()
+
+        assert settings_mod.AGENTIC_RETRIEVAL_ENABLED is True
+
+    def test_retrieval_hint_policy_strict(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_RETRIEVAL_HINT_POLICY", "strict")
+        reload_tool_settings()
+
+        assert settings_mod.RETRIEVAL_HINT_POLICY == "strict"
+
+    def test_module_attribute_access_sees_reloaded_values(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Accessing settings via module reference must see reloaded values."""
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "true")
+        monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "chunkhound")
+        reload_tool_settings()
+
+        from relace_mcp.config import settings as _settings
+
+        assert _settings.RELACE_CLOUD_TOOLS is True
+        assert _settings.RETRIEVAL_BACKEND == "chunkhound"

@@ -2,9 +2,13 @@ import pytest
 
 from relace_mcp.tools.apply.snippet import (
     anchor_precheck,
+    check_symbol_preservation,
     concrete_lines,
+    count_effective_diff_lines,
+    estimate_removed_lines,
     expects_changes,
     extract_remove_targets,
+    extract_top_level_symbols,
     is_truncation_placeholder,
     post_check_merged_code,
     validate_syntax_delta,
@@ -78,6 +82,51 @@ class TestAnchorPrecheck:
         """Should reject when only short anchors (like 'return') are found."""
         concrete = ["return", "}"]
         initial_code = "def foo():\n    return\n"
+        assert anchor_precheck(concrete, initial_code) is False
+
+
+class TestAnchorPrecheckCluster:
+    """Test anchor cluster validation (80-line window)."""
+
+    def test_accepts_clustered_anchors(self) -> None:
+        """Anchors in same region should pass."""
+        # Build a file where anchors are close together (lines 2 and 3)
+        lines = [f"line_{i}_padding_content" for i in range(100)]
+        lines[2] = "def target_function_here():"
+        lines[3] = "    return important_value_42"
+        initial_code = "\n".join(lines)
+
+        concrete = ["def target_function_here():", "    return important_value_42"]
+        assert anchor_precheck(concrete, initial_code) is True
+
+    def test_rejects_scattered_anchors(self) -> None:
+        """Anchors separated by more than 80 lines should fail."""
+        lines = [f"line_{i}_padding_content" for i in range(200)]
+        lines[5] = "def first_anchor_function():"
+        lines[150] = "def second_anchor_far_away():"
+        initial_code = "\n".join(lines)
+
+        concrete = ["def first_anchor_function():", "def second_anchor_far_away():"]
+        assert anchor_precheck(concrete, initial_code) is False
+
+    def test_accepts_anchors_at_boundary(self) -> None:
+        """Anchors exactly 80 lines apart should pass."""
+        lines = [f"line_{i}_padding_content" for i in range(200)]
+        lines[10] = "def boundary_start_function():"
+        lines[90] = "def boundary_end_function():"
+        initial_code = "\n".join(lines)
+
+        concrete = ["def boundary_start_function():", "def boundary_end_function():"]
+        assert anchor_precheck(concrete, initial_code) is True
+
+    def test_rejects_anchors_just_beyond_boundary(self) -> None:
+        """Anchors 81 lines apart should fail."""
+        lines = [f"line_{i}_padding_content" for i in range(200)]
+        lines[10] = "def just_beyond_start_fn():"
+        lines[91] = "def just_beyond_end_fn():"
+        initial_code = "\n".join(lines)
+
+        concrete = ["def just_beyond_start_fn():", "def just_beyond_end_fn():"]
         assert anchor_precheck(concrete, initial_code) is False
 
 
@@ -229,3 +278,182 @@ class TestValidateSyntaxDelta:
         assert passed is False
         assert reason is not None
         assert "SyntaxError" in reason
+
+
+class TestCountEffectiveDiffLines:
+    """Test count_effective_diff_lines function."""
+
+    def test_counts_real_changes(self) -> None:
+        """Should count added/deleted lines with content."""
+        diff = (
+            "--- before\n"
+            "+++ after\n"
+            "@@ -1,3 +1,3 @@\n"
+            "-old_line_one\n"
+            "+new_line_one\n"
+            " unchanged\n"
+            "-old_line_two\n"
+            "+new_line_two\n"
+        )
+        assert count_effective_diff_lines(diff) == 4
+
+    def test_excludes_whitespace_only(self) -> None:
+        """Should not count whitespace-only changes."""
+        diff = (
+            "--- before\n"
+            "+++ after\n"
+            "@@ -1,4 +1,4 @@\n"
+            "-real_change_here\n"
+            "+real_replacement_here\n"
+            "-   \n"
+            "+     \n"
+            "-\t\n"
+            "+\t\t\n"
+        )
+        assert count_effective_diff_lines(diff) == 2
+
+    def test_empty_diff(self) -> None:
+        """Should return 0 for empty diff."""
+        assert count_effective_diff_lines("") == 0
+
+    def test_ignores_context_lines(self) -> None:
+        """Should not count unchanged context lines."""
+        diff = (
+            "--- before\n"
+            "+++ after\n"
+            "@@ -1,3 +1,4 @@\n"
+            " context_line_unchanged\n"
+            "+added_new_line_content\n"
+            " another_context_line\n"
+        )
+        assert count_effective_diff_lines(diff) == 1
+
+
+class TestAnchorPrecheckRepeatedAnchors:
+    """Test anchor cluster validation with repeated anchor text in file."""
+
+    def test_accepts_when_close_occurrence_exists(self) -> None:
+        """Should accept when a closer occurrence of anchor exists near target."""
+        lines = [f"line_{i}_padding_content" for i in range(250)]
+        # First occurrence far away
+        lines[5] = 'logger.info("processing started")'
+        # Target cluster near line 200
+        lines[200] = 'logger.info("processing started")'
+        lines[201] = "result = compute_important_value()"
+        initial_code = "\n".join(lines)
+
+        concrete = [
+            'logger.info("processing started")',
+            "result = compute_important_value()",
+        ]
+        assert anchor_precheck(concrete, initial_code) is True
+
+    def test_rejects_when_all_occurrences_scattered(self) -> None:
+        """Should reject when no combination of occurrences clusters."""
+        lines = [f"line_{i}_padding_content" for i in range(300)]
+        lines[5] = "def handler_function_alpha():"
+        lines[250] = "def handler_function_beta():"
+        initial_code = "\n".join(lines)
+
+        concrete = ["def handler_function_alpha():", "def handler_function_beta():"]
+        assert anchor_precheck(concrete, initial_code) is False
+
+
+class TestExtractTopLevelSymbols:
+    """Test extract_top_level_symbols for Python files."""
+
+    def test_extracts_functions_and_classes(self) -> None:
+        code = "import os\n\ndef foo():\n    pass\n\nclass Bar:\n    pass\n"
+        symbols = extract_top_level_symbols(code, "test.py")
+        assert "foo" in symbols
+        assert "Bar" in symbols
+
+    def test_does_not_extract_imports(self) -> None:
+        code = "import os\nfrom pathlib import Path\n\ndef main():\n    pass\n"
+        symbols = extract_top_level_symbols(code, "test.py")
+        assert "os" not in symbols
+        assert "Path" not in symbols
+        assert "main" in symbols
+
+    def test_non_python_excludes_imports(self) -> None:
+        """Non-Python files should not include import names as symbols."""
+        code = "import React from 'react'\nexport function App() { return null }\n"
+        symbols = extract_top_level_symbols(code, "app.tsx")
+        assert "React" not in symbols
+        assert "App" in symbols
+
+    def test_go_excludes_imports(self) -> None:
+        """Go import names should not be included as symbols."""
+        code = 'import "fmt"\n\nfunc main() {\n}\n'
+        symbols = extract_top_level_symbols(code, "main.go")
+        assert "fmt" not in symbols
+
+
+class TestCheckSymbolPreservation:
+    """Test check_symbol_preservation function."""
+
+    def test_passes_when_symbols_preserved(self) -> None:
+        initial = "def foo():\n    pass\n\ndef bar():\n    pass\n"
+        merged = "def foo():\n    return 1\n\ndef bar():\n    pass\n"
+        passed, _ = check_symbol_preservation(initial, merged, "", "test.py")
+        assert passed is True
+
+    def test_fails_when_function_lost(self) -> None:
+        initial = "def foo():\n    pass\n\ndef bar():\n    pass\n"
+        merged = "def foo():\n    pass\n"
+        passed, reason = check_symbol_preservation(initial, merged, "", "test.py")
+        assert passed is False
+        assert reason is not None
+        assert "bar" in reason
+
+    def test_allows_import_removal(self) -> None:
+        """Import changes should NOT trigger SYMBOL_LOST."""
+        initial = "import os\nfrom pathlib import Path\n\ndef main():\n    pass\n"
+        merged = "from os.path import join\n\ndef main():\n    pass\n"
+        passed, _ = check_symbol_preservation(initial, merged, "", "test.py")
+        assert passed is True
+
+    def test_allows_remove_directive(self) -> None:
+        initial = "def foo():\n    pass\n\ndef bar():\n    pass\n"
+        merged = "def foo():\n    pass\n"
+        passed, _ = check_symbol_preservation(initial, merged, "# remove bar", "test.py")
+        assert passed is True
+
+    def test_ts_import_removal_not_flagged(self) -> None:
+        """Removing TS imports should NOT trigger SYMBOL_LOST."""
+        initial = "import React from 'react'\nexport function App() { return null }\n"
+        merged = "export function App() { return null }\n"
+        passed, _ = check_symbol_preservation(initial, merged, "", "app.tsx")
+        assert passed is True
+
+
+class TestEstimateRemovedLines:
+    """Test estimate_removed_lines function."""
+
+    def test_python_function(self) -> None:
+        """Should count lines of a matching Python function."""
+        code = "def small():\n    return 1\n\ndef big_func():\n    x = 1\n    y = 2\n    return x + y\n"
+        # big_func has 4 lines (def + 3 body lines)
+        result = estimate_removed_lines(code, ["big_func"])
+        assert result == 4
+
+    def test_no_match(self) -> None:
+        """Should return 0 when target is not found."""
+        code = "def foo():\n    return 1\n"
+        assert estimate_removed_lines(code, ["nonexistent"]) == 0
+
+    def test_empty_targets(self) -> None:
+        """Should return 0 for empty target list."""
+        code = "def foo():\n    return 1\n"
+        assert estimate_removed_lines(code, []) == 0
+
+    def test_multiple_targets(self) -> None:
+        """Should sum lines of multiple targets."""
+        code = (
+            "def alpha():\n    return 1\n\n"
+            "def beta():\n    return 2\n\n"
+            "def gamma():\n    return 3\n"
+        )
+        # alpha: def + body + blank separator = 3 lines, beta: def + body + blank = 3 lines
+        result = estimate_removed_lines(code, ["alpha", "beta"])
+        assert result == 6

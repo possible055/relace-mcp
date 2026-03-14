@@ -5,15 +5,11 @@ from typing import Any
 from fastmcp.server.context import Context
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 
-_HEARTBEAT_MESSAGES: dict[str, str] = {
-    "fast_apply": "fast_apply in progress",
-    "agentic_search": "agentic_search in progress",
-    "agentic_retrieval": "agentic_retrieval in progress",
-}
+_HEARTBEAT_TOOLS: frozenset[str] = frozenset({"fast_apply"})
 
 
 class ProgressHeartbeatMiddleware(Middleware):
-    """Send periodic progress notifications during long-running tool calls."""
+    """Send periodic indeterminate progress notifications for fast tools."""
 
     def __init__(self, *, interval_seconds: float = 5.0) -> None:
         self._interval_seconds = interval_seconds
@@ -24,15 +20,16 @@ class ProgressHeartbeatMiddleware(Middleware):
         call_next: CallNext[Any, Any],
     ) -> Any:
         tool_name = getattr(context.message, "name", "")
-        message = _HEARTBEAT_MESSAGES.get(tool_name)
-        if not message:
+        if tool_name not in _HEARTBEAT_TOOLS:
             return await call_next(context)
 
         ctx = context.fastmcp_context
         if ctx is None:
             return await call_next(context)
 
-        progress_task = asyncio.create_task(self._heartbeat(ctx, message=message))
+        progress_task = asyncio.create_task(
+            self._heartbeat(ctx, message=f"{tool_name} in progress")
+        )
         try:
             return await call_next(context)
         finally:
@@ -41,9 +38,11 @@ class ProgressHeartbeatMiddleware(Middleware):
                 await progress_task
 
     async def _heartbeat(self, ctx: Context, *, message: str) -> None:
+        tick = 0
         while True:
             try:
-                await ctx.report_progress(progress=0, total=1.0, message=message)
+                await ctx.report_progress(progress=tick, total=None, message=message)
+                tick += 1
             except Exception:
                 return
             await asyncio.sleep(self._interval_seconds)

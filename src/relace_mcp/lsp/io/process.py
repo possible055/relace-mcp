@@ -34,26 +34,17 @@ def resolve_server_command(command: list[str], install_hint: str) -> list[str]:
     if resolved:
         return [resolved, *command[1:]]
 
-    scripts_dirs: list[Path] = []
-    try:
-        scripts_dirs.append(Path(sys.executable).parent)
-    except Exception:  # nosec B110 - best-effort path resolution
-        pass
-    try:
-        scripts_dirs.append(Path(sys.executable).resolve().parent)
-    except Exception:  # nosec B110 - best-effort path resolution
-        pass
-    try:
-        import sysconfig
-
-        scripts_dirs.append(Path(sysconfig.get_path("scripts")))
-    except Exception:  # nosec B110 - best-effort path resolution
-        pass
-
     seen: set[Path] = set()
-    for d in scripts_dirs:
-        if d and d not in seen:
-            seen.add(d)
+    for getter in (
+        lambda: Path(sys.executable).parent,
+        lambda: Path(sys.executable).resolve().parent,
+        lambda: Path(__import__("sysconfig").get_path("scripts")),
+    ):
+        try:
+            seen.add(getter())
+        except Exception:  # nosec B110 - best-effort path resolution
+            pass
+
     candidates = list(seen)
     for scripts_dir in candidates:
         candidate = scripts_dir / executable

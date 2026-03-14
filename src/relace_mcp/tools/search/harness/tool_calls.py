@@ -7,18 +7,19 @@ from typing import TYPE_CHECKING, Any
 from ....config import settings
 from ....observability import log_trace_event
 from .._impl import (
-    CallGraphParams,
-    GetTypeParams,
-    ListSymbolsParams,
+    # --- Disabled LSP tools (kept for future re-enablement) ---
+    # CallGraphParams,
+    # GetTypeParams,
+    # ListSymbolsParams,
     LSPQueryParams,
     SearchSymbolParams,
     bash_handler,
-    call_graph_handler,
+    # call_graph_handler,
     find_symbol_handler,
-    get_type_handler,
+    # get_type_handler,
     glob_handler,
     grep_search_handler,
-    list_symbols_handler,
+    # list_symbols_handler,
     report_back_handler,
     search_symbol_handler,
     view_directory_handler,
@@ -461,23 +462,25 @@ class ToolCallsMixin:
         elif name == "search_symbol":
             search_params = SearchSymbolParams(query=args.get("query", ""))
             return search_symbol_handler(search_params, base_dir)
-        elif name == "list_symbols":
-            list_params = ListSymbolsParams(file=args.get("file", ""))
-            return list_symbols_handler(list_params, base_dir)
-        elif name == "get_type":
-            type_params = GetTypeParams(
-                file=args.get("file", ""),
-                line=args.get("line", 0),
-                column=args.get("column", 0),
-            )
-            return get_type_handler(type_params, base_dir)
-        elif name == "call_graph":
-            graph_params = CallGraphParams(
-                file=args.get("file", ""),
-                line=args.get("line", 0),
-                column=args.get("column", 0),
-                direction=args.get("direction", "incoming"),
-            )
-            return call_graph_handler(graph_params, base_dir)
+        # --- Disabled LSP tools (kept for future re-enablement) ---
+        # elif name == "list_symbols":
+        #     list_params = ListSymbolsParams(file=args.get("file", ""))
+        #     return list_symbols_handler(list_params, base_dir)
+        # elif name == "get_type":
+        #     type_params = GetTypeParams(
+        #         file=args.get("file", ""),
+        #         line=args.get("line", 0),
+        #         column=args.get("column", 0),
+        #     )
+        #     return get_type_handler(type_params, base_dir)
+        # elif name == "call_graph":
+        #     graph_params = CallGraphParams(
+        #         file=args.get("file", ""),
+        #         line=args.get("line", 0),
+        #         column=args.get("column", 0),
+        #         direction=args.get("direction", "incoming"),
+        #     )
+        #     return call_graph_handler(graph_params, base_dir)
+        # --- End disabled LSP tools ---
         else:
             return f"Error: Unknown tool '{name}'"

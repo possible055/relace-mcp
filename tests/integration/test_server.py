@@ -69,6 +69,22 @@ class TestServerToolRegistration:
             tool_names = [t.name for t in tools]
             assert "indexing_status" in tool_names
 
+    @pytest.mark.asyncio
+    async def test_agentic_retrieval_registered_with_none_backend(
+        self, mock_config: RelaceConfig
+    ) -> None:
+        """agentic_retrieval should still register when semantic hints are disabled."""
+        with (
+            patch("relace_mcp.config.settings.AGENTIC_RETRIEVAL_ENABLED", True),
+            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "none"),
+        ):
+            server = build_server(config=mock_config)
+
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            tool_names = [t.name for t in tools]
+            assert "agentic_retrieval" in tool_names
+
 
 class TestServerToolExecution:
     """Test tool execution via server."""
@@ -122,6 +138,10 @@ class TestServerToolExecution:
             payload = result.structured_content
             for key in ("trace_id", "base_dir", "relace", "codanna", "chunkhound"):
                 assert key in payload
+            assert "freshness" in payload["relace"]
+            assert "hints_usable" in payload["relace"]
+            assert "freshness" in payload["codanna"]
+            assert "hints_usable" in payload["codanna"]
 
     @pytest.mark.asyncio
     async def test_fast_apply_creates_new_file(

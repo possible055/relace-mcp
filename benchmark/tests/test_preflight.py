@@ -18,7 +18,14 @@ class _FakeSyncState:
 
 def _patch_git_head(head: str = _GIT_HEAD):
     return patch(
-        "benchmark.runner.preflight.get_current_git_info",
+        "benchmark.runner.preflight.get_git_head",
+        return_value=head,
+    )
+
+
+def _patch_current_git_info(head: str = _GIT_HEAD):
+    return patch(
+        "relace_mcp.repo.core.get_current_git_info",
         return_value=("main", head),
     )
 
@@ -32,7 +39,7 @@ def _patch_indexed_head(head: str | None):
 
 def _patch_sync_state(state=None):
     return patch(
-        "benchmark.runner.preflight.load_sync_state",
+        "relace_mcp.repo.core.load_sync_state",
         return_value=state,
     )
 
@@ -96,21 +103,21 @@ def test_local_happy_path(backend):
 
 
 def test_relace_no_sync_state():
-    with _patch_git_head(), _patch_sync_state(None):
+    with _patch_current_git_info(), _patch_sync_state(None):
         with pytest.raises(RuntimeError, match="No cloud sync state"):
             check_retrieval_backend("relace", "/tmp/repo")
 
 
 def test_relace_stale_sync():
     stale_state = _FakeSyncState(git_head_sha="0000000000000000000000000000000000000000")
-    with _patch_git_head(_GIT_HEAD), _patch_sync_state(stale_state):
+    with _patch_current_git_info(_GIT_HEAD), _patch_sync_state(stale_state):
         with pytest.raises(RuntimeError, match="Cloud sync stale"):
             check_retrieval_backend("relace", "/tmp/repo")
 
 
 def test_relace_happy_path():
     state = _FakeSyncState(git_head_sha=_GIT_HEAD)
-    with _patch_git_head(_GIT_HEAD), _patch_sync_state(state):
+    with _patch_current_git_info(_GIT_HEAD), _patch_sync_state(state):
         info = check_retrieval_backend("relace", "/tmp/repo")
         assert info["backend"] == "relace"
         assert info["stale"] is False
@@ -137,7 +144,7 @@ def test_auto_falls_back_to_relace():
     state = _FakeSyncState(git_head_sha=_GIT_HEAD)
     with (
         patch("benchmark.runner.preflight.shutil.which", return_value=None),
-        _patch_git_head(_GIT_HEAD),
+        _patch_current_git_info(_GIT_HEAD),
         _patch_sync_state(state),
     ):
         info = check_retrieval_backend("auto", "/tmp/repo")

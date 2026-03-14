@@ -10,6 +10,8 @@ def recoverable_error(
     instruction: str | None,
     trace_id: str = "",
     timing_ms: int = 0,
+    *,
+    file_lines: int | None = None,
 ) -> dict[str, Any]:
     """Generate recoverable error response message (structured format).
 
@@ -20,6 +22,7 @@ def recoverable_error(
         instruction: Optional instruction.
         trace_id: Trace ID.
         timing_ms: Elapsed time (milliseconds).
+        file_lines: Optional total line count of the target file.
 
     Returns:
         Structured error response.
@@ -34,6 +37,8 @@ def recoverable_error(
     }
     if instruction:
         result["instruction"] = instruction
+    if file_lines is not None:
+        result["file_lines"] = file_lines
     return result
 
 

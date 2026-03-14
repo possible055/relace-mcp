@@ -439,8 +439,8 @@ class TestLSPClientSync:
             return []
 
         client._sync_workspace_changes_best_effort = fake_sync  # type: ignore[assignment]
-        client._open_file = fake_open_file  # type: ignore[assignment]
-        client._close_file = fake_close_file  # type: ignore[assignment]
+        client._session.open_file = fake_open_file  # type: ignore[assignment]
+        client._session.close_file = fake_close_file  # type: ignore[assignment]
         client._send_request = fake_send_request  # type: ignore[assignment]
 
         client.definition("test.py", 0, 0)
@@ -456,7 +456,7 @@ class TestLSPClientSync:
 
         client = LSPClient(PYTHON_CONFIG, str(workspace_root))
         client._initialized = True
-        client._fs_last_sync = -1_000_000.0
+        client._fs_sync_state.last_sync = -1_000_000.0
 
         client._sync_workspace_changes()
-        assert "main.py" in client._fs_snapshot
+        assert "main.py" in client._fs_sync_state.snapshot

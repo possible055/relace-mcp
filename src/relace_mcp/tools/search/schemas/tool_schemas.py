@@ -291,96 +291,98 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_type",
-            "strict": True,
-            "description": (
-                "Get type info and docstring for a symbol at position.\n\n"
-                "Output: type signature and docstring (if available).\n"
-                "Returns empty if no type info found."
-            ),
-            "parameters": {
-                "type": "object",
-                "required": ["file", "line", "column"],
-                "properties": {
-                    "file": {
-                        "type": "string",
-                        "description": "Absolute path to the file.",
-                    },
-                    "line": {
-                        "type": "integer",
-                        "description": "Line number (1-indexed).",
-                    },
-                    "column": {
-                        "type": "integer",
-                        "description": "Column where symbol appears (1-indexed).",
-                    },
-                },
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_symbols",
-            "strict": True,
-            "description": (
-                "Get outline of all symbols in a file.\n\n"
-                "Returns: list of {name, kind, line_start, line_end} for classes, functions, variables."
-            ),
-            "parameters": {
-                "type": "object",
-                "required": ["file"],
-                "properties": {
-                    "file": {
-                        "type": "string",
-                        "description": "Absolute path to the file.",
-                    },
-                },
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "call_graph",
-            "strict": True,
-            "description": (
-                "Trace function call relationships using LSP.\n\n"
-                "Use 'incoming' to find callers of a function (who calls this?).\n"
-                "Use 'outgoing' to find callees (what does this function call?).\n"
-                "Useful for understanding dependencies and impact analysis."
-            ),
-            "parameters": {
-                "type": "object",
-                "required": ["file", "line", "column", "direction"],
-                "properties": {
-                    "file": {
-                        "type": "string",
-                        "description": "Absolute path to the file.",
-                    },
-                    "line": {
-                        "type": "integer",
-                        "description": "Line number of function (1-indexed).",
-                    },
-                    "column": {
-                        "type": "integer",
-                        "description": "Column where function name appears (1-indexed).",
-                    },
-                    "direction": {
-                        "type": "string",
-                        "enum": ["incoming", "outgoing"],
-                        "description": "'incoming' = who calls this, 'outgoing' = what this calls.",
-                    },
-                },
-                "additionalProperties": False,
-            },
-        },
-    },
+    # --- Disabled LSP tools (kept for future re-enablement) ---
+    # {
+    #     "type": "function",
+    #     "function": {
+    #         "name": "get_type",
+    #         "strict": True,
+    #         "description": (
+    #             "Get type info and docstring for a symbol at position.\n\n"
+    #             "Output: type signature and docstring (if available).\n"
+    #             "Returns empty if no type info found."
+    #         ),
+    #         "parameters": {
+    #             "type": "object",
+    #             "required": ["file", "line", "column"],
+    #             "properties": {
+    #                 "file": {
+    #                     "type": "string",
+    #                     "description": "Absolute path to the file.",
+    #                 },
+    #                 "line": {
+    #                     "type": "integer",
+    #                     "description": "Line number (1-indexed).",
+    #                 },
+    #                 "column": {
+    #                     "type": "integer",
+    #                     "description": "Column where symbol appears (1-indexed).",
+    #                 },
+    #             },
+    #             "additionalProperties": False,
+    #         },
+    #     },
+    # },
+    # {
+    #     "type": "function",
+    #     "function": {
+    #         "name": "list_symbols",
+    #         "strict": True,
+    #         "description": (
+    #             "Get outline of all symbols in a file.\n\n"
+    #             "Returns: list of {name, kind, line_start, line_end} for classes, functions, variables."
+    #         ),
+    #         "parameters": {
+    #             "type": "object",
+    #             "required": ["file"],
+    #             "properties": {
+    #                 "file": {
+    #                     "type": "string",
+    #                     "description": "Absolute path to the file.",
+    #                 },
+    #             },
+    #             "additionalProperties": False,
+    #         },
+    #     },
+    # },
+    # {
+    #     "type": "function",
+    #     "function": {
+    #         "name": "call_graph",
+    #         "strict": True,
+    #         "description": (
+    #             "Trace function call relationships using LSP.\n\n"
+    #             "Use 'incoming' to find callers of a function (who calls this?).\n"
+    #             "Use 'outgoing' to find callees (what does this function call?).\n"
+    #             "Useful for understanding dependencies and impact analysis."
+    #         ),
+    #         "parameters": {
+    #             "type": "object",
+    #             "required": ["file", "line", "column", "direction"],
+    #             "properties": {
+    #                 "file": {
+    #                     "type": "string",
+    #                     "description": "Absolute path to the file.",
+    #                 },
+    #                 "line": {
+    #                     "type": "integer",
+    #                     "description": "Line number of function (1-indexed).",
+    #                 },
+    #                 "column": {
+    #                     "type": "integer",
+    #                     "description": "Column where function name appears (1-indexed).",
+    #                 },
+    #                 "direction": {
+    #                     "type": "string",
+    #                     "enum": ["incoming", "outgoing"],
+    #                     "description": "'incoming' = who calls this, 'outgoing' = what this calls.",
+    #                 },
+    #             },
+    #             "additionalProperties": False,
+    #         },
+    #     },
+    # },
+    # --- End disabled LSP tools ---
 ]
 
 
@@ -423,7 +425,7 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
         - SEARCH_TOOL_STRICT: Set to 0/false to omit the non-standard `strict` field from tool schemas.
     """
     # LSP tool names for easy reference
-    lsp_tool_names = {"find_symbol", "search_symbol", "get_type", "list_symbols", "call_graph"}
+    lsp_tool_names = {"find_symbol", "search_symbol"}
 
     # Default: basic exploration tools only.
     enabled = {

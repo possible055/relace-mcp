@@ -27,6 +27,8 @@ dist/
 .kiro/
 .gemini/
 .agent/
+.augment/
+.junie/
 AGENTS.md
 CLAUDE.md
 

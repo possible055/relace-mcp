@@ -80,11 +80,8 @@ def _expand_glob_patterns(raw_patterns: list[str]) -> list[str]:
 
 
 def _iter_parent_paths(rel_path: str) -> list[str]:
-    parents: list[str] = []
     parts = rel_path.split("/")
-    for i in range(len(parts) - 1, 0, -1):
-        parents.append("/".join(parts[:i]))
-    return parents
+    return ["/".join(parts[:i]) for i in range(len(parts) - 1, 0, -1)]
 
 
 def _matches_any_pattern(rel_path: str, patterns: list[str]) -> bool:
