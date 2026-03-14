@@ -80,7 +80,6 @@ def _load_dotenv_from_path() -> None:
 
 def check_health(config: "RelaceConfig") -> dict[str, str]:
     from .config import settings as _settings
-    from .config.settings import AGENTIC_RETRIEVAL_ENABLED, RETRIEVAL_BACKEND
 
     results: dict[str, str] = {}
     errors: list[str] = []
@@ -138,22 +137,27 @@ def check_health(config: "RelaceConfig") -> dict[str, str]:
             errors.append(f"cannot create trace directory: {exc}")
 
     # Retrieval backend health check (passive only: do NOT run expensive CLI probes on startup)
-    if AGENTIC_RETRIEVAL_ENABLED and RETRIEVAL_BACKEND in ("chunkhound", "codanna"):
-        cli_path = shutil.which(RETRIEVAL_BACKEND)
+    if _settings.AGENTIC_RETRIEVAL_ENABLED and _settings.RETRIEVAL_BACKEND in (
+        "chunkhound",
+        "codanna",
+    ):
+        cli_path = shutil.which(_settings.RETRIEVAL_BACKEND)
         if not cli_path:
             logger.warning(
                 "%s backend: CLI not found in PATH — retrieval will be unavailable until installed",
-                RETRIEVAL_BACKEND,
+                _settings.RETRIEVAL_BACKEND,
             )
-            results["retrieval_backend"] = f"{RETRIEVAL_BACKEND}: cli_not_found"
+            results["retrieval_backend"] = f"{_settings.RETRIEVAL_BACKEND}: cli_not_found"
         elif not config.base_dir:
-            results["retrieval_backend"] = f"{RETRIEVAL_BACKEND}: deferred (base_dir not set)"
+            results["retrieval_backend"] = (
+                f"{_settings.RETRIEVAL_BACKEND}: deferred (base_dir not set)"
+            )
         else:
-            results["retrieval_backend"] = f"{RETRIEVAL_BACKEND}: cli_found"
-    elif AGENTIC_RETRIEVAL_ENABLED and RETRIEVAL_BACKEND == "auto":
+            results["retrieval_backend"] = f"{_settings.RETRIEVAL_BACKEND}: cli_found"
+    elif _settings.AGENTIC_RETRIEVAL_ENABLED and _settings.RETRIEVAL_BACKEND == "auto":
         results["retrieval_backend"] = "auto: deferred (resolved at query time)"
     else:
-        results["retrieval_backend"] = f"{RETRIEVAL_BACKEND}: ok"
+        results["retrieval_backend"] = f"{_settings.RETRIEVAL_BACKEND}: ok"
 
     if errors:
         raise RuntimeError("; ".join(errors))

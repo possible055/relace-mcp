@@ -85,7 +85,7 @@
 | `RELACE_REPO_SYNC_MAX_FILES` | `5000` | 每次同步最大文件数 |
 | `RELACE_REPO_LIST_MAX` | `10000` | 最大获取仓库数 |
 | `RELACE_UPLOAD_MAX_WORKERS` | `8` | 并发上传工作线程数 |
-| `RELACE_AGENTIC_AUTO_SYNC` | `1` | 在 agentic retrieval 前自动同步（启用 cloud tools 时） |
+| `MCP_RETRIEVAL_HINT_POLICY` | `prefer-stale` | retrieval hint policy：`prefer-stale` 或 `strict` |
 
 ### 第三方 API Keys
 
@@ -146,7 +146,18 @@ SEARCH_MAX_TURNS=6
 
 ## 本地检索后端
 
-`agentic_retrieval` 在 agentic 搜索前利用语义检索对文件排序。默认使用 Relace 云端索引（`relace` 后端，需要 `RELACE_CLOUD_TOOLS=1` 并已完成 sync）。如需离线使用，可切换为本地后端。
+`agentic_retrieval` 会先用语义检索对文件做预排序，再回到 live code 进行确认。默认使用 Relace 云端索引（`relace` 后端，需要 `RELACE_CLOUD_TOOLS=1` 并已完成 sync）。如需离线使用，可切换为本地后端。
+
+### Hint Freshness Policy
+
+```bash
+MCP_RETRIEVAL_HINT_POLICY=prefer-stale
+```
+
+- `prefer-stale`（默认）：只要有可用的 stale semantic hints，就先拿来缩小搜索范围，再继续做 live code exploration。
+- `strict`：只接受 fresh semantic hints。遇到 stale 或 missing hints 时会跳过 hints，直接退回 agentic exploration。
+
+`agentic_retrieval` 不会隐式执行 `cloud_sync`。如果你想在 retrieval 前主动刷新 cloud index，请显式调用 `cloud_sync`。
 
 ### Codanna
 
@@ -161,7 +172,7 @@ MCP_SEARCH_RETRIEVAL=1
 MCP_RETRIEVAL_BACKEND=codanna
 ```
 
-首次使用时，server 会自动执行 `codanna init`（创建 `.codanna` 目录）并紧接着运行 `codanna index`。每次 `fast_apply` 编辑后会在后台对变动文件增量重新索引。更多配置请参阅 [Codanna 项目](https://pypi.org/project/codanna/)。
+首次使用时，如果 index 缺失，server 可能会先在没有 hints 的情况下继续查询，同时排程 background refresh。每次 `fast_apply` 编辑后会在后台对变动文件增量重新索引。retrieval 过程中，当 `MCP_RETRIEVAL_HINT_POLICY=prefer-stale` 时可以继续使用 stale Codanna hints；`strict` 会跳过它们。更多配置请参阅 [Codanna 项目](https://pypi.org/project/codanna/)。
 
 ### ChunkHound
 
@@ -176,7 +187,7 @@ MCP_SEARCH_RETRIEVAL=1
 MCP_RETRIEVAL_BACKEND=chunkhound
 ```
 
-首次使用时，server 会自动执行 `chunkhound index`。每次 `fast_apply` 编辑后触发后台扫描，仅重新处理有变更的文件（xxHash3-64 校验）。更多配置请参阅 [ChunkHound 项目](https://pypi.org/project/chunkhound/)。
+首次使用时，如果 index 缺失，server 可能会先在没有 hints 的情况下继续查询，同时排程 background refresh。每次 `fast_apply` 编辑后触发后台扫描，仅重新处理有变更的文件（xxHash3-64 校验）。retrieval 过程中，当 `MCP_RETRIEVAL_HINT_POLICY=prefer-stale` 时可以继续使用 stale ChunkHound hints；`strict` 会跳过它们。更多配置请参阅 [ChunkHound 项目](https://pypi.org/project/chunkhound/)。
 
 ### 自动模式
 
@@ -186,6 +197,8 @@ MCP_RETRIEVAL_BACKEND=auto
 ```
 
 Server 按优先级自动选择当前 session 可用的后端：`codanna` → `chunkhound` → `relace`（云端兜底）。
+
+当选中的本地后端处于 stale 或 missing 状态时，retrieval 可以排程 background refresh；query path 不会等待 rebuild 完成。
 
 ---
 
@@ -268,10 +281,9 @@ Trace 日志也是 JSONL 格式，每行一个事件。
 | `backend_index_error` | Codanna/ChunkHound 索引失败 |
 | `backend_disabled` | 后端已禁用（如 CLI 缺失） |
 | `retrieval_backend_selected` | 检索后端选择（含 auto） |
+| `retrieval_hints_skipped` | 因 policy 或 backend freshness 不允许而跳过 retrieval hints |
 | `retrieval_hints_complete` | 检索提示完成 |
 | `retrieval_hints_error` | 检索提示失败（兜底继续） |
-| `retrieval_auto_sync_complete` | Relace 自动同步完成 |
-| `retrieval_auto_sync_error` | Relace 自动同步失败 |
 
 ### 工具生命周期事件
 

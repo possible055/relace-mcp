@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from relace_mcp.lsp.protocol import (
+from relace_mcp.lsp.io.protocol import (
     MAX_MESSAGE_BUFFER_BYTES,
     MessageBuffer,
     decode_header,

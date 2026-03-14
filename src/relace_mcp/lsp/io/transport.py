@@ -5,7 +5,7 @@ import threading
 from collections.abc import Callable
 from typing import Any
 
-from relace_mcp.lsp.protocol import MessageBuffer, encode_message
+from relace_mcp.lsp.io.protocol import MessageBuffer, encode_message
 from relace_mcp.lsp.types import LSPError
 
 logger = logging.getLogger(__name__)

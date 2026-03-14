@@ -118,8 +118,8 @@ def compute_line_precision_matched(
 
     Line Precision (Matched) = Σ(Correct lines) / Σ(Matched file lines)
 
-    Unlike compute_line_precision, this only counts lines from files that exist
-    in both returned and GT, providing a pure measure of range accuracy.
+    This only counts lines from files that exist in both returned and GT,
+    providing a pure measure of range accuracy within matched files.
 
     Args:
         returned_files: Files returned by agentic_search (path -> [[start, end], ...]).

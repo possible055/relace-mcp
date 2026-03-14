@@ -3,6 +3,7 @@ import logging
 import re
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
@@ -68,7 +69,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
 
         # Resolve enabled tools first (runtime LSP detection happens here)
         enabled_tools = self._enabled_tool_names()
-        _lsp_tool_names = {"find_symbol", "search_symbol", "get_type", "list_symbols", "call_graph"}
+        _lsp_tool_names = {"find_symbol", "search_symbol"}
         has_lsp = bool(enabled_tools & _lsp_tool_names)
 
         # Select prompt YAML: (tool_kind, backend) → file stem
@@ -175,7 +176,12 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             }
 
     async def run_async(
-        self, query: str, semantic_hints_section: str = "", *, trace_id: str | None = None
+        self,
+        query: str,
+        semantic_hints_section: str = "",
+        *,
+        trace_id: str | None = None,
+        on_progress: Callable[[int, int], Awaitable[None]] | None = None,
     ) -> dict[str, Any]:
         """Execute one Fast Agentic Search asynchronously.
 
@@ -206,6 +212,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 tid,
                 start_time=start_time,
                 semantic_hints_section=semantic_hints_section,
+                on_progress=on_progress,
             )
             result["trace_id"] = tid
             total_ms = (time.perf_counter() - start_time) * 1000
@@ -254,6 +261,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         ]
 
         turns_log: list[dict[str, Any]] = []
+        result_dict: dict[str, Any]
 
         for turn in range(SEARCH_MAX_TURNS):
             if (time.perf_counter() - start_time) > SEARCH_TIMEOUT_SECONDS:
@@ -459,6 +467,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         *,
         start_time: float,
         semantic_hints_section: str = "",
+        on_progress: Callable[[int, int], Awaitable[None]] | None = None,
     ) -> dict[str, Any]:
         """Internal method to execute the search loop asynchronously."""
         user_content = (
@@ -475,6 +484,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         ]
 
         turns_log: list[dict[str, Any]] = []
+        result_dict: dict[str, Any]
 
         loop = asyncio.get_running_loop()
         # Use an explicit ThreadPoolExecutor for blocking tool execution.
@@ -502,6 +512,12 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                     turn + 1,
                     SEARCH_MAX_TURNS,
                 )
+
+                if on_progress is not None:
+                    try:
+                        await on_progress(turn + 1, SEARCH_MAX_TURNS)
+                    except Exception:  # nosec B110 — progress is best-effort
+                        pass
 
                 # Inject unified turn hint (from turn 2 onwards)
                 if turn > 0:
@@ -639,6 +655,11 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                         turn + 1,
                         len(report_back_result.get("files", {})),
                     )
+                    if on_progress is not None:
+                        try:
+                            await on_progress(SEARCH_MAX_TURNS, SEARCH_MAX_TURNS)
+                        except Exception:  # nosec B110 — progress is best-effort
+                            pass
                     result_dict = {
                         "query": query,
                         "explanation": report_back_result.get("explanation", ""),

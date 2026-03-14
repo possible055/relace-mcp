@@ -515,7 +515,7 @@ class BenchmarkRunner:
             returned_files=returned_files,
             raw_result=result,
             trace_path=trace_path_str,
-            hints_used=result.get("cloud_hints_used", 0) if self.search_mode == "indexed" else 0,
+            hints_used=result.get("semantic_hints_used", 0) if self.search_mode == "indexed" else 0,
             search_mode=self.search_mode,
             retrieval_backend=result.get("retrieval_backend"),
             retrieval_latency_s=result.get("retrieval_latency_s"),

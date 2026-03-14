@@ -85,7 +85,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `RELACE_REPO_SYNC_MAX_FILES` | `5000` | Maximum files per sync |
 | `RELACE_REPO_LIST_MAX` | `10000` | Maximum repos to fetch |
 | `RELACE_UPLOAD_MAX_WORKERS` | `8` | Concurrent upload workers |
-| `RELACE_AGENTIC_AUTO_SYNC` | `1` | Auto-sync before agentic retrieval (when cloud tools enabled) |
+| `MCP_RETRIEVAL_HINT_POLICY` | `prefer-stale` | Retrieval hint policy: `prefer-stale` or `strict` |
 
 ### Third-Party API Keys
 
@@ -146,7 +146,18 @@ When git HEAD changes since last sync (e.g., branch switch, rebase), Safe Full m
 
 ## Local Retrieval Backends
 
-`agentic_retrieval` uses semantic search to pre-rank files before the agentic pass. By default it uses the Relace cloud index (`relace` backend, requires `RELACE_CLOUD_TOOLS=1` and a synced repo). To run without cloud dependency, use a local backend.
+`agentic_retrieval` uses semantic search to pre-rank files before the agentic pass, then verifies those hints against live code. By default it uses the Relace cloud index (`relace` backend, requires `RELACE_CLOUD_TOOLS=1` and a synced repo). To run without cloud dependency, use a local backend.
+
+### Hint Freshness Policy
+
+```bash
+MCP_RETRIEVAL_HINT_POLICY=prefer-stale
+```
+
+- `prefer-stale` (default): use stale semantic hints when they exist, then continue with live code exploration. This keeps retrieval responsive even when indexes lag behind the workspace.
+- `strict`: only use fresh semantic hints. Stale or missing hints are skipped and the tool falls back to agentic exploration.
+
+`agentic_retrieval` never runs `cloud_sync` implicitly. Use `cloud_sync` as the explicit maintenance tool when you want to refresh the cloud index ahead of retrieval.
 
 ### Codanna
 
@@ -161,7 +172,7 @@ MCP_SEARCH_RETRIEVAL=1
 MCP_RETRIEVAL_BACKEND=codanna
 ```
 
-On first use the server automatically runs `codanna init` (creates the `.codanna` directory) followed by `codanna index`. After each `fast_apply` edit it incrementally reindexes the changed file in the background. Refer to the [Codanna project](https://pypi.org/project/codanna/) for configuration and model setup.
+On first use the server may proceed without hints if the index is missing, while scheduling a background refresh. After each `fast_apply` edit it incrementally reindexes the changed file in the background. During retrieval, stale Codanna hints can still be used when `MCP_RETRIEVAL_HINT_POLICY=prefer-stale`; `strict` skips them. Refer to the [Codanna project](https://pypi.org/project/codanna/) for configuration and model setup.
 
 ### ChunkHound
 
@@ -176,7 +187,7 @@ MCP_SEARCH_RETRIEVAL=1
 MCP_RETRIEVAL_BACKEND=chunkhound
 ```
 
-On first use the server automatically runs `chunkhound index`. After each `fast_apply` edit it triggers a background scan; only files that changed are re-processed (xxHash3-64 checksums). Refer to the [ChunkHound project](https://pypi.org/project/chunkhound/) for configuration and embedding model setup.
+On first use the server may proceed without hints if the index is missing, while scheduling a background refresh. After each `fast_apply` edit it triggers a background scan; only files that changed are re-processed (xxHash3-64 checksums). During retrieval, stale ChunkHound hints can still be used when `MCP_RETRIEVAL_HINT_POLICY=prefer-stale`; `strict` skips them. Refer to the [ChunkHound project](https://pypi.org/project/chunkhound/) for configuration and embedding model setup.
 
 ### Auto Mode
 
@@ -186,6 +197,8 @@ MCP_RETRIEVAL_BACKEND=auto
 ```
 
 The server picks the first available backend per session: `codanna` → `chunkhound` → `relace` (cloud fallback).
+
+When the selected local backend is stale or missing, retrieval can schedule a background refresh. The query path does not block on rebuild completion.
 
 ---
 
@@ -268,10 +281,9 @@ Trace logs are also JSONL. Each line is one event.
 | `backend_index_error` | Codanna/ChunkHound indexing failed |
 | `backend_disabled` | Backend disabled for session (e.g., CLI missing) |
 | `retrieval_backend_selected` | Retrieval backend selection (including auto) |
+| `retrieval_hints_skipped` | Retrieval hints skipped because policy/backend freshness did not allow them |
 | `retrieval_hints_complete` | Retrieval hints completed |
 | `retrieval_hints_error` | Retrieval hints failed (fallback continues) |
-| `retrieval_auto_sync_complete` | Relace auto-sync completed |
-| `retrieval_auto_sync_error` | Relace auto-sync failed |
 
 ### Tool Lifecycle Events
 

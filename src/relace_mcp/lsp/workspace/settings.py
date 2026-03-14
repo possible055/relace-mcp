@@ -8,13 +8,12 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-def deep_update_dict(target: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
+def deep_update_dict(target: dict[str, Any], updates: dict[str, Any]) -> None:
     for key, value in updates.items():
         if isinstance(value, dict) and isinstance(target.get(key), dict):
             deep_update_dict(target[key], value)
         else:
             target[key] = value
-    return target
 
 
 def _normalize_str_list(raw: Any) -> list[str] | None:

@@ -71,18 +71,24 @@ def should_run_anchor_precheck(edit_snippet: str, instruction: str | None) -> bo
     return True
 
 
+def _find_all_line_numbers(text_lines: list[str], substring: str) -> list[int]:
+    return [i for i, line in enumerate(text_lines) if substring in line]
+
+
 def anchor_precheck(concrete_lines_list: list[str], initial_code: str) -> bool:
     """Check if concrete lines have sufficient anchors to locate in initial_code.
 
     Uses loose matching (after strip()) to avoid false negatives from indentation/whitespace differences.
     Filters out short lines (like }, return) to avoid false positives.
+    When multiple anchors are found, validates they cluster within an 80-line window.
+    Considers all occurrences of each anchor to avoid false negatives from repeated lines.
 
     Args:
         concrete_lines_list: Non-placeholder lines.
         initial_code: Original file content.
 
     Returns:
-        True if at least 2 valid anchors are found, False otherwise.
+        True if at least 2 valid anchors are found in the same region, False otherwise.
     """
     if not concrete_lines_list:
         return False
@@ -99,23 +105,37 @@ def anchor_precheck(concrete_lines_list: list[str], initial_code: str) -> bool:
         # Only directives, no real anchors
         return False
 
-    # Count valid anchor hits
+    # Count valid anchor hits and record their line positions
     MIN_ANCHOR_LENGTH = (
         10  # Minimum valid anchor length (avoid false positives from }, return, etc.)
     )
     MIN_ANCHOR_HITS = 2  # Minimum number of anchor hits required
+    CLUSTER_WINDOW = 80  # Maximum line span for anchor cluster
 
-    hit_count = 0
+    initial_lines = initial_code.splitlines()
+    all_positions: list[list[int]] = []
     for line in anchor_lines:
         stripped = line.strip()
         # Only count sufficiently long lines to avoid false positives from }, return, pass, etc.
         if len(stripped) >= MIN_ANCHOR_LENGTH and stripped in initial_code:
-            hit_count += 1
-            if hit_count >= MIN_ANCHOR_HITS:
+            positions = _find_all_line_numbers(initial_lines, stripped)
+            if positions:
+                all_positions.append(positions)
+
+    if len(all_positions) >= MIN_ANCHOR_HITS:
+        # Cluster check: find if any combination of positions falls within CLUSTER_WINDOW.
+        # Greedy: try each position of the first anchor as seed.
+        for seed in all_positions[0]:
+            cluster = [seed]
+            for other in all_positions[1:]:
+                best = min(other, key=lambda p: abs(p - seed))
+                cluster.append(best)
+            if max(cluster) - min(cluster) <= CLUSTER_WINDOW:
                 return True
+        return False
 
     # If only one valid anchor but it's sufficiently unique (length >= 20), accept it
-    if hit_count == 1:
+    if len(all_positions) == 1:
         for line in anchor_lines:
             stripped = line.strip()
             if len(stripped) >= 20 and stripped in initial_code:
@@ -243,6 +263,49 @@ def extract_remove_targets(edit_snippet: str) -> list[str]:
     return targets
 
 
+def estimate_removed_lines(initial_code: str, remove_targets: list[str]) -> int:
+    """Estimate total lines occupied by remove-directive targets in initial_code.
+
+    Scans for top-level symbol definitions matching targets and counts their
+    lines (including body). Used to adjust blast-radius calculations.
+
+    Args:
+        initial_code: Original file content.
+        remove_targets: List of symbol names from remove directives.
+
+    Returns:
+        Estimated total lines belonging to targeted symbols.
+    """
+    if not remove_targets:
+        return 0
+
+    target_set = set(remove_targets)
+    lines = initial_code.splitlines()
+    total = 0
+
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].lstrip()
+        m = _SYMBOL_RE.match(stripped)
+        if m and m.group(1) in target_set:
+            indent = len(lines[i]) - len(stripped)
+            start = i
+            i += 1
+            while i < len(lines):
+                if not lines[i].strip():
+                    i += 1
+                    continue
+                line_indent = len(lines[i]) - len(lines[i].lstrip())
+                if line_indent <= indent:
+                    break
+                i += 1
+            total += i - start
+        else:
+            i += 1
+
+    return total
+
+
 def _extract_new_lines(edit_snippet: str, initial_code: str) -> list[str]:
     """Extract "new lines" from snippet (lines not in initial_code).
 
@@ -360,3 +423,115 @@ def validate_syntax_delta(
         if initial_has_error:
             return True, None  # Original was already broken, don't block
         return False, f"SyntaxError at line {e.lineno}: {e.msg}"
+
+
+def count_effective_diff_lines(diff: str) -> int:
+    """Count non-whitespace-only changed lines in a unified diff.
+
+    Args:
+        diff: Unified diff string.
+
+    Returns:
+        Number of effective (non-whitespace-only) added/deleted lines.
+    """
+    count = 0
+    for line in diff.splitlines():
+        if line.startswith("--- ") or line.startswith("+++ ") or line.startswith("@@"):
+            continue
+        if line.startswith("+") or line.startswith("-"):
+            content = line[1:]
+            if content.strip():
+                count += 1
+    return count
+
+
+def extract_top_level_symbols(code: str, file_path: str) -> list[str]:
+    """Extract top-level symbol names from source code.
+
+    For Python files, uses ast.parse to extract function and class names
+    (imports are intentionally excluded).
+    For other languages, uses regex fallback patterns.
+    Returns empty list on parse failure (does not block the pipeline).
+
+    Args:
+        code: Source code text.
+        file_path: File path (used to detect language by extension).
+
+    Returns:
+        Sorted list of unique top-level symbol names.
+    """
+    ext = os.path.splitext(file_path)[1].lower()
+
+    if ext == ".py":
+        return _extract_python_symbols(code)
+
+    return _extract_symbols_regex(code)
+
+
+def _extract_python_symbols(code: str) -> list[str]:
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return []
+
+    names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+    return sorted(names)
+
+
+_SYMBOL_RE = re.compile(
+    r"^(?:export\s+)?(?:async\s+)?(?:def|class|function)\s+(\w+)",
+    re.MULTILINE,
+)
+
+
+def _extract_symbols_regex(code: str) -> list[str]:
+    names: set[str] = set()
+    for m in _SYMBOL_RE.finditer(code):
+        names.add(m.group(1))
+    return sorted(names)
+
+
+def check_symbol_preservation(
+    initial_code: str,
+    merged_code: str,
+    edit_snippet: str,
+    file_path: str,
+) -> tuple[bool, str | None]:
+    """Check that no top-level symbols were accidentally removed by the merge.
+
+    Compares symbols before and after merge. Symbols explicitly targeted
+    by remove directives (``// remove X`` / ``# remove X``) are excluded
+    from the check.
+
+    Args:
+        initial_code: Original file content.
+        merged_code: Merged code from API.
+        edit_snippet: Edit snippet (checked for remove directives).
+        file_path: File path (used to detect language).
+
+    Returns:
+        (passed, failure_reason): failure_reason is None when passed=True.
+    """
+    initial_symbols = set(extract_top_level_symbols(initial_code, file_path))
+    merged_symbols = set(extract_top_level_symbols(merged_code, file_path))
+
+    if not initial_symbols:
+        return True, None  # Cannot extract symbols, skip check
+
+    disappeared = initial_symbols - merged_symbols
+
+    if not disappeared:
+        return True, None
+
+    # Exclude symbols explicitly targeted by remove directives
+    remove_targets = set(extract_remove_targets(edit_snippet))
+    unexpected = disappeared - remove_targets
+
+    if not unexpected:
+        return True, None
+
+    missing_list = ", ".join(sorted(unexpected))
+    return False, f"Symbols unexpectedly removed: {missing_list}"

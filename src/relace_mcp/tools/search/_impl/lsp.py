@@ -189,30 +189,32 @@ class SearchSymbolParams:
     query: str
 
 
-@dataclass
-class ListSymbolsParams:
-    """Parameters for list_symbols tool."""
-
-    file: str
-
-
-@dataclass
-class GetTypeParams:
-    """Parameters for get_type tool."""
-
-    file: str
-    line: int  # 1-indexed
-    column: int  # 1-indexed
-
-
-@dataclass
-class CallGraphParams:
-    """Parameters for call_graph tool."""
-
-    file: str
-    line: int  # 1-indexed
-    column: int  # 1-indexed
-    direction: str  # "incoming" | "outgoing"
+# --- Disabled LSP tools (kept for future re-enablement) ---
+# @dataclass
+# class ListSymbolsParams:
+#     """Parameters for list_symbols tool."""
+#
+#     file: str
+#
+#
+# @dataclass
+# class GetTypeParams:
+#     """Parameters for get_type tool."""
+#
+#     file: str
+#     line: int  # 1-indexed
+#     column: int  # 1-indexed
+#
+#
+# @dataclass
+# class CallGraphParams:
+#     """Parameters for call_graph tool."""
+#
+#     file: str
+#     line: int  # 1-indexed
+#     column: int  # 1-indexed
+#     direction: str  # "incoming" | "outgoing"
+# --- End disabled LSP tool params ---
 
 
 def _find_symbol_columns(line_content: str, keywords: frozenset[str] | None = None) -> list[int]:
@@ -409,144 +411,146 @@ def search_symbol_handler(params: SearchSymbolParams, base_dir: str) -> str:
     return "\n".join(lines)
 
 
-def list_symbols_handler(params: ListSymbolsParams, base_dir: str) -> str:
-    """List all symbols defined in a file using LSP.
-
-    Thread-safe through LSPClientManager's internal locking.
-    First call incurs startup delay, subsequent calls are fast.
-    """
-    if not params.file or not params.file.strip():
-        return "Error: file path cannot be empty."
-
-    path_result = _validate_lsp_path(params.file, base_dir)
-    if isinstance(path_result, str):
-        return path_result
-
-    client_result = _get_lsp_client(path_result.config, base_dir)
-    if isinstance(client_result, str):
-        return client_result
-    session, _, _ = client_result
-
-    try:
-        with session as client:
-            results = client.document_symbols(path_result.rel_path)
-
-            if not results:
-                return "No symbols found in file."
-
-            lines = []
-            for sym in results:
-                lines.append(sym.to_outline_str())
-
-            return "\n".join(lines)
-
-    except Exception as exc:
-        return _handle_lsp_error(exc, "document symbols")
-
-
-def get_type_handler(params: GetTypeParams, base_dir: str) -> str:
-    """Get type information at a position using LSP hover.
-
-    Thread-safe through LSPClientManager's internal locking.
-    First call incurs startup delay, subsequent calls are fast.
-    """
-    if not isinstance(params.line, int) or not isinstance(params.column, int):
-        return "Error: line and column must be integers (1-indexed)."
-    if params.line < 1:
-        return "Error: line must be >= 1 (1-indexed)."
-    if params.column < 1:
-        return "Error: column must be >= 1 (1-indexed)."
-
-    # Convert to 0-indexed for LSP protocol
-    line_0 = params.line - 1
-    column_0 = params.column - 1
-
-    path_result = _validate_lsp_path(params.file, base_dir)
-    if isinstance(path_result, str):
-        return path_result
-
-    client_result = _get_lsp_client(path_result.config, base_dir)
-    if isinstance(client_result, str):
-        return client_result
-    session, _, _ = client_result
-
-    try:
-        with session as client:
-            result = client.hover(path_result.rel_path, line_0, column_0)
-
-            if not result:
-                return "No type information available."
-
-            return result.to_display_str()
-
-    except Exception as exc:
-        return _handle_lsp_error(exc, "hover")
-
-
-def call_graph_handler(params: CallGraphParams, base_dir: str) -> str:
-    """Get call hierarchy (who calls / what is called) using LSP.
-
-    Thread-safe through LSPClientManager's internal locking.
-    First call incurs startup delay, subsequent calls are fast.
-    """
-    if params.direction not in ("incoming", "outgoing"):
-        return "Error: direction must be 'incoming' or 'outgoing'."
-
-    if not isinstance(params.line, int) or not isinstance(params.column, int):
-        return "Error: line and column must be integers (1-indexed)."
-    if params.line < 1:
-        return "Error: line must be >= 1 (1-indexed)."
-    if params.column < 1:
-        return "Error: column must be >= 1 (1-indexed)."
-
-    if not params.file or not params.file.strip():
-        return "Error: file path cannot be empty."
-
-    line_0 = params.line - 1
-    column_0 = params.column - 1
-
-    path_result = _validate_lsp_path(params.file, base_dir)
-    if isinstance(path_result, str):
-        return path_result
-
-    client_result = _get_lsp_client(path_result.config, base_dir)
-    if isinstance(client_result, str):
-        return client_result
-    session, resolved_base_dir, _ = client_result
-
-    try:
-        with session as client:
-            results = client.call_hierarchy(
-                path_result.rel_path,
-                line_0,
-                column_0,
-                params.direction,
-            )
-
-            if not results:
-                direction_desc = "callers" if params.direction == "incoming" else "callees"
-                return f"No {direction_desc} found. Ensure cursor is on a function/method name."
-
-            lines = []
-            header = "Called by:" if params.direction == "incoming" else "Calls:"
-            lines.append(header)
-            result_count = 0
-            for r in results:
-                display_str = r.to_display_str(resolved_base_dir)
-                if display_str is not None:
-                    lines.append("  " + display_str)
-                    result_count += 1
-                    if result_count >= MAX_LSP_RESULTS:
-                        break
-
-            if len(lines) == 1:  # Only header, no results after filtering
-                direction_desc = "callers" if params.direction == "incoming" else "callees"
-                return f"No {direction_desc} found within repository."
-
-            if result_count >= MAX_LSP_RESULTS:
-                lines.append(f"  ... capped at {MAX_LSP_RESULTS} results")
-
-            return "\n".join(lines)
-
-    except Exception as exc:
-        return _handle_lsp_error(exc, "call hierarchy")
+# --- Disabled LSP tools (kept for future re-enablement) ---
+# def list_symbols_handler(params: ListSymbolsParams, base_dir: str) -> str:
+#     """List all symbols defined in a file using LSP.
+#
+#     Thread-safe through LSPClientManager's internal locking.
+#     First call incurs startup delay, subsequent calls are fast.
+#     """
+#     if not params.file or not params.file.strip():
+#         return "Error: file path cannot be empty."
+#
+#     path_result = _validate_lsp_path(params.file, base_dir)
+#     if isinstance(path_result, str):
+#         return path_result
+#
+#     client_result = _get_lsp_client(path_result.config, base_dir)
+#     if isinstance(client_result, str):
+#         return client_result
+#     session, _, _ = client_result
+#
+#     try:
+#         with session as client:
+#             results = client.document_symbols(path_result.rel_path)
+#
+#             if not results:
+#                 return "No symbols found in file."
+#
+#             lines = []
+#             for sym in results:
+#                 lines.append(sym.to_outline_str())
+#
+#             return "\n".join(lines)
+#
+#     except Exception as exc:
+#         return _handle_lsp_error(exc, "document symbols")
+#
+#
+# def get_type_handler(params: GetTypeParams, base_dir: str) -> str:
+#     """Get type information at a position using LSP hover.
+#
+#     Thread-safe through LSPClientManager's internal locking.
+#     First call incurs startup delay, subsequent calls are fast.
+#     """
+#     if not isinstance(params.line, int) or not isinstance(params.column, int):
+#         return "Error: line and column must be integers (1-indexed)."
+#     if params.line < 1:
+#         return "Error: line must be >= 1 (1-indexed)."
+#     if params.column < 1:
+#         return "Error: column must be >= 1 (1-indexed)."
+#
+#     # Convert to 0-indexed for LSP protocol
+#     line_0 = params.line - 1
+#     column_0 = params.column - 1
+#
+#     path_result = _validate_lsp_path(params.file, base_dir)
+#     if isinstance(path_result, str):
+#         return path_result
+#
+#     client_result = _get_lsp_client(path_result.config, base_dir)
+#     if isinstance(client_result, str):
+#         return client_result
+#     session, _, _ = client_result
+#
+#     try:
+#         with session as client:
+#             result = client.hover(path_result.rel_path, line_0, column_0)
+#
+#             if not result:
+#                 return "No type information available."
+#
+#             return result.to_display_str()
+#
+#     except Exception as exc:
+#         return _handle_lsp_error(exc, "hover")
+#
+#
+# def call_graph_handler(params: CallGraphParams, base_dir: str) -> str:
+#     """Get call hierarchy (who calls / what is called) using LSP.
+#
+#     Thread-safe through LSPClientManager's internal locking.
+#     First call incurs startup delay, subsequent calls are fast.
+#     """
+#     if params.direction not in ("incoming", "outgoing"):
+#         return "Error: direction must be 'incoming' or 'outgoing'."
+#
+#     if not isinstance(params.line, int) or not isinstance(params.column, int):
+#         return "Error: line and column must be integers (1-indexed)."
+#     if params.line < 1:
+#         return "Error: line must be >= 1 (1-indexed)."
+#     if params.column < 1:
+#         return "Error: column must be >= 1 (1-indexed)."
+#
+#     if not params.file or not params.file.strip():
+#         return "Error: file path cannot be empty."
+#
+#     line_0 = params.line - 1
+#     column_0 = params.column - 1
+#
+#     path_result = _validate_lsp_path(params.file, base_dir)
+#     if isinstance(path_result, str):
+#         return path_result
+#
+#     client_result = _get_lsp_client(path_result.config, base_dir)
+#     if isinstance(client_result, str):
+#         return client_result
+#     session, resolved_base_dir, _ = client_result
+#
+#     try:
+#         with session as client:
+#             results = client.call_hierarchy(
+#                 path_result.rel_path,
+#                 line_0,
+#                 column_0,
+#                 params.direction,
+#             )
+#
+#             if not results:
+#                 direction_desc = "callers" if params.direction == "incoming" else "callees"
+#                 return f"No {direction_desc} found. Ensure cursor is on a function/method name."
+#
+#             lines = []
+#             header = "Called by:" if params.direction == "incoming" else "Calls:"
+#             lines.append(header)
+#             result_count = 0
+#             for r in results:
+#                 display_str = r.to_display_str(resolved_base_dir)
+#                 if display_str is not None:
+#                     lines.append("  " + display_str)
+#                     result_count += 1
+#                     if result_count >= MAX_LSP_RESULTS:
+#                         break
+#
+#             if len(lines) == 1:  # Only header, no results after filtering
+#                 direction_desc = "callers" if params.direction == "incoming" else "callees"
+#                 return f"No {direction_desc} found within repository."
+#
+#             if result_count >= MAX_LSP_RESULTS:
+#                 lines.append(f"  ... capped at {MAX_LSP_RESULTS} results")
+#
+#             return "\n".join(lines)
+#
+#     except Exception as exc:
+#         return _handle_lsp_error(exc, "call hierarchy")
+# --- End disabled LSP tools ---
