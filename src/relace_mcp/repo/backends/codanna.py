@@ -48,23 +48,12 @@ def _codanna_health_probe(base_dir: str) -> None:
     except RuntimeError as exc:
         msg = str(exc).lower()
         if "index" in msg and ("missing" in msg or "not found" in msg or "not built" in msg):
-            logger.debug("Codanna index not found in health probe, attempting to create...")
-            env = os.environ.copy()
-            env["LANG"] = "C.UTF-8"
-            env["LC_ALL"] = "C.UTF-8"
-            try:
-                _ensure_codanna_index(base_dir, env)
-            except RuntimeError as reindex_exc:
-                raise ExternalCLIError(
-                    backend="codanna",
-                    kind="index_missing",
-                    message=f"Codanna index not available. Auto-index failed: {reindex_exc}",
-                    command=["codanna", "mcp"],
-                ) from reindex_exc
-            head = get_git_head(base_dir)
-            if head:
-                _write_indexed_head(base_dir, head, _CODANNA_HEAD_FILE)
-            return
+            raise ExternalCLIError(
+                backend="codanna",
+                kind="index_missing",
+                message="Codanna index not built. Run `codanna index` to build it.",
+                command=["codanna", "mcp"],
+            ) from exc
         raise ExternalCLIError(
             backend="codanna",
             kind="nonzero_exit",

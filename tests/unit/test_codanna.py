@@ -189,26 +189,20 @@ class TestCodannaSearchAutoRetry:
 
 
 class TestCodannaHealthProbeHeadPersistence:
-    @patch("relace_mcp.repo.backends.codanna._write_indexed_head")
-    @patch("relace_mcp.repo.backends.codanna.get_git_head")
-    @patch("relace_mcp.repo.backends.codanna._ensure_codanna_index")
     @patch("relace_mcp.repo.backends.codanna._run_cli_json")
-    def test_writes_head_after_auto_index(self, mock_run, mock_ensure, mock_head, mock_write):
+    def test_raises_external_cli_error_on_index_missing(self, mock_run):
         mock_run.side_effect = RuntimeError("codanna error (exit 1): index not found")
-        mock_head.return_value = "deadbeef"
-        _codanna_health_probe("/tmp/repo")
-        mock_ensure.assert_called_once()
-        mock_write.assert_called_once_with("/tmp/repo", "deadbeef", ".codanna/last_indexed_head")
+        with pytest.raises(ExternalCLIError) as exc_info:
+            _codanna_health_probe("/tmp/repo")
+        assert exc_info.value.kind == "index_missing"
+        assert exc_info.value.backend == "codanna"
 
-    @patch("relace_mcp.repo.backends.codanna._write_indexed_head")
-    @patch("relace_mcp.repo.backends.codanna.get_git_head")
-    @patch("relace_mcp.repo.backends.codanna._ensure_codanna_index")
     @patch("relace_mcp.repo.backends.codanna._run_cli_json")
-    def test_no_write_when_not_git_repo(self, mock_run, mock_ensure, mock_head, mock_write):
+    def test_raises_external_cli_error_on_index_missing_no_git(self, mock_run):
         mock_run.side_effect = RuntimeError("codanna error (exit 1): index not found")
-        mock_head.return_value = None
-        _codanna_health_probe("/tmp/repo")
-        mock_write.assert_not_called()
+        with pytest.raises(ExternalCLIError) as exc_info:
+            _codanna_health_probe("/tmp/repo")
+        assert exc_info.value.kind == "index_missing"
 
 
 class TestCodannaSearch:

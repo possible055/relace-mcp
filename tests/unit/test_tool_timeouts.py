@@ -21,7 +21,6 @@ async def test_tool_timeouts(tmp_path) -> None:
         "cloud_search": 300.0,
         "cloud_clear": 300.0,
         "cloud_list": 120.0,
-        "cloud_info": 300.0,
     }
 
     for name, timeout in expected.items():

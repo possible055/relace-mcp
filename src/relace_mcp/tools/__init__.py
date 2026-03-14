@@ -101,19 +101,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         if ctx is not None and result and result.get("status") == "ok":
             diff_preview = (result.get("diff") or "")[:200]
             await ctx.debug(f"Edit applied: {diff_preview}...")
-        if result and result.get("status") == "ok":
-            import shutil as _shutil
-
-            from ..repo.backends import (
-                is_backend_disabled,
-                schedule_bg_chunkhound_index,
-                schedule_bg_codanna_index,
-            )
-
-            if _shutil.which("chunkhound") and not is_backend_disabled("chunkhound"):
-                schedule_bg_chunkhound_index(base_dir)
-            if _shutil.which("codanna") and not is_backend_disabled("codanna"):
-                schedule_bg_codanna_index(result.get("path", path), base_dir)
         return result
 
     # Register agentic_search (always enabled)
@@ -193,10 +180,13 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     ) -> dict[str, Any]:
         """Inspect indexing services status.
 
-        This reports:
-        - Relace cloud repo sync/index status (passive by default; probe can call cloud_info)
-        - Codanna local index status (markers + optional health probe)
-        - ChunkHound local index status (markers + optional health probe)
+        Single status entry point for all backends (Relace cloud, Codanna, ChunkHound).
+        Reports freshness, hints_usable, and recommended_action for each backend.
+
+        probe=False (default): reads local state only, no external calls.
+        probe=True: runs active health probes; for Relace cloud, calls the API.
+
+        Use this BEFORE deciding whether to call cloud_sync or any refresh operation.
         """
         from ..repo.core import get_current_git_info, is_git_dirty
         from ..repo.core.state import load_sync_state
@@ -342,6 +332,12 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 ("codanna", codanna_status),
                 ("chunkhound", chunkhound_status),
             ):
+                if _settings.RETRIEVAL_BACKEND != backend_name:
+                    status_obj["probe"] = {
+                        "status": "skipped",
+                        "reason": f"RETRIEVAL_BACKEND is {_settings.RETRIEVAL_BACKEND!r}, not {backend_name!r}",
+                    }
+                    continue
                 if not status_obj.get("cli_found"):
                     status_obj["probe"] = {
                         "status": "error",
@@ -462,12 +458,16 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         ] = False,
         ctx: Context | None = None,
     ) -> dict[str, Any]:
-        """Upload codebase to Relace Cloud for semantic search.
+        """Upload or refresh codebase to Relace Cloud for semantic search.
 
-        Syncs git-tracked files to enable cloud_search. Incremental by default—only
-        uploads changed files. Run once per session before using cloud_search.
+        Check indexing_status() first—skip this if cloud freshness is already 'fresh'.
+        Syncs git-tracked files to enable cloud_search. Incremental by default.
 
-        Fails if not in a git repository or RELACE_API_KEY is not set.
+        Advanced (Relace-specific):
+          force=True              Re-upload all files; use after large refactors.
+          force=True+mirror=True  Delete cloud files absent locally; use after branch switch.
+
+        Fails if not in a git repo or RELACE_API_KEY is not set.
         """
         from ..repo.cloud.sync import cloud_sync_logic
 
@@ -556,7 +556,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         )
 
     @mcp.tool(
-        tags={"cloud"},
+        tags={"cloud", "admin"},
         timeout=120.0,
         annotations={
             "readOnlyHint": True,
@@ -570,41 +570,15 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             str, Field(description="Why you need this list (helps with debugging).")
         ] = "",
     ) -> dict[str, Any]:
-        """List all repositories in your Relace Cloud account.
+        """[ADMIN] List all repositories in your Relace Cloud account.
 
-        Returns repository IDs, names, and indexing status. Use to find repo_id for cloud_clear.
+        Use to find repo_id for cloud_clear. Not needed for normal search/sync workflow.
+        Returns repository IDs, names, and indexing status.
         """
         from ..repo.cloud.list import cloud_list_logic
 
         del reason  # LLM chain-of-thought only
         return cloud_list_logic(_clients.get_repo())
-
-    @mcp.tool(
-        tags={"cloud"},
-        timeout=300.0,
-        annotations={
-            "readOnlyHint": True,
-            "destructiveHint": False,
-            "idempotentHint": True,
-            "openWorldHint": True,
-        },
-    )
-    async def cloud_info(
-        reason: Annotated[
-            str, Field(description="Why you need sync status (helps with debugging).")
-        ] = "",
-        ctx: Context | None = None,
-    ) -> dict[str, Any]:
-        """Check sync status before running cloud_sync.
-
-        Shows local git state, last sync info, and whether re-sync is needed.
-        Helps decide if cloud_sync should be called.
-        """
-        from ..repo.cloud.info import cloud_info_logic
-
-        del reason  # LLM chain-of-thought only
-        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-        return await asyncio.to_thread(cloud_info_logic, _clients.get_repo(), base_dir)
 
     if _settings.AGENTIC_RETRIEVAL_ENABLED:
 
@@ -692,10 +666,10 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         tags={"cloud"},
     )
     async def cloud_status(ctx: Context | None = None) -> str:
-        """Current cloud sync status - lightweight read from local state file.
+        """Current cloud sync status — lightweight, reads local state file only (no API calls).
 
-        Returns sync state without making API calls. Use this to quickly check
-        if cloud_sync has been run and what the current sync status is.
+        For dashboard/UI display. Agents should use the indexing_status tool instead,
+        which covers Relace, Codanna, and ChunkHound backends with recommended_action.
         """
         try:
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
