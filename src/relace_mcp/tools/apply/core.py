@@ -32,10 +32,16 @@ logger = logging.getLogger(__name__)
 
 # Per-file lock map for serializing concurrent edits to the same file
 _path_locks: dict[str, asyncio.Lock] = {}
+_PATH_LOCKS_MAX = 256
 
 
 def _get_path_lock(path: str) -> asyncio.Lock:
     if path not in _path_locks:
+        # Evict unlocked entries when map exceeds threshold
+        if len(_path_locks) >= _PATH_LOCKS_MAX:
+            idle = [k for k, v in _path_locks.items() if not v.locked()]
+            for k in idle:
+                del _path_locks[k]
         _path_locks[path] = asyncio.Lock()
     return _path_locks[path]
 

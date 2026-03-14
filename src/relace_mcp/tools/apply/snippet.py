@@ -441,21 +441,12 @@ _SYMBOL_RE = re.compile(
     r"^(?:export\s+)?(?:async\s+)?(?:def|class|function|const|let|var)\s+(\w+)",
     re.MULTILINE,
 )
-_IMPORT_RE = re.compile(
-    r"^import\s+(.+)",
-    re.MULTILINE,
-)
 
 
 def _extract_symbols_regex(code: str) -> list[str]:
     names: set[str] = set()
     for m in _SYMBOL_RE.finditer(code):
         names.add(m.group(1))
-    for m in _IMPORT_RE.finditer(code):
-        # Take first token of the import line as the symbol name
-        first_token = m.group(1).split()[0].strip("'\"{}*;,")
-        if first_token and first_token.isidentifier():
-            names.add(first_token)
     return sorted(names)
 
 

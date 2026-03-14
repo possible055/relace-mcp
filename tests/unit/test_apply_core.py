@@ -40,7 +40,7 @@ class TestPathLock:
         """Two concurrent applies to same file should be serialized by lock."""
         source = tmp_path / "target.py"
         initial = "def hello_world():\n    return original_value\n"
-        source.write_text(initial, encoding="utf-8")
+        source.write_text(initial, encoding="utf-8", newline="")
 
         order: list[str] = []
 
@@ -73,7 +73,7 @@ class TestContentConflict:
         """Should return CONTENT_CONFLICT when file changes between read and write."""
         source = tmp_path / "conflict.py"
         initial = "def process_incoming_request():\n    return original_response_value\n"
-        source.write_text(initial, encoding="utf-8")
+        source.write_text(initial, encoding="utf-8", newline="")
 
         merged = "def process_incoming_request():\n    return modified_response_value\n"
         backend = _make_mock_backend(merged)
@@ -86,6 +86,7 @@ class TestContentConflict:
             source.write_text(
                 "def process_incoming_request():\n    return tampered_externally\n",
                 encoding="utf-8",
+                newline="",
             )
             return result
 
@@ -105,7 +106,7 @@ class TestBlastRadiusGuard:
         # Create a file with 20 lines of real code
         lines = [f"variable_{i} = compute_value({i})" for i in range(20)]
         source = tmp_path / "blast.py"
-        source.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        source.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="")
 
         # Snippet has 2 concrete anchor lines that exist in the file
         edit_snippet = (
@@ -132,6 +133,7 @@ class TestBlastRadiusGuard:
         source.write_text(
             "def process_incoming_request():\n    return original_response_value\n\ndef handle_outgoing_response():\n    return 2\n",
             encoding="utf-8",
+            newline="",
         )
 
         edit_snippet = (
@@ -158,7 +160,7 @@ class TestSymbolPreservationGuard:
             "def compute_beta_value():\n    return 2\n\n"
             "def compute_gamma_value():\n    return 3\n"
         )
-        source.write_text(initial, encoding="utf-8")
+        source.write_text(initial, encoding="utf-8", newline="")
 
         # Snippet modifies alpha, provides anchors; but LLM drops beta
         edit_snippet = (
@@ -187,7 +189,7 @@ class TestSymbolPreservationGuard:
             "def compute_beta_value():\n    return 2\n\n"
             "def compute_gamma_value():\n    return 3\n"
         )
-        source.write_text(initial, encoding="utf-8")
+        source.write_text(initial, encoding="utf-8", newline="")
 
         edit_snippet = (
             "def compute_alpha_value():\n"
@@ -212,7 +214,7 @@ class TestSymbolPreservationGuard:
         initial = (
             "def compute_alpha_value():\n    return 1\n\ndef compute_beta_value():\n    return 2\n"
         )
-        source.write_text(initial, encoding="utf-8")
+        source.write_text(initial, encoding="utf-8", newline="")
 
         edit_snippet = (
             "def compute_alpha_value():\n"
@@ -240,7 +242,7 @@ class TestImprovedErrorMessage:
             "def handle_response():\n    return 2\n\n"
             "class MyService:\n    pass\n"
         )
-        source.write_text(initial, encoding="utf-8")
+        source.write_text(initial, encoding="utf-8", newline="")
 
         # Snippet with no matching anchors
         edit_snippet = "def totally_unrelated_anchor_xyz():\n    return 999\n"

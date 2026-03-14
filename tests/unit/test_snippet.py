@@ -374,6 +374,19 @@ class TestExtractTopLevelSymbols:
         assert "Path" not in symbols
         assert "main" in symbols
 
+    def test_non_python_excludes_imports(self) -> None:
+        """Non-Python files should not include import names as symbols."""
+        code = "import React from 'react'\nexport function App() { return null }\n"
+        symbols = extract_top_level_symbols(code, "app.tsx")
+        assert "React" not in symbols
+        assert "App" in symbols
+
+    def test_go_excludes_imports(self) -> None:
+        """Go import names should not be included as symbols."""
+        code = 'import "fmt"\n\nfunc main() {\n}\n'
+        symbols = extract_top_level_symbols(code, "main.go")
+        assert "fmt" not in symbols
+
 
 class TestCheckSymbolPreservation:
     """Test check_symbol_preservation function."""
@@ -403,4 +416,11 @@ class TestCheckSymbolPreservation:
         initial = "def foo():\n    pass\n\ndef bar():\n    pass\n"
         merged = "def foo():\n    pass\n"
         passed, _ = check_symbol_preservation(initial, merged, "# remove bar", "test.py")
+        assert passed is True
+
+    def test_ts_import_removal_not_flagged(self) -> None:
+        """Removing TS imports should NOT trigger SYMBOL_LOST."""
+        initial = "import React from 'react'\nexport function App() { return null }\n"
+        merged = "export function App() { return null }\n"
+        passed, _ = check_symbol_preservation(initial, merged, "", "app.tsx")
         assert passed is True
