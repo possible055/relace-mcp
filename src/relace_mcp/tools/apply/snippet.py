@@ -405,7 +405,8 @@ def count_effective_diff_lines(diff: str) -> int:
 def extract_top_level_symbols(code: str, file_path: str) -> list[str]:
     """Extract top-level symbol names from source code.
 
-    For Python files, uses ast.parse to extract function, class, and import names.
+    For Python files, uses ast.parse to extract function and class names
+    (imports are intentionally excluded).
     For other languages, uses regex fallback patterns.
     Returns empty list on parse failure (does not block the pipeline).
 

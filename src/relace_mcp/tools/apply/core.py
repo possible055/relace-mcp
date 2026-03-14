@@ -199,7 +199,7 @@ async def _apply_to_existing_file(
 
     async with _get_path_lock(str(resolved_path)):
         initial_code, detected_encoding = read_text_with_fallback(resolved_path)
-        initial_hash = hashlib.sha256(initial_code.encode(detected_encoding)).hexdigest()
+        initial_hash = hashlib.sha256(resolved_path.read_bytes()).hexdigest()
 
         if snippet.should_run_anchor_precheck(edit_snippet, ctx.instruction):
             if not snippet.anchor_precheck(concrete, initial_code):
@@ -312,7 +312,7 @@ async def _apply_to_existing_file(
             if not any(line.strip().startswith(pat) for pat in snippet._REMOVE_DIRECTIVE_PATTERNS)
         ]
         snippet_scope = max(len(scope_lines), 1)
-        if snippet_scope > 0 and effective_diff_lines > snippet_scope * 3:
+        if effective_diff_lines > snippet_scope * 3:
             logger.warning(
                 "[%s] BLAST_RADIUS_EXCEEDED for %s: diff=%d lines, snippet=%d lines",
                 ctx.trace_id,
@@ -377,8 +377,7 @@ async def _apply_to_existing_file(
                 )
 
         # Optimistic concurrency: verify file unchanged since read
-        current_code, _ = read_text_with_fallback(resolved_path)
-        current_hash = hashlib.sha256(current_code.encode(detected_encoding)).hexdigest()
+        current_hash = hashlib.sha256(resolved_path.read_bytes()).hexdigest()
         if current_hash != initial_hash:
             logger.warning(
                 "[%s] CONTENT_CONFLICT for %s: file changed during apply",
