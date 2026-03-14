@@ -1128,7 +1128,7 @@ class TestApplyNoopDetection:
 
         assert result["status"] == "error"
         assert result["code"] == "APPLY_NOOP"
-        assert "identical to initial" in result["message"]
+        assert "identical to original file" in result["message"]
 
     @pytest.mark.asyncio
     async def test_noop_idempotent_returns_ok(

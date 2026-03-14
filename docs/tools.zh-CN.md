@@ -61,6 +61,24 @@
 
 ---
 
+## `indexing_status`
+
+在不执行 retrieval 的前提下，检查 cloud/local indexing readiness。
+
+### 参数
+
+| 参数 | 必需 | 默认值 | 描述 |
+|------|------|--------|------|
+| `probe` | ❌ | `false` | 对本地 backend 运行主动 health probe，并在启用 cloud tools 时调用 `cloud_info` |
+
+### 返回
+
+- `relace`、`codanna`、`chunkhound` 都会包含 `freshness`：`fresh`、`stale`、`missing` 或 `unknown`
+- `relace`、`codanna`、`chunkhound` 都会包含 `hints_usable`：表示在 `prefer-stale` 下 `agentic_retrieval` 是否可以使用该 backend 的 semantic hints
+- `probe=true` 可能触发 backend health check，以及外部 CLI 的 auto-index side effect
+
+---
+
 ## `cloud_sync`
 
 > **注意：** 所有 `cloud_*` 工具的响应都会包含 `trace_id`。失败时响应还可能包含 `status_code`、`error_code`、`retryable`、`recommended_action`。
@@ -153,12 +171,23 @@
 
 ## `agentic_retrieval`
 
-两阶段语义 + 智能代码检索。结合语义提示与本地智能探索以获取精确结果。
+结合 semantic hints 与 agentic code retrieval 的混合检索。它会先用语义 hints 缩小范围，再回到 live code exploration 做确认。
 
 ### 运作方式
 
 1. **阶段 1 — 语义提示**：从配置的 backend 检索相关文件/符号提示
-2. **阶段 2 — 智能探索**：利用提示引导本地 grep/view 探索
+2. **阶段 2 — 智能探索**：利用提示引导本地 grep/view 探索当前 workspace 的 live code
+
+`agentic_retrieval` 不会隐式执行 `cloud_sync`。如果你想在 retrieval 前刷新 cloud index，请显式调用 `cloud_sync`。
+
+### Hint Policy
+
+使用 `MCP_RETRIEVAL_HINT_POLICY` 控制 stale index 的处理方式。
+
+| 值 | 默认 | 行为 |
+|----|------|------|
+| `prefer-stale` | ✅ | 只要有 stale semantic hints 就先用，再由 live code 做确认 |
+| `strict` | — | 只有 backend 处于 fresh 状态时才使用 semantic hints |
 
 ### Backend 配置
 
@@ -170,7 +199,7 @@
 | `codanna` | `codanna` CLI | 符号级语义搜索（本地，无需 API key） |
 | `chunkhound` | `chunkhound` CLI + embedding API key | 代码块级语义搜索（本地） |
 | `relace` | `RELACE_API_KEY` | 云端语义搜索 |
-| `none` | — | 跳过语义提示，仅使用智能探索 |
+| `none` | — | 完全跳过语义提示，改为 agentic-only retrieval |
 
 #### Codanna
 
@@ -192,6 +221,8 @@ export MCP_RETRIEVAL_BACKEND=codanna
 ```
 
 > 将 `.codanna/` 和 `.codannaignore` 添加到 `.gitignore`。
+>
+> 当 Codanna index 处于 stale 状态时，`prefer-stale` 仍会使用它的 hints，并排程 background refresh；`strict` 会跳过 stale Codanna hints。
 
 #### ChunkHound
 
@@ -234,6 +265,8 @@ Embedding 服务配置（项目根目录 `.chunkhound.json`）：
 ```
 
 > 将 `.chunkhound/` 和 `.chunkhound.json` 添加到 `.gitignore`。
+>
+> 当 ChunkHound index 处于 stale 状态时，`prefer-stale` 仍会使用它的 hints，并排程 background refresh；`strict` 会跳过 stale ChunkHound hints。
 
 ### 参数
 
@@ -253,6 +286,9 @@ Embedding 服务配置（项目根目录 `.chunkhound.json`）：
   "turns_used": 3,
   "partial": false,
   "trace_id": "a1b2c3d4",
-  "cloud_hints_used": 5
+  "semantic_hints_used": 5,
+  "hint_policy": "prefer-stale",
+  "hints_index_freshness": "stale",
+  "background_refresh_scheduled": true
 }
 ```

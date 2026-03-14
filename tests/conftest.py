@@ -28,7 +28,7 @@ def successful_api_response() -> dict[str, Any]:
         "choices": [
             {
                 "message": {
-                    "content": "def hello():\n    print('Hello, World!')\n",
+                    "content": "def hello():\n    print('Hello, World!')\n\ndef goodbye():\n    print('Goodbye')\n",
                 },
                 "finish_reason": "stop",
             }

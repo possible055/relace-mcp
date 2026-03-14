@@ -87,6 +87,7 @@ MCP_TRACE_LOGGING = MCP_LOGGING_MODE == "full"
 RELACE_CLOUD_TOOLS = env_bool("RELACE_CLOUD_TOOLS", default=False)
 
 _ALLOWED_RETRIEVAL_BACKENDS = {"relace", "codanna", "chunkhound", "none", "auto"}
+_ALLOWED_RETRIEVAL_HINT_POLICIES = {"prefer-stale", "strict"}
 
 
 def _parse_retrieval_backend() -> str:
@@ -101,18 +102,26 @@ def _parse_retrieval_backend() -> str:
     return raw
 
 
+def _parse_retrieval_hint_policy() -> str:
+    raw = os.getenv("MCP_RETRIEVAL_HINT_POLICY", "prefer-stale").strip().lower()
+    if raw not in _ALLOWED_RETRIEVAL_HINT_POLICIES:
+        raise RuntimeError(
+            f"Invalid MCP_RETRIEVAL_HINT_POLICY={raw!r}. "
+            f"Expected one of: {sorted(_ALLOWED_RETRIEVAL_HINT_POLICIES)}"
+        )
+    return raw
+
+
 RETRIEVAL_BACKEND = _parse_retrieval_backend()
+RETRIEVAL_HINT_POLICY = _parse_retrieval_hint_policy()
 
 
-# Enable agentic_retrieval tool (requires cloud sync or local backend)
+# Enable agentic_retrieval tool (semantic hints are optional; backend may be "none")
 AGENTIC_RETRIEVAL_ENABLED = env_bool("MCP_SEARCH_RETRIEVAL", default=False)
 
 # Search tool toggles (both disabled by default)
 SEARCH_BASH_TOOLS = env_bool("SEARCH_BASH_TOOLS", default=False)
 SEARCH_LSP_TOOLS = env_bool("SEARCH_LSP_TOOLS", default=False)
-
-# Agentic retrieval auto-sync (enabled by default when cloud tools are enabled)
-AGENTIC_AUTO_SYNC = env_bool("RELACE_AGENTIC_AUTO_SYNC", default=True)
 
 # Logging - Cross-platform state directory:
 # - Linux: ~/.local/state/relace
@@ -154,19 +163,19 @@ def reload_tool_settings() -> None:
     """Re-read tool-registration environment variables after dotenv loading.
 
     Module-level constants (``RELACE_CLOUD_TOOLS``, ``RETRIEVAL_BACKEND``,
-    ``AGENTIC_RETRIEVAL_ENABLED``, ``AGENTIC_AUTO_SYNC``) are bound at import
-    time.  If ``settings`` is imported before ``load_dotenv()`` populates
+    ``RETRIEVAL_HINT_POLICY``, ``AGENTIC_RETRIEVAL_ENABLED``) are bound at
+    import time. If ``settings`` is imported before ``load_dotenv()`` populates
     ``os.environ``, these constants will hold stale defaults.
 
     Call this once after ``_load_dotenv_from_path()`` to ensure ``.env``
     values take effect.
     """
-    global RELACE_CLOUD_TOOLS, RETRIEVAL_BACKEND, AGENTIC_RETRIEVAL_ENABLED, AGENTIC_AUTO_SYNC
+    global RELACE_CLOUD_TOOLS, RETRIEVAL_BACKEND, RETRIEVAL_HINT_POLICY, AGENTIC_RETRIEVAL_ENABLED
 
     RELACE_CLOUD_TOOLS = env_bool("RELACE_CLOUD_TOOLS", default=False)
     RETRIEVAL_BACKEND = _parse_retrieval_backend()
+    RETRIEVAL_HINT_POLICY = _parse_retrieval_hint_policy()
     AGENTIC_RETRIEVAL_ENABLED = env_bool("MCP_SEARCH_RETRIEVAL", default=False)
-    AGENTIC_AUTO_SYNC = env_bool("RELACE_AGENTIC_AUTO_SYNC", default=True)
 
 
 # File size limit (10MB) to prevent memory exhaustion on file read/write operations

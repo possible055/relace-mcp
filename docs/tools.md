@@ -61,6 +61,24 @@ Search the codebase and return relevant files and line ranges. Uses an agentic l
 
 ---
 
+## `indexing_status`
+
+Inspect cloud/local indexing readiness without running retrieval.
+
+### Parameters
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `probe` | ❌ | `false` | Run active health probes for local backends and `cloud_info` when cloud tools are enabled |
+
+### Returns
+
+- `relace`, `codanna`, and `chunkhound` each include `freshness`: `fresh`, `stale`, `missing`, or `unknown`
+- `relace`, `codanna`, and `chunkhound` each include `hints_usable`: whether `agentic_retrieval` may use that backend's semantic hints under `prefer-stale`
+- `probe=true` may trigger backend health checks and auto-indexing side effects in external CLIs
+
+---
+
 ## `cloud_sync`
 
 > **Note:** All `cloud_*` tools include a `trace_id` field in responses. On failures, responses may also include `status_code`, `error_code`, `retryable`, and `recommended_action`.
@@ -153,12 +171,23 @@ If `confirm=false`, returns `status="cancelled"` and does nothing.
 
 ## `agentic_retrieval`
 
-Two-stage semantic + agentic code retrieval. Combines semantic hints with local agentic exploration for precise results.
+Hybrid semantic-hint + agentic code retrieval. It uses semantic hints to narrow the search space, then verifies those hints against live code exploration.
 
 ### How It Works
 
 1. **Stage 1 — Semantic hints**: Retrieves relevant file/symbol hints from the configured backend
-2. **Stage 2 — Agentic exploration**: Uses those hints to guide local grep/view exploration
+2. **Stage 2 — Agentic exploration**: Uses those hints to guide local grep/view exploration against the current workspace
+
+`agentic_retrieval` never runs `cloud_sync` implicitly. Use `cloud_sync` when you want to refresh the cloud index before retrieval.
+
+### Hint Policy
+
+Set `MCP_RETRIEVAL_HINT_POLICY` to control how stale indexes are handled.
+
+| Value | Default | Behavior |
+|-------|---------|----------|
+| `prefer-stale` | ✅ | Uses stale semantic hints when available, then verifies them against live code |
+| `strict` | — | Uses semantic hints only when the selected backend is fresh |
 
 ### Backend Configuration
 
@@ -170,7 +199,7 @@ Set `MCP_RETRIEVAL_BACKEND` to choose a backend. Default: `relace`.
 | `codanna` | `codanna` CLI | Symbol-level semantic search (local, no API key needed) |
 | `chunkhound` | `chunkhound` CLI + embedding API key | Chunk-level semantic search (local) |
 | `relace` | `RELACE_API_KEY` | Cloud-based semantic search |
-| `none` | — | Skip semantic hints, agentic-only |
+| `none` | — | Skip semantic hints entirely and run agentic-only retrieval |
 
 #### Codanna
 
@@ -192,6 +221,8 @@ export MCP_RETRIEVAL_BACKEND=codanna
 ```
 
 > Add `.codanna/` and `.codannaignore` to your `.gitignore`.
+>
+> When the Codanna index is stale, `prefer-stale` still uses its hints and schedules a background refresh. `strict` skips stale Codanna hints.
 
 #### ChunkHound
 
@@ -234,6 +265,8 @@ For local Ollama (no API key needed):
 ```
 
 > Add `.chunkhound/` and `.chunkhound.json` to your `.gitignore`.
+>
+> When the ChunkHound index is stale, `prefer-stale` still uses its hints and schedules a background refresh. `strict` skips stale ChunkHound hints.
 
 ### Parameters
 
@@ -253,6 +286,9 @@ For local Ollama (no API key needed):
   "turns_used": 3,
   "partial": false,
   "trace_id": "a1b2c3d4",
-  "cloud_hints_used": 5
+  "semantic_hints_used": 5,
+  "hint_policy": "prefer-stale",
+  "hints_index_freshness": "stale",
+  "background_refresh_scheduled": true
 }
 ```

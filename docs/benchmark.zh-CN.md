@@ -8,6 +8,8 @@
 
 **前置要求**: Python 3.11+、`git`、网络连接
 
+**执行方式**: `benchmark/` 是 repo 内部工具。请在仓库根目录使用 `uv run --extra benchmark ...` 运行。执行 benchmark 测试时，再额外加上 `--extra dev`。
+
 **环境配置**（在项目根目录创建 `.env`）:
 ```bash
 SEARCH_PROVIDER=relace          # 或: openai, openrouter
@@ -18,27 +20,36 @@ RELACE_API_KEY=your-key-here    # 或: OPENAI_API_KEY, OPENROUTER_API_KEY
 
 通过 Hugging Face datasets-server 构建 Loc-Bench（无需 LocAgent）:
 ```bash
-uv run python -m benchmark.cli.build_locbench \
+uv run --extra benchmark python -m benchmark.cli.build_locbench \
   --output artifacts/data/raw/locbench_v1.jsonl
 ```
+
+为可重复的 benchmark 运行生成一个处理后的子集:
+```bash
+uv run --extra benchmark python -m benchmark.cli.curate --count 50
+```
+
+如果使用 `--local-parquet`，请先在当前环境里安装 `pyarrow`。
 
 ## 2. 单次运行
 
 ```bash
-# 基本运行
-uv run python -m benchmark.cli.run --dataset artifacts/data/processed/elite_50.jsonl --limit 20
+# 在 curated 子集上基本运行
+uv run --extra benchmark python -m benchmark.cli.run \
+  --dataset artifacts/data/processed/curated_50.jsonl --limit 20
 
 # 在 Loc-Bench 上运行（先执行 build_locbench）
-uv run python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.jsonl --limit 20
+uv run --extra benchmark python -m benchmark.cli.run \
+  --dataset artifacts/data/raw/locbench_v1.jsonl --limit 20
 
 # 带参数覆盖
-uv run python -m benchmark.cli.run \
-  --dataset artifacts/data/processed/elite_50.jsonl \
+uv run --extra benchmark python -m benchmark.cli.run \
+  --dataset artifacts/data/processed/curated_50.jsonl \
   --limit 64 --seed 0 --shuffle \
   --max-turns 8 --temperature 0.2 -q
 
 # 中断后从 checkpoint 恢复
-uv run python -m benchmark.cli.run \
+uv run --extra benchmark python -m benchmark.cli.run \
   -o my_run --resume --timeout 300 --fail-fast 5
 ```
 
@@ -67,24 +78,28 @@ uv run python -m benchmark.cli.run \
 | `--dry-run` | 关闭 | 仅预览 |
 | `--trace` | 关闭 | 保存逐 case trace JSONL 和 run 级别 events JSONL |
 
+**搜索模式**:
+- `agentic` 是默认模式，不依赖 retrieval index。
+- `indexed` 需要可用的 retrieval backend，以及每个 repo 对应的最新本地 index 或 cloud sync state。
+
 ## 3. 网格搜索 (超参数调优)
 
 运行 `turns × temperature` 笛卡尔积组合:
 
 ```bash
-uv run python -m benchmark.cli.grid \
-  --dataset artifacts/data/processed/elite_50.jsonl \
+uv run --extra benchmark python -m benchmark.cli.grid \
+  --dataset artifacts/data/processed/curated_50.jsonl \
   --limit 64 --seed 0 --shuffle \
-  --turns 4 --turns 6 --turns 8 \
+  --max-turns 4 --max-turns 6 --max-turns 8 \
   --temperatures 0 --temperatures 0.2 --temperatures 0.4 --temperatures 0.6
 ```
 
 **网格参数**:
 | 参数 | 必需 | 说明 |
 |------|------|------|
-| `--turns` | ✓ | `SEARCH_MAX_TURNS` 网格值 (可重复) |
+| `--max-turns` | ✓ | `SEARCH_MAX_TURNS` 网格值 (可重复) |
 | `--temperatures` | ✓ | `SEARCH_TEMPERATURE` 网格值 (可重复) |
-| `--search-prompt-file` | | 覆盖所有 run 的 `SEARCH_PROMPT_FILE` |
+| `--prompt-file` | | 覆盖所有 run 的 `SEARCH_PROMPT_FILE` |
 | `--output` | | 输出目录前缀 |
 | `--dry-run` | | 仅打印计划的 run，不执行 |
 
@@ -96,13 +111,13 @@ uv run python -m benchmark.cli.grid \
 
 ```bash
 # 验证默认数据集
-uv run python -m benchmark.cli.validate
+uv run --extra benchmark python -m benchmark.cli.validate
 
 # 验证指定数据集
-uv run python -m benchmark.cli.validate --input artifacts/data/raw/locbench_v1.jsonl
+uv run --extra benchmark python -m benchmark.cli.validate --input artifacts/data/raw/locbench_v1.jsonl
 
 # 输出报告到文件
-uv run python -m benchmark.cli.validate --output validation.json --verbose
+uv run --extra benchmark python -m benchmark.cli.validate --output validation.json --verbose
 ```
 
 **验证项目**:
@@ -124,17 +139,25 @@ uv run python -m benchmark.cli.validate --output validation.json --verbose
 
 ```bash
 # 分析单次运行 (详细 stdout)
-uv run python -m benchmark.cli.analyze path/to/run.report.json
+uv run --extra benchmark python -m benchmark.cli.analyze path/to/run.report.json
 
-# 比较多次运行 (Markdown 输出)
-uv run python -m benchmark.cli.report run1.report.json run2.report.json
+# 比较多个 report 文件 (Markdown 输出)
+uv run --extra benchmark python -m benchmark.cli.report run1.report.json run2.report.json
 
 # 从网格搜索找最佳配置
-uv run python -m benchmark.cli.report --best grid_curated_30.grid.json
+uv run --extra benchmark python -m benchmark.cli.report --best grid_curated_30.grid.json
+
+# 分析 result 文件中的失败 / 未完成 case
+uv run --extra benchmark python -m benchmark.cli.report --failures path/to/run.jsonl
 
 # 输出比较报告到文件
-uv run python -m benchmark.cli.report -o comparison.md *.report.json
+uv run --extra benchmark python -m benchmark.cli.report -o comparison.md *.report.json
 ```
+
+**各模式接受的输入**:
+- Comparison mode: 一个或多个 `*.report.json`
+- `--best`: 恰好一个 `*.grid.json`
+- `--failures`: 恰好一个 `*.jsonl`
 
 ## 6. 指标说明
 
@@ -143,7 +166,6 @@ uv run python -m benchmark.cli.report -o comparison.md *.report.json
 | File Recall | 找到的 GT 文件 / GT 文件总数 |
 | File Precision | 正确文件 / 返回文件总数 |
 | Line Coverage | 覆盖的 GT 行 / GT 行总数 |
-| Line Precision | 正确行 / 返回行总数 |
 | Line Prec(M) | 仅统计匹配文件：正确行 / 返回行总数 |
 | Function Hit Rate | 有重叠的函数 / 函数总数 |
 
@@ -153,15 +175,17 @@ uv run python -m benchmark.cli.report -o comparison.md *.report.json
 
 | 问题 | 解决方案 |
 |------|----------|
+| 缺少 benchmark 依赖 | 使用 `uv run --extra benchmark ...` 运行命令 |
 | 缺少 API key | 设置 `RELACE_API_KEY` 或对应 provider 的 key |
 | 克隆失败 | 检查网络，确保 `git` 已安装 |
+| `indexed` preflight 失败 | 确认 retrieval backend 可用，且 index / cloud sync state 是最新的 |
 | 找不到数据集 | 将数据集放入 `benchmark/artifacts/data/` |
 | 首次运行慢 | 正常—仓库首次下载后会缓存 |
 
 ## 8. 运行单元测试
 
 ```bash
-uv run pytest benchmark/tests -v
+uv run --extra dev --extra benchmark pytest benchmark/tests -v
 ```
 
 ## 目录结构

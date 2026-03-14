@@ -6,6 +6,4 @@ GO_CONFIG = LanguageServerConfig(
     command=["gopls"],
     config_files=("go.mod", "go.sum"),
     install_hint="go install golang.org/x/tools/gopls@latest",
-    initialization_options={},
-    workspace_config={},
 )

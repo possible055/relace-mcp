@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from relace_mcp.lsp.process_runtime import resolve_server_command
-from relace_mcp.lsp.transport import JsonRpcTransport
+from relace_mcp.lsp.io.process import resolve_server_command
+from relace_mcp.lsp.io.transport import JsonRpcTransport
 from relace_mcp.lsp.types import LSPError
 
 

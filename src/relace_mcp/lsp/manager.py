@@ -5,8 +5,8 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
+from relace_mcp.lsp.events import log_lsp_client_created, log_lsp_client_evicted
 from relace_mcp.lsp.languages.base import LanguageServerConfig
-from relace_mcp.lsp.logging import log_lsp_client_created, log_lsp_client_evicted
 
 if TYPE_CHECKING:
     from relace_mcp.lsp.client import LSPClient
