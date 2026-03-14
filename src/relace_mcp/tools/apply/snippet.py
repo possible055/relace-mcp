@@ -439,7 +439,7 @@ def _extract_python_symbols(code: str) -> list[str]:
 
 
 _SYMBOL_RE = re.compile(
-    r"^(?:export\s+)?(?:async\s+)?(?:def|class|function|const|let|var)\s+(\w+)",
+    r"^(?:export\s+)?(?:async\s+)?(?:def|class|function)\s+(\w+)",
     re.MULTILINE,
 )
 
