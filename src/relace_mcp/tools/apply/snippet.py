@@ -263,6 +263,49 @@ def extract_remove_targets(edit_snippet: str) -> list[str]:
     return targets
 
 
+def estimate_removed_lines(initial_code: str, remove_targets: list[str]) -> int:
+    """Estimate total lines occupied by remove-directive targets in initial_code.
+
+    Scans for top-level symbol definitions matching targets and counts their
+    lines (including body). Used to adjust blast-radius calculations.
+
+    Args:
+        initial_code: Original file content.
+        remove_targets: List of symbol names from remove directives.
+
+    Returns:
+        Estimated total lines belonging to targeted symbols.
+    """
+    if not remove_targets:
+        return 0
+
+    target_set = set(remove_targets)
+    lines = initial_code.splitlines()
+    total = 0
+
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].lstrip()
+        m = _SYMBOL_RE.match(stripped)
+        if m and m.group(1) in target_set:
+            indent = len(lines[i]) - len(stripped)
+            start = i
+            i += 1
+            while i < len(lines):
+                if not lines[i].strip():
+                    i += 1
+                    continue
+                line_indent = len(lines[i]) - len(lines[i].lstrip())
+                if line_indent <= indent:
+                    break
+                i += 1
+            total += i - start
+        else:
+            i += 1
+
+    return total
+
+
 def _extract_new_lines(edit_snippet: str, initial_code: str) -> list[str]:
     """Extract "new lines" from snippet (lines not in initial_code).
 

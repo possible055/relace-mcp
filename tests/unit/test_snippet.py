@@ -5,6 +5,7 @@ from relace_mcp.tools.apply.snippet import (
     check_symbol_preservation,
     concrete_lines,
     count_effective_diff_lines,
+    estimate_removed_lines,
     expects_changes,
     extract_remove_targets,
     extract_top_level_symbols,
@@ -424,3 +425,35 @@ class TestCheckSymbolPreservation:
         merged = "export function App() { return null }\n"
         passed, _ = check_symbol_preservation(initial, merged, "", "app.tsx")
         assert passed is True
+
+
+class TestEstimateRemovedLines:
+    """Test estimate_removed_lines function."""
+
+    def test_python_function(self) -> None:
+        """Should count lines of a matching Python function."""
+        code = "def small():\n    return 1\n\ndef big_func():\n    x = 1\n    y = 2\n    return x + y\n"
+        # big_func has 4 lines (def + 3 body lines)
+        result = estimate_removed_lines(code, ["big_func"])
+        assert result == 4
+
+    def test_no_match(self) -> None:
+        """Should return 0 when target is not found."""
+        code = "def foo():\n    return 1\n"
+        assert estimate_removed_lines(code, ["nonexistent"]) == 0
+
+    def test_empty_targets(self) -> None:
+        """Should return 0 for empty target list."""
+        code = "def foo():\n    return 1\n"
+        assert estimate_removed_lines(code, []) == 0
+
+    def test_multiple_targets(self) -> None:
+        """Should sum lines of multiple targets."""
+        code = (
+            "def alpha():\n    return 1\n\n"
+            "def beta():\n    return 2\n\n"
+            "def gamma():\n    return 3\n"
+        )
+        # alpha: def + body + blank separator = 3 lines, beta: def + body + blank = 3 lines
+        result = estimate_removed_lines(code, ["alpha", "beta"])
+        assert result == 6

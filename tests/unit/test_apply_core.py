@@ -149,6 +149,35 @@ class TestBlastRadiusGuard:
 
         assert result["status"] == "ok"
 
+    @pytest.mark.asyncio
+    async def test_remove_directive_bypasses_guard(self, tmp_path: Path) -> None:
+        """Should accept removal of large function via // remove directive."""
+        # Create a file with a 20-line function
+        func_lines = [f"    line_{i} = compute({i})" for i in range(18)]
+        initial = (
+            "def small_helper():\n    return 1\n\n"
+            "def big_function():\n" + "\n".join(func_lines) + "\n\n"
+            "def another_helper():\n    return 2\n"
+        )
+        source = tmp_path / "remove_blast.py"
+        source.write_text(initial, encoding="utf-8", newline="")
+
+        # Snippet: 2 anchors + remove directive
+        edit_snippet = (
+            "def small_helper():\n"
+            "    return 1\n"
+            "# remove big_function\n"
+            "def another_helper():\n"
+            "# ... existing code ...\n"
+        )
+        # LLM returns file without big_function
+        merged_code = "def small_helper():\n    return 1\n\ndef another_helper():\n    return 2\n"
+
+        backend = _make_mock_backend(merged_code)
+        result = await apply_file_logic(backend, str(source), edit_snippet, None, str(tmp_path))
+
+        assert result["status"] == "ok"
+
 
 class TestSymbolPreservationGuard:
     @pytest.mark.asyncio

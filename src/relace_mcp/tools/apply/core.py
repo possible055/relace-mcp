@@ -312,18 +312,26 @@ async def _apply_to_existing_file(
             if not any(line.strip().startswith(pat) for pat in snippet._REMOVE_DIRECTIVE_PATTERNS)
         ]
         snippet_scope = max(len(scope_lines), 1)
-        if effective_diff_lines > snippet_scope * 3:
+
+        # Subtract lines belonging to explicitly-removed symbols so intentional
+        # deletions (// remove BigFunction) don't trigger the guard.
+        remove_targets = snippet.extract_remove_targets(edit_snippet)
+        removed_estimate = snippet.estimate_removed_lines(initial_code, remove_targets)
+        adjusted_diff_lines = max(0, effective_diff_lines - removed_estimate)
+
+        if adjusted_diff_lines > snippet_scope * 3:
             logger.warning(
-                "[%s] BLAST_RADIUS_EXCEEDED for %s: diff=%d lines, snippet=%d lines",
+                "[%s] BLAST_RADIUS_EXCEEDED for %s: diff=%d lines (adjusted), snippet=%d lines",
                 ctx.trace_id,
                 resolved_path,
-                effective_diff_lines,
+                adjusted_diff_lines,
                 snippet_scope,
             )
             file_lines = initial_code.count("\n") + 1
             return errors.recoverable_error(
                 "BLAST_RADIUS_EXCEEDED",
-                f"Diff touches {effective_diff_lines} lines but snippet only covers {snippet_scope} lines "
+                f"Diff touches {adjusted_diff_lines} lines (after excluding remove-directive targets) "
+                f"but snippet only covers {snippet_scope} lines "
                 f"(file has {file_lines} lines). "
                 "Add more anchor lines or split into smaller edits.",
                 ctx.file_path,
