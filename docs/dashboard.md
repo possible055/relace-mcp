@@ -166,7 +166,7 @@ Logs are stored using `platformdirs`:
 
 | Kind | Description | Source |
 |------|-------------|--------|
-| `indexing_status` | Indexing backends summary | `agentic_retrieval` |
+| `index_status` | Indexing backends summary | `agentic_retrieval` |
 | `backend_index_start` | CLI indexing started | `codanna` / `chunkhound` |
 | `backend_index_complete` | CLI indexing completed | `codanna` / `chunkhound` |
 | `backend_index_error` | CLI indexing failed | `codanna` / `chunkhound` |

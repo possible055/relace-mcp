@@ -274,8 +274,8 @@ Trace 日志也是 JSONL 格式，每行一个事件。
 | `tool_call` | 工具调用（含计时） |
 | `search_complete` | 搜索完成 |
 | `search_error` | 搜索失败 |
-| `indexing_status` | 索引后端汇总（relace/codanna/chunkhound） |
-| `indexing_status_error` | 索引状态错误（如 base_dir 解析失败） |
+| `index_status` | 索引后端汇总（relace/codanna/chunkhound） |
+| `index_status_error` | 索引状态错误（如 base_dir 解析失败） |
 | `backend_index_start` | Codanna/ChunkHound 索引开始 |
 | `backend_index_complete` | Codanna/ChunkHound 索引完成 |
 | `backend_index_error` | Codanna/ChunkHound 索引失败 |

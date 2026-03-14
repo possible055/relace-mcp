@@ -166,7 +166,7 @@ Turn 2 [████████████████████████
 
 | 类型 | 说明 | 来源 |
 |------|------|------|
-| `indexing_status` | 索引后端汇总 | `agentic_retrieval` |
+| `index_status` | 索引后端汇总 | `agentic_retrieval` |
 | `backend_index_start` | CLI 索引开始 | `codanna` / `chunkhound` |
 | `backend_index_complete` | CLI 索引完成 | `codanna` / `chunkhound` |
 | `backend_index_error` | CLI 索引失败 | `codanna` / `chunkhound` |

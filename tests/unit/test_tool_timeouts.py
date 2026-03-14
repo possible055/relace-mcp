@@ -16,7 +16,7 @@ async def test_tool_timeouts(tmp_path) -> None:
     expected = {
         "fast_apply": 300.0,
         "agentic_search": 600.0,
-        "indexing_status": 120.0,
+        "index_status": 120.0,
         "cloud_sync": 900.0,
         "cloud_search": 300.0,
         "cloud_clear": 300.0,

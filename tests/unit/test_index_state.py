@@ -113,7 +113,7 @@ class TestWriteDirtyTs:
 
 
 class TestReadTextSafe:
-    """Tests for _read_text_safe used by indexing_status."""
+    """Tests for _read_text_safe used by index_status."""
 
     def test_returns_content_for_regular_file(self, tmp_path: Path) -> None:
         from relace_mcp.tools import _read_text_safe

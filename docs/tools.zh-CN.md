@@ -61,7 +61,7 @@
 
 ---
 
-## `indexing_status`
+## `index_status`
 
 在不执行 retrieval 的前提下，检查 cloud/local indexing readiness。
 
@@ -69,13 +69,13 @@
 
 | 参数 | 必需 | 默认值 | 描述 |
 |------|------|--------|------|
-| `probe` | ❌ | `false` | 对本地 backend 运行主动 health probe，并在启用 cloud tools 时调用 `cloud_info` |
+| `probe` | ❌ | `false` | 对所有已安装 CLI 的本地 backend（codanna/chunkhound）运行主动 health probe，并在启用 cloud tools 时对 Relace cloud 进行检查 |
 
 ### 返回
 
 - `relace`、`codanna`、`chunkhound` 都会包含 `freshness`：`fresh`、`stale`、`missing` 或 `unknown`
 - `relace`、`codanna`、`chunkhound` 都会包含 `hints_usable`：表示在 `prefer-stale` 下 `agentic_retrieval` 是否可以使用该 backend 的 semantic hints
-- `probe=true` 可能触发 backend health check，以及外部 CLI 的 auto-index side effect
+- `probe=true` 会对所有已安装 CLI 的本地 backend 执行健康检查
 
 ---
 
@@ -129,16 +129,6 @@
 | `reason` | ❌ | LLM 链式思维的简要说明（工具会忽略） |
 
 ---
-
-## `cloud_info`
-
-获取当前仓库的详细同步状态。在 `cloud_sync` 之前使用以了解需要执行的操作。
-
-### 参数
-
-| 参数 | 必需 | 描述 |
-|------|------|------|
-| `reason` | ❌ | LLM 链式思维的简要说明（工具会忽略） |
 
 ---
 

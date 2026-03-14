@@ -61,7 +61,7 @@ Search the codebase and return relevant files and line ranges. Uses an agentic l
 
 ---
 
-## `indexing_status`
+## `index_status`
 
 Inspect cloud/local indexing readiness without running retrieval.
 
@@ -69,13 +69,13 @@ Inspect cloud/local indexing readiness without running retrieval.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `probe` | ❌ | `false` | Run active health probes for local backends and `cloud_info` when cloud tools are enabled |
+| `probe` | ❌ | `false` | Run active health probes for all available local backends (codanna/chunkhound) and Relace cloud when cloud tools are enabled |
 
 ### Returns
 
 - `relace`, `codanna`, and `chunkhound` each include `freshness`: `fresh`, `stale`, `missing`, or `unknown`
 - `relace`, `codanna`, and `chunkhound` each include `hints_usable`: whether `agentic_retrieval` may use that backend's semantic hints under `prefer-stale`
-- `probe=true` may trigger backend health checks and auto-indexing side effects in external CLIs
+- `probe=true` triggers health checks for all local backends that have their CLI installed
 
 ---
 
@@ -129,16 +129,6 @@ List all repositories in your Relace Cloud account.
 | `reason` | ❌ | Brief explanation for LLM chain-of-thought (ignored by tool) |
 
 ---
-
-## `cloud_info`
-
-Get detailed sync status for the current repository. Use before `cloud_sync` to understand what action is needed.
-
-### Parameters
-
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `reason` | ❌ | Brief explanation for LLM chain-of-thought (ignored by tool) |
 
 ---
 

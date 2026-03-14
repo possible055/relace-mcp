@@ -160,19 +160,19 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     @mcp.tool(
         timeout=120.0,
         annotations={
-            "readOnlyHint": False,  # probe=True may auto-index via external CLIs
+            "readOnlyHint": False,  # probe=True may trigger external CLI health checks
             "destructiveHint": False,
             "idempotentHint": True,
-            "openWorldHint": _settings.RELACE_CLOUD_TOOLS,  # probe may call cloud_info
+            "openWorldHint": _settings.RELACE_CLOUD_TOOLS,  # probe may call cloud APIs
         },
     )
-    async def indexing_status(
+    async def index_status(
         probe: Annotated[
             bool,
             Field(
                 description=(
-                    "If True, run active health probes for local backends (may auto-index) "
-                    "and run cloud_info when RELACE_CLOUD_TOOLS=1."
+                    "If True, run active health probes for all available local backends "
+                    "(codanna/chunkhound) and Relace cloud when RELACE_CLOUD_TOOLS=1."
                 )
             ),
         ] = False,
@@ -199,7 +199,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         except Exception as exc:
             log_event(
                 {
-                    "kind": "indexing_status_error",
+                    "kind": "index_status_error",
                     "level": "error",
                     "trace_id": trace_id,
                     "probe": probe,
@@ -332,12 +332,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 ("codanna", codanna_status),
                 ("chunkhound", chunkhound_status),
             ):
-                if _settings.RETRIEVAL_BACKEND != backend_name:
-                    status_obj["probe"] = {
-                        "status": "skipped",
-                        "reason": f"RETRIEVAL_BACKEND is {_settings.RETRIEVAL_BACKEND!r}, not {backend_name!r}",
-                    }
-                    continue
                 if not status_obj.get("cli_found"):
                     status_obj["probe"] = {
                         "status": "error",
@@ -402,7 +396,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         log_event(
             {
-                "kind": "indexing_status",
+                "kind": "index_status",
                 "level": "info",
                 "trace_id": trace_id,
                 "probe": probe,
@@ -460,7 +454,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     ) -> dict[str, Any]:
         """Upload or refresh codebase to Relace Cloud for semantic search.
 
-        Check indexing_status() first—skip this if cloud freshness is already 'fresh'.
+        Check index_status() first—skip this if cloud freshness is already 'fresh'.
         Syncs git-tracked files to enable cloud_search. Incremental by default.
 
         Advanced (Relace-specific):
@@ -668,7 +662,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     async def cloud_status(ctx: Context | None = None) -> str:
         """Current cloud sync status — lightweight, reads local state file only (no API calls).
 
-        For dashboard/UI display. Agents should use the indexing_status tool instead,
+        For dashboard/UI display. Agents should use the index_status tool instead,
         which covers Relace, Codanna, and ChunkHound backends with recommended_action.
         """
         try:

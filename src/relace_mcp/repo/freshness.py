@@ -88,8 +88,8 @@ def classify_local_index_freshness(base_dir: str, backend: str) -> FreshnessStat
     last_indexed_head = _read_indexed_head(base_dir, head_file)
     if not last_indexed_head:
         return FreshnessStatus(
-            freshness="missing",
-            hints_usable=False,
+            freshness="stale",
+            hints_usable=True,
             refresh_recommended=True,
             reason="last_indexed_head_missing",
         )

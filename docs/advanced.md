@@ -274,8 +274,8 @@ Trace logs are also JSONL. Each line is one event.
 | `tool_call` | Tool call with timing |
 | `search_complete` | Search completed |
 | `search_error` | Search failed |
-| `indexing_status` | Indexing backends summary (relace/codanna/chunkhound) |
-| `indexing_status_error` | Indexing status error (e.g., base_dir resolution failure) |
+| `index_status` | Indexing backends summary (relace/codanna/chunkhound) |
+| `index_status_error` | Indexing status error (e.g., base_dir resolution failure) |
 | `backend_index_start` | Codanna/ChunkHound indexing started |
 | `backend_index_complete` | Codanna/ChunkHound indexing completed |
 | `backend_index_error` | Codanna/ChunkHound indexing failed |
