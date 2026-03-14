@@ -372,6 +372,21 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                         "message": str(exc),
                     }
 
+        # Reconcile reported state with actual runtime conditions
+        for backend_name, status_obj in (
+            ("codanna", codanna_status),
+            ("chunkhound", chunkhound_status),
+        ):
+            if probe:
+                refreshed = classify_local_index_freshness(base_dir, backend_name)
+                status_obj["freshness"] = refreshed.freshness
+                status_obj["hints_usable"] = refreshed.hints_usable
+                status_obj["index_dir_exists"] = (base_path / f".{backend_name}").is_dir()
+                head_path = base_path / f".{backend_name}" / "last_indexed_head"
+                status_obj["last_indexed_head"] = _read_text_safe(head_path)
+            if not status_obj["cli_found"]:
+                status_obj["hints_usable"] = False
+
         payload = {
             "trace_id": trace_id,
             "probe": probe,

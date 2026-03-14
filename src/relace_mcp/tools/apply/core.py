@@ -1,4 +1,6 @@
+import asyncio
 import difflib
+import hashlib
 import logging
 import os
 import uuid
@@ -27,6 +29,15 @@ from .exceptions import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Per-file lock map for serializing concurrent edits to the same file
+_path_locks: dict[str, asyncio.Lock] = {}
+
+
+def _get_path_lock(path: str) -> asyncio.Lock:
+    if path not in _path_locks:
+        _path_locks[path] = asyncio.Lock()
+    return _path_locks[path]
 
 
 @dataclass
@@ -114,10 +125,22 @@ def _resolve_path(
     return resolved_path, file_exists, file_size
 
 
-def _create_new_file(ctx: ApplyContext, resolved_path: Path, edit_snippet: str) -> dict[str, Any]:
-    resolved_path.parent.mkdir(parents=True, exist_ok=True)
-    encoding = get_project_encoding() or "utf-8"
-    atomic_write(resolved_path, edit_snippet, encoding=encoding)
+async def _create_new_file(
+    ctx: ApplyContext, resolved_path: Path, edit_snippet: str
+) -> dict[str, Any]:
+    async with _get_path_lock(str(resolved_path)):
+        if resolved_path.exists():
+            return errors.recoverable_error(
+                "FILE_EXISTS",
+                f"File already exists (created by concurrent operation): {ctx.file_path}",
+                ctx.file_path,
+                ctx.instruction,
+                ctx.trace_id,
+                ctx.elapsed_ms(),
+            )
+        resolved_path.parent.mkdir(parents=True, exist_ok=True)
+        encoding = get_project_encoding() or "utf-8"
+        atomic_write(resolved_path, edit_snippet, encoding=encoding)
 
     apply_logging.log_create_success(ctx.trace_id, resolved_path, edit_snippet, ctx.instruction)
     logger.debug("[%s] Created new file %s", ctx.trace_id, resolved_path)
@@ -139,9 +162,20 @@ async def _apply_to_existing_file(
 ) -> dict[str, Any]:
     concrete = snippet.concrete_lines(edit_snippet)
     if not concrete:
+        # Try to provide symbol hints even for empty-concrete path
+        try:
+            hint_code, _ = read_text_with_fallback(resolved_path)
+            symbols = snippet.extract_top_level_symbols(hint_code, str(resolved_path))
+            hint = ""
+            if symbols:
+                sym_preview = symbols[:10]
+                hint = f" The file defines: {', '.join(sym_preview)}."
+        except Exception:
+            hint = ""
         return errors.recoverable_error(
             "NEEDS_MORE_CONTEXT",
-            "edit_snippet lacks sufficient anchor lines. Please add 1-3 lines of real code for positioning.",
+            f"edit_snippet contains only placeholders, no concrete code found.{hint}"
+            " Include 1-3 lines of existing code as anchors for positioning.",
             ctx.file_path,
             ctx.instruction,
             ctx.trace_id,
@@ -157,132 +191,229 @@ async def _apply_to_existing_file(
     if not os.access(resolved_path.parent, os.W_OK):
         raise FileNotWritableError(f"Directory not writable: {resolved_path.parent}")
 
-    initial_code, detected_encoding = read_text_with_fallback(resolved_path)
+    async with _get_path_lock(str(resolved_path)):
+        initial_code, detected_encoding = read_text_with_fallback(resolved_path)
+        initial_hash = hashlib.sha256(initial_code.encode(detected_encoding)).hexdigest()
 
-    if snippet.should_run_anchor_precheck(edit_snippet, ctx.instruction):
-        if not snippet.anchor_precheck(concrete, initial_code):
+        if snippet.should_run_anchor_precheck(edit_snippet, ctx.instruction):
+            if not snippet.anchor_precheck(concrete, initial_code):
+                symbols = snippet.extract_top_level_symbols(initial_code, str(resolved_path))
+                hint = ""
+                if symbols:
+                    sym_preview = symbols[:10]
+                    hint = (
+                        f" The file defines: {', '.join(sym_preview)}."
+                        " Include 1-2 lines near your target as anchors."
+                    )
+                file_lines = initial_code.count("\n") + 1
+                return errors.recoverable_error(
+                    "NEEDS_MORE_CONTEXT",
+                    f"Anchor lines in edit_snippet cannot be located in the file ({file_lines} lines).{hint}",
+                    ctx.file_path,
+                    ctx.instruction,
+                    ctx.trace_id,
+                    ctx.elapsed_ms(),
+                    file_lines=file_lines,
+                )
+
+        metadata = {
+            "source": "fastmcp",
+            "tool": "fast_apply",
+            "file_path": str(resolved_path),
+            "trace_id": ctx.trace_id,
+        }
+
+        request = ApplyRequest(
+            initial_code=initial_code,
+            edit_snippet=edit_snippet,
+            instruction=ctx.instruction,
+            metadata=metadata,
+        )
+        response: ApplyResponse = await backend.apply(request)
+
+        merged_code = response.merged_code
+        usage = response.usage
+
+        if not isinstance(merged_code, str):
+            raise ApiInvalidResponseError()
+
+        diff = "".join(
+            difflib.unified_diff(
+                initial_code.splitlines(keepends=True),
+                merged_code.splitlines(keepends=True),
+                fromfile="before",
+                tofile="after",
+            )
+        )
+
+        if not diff:
+            if snippet.expects_changes(edit_snippet, initial_code):
+                logger.warning(
+                    "[%s] APPLY_NOOP: Expected changes but got no diff for %s",
+                    ctx.trace_id,
+                    resolved_path,
+                )
+                file_lines = initial_code.count("\n") + 1
+                return errors.recoverable_error(
+                    "APPLY_NOOP",
+                    f"Merged result is identical to original file ({file_lines} lines). "
+                    "The edit may lack sufficient context for the merge model to locate the target. "
+                    "Add 1-3 unique anchor lines from near the edit target.",
+                    ctx.file_path,
+                    ctx.instruction,
+                    ctx.trace_id,
+                    ctx.elapsed_ms(),
+                    file_lines=file_lines,
+                )
+
+            logger.debug("[%s] No changes needed (idempotent) for %s", ctx.trace_id, resolved_path)
+            return _ok_result(
+                ctx,
+                str(resolved_path),
+                "No changes needed (already matches)",
+                diff=None,
+            )
+
+        # L1 Syntax validation (always enabled for Python files)
+        syntax_passed, syntax_reason = snippet.validate_syntax_delta(
+            initial_code, merged_code, str(resolved_path)
+        )
+        if not syntax_passed:
+            logger.warning(
+                "[%s] SYNTAX_CHECK_FAILED for %s: %s",
+                ctx.trace_id,
+                resolved_path,
+                syntax_reason,
+            )
+            file_lines = initial_code.count("\n") + 1
             return errors.recoverable_error(
-                "NEEDS_MORE_CONTEXT",
-                "Anchor lines in edit_snippet cannot be located in the file. Ensure you include 1-3 lines of existing code.",
+                "SYNTAX_CHECK_FAILED",
+                f"Merged code has syntax error: {syntax_reason}",
                 ctx.file_path,
                 ctx.instruction,
                 ctx.trace_id,
                 ctx.elapsed_ms(),
+                file_lines=file_lines,
             )
 
-    metadata = {
-        "source": "fastmcp",
-        "tool": "fast_apply",
-        "file_path": str(resolved_path),
-        "trace_id": ctx.trace_id,
-    }
-
-    request = ApplyRequest(
-        initial_code=initial_code,
-        edit_snippet=edit_snippet,
-        instruction=ctx.instruction,
-        metadata=metadata,
-    )
-    response: ApplyResponse = await backend.apply(request)
-
-    merged_code = response.merged_code
-    usage = response.usage
-
-    if not isinstance(merged_code, str):
-        raise ApiInvalidResponseError()
-
-    diff = "".join(
-        difflib.unified_diff(
-            initial_code.splitlines(keepends=True),
-            merged_code.splitlines(keepends=True),
-            fromfile="before",
-            tofile="after",
-        )
-    )
-
-    if not diff:
-        if snippet.expects_changes(edit_snippet, initial_code):
+        # Blast-radius guard: reject diffs that touch too many lines relative to snippet scope
+        effective_diff_lines = snippet.count_effective_diff_lines(diff)
+        # Exclude remove directives from scope calculation — large deletes need
+        # proportionally larger snippets, but directives alone shouldn't inflate scope.
+        scope_lines = [
+            line
+            for line in concrete
+            if not any(line.strip().startswith(pat) for pat in snippet._REMOVE_DIRECTIVE_PATTERNS)
+        ]
+        snippet_scope = max(len(scope_lines), 1)
+        if snippet_scope > 0 and effective_diff_lines > snippet_scope * 3:
             logger.warning(
-                "[%s] APPLY_NOOP: Expected changes but got no diff for %s",
+                "[%s] BLAST_RADIUS_EXCEEDED for %s: diff=%d lines, snippet=%d lines",
+                ctx.trace_id,
+                resolved_path,
+                effective_diff_lines,
+                snippet_scope,
+            )
+            file_lines = initial_code.count("\n") + 1
+            return errors.recoverable_error(
+                "BLAST_RADIUS_EXCEEDED",
+                f"Diff touches {effective_diff_lines} lines but snippet only covers {snippet_scope} lines "
+                f"(file has {file_lines} lines). "
+                "Add more anchor lines or split into smaller edits.",
+                ctx.file_path,
+                ctx.instruction,
+                ctx.trace_id,
+                ctx.elapsed_ms(),
+                file_lines=file_lines,
+            )
+
+        # Symbol preservation guard: reject if top-level symbols unexpectedly disappeared
+        sym_passed, sym_reason = snippet.check_symbol_preservation(
+            initial_code, merged_code, edit_snippet, str(resolved_path)
+        )
+        if not sym_passed:
+            logger.warning(
+                "[%s] SYMBOL_LOST for %s: %s",
+                ctx.trace_id,
+                resolved_path,
+                sym_reason,
+            )
+            file_lines = initial_code.count("\n") + 1
+            return errors.recoverable_error(
+                "SYMBOL_LOST",
+                f"Merge would remove symbols not targeted by edit: {sym_reason}",
+                ctx.file_path,
+                ctx.instruction,
+                ctx.trace_id,
+                ctx.elapsed_ms(),
+                file_lines=file_lines,
+            )
+
+        # Semantic check (validates new/delete intent, disabled by default)
+        if APPLY_SEMANTIC_CHECK:
+            post_check_passed, post_check_reason = snippet.post_check_merged_code(
+                edit_snippet, merged_code, initial_code
+            )
+            if not post_check_passed:
+                logger.warning(
+                    "[%s] SEMANTIC_CHECK_FAILED for %s: %s",
+                    ctx.trace_id,
+                    resolved_path,
+                    post_check_reason,
+                )
+                return errors.recoverable_error(
+                    "SEMANTIC_CHECK_FAILED",
+                    f"Merged code does not match expected changes: {post_check_reason}",
+                    ctx.file_path,
+                    ctx.instruction,
+                    ctx.trace_id,
+                    ctx.elapsed_ms(),
+                )
+
+        # Optimistic concurrency: verify file unchanged since read
+        current_code, _ = read_text_with_fallback(resolved_path)
+        current_hash = hashlib.sha256(current_code.encode(detected_encoding)).hexdigest()
+        if current_hash != initial_hash:
+            logger.warning(
+                "[%s] CONTENT_CONFLICT for %s: file changed during apply",
                 ctx.trace_id,
                 resolved_path,
             )
+            file_lines = initial_code.count("\n") + 1
             return errors.recoverable_error(
-                "APPLY_NOOP",
-                "Apply API returned content identical to initial. Add 1-3 anchor lines before/after target.",
+                "CONTENT_CONFLICT",
+                "File was modified by another process during apply. Please retry.",
                 ctx.file_path,
                 ctx.instruction,
                 ctx.trace_id,
                 ctx.elapsed_ms(),
+                file_lines=file_lines,
             )
 
-        logger.debug("[%s] No changes needed (idempotent) for %s", ctx.trace_id, resolved_path)
-        return _ok_result(
-            ctx,
-            str(resolved_path),
-            "No changes needed (already matches)",
-            diff=None,
-        )
+        atomic_write(resolved_path, merged_code, encoding=detected_encoding)
 
-    # L1 Syntax validation (always enabled for Python files)
-    syntax_passed, syntax_reason = snippet.validate_syntax_delta(
-        initial_code, merged_code, str(resolved_path)
-    )
-    if not syntax_passed:
-        logger.warning(
-            "[%s] SYNTAX_CHECK_FAILED for %s: %s",
+        apply_logging.log_apply_success(
+            ctx.trace_id,
+            ctx.started_at,
+            resolved_path,
+            file_size,
+            edit_snippet,
+            ctx.instruction,
+            usage,
+        )
+        logger.debug(
+            "[%s] Applied edit to %s (latency=%dms)",
             ctx.trace_id,
             resolved_path,
-            syntax_reason,
-        )
-        return errors.recoverable_error(
-            "SYNTAX_CHECK_FAILED",
-            f"Merged code has syntax error: {syntax_reason}",
-            ctx.file_path,
-            ctx.instruction,
-            ctx.trace_id,
             ctx.elapsed_ms(),
         )
 
-    # Semantic check (validates new/delete intent, disabled by default)
-    if APPLY_SEMANTIC_CHECK:
-        post_check_passed, post_check_reason = snippet.post_check_merged_code(
-            edit_snippet, merged_code, initial_code
+        return _ok_result(
+            ctx,
+            str(resolved_path),
+            "Applied code changes successfully.",
+            diff=diff,
         )
-        if not post_check_passed:
-            logger.warning(
-                "[%s] SEMANTIC_CHECK_FAILED for %s: %s",
-                ctx.trace_id,
-                resolved_path,
-                post_check_reason,
-            )
-            return errors.recoverable_error(
-                "SEMANTIC_CHECK_FAILED",
-                f"Merged code does not match expected changes: {post_check_reason}",
-                ctx.file_path,
-                ctx.instruction,
-                ctx.trace_id,
-                ctx.elapsed_ms(),
-            )
-
-    atomic_write(resolved_path, merged_code, encoding=detected_encoding)
-
-    apply_logging.log_apply_success(
-        ctx.trace_id, ctx.started_at, resolved_path, file_size, edit_snippet, ctx.instruction, usage
-    )
-    logger.debug(
-        "[%s] Applied edit to %s (latency=%dms)",
-        ctx.trace_id,
-        resolved_path,
-        ctx.elapsed_ms(),
-    )
-
-    return _ok_result(
-        ctx,
-        str(resolved_path),
-        "Applied code changes successfully.",
-        diff=diff,
-    )
 
 
 async def apply_file_logic(
@@ -346,7 +477,7 @@ async def apply_file_logic(
             resolved_path, file_exists, file_size = resolved
 
             if not file_exists:
-                result = _create_new_file(ctx, resolved_path, edit_snippet)
+                result = await _create_new_file(ctx, resolved_path, edit_snippet)
             else:
                 result = await _apply_to_existing_file(
                     ctx,
