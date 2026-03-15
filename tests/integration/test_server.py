@@ -60,14 +60,14 @@ class TestServerToolRegistration:
             assert "agentic_search" in tool_names
 
     @pytest.mark.asyncio
-    async def test_indexing_status_registered(self, mock_config: RelaceConfig) -> None:
-        """Verify indexing_status registration via public API Client.list_tools()."""
+    async def test_index_status_registered(self, mock_config: RelaceConfig) -> None:
+        """Verify index_status registration via public API Client.list_tools()."""
         server = build_server(config=mock_config)
 
         async with Client(server) as client:
             tools = await client.list_tools()
             tool_names = [t.name for t in tools]
-            assert "indexing_status" in tool_names
+            assert "index_status" in tool_names
 
     @pytest.mark.asyncio
     async def test_agentic_retrieval_registered_with_none_backend(
@@ -122,16 +122,14 @@ class TestServerToolExecution:
                 assert result is not None
 
     @pytest.mark.asyncio
-    async def test_indexing_status_success(self, mock_config: RelaceConfig) -> None:
-        """Should execute indexing_status tool successfully."""
+    async def test_index_status_success(self, mock_config: RelaceConfig) -> None:
+        """Should execute index_status tool successfully."""
         server = build_server(config=mock_config)
 
         async with Client(server) as client:
             result = await client.call_tool(
-                "indexing_status",
-                {
-                    "probe": False,
-                },
+                "index_status",
+                {},
             )
 
             assert result.structured_content is not None

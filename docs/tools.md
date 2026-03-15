@@ -6,6 +6,15 @@ This document provides detailed information about all available MCP tools.
 
 Apply edits to a file (or create a new file). Use truncation placeholders like `// ... existing code ...` or `# ... existing code ...`.
 
+Notes:
+- For existing files, always include 1-2 verbatim anchor lines copied from the target file near the edit location.
+- Truncation markers are recommended for larger scoped edits, but anchor-only edits are still supported.
+- Outer markdown fences are preserved for `.md` / `.mdx` targets so fenced code blocks can be inserted verbatim.
+- For new files, provide the complete file content and do not include truncation markers.
+- Context-only omission syntax no longer triggers `APPLY_NOOP` by itself; `APPLY_NOOP` is reserved for explicit remove directives or concrete new lines that should have changed the file.
+- Omission-style deletion detection remains part of opt-in semantic validation via `APPLY_SEMANTIC_CHECK=1`; it is not enabled by default because context-only adjacency can produce extra failures.
+- Explicit `// remove X` / `# remove X` directives can allow large deletion-dominant edits to bypass the truncation and blast-radius guards instead of hard-failing.
+
 ### Parameters
 
 | Parameter | Required | Description |
@@ -27,6 +36,14 @@ Apply edits to a file (or create a new file). Use truncation placeholders like `
 ### Returns
 
 UDiff of changes, or confirmation for new files.
+
+### Common Errors
+
+- `NEEDS_MORE_CONTEXT`: Anchor lines could not be located in the file.
+- `APPLY_NOOP`: Merge returned an identical file even though the snippet contained explicit remove directives or concrete new lines not present in the original file.
+- `MARKER_LEAKAGE`: Placeholder markers leaked into merged output (treated as literal text).
+- `TRUNCATION_DETECTED`: Merged output shrank drastically and no explicit remove directive was provided.
+- `BLAST_RADIUS_EXCEEDED`: Diff scope too large; split into smaller edits. Large deletion-dominant edits with explicit remove directives bypass this guard.
 
 ---
 
@@ -61,21 +78,20 @@ Search the codebase and return relevant files and line ranges. Uses an agentic l
 
 ---
 
-## `indexing_status`
+## `index_status`
 
-Inspect cloud/local indexing readiness without running retrieval.
+Inspect cloud/local indexing readiness. Automatically schedules a background reindex
+for local backends (Codanna/ChunkHound) when their index is stale or missing.
 
-### Parameters
-
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| `probe` | ❌ | `false` | Run active health probes for local backends and `cloud_info` when cloud tools are enabled |
+This tool takes no parameters.
 
 ### Returns
 
 - `relace`, `codanna`, and `chunkhound` each include `freshness`: `fresh`, `stale`, `missing`, or `unknown`
 - `relace`, `codanna`, and `chunkhound` each include `hints_usable`: whether `agentic_retrieval` may use that backend's semantic hints under `prefer-stale`
-- `probe=true` may trigger backend health checks and auto-indexing side effects in external CLIs
+- `codanna` and `chunkhound` include `background_refresh_scheduled`: `true` if a background reindex was triggered
+- For local backends, `missing` also covers bootstrap/empty index directories that do not yet contain usable index artifacts
+- For Relace cloud: if stale, `status.recommended_action` tells you to run `cloud_sync()`
 
 ---
 
@@ -112,7 +128,7 @@ Semantic code search over the cloud-synced repository. Requires running `cloud_s
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `query` | ✅ | Natural language search query |
-| `branch` | ❌ | Branch to search (empty uses API default) |
+| `branch` | ❌ | Branch to search (null = API default branch) |
 
 > **Note:** Internal parameters (`score_threshold=0.3`, `token_limit=30000`) are not exposed to LLM.
 
@@ -122,23 +138,8 @@ Semantic code search over the cloud-synced repository. Requires running `cloud_s
 
 List all repositories in your Relace Cloud account.
 
-### Parameters
-
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `reason` | ❌ | Brief explanation for LLM chain-of-thought (ignored by tool) |
-
----
-
-## `cloud_info`
-
-Get detailed sync status for the current repository. Use before `cloud_sync` to understand what action is needed.
-
-### Parameters
-
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `reason` | ❌ | Brief explanation for LLM chain-of-thought (ignored by tool) |
+This tool takes no parameters. Returns repository IDs, names, and indexing status.
+Use to find `repo_id` for `cloud_clear`; not needed for normal search/sync workflow.
 
 ---
 
@@ -153,6 +154,7 @@ If `confirm=false`, returns `status="cancelled"` and does nothing.
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `confirm` | ✅ | `false` | Must be `true` to proceed (safety guard) |
+| `repo_id` | ❌ | `null` | Repo UUID to delete directly (use `cloud_list` to find). If omitted, deletes the repo for the current directory. **Note:** direct `repo_id` mode skips clearing local sync state. |
 
 ### Returns
 

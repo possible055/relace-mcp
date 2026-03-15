@@ -67,13 +67,18 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         edit_snippet: Annotated[
             str,
             Field(
-                description="New content. Use placeholders for unchanged parts: "
-                "`// ... existing code ...` (C/JS/TS), `# ... existing code ...` (Python/shell)."
+                description="Code snippet representing the changes. Include only the lines being added or "
+                "modified, plus placeholder comments for unchanged parts when useful for larger scoped edits: "
+                "`// ... existing code ...` (JS/TS), `# ... existing code ...` (Python/shell). "
+                "Anchor the edit with 1-2 verbatim lines from the existing file."
             ),
         ],
         instruction: Annotated[
             str,
-            Field(description="Optional hint when edit is ambiguous (e.g., 'add after imports')."),
+            Field(
+                description="Optional natural language hint to disambiguate the target location "
+                "(e.g., 'add after imports', 'inside the if block')."
+            ),
         ] = "",
         ctx: Context | None = None,
     ) -> dict[str, Any]:
@@ -81,15 +86,38 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         For new files: writes content directly.
         For existing files: merges edit_snippet with current content using anchor lines.
-        If anchors cannot be located, returns NEEDS_MORE_CONTEXT error—provide complete
-        file content to fully overwrite, or add context lines to help locate the edit point.
+        Anchor lines are verbatim lines copied from the existing file that help locate
+        the exact edit target. Include 1-2 unique lines adjacent to the change.
+        Truncation markers are recommended for larger scoped edits but not required.
+        Markdown files keep fenced code blocks verbatim; outer fence stripping is skipped
+        for .md/.mdx targets.
+
+        On error, the response includes a code field:
+        - NEEDS_MORE_CONTEXT: merge model could not locate the target -
+          add 1-2 unique anchor lines from immediately around the edit location.
+        - APPLY_NOOP: merge returned an identical file even though the snippet contained
+          explicit remove directives or concrete new lines not present in the original.
+        - BLAST_RADIUS_EXCEEDED: edit scope too large - split into smaller edits.
+        - MARKER_LEAKAGE: placeholder marker text leaked into merged output (treated as literal text).
+        - TRUNCATION_DETECTED: merged output shrank drastically and no explicit remove
+          directive was provided.
+
+        On success: {status: "ok", diff: str | None (unified diff, None for new files or no-op)}.
+
+        Do NOT use this tool to delete files or clear file contents.
+        Use a dedicated file management tool for those operations.
         """
         from .apply import apply_file_logic
 
         base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
         await _detect_encoding(ctx, base_dir)
         if ctx is not None:
-            await ctx.info(f"Applying edit to {path}")
+            await ctx.info(f"Applying to {path}")
+
+        async def _on_progress(progress: int, total: int, message: str) -> None:
+            if ctx is not None:
+                await ctx.report_progress(progress=progress, total=total, message=message)
+
         result = await apply_file_logic(
             backend=_clients.get_apply(),
             file_path=path,
@@ -97,23 +125,11 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             instruction=instruction or None,  # Convert empty string to None internally
             base_dir=base_dir,
             extra_paths=config.extra_paths,
+            on_progress=_on_progress,
         )
         if ctx is not None and result and result.get("status") == "ok":
             diff_preview = (result.get("diff") or "")[:200]
             await ctx.debug(f"Edit applied: {diff_preview}...")
-        if result and result.get("status") == "ok":
-            import shutil as _shutil
-
-            from ..repo.backends import (
-                is_backend_disabled,
-                schedule_bg_chunkhound_index,
-                schedule_bg_codanna_index,
-            )
-
-            if _shutil.which("chunkhound") and not is_backend_disabled("chunkhound"):
-                schedule_bg_chunkhound_index(base_dir)
-            if _shutil.which("codanna") and not is_backend_disabled("codanna"):
-                schedule_bg_codanna_index(result.get("path", path), base_dir)
         return result
 
     # Register agentic_search (always enabled)
@@ -130,18 +146,23 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         query: Annotated[
             str,
             Field(
-                description="What to find. Natural language (e.g., 'where is auth handled') "
-                "or specific patterns (e.g., 'UserService class')."
+                description="What to find. Prefer specific identifiers over vague concepts.\n"
+                "  ✅ 'UserService class'\n"
+                "  ✅ 'where is JWT validation done'\n"
+                "  ❌ 'error handling' (too vague — results will be poor)\n"
+                "Natural language or exact symbol names both accepted."
             ),
         ],
         ctx: Context,
     ) -> dict[str, Any]:
         """Search codebase for code locations matching a query.
 
-        Finds functions, classes, modules, and traces how components connect.
-        Accepts natural language or specific patterns like class/function names.
+        Use when you know the name or structure you're looking for —
+        function names, class names, modules, or how components connect.
+        For conceptual/behavioral queries without known identifiers, use agentic_retrieval instead.
 
         Returns file paths with line ranges and an explanation of findings.
+        Keys: explanation (str), files (dict[path → {lines, snippet}]), turns_used (int).
         """
         from .search import FastAgenticSearchHarness
 
@@ -173,31 +194,33 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     @mcp.tool(
         timeout=120.0,
         annotations={
-            "readOnlyHint": False,  # probe=True may auto-index via external CLIs
+            "readOnlyHint": False,  # Schedules background reindex tasks when stale
             "destructiveHint": False,
             "idempotentHint": True,
-            "openWorldHint": _settings.RELACE_CLOUD_TOOLS,  # probe may call cloud_info
+            "openWorldHint": False,  # Pure local read + local CLI scheduling
         },
     )
-    async def indexing_status(
-        probe: Annotated[
-            bool,
-            Field(
-                description=(
-                    "If True, run active health probes for local backends (may auto-index) "
-                    "and run cloud_info when RELACE_CLOUD_TOOLS=1."
-                )
-            ),
-        ] = False,
+    async def index_status(
         ctx: Context | None = None,
     ) -> dict[str, Any]:
-        """Inspect indexing services status.
+        """Inspect indexing services status. Call before retrieval when hints seem stale or missing,
+        or after index errors to check backend health.
 
-        This reports:
-        - Relace cloud repo sync/index status (passive by default; probe can call cloud_info)
-        - Codanna local index status (markers + optional health probe)
-        - ChunkHound local index status (markers + optional health probe)
+        Single status entry point for all backends (Relace cloud, Codanna, ChunkHound).
+        Reports freshness, hints_usable, and recommended_action for each backend.
+
+        Side-effect: for local backends (Codanna/ChunkHound), automatically schedules
+        a background reindex if the index is stale or missing AND the CLI is available,
+        setting background_refresh_scheduled=true in the response.
+
+        Return structure (top-level keys):
+          relace     → {freshness, hints_usable, status.recommended_action, ...}
+          codanna    → {freshness, hints_usable, background_refresh_scheduled, ...}
+          chunkhound → {freshness, hints_usable, background_refresh_scheduled, ...}
+
+        For Relace cloud: read-only; if stale, call cloud_sync().
         """
+        from ..repo.backends import schedule_bg_chunkhound_index, schedule_bg_codanna_full_index
         from ..repo.core import get_current_git_info, is_git_dirty
         from ..repo.core.state import load_sync_state
         from ..repo.freshness import classify_cloud_index_freshness, classify_local_index_freshness
@@ -209,16 +232,14 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         except Exception as exc:
             log_event(
                 {
-                    "kind": "indexing_status_error",
+                    "kind": "index_status_error",
                     "level": "error",
                     "trace_id": trace_id,
-                    "probe": probe,
                     "error": redact_value(str(exc), 500),
                 }
             )
             return {
                 "trace_id": trace_id,
-                "probe": probe,
                 "base_dir": None,
                 "error": str(exc),
             }
@@ -243,7 +264,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             "hints_usable": relace_freshness.hints_usable,
             "sync_state": None,
             "status": None,
-            "probe": None,
         }
 
         if sync_state is None:
@@ -291,21 +311,6 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 "recommended_action": recommended_action,
             }
 
-        if probe:
-            if not _settings.RELACE_CLOUD_TOOLS:
-                relace_status["probe"] = {
-                    "status": "skipped",
-                    "reason": "RELACE_CLOUD_TOOLS is disabled",
-                }
-            else:
-                from ..repo.cloud.info import cloud_info_logic
-
-                relace_status["probe"] = await asyncio.to_thread(
-                    cloud_info_logic,
-                    _clients.get_repo(),
-                    base_dir,
-                )
-
         # --- Local backends (Codanna / ChunkHound) ---
         codanna_cli_path = shutil.which("codanna")
         chunkhound_cli_path = shutil.which("chunkhound")
@@ -323,7 +328,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             "last_indexed_head": _read_text_safe(codanna_head_path),
             "freshness": codanna_freshness.freshness,
             "hints_usable": codanna_freshness.hints_usable,
-            "probe": None,
+            "background_refresh_scheduled": False,
         }
         chunkhound_status: dict[str, Any] = {
             "cli_found": bool(chunkhound_cli_path),
@@ -332,64 +337,26 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             "last_indexed_head": _read_text_safe(chunkhound_head_path),
             "freshness": chunkhound_freshness.freshness,
             "hints_usable": chunkhound_freshness.hints_usable,
-            "probe": None,
+            "background_refresh_scheduled": False,
         }
 
-        if probe:
-            from ..repo.backends import ExternalCLIError, check_backend_health
-
-            for backend_name, status_obj in (
-                ("codanna", codanna_status),
-                ("chunkhound", chunkhound_status),
-            ):
-                if not status_obj.get("cli_found"):
-                    status_obj["probe"] = {
-                        "status": "error",
-                        "kind": "cli_not_found",
-                        "message": f"{backend_name} CLI not found in PATH",
-                    }
-                    continue
-
-                try:
-                    probe_status = await asyncio.to_thread(
-                        check_backend_health,
-                        backend_name,
-                        base_dir,
-                    )
-                    status_obj["probe"] = {"status": probe_status}
-                except ExternalCLIError as exc:
-                    status_obj["probe"] = {
-                        "status": "error",
-                        "backend": exc.backend,
-                        "kind": exc.kind,
-                        "message": str(exc),
-                        "command": exc.command,
-                    }
-                except Exception as exc:
-                    status_obj["probe"] = {
-                        "status": "error",
-                        "kind": type(exc).__name__,
-                        "message": str(exc),
-                    }
-
-        # Reconcile reported state with actual runtime conditions
-        for backend_name, status_obj in (
-            ("codanna", codanna_status),
-            ("chunkhound", chunkhound_status),
+        # Auto-schedule background refresh for stale/missing local backends
+        for backend_name, status_obj, freshness_obj in (
+            ("codanna", codanna_status, codanna_freshness),
+            ("chunkhound", chunkhound_status, chunkhound_freshness),
         ):
-            if probe:
-                refreshed = classify_local_index_freshness(base_dir, backend_name)
-                status_obj["freshness"] = refreshed.freshness
-                status_obj["hints_usable"] = refreshed.hints_usable
-                status_obj["index_dir_exists"] = (base_path / f".{backend_name}").is_dir()
-                head_path = base_path / f".{backend_name}" / "last_indexed_head"
-                status_obj["last_indexed_head"] = _read_text_safe(head_path)
             if not status_obj["cli_found"]:
                 status_obj["hints_usable"] = False
+                continue
+            if freshness_obj.refresh_recommended:
+                if backend_name == "codanna":
+                    schedule_bg_codanna_full_index(base_dir)
+                else:
+                    schedule_bg_chunkhound_index(base_dir)
+                status_obj["background_refresh_scheduled"] = True
 
         payload = {
             "trace_id": trace_id,
-            "probe": probe,
             "base_dir": base_dir,
             "base_dir_source": base_dir_source,
             "retrieval_backend": _settings.RETRIEVAL_BACKEND,
@@ -406,10 +373,9 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         log_event(
             {
-                "kind": "indexing_status",
+                "kind": "index_status",
                 "level": "info",
                 "trace_id": trace_id,
-                "probe": probe,
                 "base_dir": base_dir,
                 "base_dir_source": base_dir_source,
                 "retrieval_backend": _settings.RETRIEVAL_BACKEND,
@@ -428,13 +394,17 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
                 "codanna_last_indexed_head": codanna_status.get("last_indexed_head"),
                 "codanna_freshness": codanna_status.get("freshness"),
                 "codanna_hints_usable": codanna_status.get("hints_usable"),
-                "codanna_probe": codanna_status.get("probe"),
+                "codanna_background_refresh_scheduled": codanna_status.get(
+                    "background_refresh_scheduled"
+                ),
                 "chunkhound_cli_found": bool(chunkhound_status.get("cli_found")),
                 "chunkhound_index_dir_exists": bool(chunkhound_status.get("index_dir_exists")),
                 "chunkhound_last_indexed_head": chunkhound_status.get("last_indexed_head"),
                 "chunkhound_freshness": chunkhound_status.get("freshness"),
                 "chunkhound_hints_usable": chunkhound_status.get("hints_usable"),
-                "chunkhound_probe": chunkhound_status.get("probe"),
+                "chunkhound_background_refresh_scheduled": chunkhound_status.get(
+                    "background_refresh_scheduled"
+                ),
             }
         )
 
@@ -462,12 +432,20 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         ] = False,
         ctx: Context | None = None,
     ) -> dict[str, Any]:
-        """Upload codebase to Relace Cloud for semantic search.
+        """Upload or refresh codebase to Relace Cloud for semantic search.
 
-        Syncs git-tracked files to enable cloud_search. Incremental by default—only
-        uploads changed files. Run once per session before using cloud_search.
+        Check index_status() first—skip this if cloud freshness is already 'fresh'.
+        Syncs git-tracked files to enable cloud_search. Incremental by default.
 
-        Fails if not in a git repository or RELACE_API_KEY is not set.
+        Advanced (Relace-specific):
+          force=True              Re-upload all files; use after large refactors.
+          force=True+mirror=True  Delete cloud files absent locally; use after branch switch.
+
+        Returns: {sync_mode (str), files_created (int), files_updated (int),
+                  files_deleted (int), files_unchanged (int), warnings (list[str]),
+                  repo_id (str), repo_head (str)}.
+        Check warnings[] for truncation or suppressed deletes.
+        Fails if not in a git repo or RELACE_API_KEY is not set.
         """
         from ..repo.cloud.sync import cloud_sync_logic
 
@@ -491,15 +469,32 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         },
     )
     async def cloud_search(
-        query: Annotated[str, Field(description="Natural language search query.")],
+        query: Annotated[
+            str,
+            Field(
+                description="Natural language description of the code to find.\n"
+                "  ✅ 'function that validates JWT and returns user ID'\n"
+                "  ✅ 'rate limiting middleware for HTTP requests'\n"
+                "  ❌ 'auth' (too vague — low-relevance results)\n"
+                "Be specific about behavior, not just topic.",
+            ),
+        ],
         branch: Annotated[
-            str, Field(description="Branch to search (empty = default branch).")
-        ] = "",
+            str | None, Field(description="Branch to search (null = API default branch).")
+        ] = None,
         ctx: Context | None = None,
     ) -> dict[str, Any]:
-        """Semantic code search using AI embeddings. Requires cloud_sync first.
+        """Search for code by meaning using AI embeddings. Requires cloud_sync first.
 
-        Finds code by meaning, not just keywords. Returns ranked results with relevance scores.
+        Use for conceptual queries where you don't know the exact file, class, or function name.
+        Prefer agentic_search when you know the exact identifier or symbol name.
+
+        Prerequisite: cloud_sync must have been run at least once.
+        Fails if RELACE_API_KEY is not set or no sync state exists.
+
+        Returns: {results (list), result_count (int), warnings (list[str]),
+                  query (str), branch (str), repo_id (str)}.
+        Check warnings[] for stale index alerts (e.g., uncommitted local changes).
         """
         from ..repo.cloud.search import cloud_search_logic
 
@@ -514,7 +509,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             _clients.get_repo(),
             base_dir,
             query,
-            branch=branch,
+            branch=branch or "",
             score_threshold=score_threshold,
             token_limit=token_limit,
         )
@@ -556,7 +551,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         )
 
     @mcp.tool(
-        tags={"cloud"},
+        tags={"cloud", "admin"},
         timeout=120.0,
         annotations={
             "readOnlyHint": True,
@@ -565,46 +560,15 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             "openWorldHint": True,
         },
     )
-    def cloud_list(
-        reason: Annotated[
-            str, Field(description="Why you need this list (helps with debugging).")
-        ] = "",
-    ) -> dict[str, Any]:
-        """List all repositories in your Relace Cloud account.
+    def cloud_list() -> dict[str, Any]:
+        """[ADMIN] List all repositories in your Relace Cloud account.
 
-        Returns repository IDs, names, and indexing status. Use to find repo_id for cloud_clear.
+        Use to find repo_id for cloud_clear. Not needed for normal search/sync workflow.
+        Returns repository IDs, names, and indexing status.
         """
         from ..repo.cloud.list import cloud_list_logic
 
-        del reason  # LLM chain-of-thought only
         return cloud_list_logic(_clients.get_repo())
-
-    @mcp.tool(
-        tags={"cloud"},
-        timeout=300.0,
-        annotations={
-            "readOnlyHint": True,
-            "destructiveHint": False,
-            "idempotentHint": True,
-            "openWorldHint": True,
-        },
-    )
-    async def cloud_info(
-        reason: Annotated[
-            str, Field(description="Why you need sync status (helps with debugging).")
-        ] = "",
-        ctx: Context | None = None,
-    ) -> dict[str, Any]:
-        """Check sync status before running cloud_sync.
-
-        Shows local git state, last sync info, and whether re-sync is needed.
-        Helps decide if cloud_sync should be called.
-        """
-        from ..repo.cloud.info import cloud_info_logic
-
-        del reason  # LLM chain-of-thought only
-        base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
-        return await asyncio.to_thread(cloud_info_logic, _clients.get_repo(), base_dir)
 
     if _settings.AGENTIC_RETRIEVAL_ENABLED:
 
@@ -622,19 +586,27 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             query: Annotated[
                 str,
                 Field(
-                    description="Be SPECIFIC. Examples: "
-                    "❌ 'auth logic' "
-                    "✅ 'function that validates JWT tokens and extracts user ID' "
-                    "❌ 'error handling' "
-                    "✅ 'where HTTP 4xx errors are caught and transformed to user messages'"
+                    description="Describe the behavior or concept to find. Be SPECIFIC — vague queries skip semantic hints.\n"
+                    "  ❌ 'auth logic'\n"
+                    "  ✅ 'function that validates JWT tokens and extracts user ID'\n"
+                    "  ❌ 'error handling'\n"
+                    "  ✅ 'where HTTP 4xx errors are caught and transformed to user messages'\n"
+                    "Natural language only; do not use bare symbol names."
                 ),
             ],
             ctx: Context | None = None,
         ) -> dict[str, Any]:
-            """Find code by semantic similarity. Best for conceptual queries.
+            """Find code by meaning using two-stage retrieval: semantic hints + agentic exploration.
 
-            When you know what behavior you're looking for but not the exact names or keywords.
+            Use when the query is conceptual and you don't know exact names or keywords —
+            searching for behaviors, patterns, or side-effects.
+
+            Requires a semantic index (Codanna, ChunkHound, or Relace Cloud) for semantic hints;
+            falls back to agentic exploration only if no index is available.
+
             Returns file paths with line ranges and relevance-ranked results.
+            Keys: explanation (str), files (dict[path → {lines, snippet}]),
+                  semantic_hints_used (int), retrieval_backend (str), warnings (list[str]).
             """
             from .retrieval import agentic_retrieval_logic
 
@@ -692,10 +664,10 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         tags={"cloud"},
     )
     async def cloud_status(ctx: Context | None = None) -> str:
-        """Current cloud sync status - lightweight read from local state file.
+        """Current cloud sync status — lightweight, reads local state file only (no API calls).
 
-        Returns sync state without making API calls. Use this to quickly check
-        if cloud_sync has been run and what the current sync status is.
+        For dashboard/UI display. Agents should use the index_status tool instead,
+        which covers Relace, Codanna, and ChunkHound backends with recommended_action.
         """
         try:
             base_dir, _ = await resolve_base_dir(config.base_dir, ctx)

@@ -57,20 +57,12 @@ def _chunkhound_health_probe(base_dir: str) -> None:
     except RuntimeError as exc:
         msg = str(exc)
         if _is_chunkhound_index_missing_error(msg):
-            logger.debug("ChunkHound index not found in health probe, attempting to create...")
-            try:
-                _ensure_chunkhound_index(base_dir, env)
-            except RuntimeError as reindex_exc:
-                raise ExternalCLIError(
-                    backend="chunkhound",
-                    kind="index_missing",
-                    message=f"ChunkHound index not found. Auto-index failed: {reindex_exc}",
-                    command=["chunkhound", "search"],
-                ) from reindex_exc
-            head = get_git_head(base_dir)
-            if head:
-                _write_indexed_head(base_dir, head, _CHUNKHOUND_HEAD_FILE)
-            return
+            raise ExternalCLIError(
+                backend="chunkhound",
+                kind="index_missing",
+                message="ChunkHound index not built. Run `chunkhound index` to build it.",
+                command=["chunkhound", "search"],
+            ) from exc
         raise ExternalCLIError(
             backend="chunkhound",
             kind="nonzero_exit",

@@ -24,9 +24,9 @@ async def test_encoding_detection_runs_after_resolve_base_dir(monkeypatch, tmp_p
         return None
 
     async def fake_apply_file_logic(
-        *, backend, file_path, edit_snippet, instruction, base_dir, extra_paths=()
+        *, backend, file_path, edit_snippet, instruction, base_dir, extra_paths=(), on_progress=None
     ):
-        del backend, edit_snippet, instruction, extra_paths
+        del backend, edit_snippet, instruction, extra_paths, on_progress
         return {"status": "ok", "path": file_path, "diff": ""}
 
     def _noop_bg_chunkhound_index(_base_dir: str) -> None:

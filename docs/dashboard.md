@@ -166,7 +166,7 @@ Logs are stored using `platformdirs`:
 
 | Kind | Description | Source |
 |------|-------------|--------|
-| `indexing_status` | Indexing backends summary | `agentic_retrieval` |
+| `index_status` | Indexing backends summary | `agentic_retrieval` |
 | `backend_index_start` | CLI indexing started | `codanna` / `chunkhound` |
 | `backend_index_complete` | CLI indexing completed | `codanna` / `chunkhound` |
 | `backend_index_error` | CLI indexing failed | `codanna` / `chunkhound` |
@@ -203,9 +203,6 @@ Cloud operations emit structured events:
 | `cloud_search_start` | Cloud search started | `cloud_search` |
 | `cloud_search_complete` | Cloud search completed | `cloud_search` |
 | `cloud_search_error` | Cloud search failed | `cloud_search` |
-| `cloud_info_start` | Cloud info started | `cloud_info` |
-| `cloud_info_complete` | Cloud info completed | `cloud_info` |
-| `cloud_info_error` | Cloud info failed | `cloud_info` |
 | `cloud_list_start` | Cloud list started | `cloud_list` |
 | `cloud_list_complete` | Cloud list completed | `cloud_list` |
 | `cloud_list_error` | Cloud list failed | `cloud_list` |

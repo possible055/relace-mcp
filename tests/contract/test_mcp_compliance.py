@@ -10,7 +10,7 @@ from relace_mcp.config import RelaceConfig
 from relace_mcp.server import build_server
 
 CORE_TOOLS = ["fast_apply", "agentic_search"]
-CLOUD_TOOLS = ["cloud_sync", "cloud_search", "cloud_clear", "cloud_list", "cloud_info"]
+CLOUD_TOOLS = ["cloud_sync", "cloud_search", "cloud_clear", "cloud_list"]
 RETRIEVAL_TOOLS = ["agentic_retrieval"]
 
 

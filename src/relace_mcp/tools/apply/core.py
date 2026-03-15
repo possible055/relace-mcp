@@ -2,9 +2,10 @@ import asyncio
 import difflib
 import hashlib
 import logging
+import math
 import os
 import uuid
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -73,6 +74,13 @@ def _ok_result(
     }
 
 
+async def _report_apply_done(
+    on_progress: Callable[[int, int, str], Awaitable[None]] | None,
+) -> None:
+    if on_progress:
+        await on_progress(2, 2, "Done")
+
+
 def _resolve_path(
     file_path: str,
     base_dir: str | None,
@@ -134,6 +142,17 @@ def _resolve_path(
 async def _create_new_file(
     ctx: ApplyContext, resolved_path: Path, edit_snippet: str
 ) -> dict[str, Any]:
+    if snippet.contains_truncation_markers(edit_snippet):
+        return errors.recoverable_error(
+            "INVALID_INPUT",
+            "New file creation does not support truncation markers. "
+            "Provide the complete file content without '// ... existing code ...' or '# ... existing code ...'.",
+            ctx.file_path,
+            ctx.instruction,
+            ctx.trace_id,
+            ctx.elapsed_ms(),
+        )
+
     async with _get_path_lock(str(resolved_path)):
         if resolved_path.exists():
             return errors.recoverable_error(
@@ -165,8 +184,11 @@ async def _apply_to_existing_file(
     resolved_path: Path,
     edit_snippet: str,
     file_size: int,
+    on_progress: Callable[[int, int, str], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     concrete = snippet.concrete_lines(edit_snippet)
+    has_markers = snippet.contains_truncation_markers(edit_snippet)
+    has_explicit_remove = bool(snippet.extract_remove_targets(edit_snippet))
     if not concrete:
         # Try to provide symbol hints even for empty-concrete path
         try:
@@ -201,26 +223,30 @@ async def _apply_to_existing_file(
         initial_code, detected_encoding = read_text_with_fallback(resolved_path)
         initial_hash = hashlib.sha256(resolved_path.read_bytes()).hexdigest()
 
-        if snippet.should_run_anchor_precheck(edit_snippet, ctx.instruction):
-            if not snippet.anchor_precheck(concrete, initial_code):
-                symbols = snippet.extract_top_level_symbols(initial_code, str(resolved_path))
-                hint = ""
-                if symbols:
-                    sym_preview = symbols[:10]
-                    hint = (
-                        f" The file defines: {', '.join(sym_preview)}."
-                        " Include 1-2 lines near your target as anchors."
-                    )
-                file_lines = initial_code.count("\n") + 1
-                return errors.recoverable_error(
-                    "NEEDS_MORE_CONTEXT",
-                    f"Anchor lines in edit_snippet cannot be located in the file ({file_lines} lines).{hint}",
-                    ctx.file_path,
-                    ctx.instruction,
-                    ctx.trace_id,
-                    ctx.elapsed_ms(),
-                    file_lines=file_lines,
+        file_lines = initial_code.count("\n") + 1
+
+        anchor_passed, _ = snippet.anchor_precheck(concrete, initial_code)
+        if not anchor_passed:
+            symbols = snippet.extract_top_level_symbols(initial_code, str(resolved_path))
+            hint = ""
+            if symbols:
+                sym_preview = symbols[:10]
+                hint = (
+                    f" The file defines: {', '.join(sym_preview)}."
+                    " Include 1-2 lines near your target as anchors."
                 )
+            return errors.recoverable_error(
+                "NEEDS_MORE_CONTEXT",
+                f"Anchor lines in edit_snippet cannot be located in the file ({file_lines} lines).{hint}",
+                ctx.file_path,
+                ctx.instruction,
+                ctx.trace_id,
+                ctx.elapsed_ms(),
+                file_lines=file_lines,
+            )
+
+        if on_progress:
+            await on_progress(1, 2, "Merging")
 
         metadata = {
             "source": "fastmcp",
@@ -251,6 +277,53 @@ async def _apply_to_existing_file(
                 tofile="after",
             )
         )
+        added_lines, deleted_lines = snippet.count_nonempty_diff_lines(diff)
+        lines_touched = max(added_lines, deleted_lines)
+        deletion_dominant_diff = deleted_lines > added_lines
+
+        original_chars = len(initial_code)
+        original_lines = file_lines if initial_code else 0
+        merged_chars = len(merged_code)
+        merged_lines = merged_code.count("\n") + 1 if merged_code else 0
+
+        if has_markers:
+            initial_had_markers = snippet.contains_truncation_markers(initial_code)
+            merged_has_markers = snippet.contains_truncation_markers(merged_code)
+            if merged_has_markers and not initial_had_markers:
+                file_lines = initial_code.count("\n") + 1
+                return errors.recoverable_error(
+                    "MARKER_LEAKAGE",
+                    "Detected truncation marker text in merged output. "
+                    "This usually means the merge model treated markers as literal text instead of expanding them. "
+                    "Simplify edit_snippet and add more unique anchor lines.",
+                    ctx.file_path,
+                    ctx.instruction,
+                    ctx.trace_id,
+                    ctx.elapsed_ms(),
+                    file_lines=file_lines,
+                )
+
+        if original_chars > 0 and original_lines > 0:
+            char_loss = max(0.0, (original_chars - merged_chars) / original_chars)
+            line_loss = max(0.0, (original_lines - merged_lines) / original_lines)
+            if char_loss > 0.6 and line_loss > 0.5:
+                if has_explicit_remove:
+                    logger.debug(
+                        "[%s] EXPLICIT_DELETE_INTENT for %s: skipping TRUNCATION_DETECTED (remove directives present)",
+                        ctx.trace_id,
+                        resolved_path,
+                    )
+                else:
+                    return errors.recoverable_error(
+                        "TRUNCATION_DETECTED",
+                        f"Catastrophic truncation detected (charLoss={int(char_loss * 100)}%, "
+                        f"lineLoss={int(line_loss * 100)}%).",
+                        ctx.file_path,
+                        ctx.instruction,
+                        ctx.trace_id,
+                        ctx.elapsed_ms(),
+                        file_lines=file_lines,
+                    )
 
         if not diff:
             if snippet.expects_changes(edit_snippet, initial_code):
@@ -273,6 +346,7 @@ async def _apply_to_existing_file(
                 )
 
             logger.debug("[%s] No changes needed (idempotent) for %s", ctx.trace_id, resolved_path)
+            await _report_apply_done(on_progress)
             return _ok_result(
                 ctx,
                 str(resolved_path),
@@ -302,49 +376,44 @@ async def _apply_to_existing_file(
                 file_lines=file_lines,
             )
 
-        # Blast-radius guard: reject diffs that touch too many lines relative to snippet scope
-        effective_diff_lines = snippet.count_effective_diff_lines(diff)
-        # Exclude remove directives from scope calculation — large deletes need
-        # proportionally larger snippets, but directives alone shouldn't inflate scope.
-        scope_lines = [
-            line
-            for line in concrete
-            if not any(line.strip().startswith(pat) for pat in snippet._REMOVE_DIRECTIVE_PATTERNS)
-        ]
-        snippet_scope = max(len(scope_lines), 1)
-
-        # Subtract lines belonging to explicitly-removed symbols so intentional
-        # deletions (// remove BigFunction) don't trigger the guard.
-        remove_targets = snippet.extract_remove_targets(edit_snippet)
-        removed_estimate = snippet.estimate_removed_lines(initial_code, remove_targets)
-        adjusted_diff_lines = max(0, effective_diff_lines - removed_estimate)
-
-        if adjusted_diff_lines > snippet_scope * 3:
-            logger.warning(
-                "[%s] BLAST_RADIUS_EXCEEDED for %s: diff=%d lines (adjusted), snippet=%d lines",
-                ctx.trace_id,
-                resolved_path,
-                adjusted_diff_lines,
-                snippet_scope,
-            )
-            file_lines = initial_code.count("\n") + 1
-            return errors.recoverable_error(
-                "BLAST_RADIUS_EXCEEDED",
-                f"Diff touches {adjusted_diff_lines} lines (after excluding remove-directive targets) "
-                f"but snippet only covers {snippet_scope} lines "
-                f"(file has {file_lines} lines). "
-                "Add more anchor lines or split into smaller edits.",
-                ctx.file_path,
-                ctx.instruction,
-                ctx.trace_id,
-                ctx.elapsed_ms(),
-                file_lines=file_lines,
-            )
+        # Blast-radius guard: reject diffs that rewrite most of the file.
+        blast_radius_limit = max(1, math.ceil(file_lines * 0.8))
+        if lines_touched > blast_radius_limit:
+            if has_explicit_remove and deletion_dominant_diff:
+                logger.debug(
+                    "[%s] EXPLICIT_DELETE_INTENT for %s: skipping BLAST_RADIUS_EXCEEDED (remove directives present)",
+                    ctx.trace_id,
+                    resolved_path,
+                )
+            else:
+                logger.warning(
+                    "[%s] BLAST_RADIUS_EXCEEDED for %s: %d lines touched, file=%d lines, limit=%d",
+                    ctx.trace_id,
+                    resolved_path,
+                    lines_touched,
+                    file_lines,
+                    blast_radius_limit,
+                )
+                return errors.recoverable_error(
+                    "BLAST_RADIUS_EXCEEDED",
+                    f"Diff touches {lines_touched} lines but file only has {file_lines} lines "
+                    f"(limit={blast_radius_limit}, 80% of file). "
+                    "This looks like a full-file rewrite. Split into smaller edits.",
+                    ctx.file_path,
+                    ctx.instruction,
+                    ctx.trace_id,
+                    ctx.elapsed_ms(),
+                    file_lines=file_lines,
+                )
 
         # Symbol preservation guard: reject if top-level symbols unexpectedly disappeared
         sym_passed, sym_reason = snippet.check_symbol_preservation(
             initial_code, merged_code, edit_snippet, str(resolved_path)
         )
+        if sym_passed and sym_reason:
+            logger.debug(
+                "[%s] SYMBOL_CHANGE_DETECTED for %s: %s", ctx.trace_id, resolved_path, sym_reason
+            )
         if not sym_passed:
             logger.warning(
                 "[%s] SYMBOL_LOST for %s: %s",
@@ -363,7 +432,7 @@ async def _apply_to_existing_file(
                 file_lines=file_lines,
             )
 
-        # Semantic check (validates new/delete intent, disabled by default)
+        # Semantic check is opt-in because context-only intent checks can add false positives.
         if APPLY_SEMANTIC_CHECK:
             post_check_passed, post_check_reason = snippet.post_check_merged_code(
                 edit_snippet, merged_code, initial_code
@@ -421,6 +490,7 @@ async def _apply_to_existing_file(
             ctx.elapsed_ms(),
         )
 
+        await _report_apply_done(on_progress)
         return _ok_result(
             ctx,
             str(resolved_path),
@@ -437,6 +507,7 @@ async def apply_file_logic(
     base_dir: str | None,
     *,
     extra_paths: Sequence[str] = (),
+    on_progress: Callable[[int, int, str], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     """Core logic for fast_apply (testable independently).
 
@@ -458,6 +529,8 @@ async def apply_file_logic(
         file_path=file_path,
         instruction=instruction,
     )
+
+    edit_snippet = snippet.normalize_edit_snippet(edit_snippet, file_path)
 
     if not edit_snippet or not edit_snippet.strip():
         empty_result = errors.recoverable_error(
@@ -498,6 +571,7 @@ async def apply_file_logic(
                     resolved_path,
                     edit_snippet,
                     file_size,
+                    on_progress=on_progress,
                 )
     except Exception as exc:
         apply_logging.log_apply_error(
