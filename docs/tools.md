@@ -13,7 +13,7 @@ Notes:
 - For new files, provide the complete file content and do not include truncation markers.
 - Context-only omission syntax no longer triggers `APPLY_NOOP` by itself; `APPLY_NOOP` is reserved for explicit remove directives or concrete new lines that should have changed the file.
 - Omission-style deletion detection remains part of opt-in semantic validation via `APPLY_SEMANTIC_CHECK=1`; it is not enabled by default because context-only adjacency can produce extra failures.
-- Explicit `// remove X` / `# remove X` directives can allow large deletion-dominant edits to succeed with warnings instead of hard-failing.
+- Explicit `// remove X` / `# remove X` directives can allow large deletion-dominant edits to bypass the truncation and blast-radius guards instead of hard-failing.
 
 ### Parameters
 
@@ -43,7 +43,7 @@ UDiff of changes, or confirmation for new files.
 - `APPLY_NOOP`: Merge returned an identical file even though the snippet contained explicit remove directives or concrete new lines not present in the original file.
 - `MARKER_LEAKAGE`: Placeholder markers leaked into merged output (treated as literal text).
 - `TRUNCATION_DETECTED`: Merged output shrank drastically and no explicit remove directive was provided.
-- `BLAST_RADIUS_EXCEEDED`: Diff scope too large; split into smaller edits. Large deletion-dominant edits with explicit remove directives may be allowed with a warning instead.
+- `BLAST_RADIUS_EXCEEDED`: Diff scope too large; split into smaller edits. Large deletion-dominant edits with explicit remove directives bypass this guard.
 
 ---
 

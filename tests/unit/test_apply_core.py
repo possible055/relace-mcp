@@ -488,7 +488,7 @@ class TestMarkerAndInputGuards:
         assert not any("MISSING_MARKERS" in warning for warning in result.get("warnings", []))
 
     @pytest.mark.asyncio
-    async def test_large_markerless_edit_adds_warning(self, tmp_path: Path) -> None:
+    async def test_large_markerless_edit_does_not_warn(self, tmp_path: Path) -> None:
         source = tmp_path / "warn.py"
         initial_lines = [f"line_{i} = {i}" for i in range(31)]
         source.write_text("\n".join(initial_lines) + "\n", encoding="utf-8", newline="")

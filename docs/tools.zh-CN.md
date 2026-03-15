@@ -13,7 +13,7 @@
 - 创建新文件时，请提供完整文件内容，不要包含 truncation markers。
 - 仅靠 omission-style 的 context adjacency 不会再单独触发 `APPLY_NOOP`；`APPLY_NOOP` 现在主要用于 explicit remove directive 或明确新增行却没有产生 diff 的情况。
 - omission-style deletion detection 仍属于 `APPLY_SEMANTIC_CHECK=1` 的 opt-in 语义校验；默认不启用，以避免仅靠 context adjacency 带来的额外失败。
-- 显式 `// remove X` / `# remove X` directive 可让 deletion-dominant 的大删改以 warning 形式放行，而不是直接 hard fail。
+- 显式 `// remove X` / `# remove X` directive 可让 deletion-dominant 的大删改绕过 truncation 与 blast-radius guard，而不是直接 hard fail。
 
 ### 参数
 
@@ -43,7 +43,7 @@
 - `APPLY_NOOP`：snippet 中包含 explicit remove directive 或原文件不存在的 concrete 新行，但 merge 结果仍与原文件完全一致。
 - `MARKER_LEAKAGE`：占位符 marker 泄漏到 merged output（被当成字面文本）。
 - `TRUNCATION_DETECTED`：在没有 explicit remove directive 的情况下，merged output 出现异常大幅缩短。
-- `BLAST_RADIUS_EXCEEDED`：diff 范围过大，需要拆分成更小的 edits。若是带 explicit remove directive 的 deletion-dominant 大删改，则可能改为 warning 放行。
+- `BLAST_RADIUS_EXCEEDED`：diff 范围过大，需要拆分成更小的 edits。若是带 explicit remove directive 的 deletion-dominant 大删改，则会绕过此 guard。
 
 ---
 
