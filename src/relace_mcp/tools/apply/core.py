@@ -4,7 +4,7 @@ import hashlib
 import logging
 import os
 import uuid
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -167,6 +167,7 @@ async def _apply_to_existing_file(
     resolved_path: Path,
     edit_snippet: str,
     file_size: int,
+    on_progress: Callable[[int, int, str], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     concrete = snippet.concrete_lines(edit_snippet)
     if not concrete:
@@ -230,6 +231,9 @@ async def _apply_to_existing_file(
                 logger.warning("[%s] %s for %s", ctx.trace_id, anchor_warning, resolved_path)
                 warnings.append(anchor_warning)
 
+        if on_progress:
+            await on_progress(1, 3, "Merging")
+
         metadata = {
             "source": "fastmcp",
             "tool": "fast_apply",
@@ -247,6 +251,9 @@ async def _apply_to_existing_file(
 
         merged_code = response.merged_code
         usage = response.usage
+
+        if on_progress:
+            await on_progress(2, 3, "Verifying")
 
         if not isinstance(merged_code, str):
             raise ApiInvalidResponseError()
@@ -435,6 +442,7 @@ async def apply_file_logic(
     base_dir: str | None,
     *,
     extra_paths: Sequence[str] = (),
+    on_progress: Callable[[int, int, str], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     """Core logic for fast_apply (testable independently).
 
@@ -496,6 +504,7 @@ async def apply_file_logic(
                     resolved_path,
                     edit_snippet,
                     file_size,
+                    on_progress=on_progress,
                 )
     except Exception as exc:
         apply_logging.log_apply_error(

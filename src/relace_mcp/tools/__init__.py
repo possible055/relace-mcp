@@ -92,7 +92,12 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         base_dir, _ = await resolve_base_dir(config.base_dir, ctx)
         await _detect_encoding(ctx, base_dir)
         if ctx is not None:
-            await ctx.info(f"Applying edit to {path}")
+            await ctx.info(f"Applying to {path}")
+
+        async def _on_progress(progress: int, total: int, message: str) -> None:
+            if ctx is not None:
+                await ctx.report_progress(progress=progress, total=total, message=message)
+
         result = await apply_file_logic(
             backend=_clients.get_apply(),
             file_path=path,
@@ -100,6 +105,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             instruction=instruction or None,  # Convert empty string to None internally
             base_dir=base_dir,
             extra_paths=config.extra_paths,
+            on_progress=_on_progress,
         )
         if ctx is not None and result and result.get("status") == "ok":
             diff_preview = (result.get("diff") or "")[:200]
