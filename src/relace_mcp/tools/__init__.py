@@ -68,7 +68,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             str,
             Field(
                 description="Code snippet representing the changes. Include only the lines being added or "
-                "modified, plus placeholder comments for unchanged parts: "
+                "modified, plus placeholder comments for unchanged parts when useful for larger scoped edits: "
                 "`// ... existing code ...` (JS/TS), `# ... existing code ...` (Python/shell). "
                 "Anchor the edit with 1-2 verbatim lines from the existing file."
             ),
@@ -88,13 +88,21 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         For existing files: merges edit_snippet with current content using anchor lines.
         Anchor lines are verbatim lines copied from the existing file that help locate
         the exact edit target. Include 1-2 unique lines adjacent to the change.
+        Truncation markers are recommended for larger scoped edits but not required.
 
         On error, the response includes a code field:
-        - NEEDS_MORE_CONTEXT or APPLY_NOOP: merge model could not locate the target -
+        - NEEDS_MORE_CONTEXT: merge model could not locate the target -
           add 1-2 unique anchor lines from immediately around the edit location.
+        - APPLY_NOOP: merge returned an identical file even though the snippet contained
+          explicit remove directives or concrete new lines not present in the original.
         - BLAST_RADIUS_EXCEEDED: edit scope too large - split into smaller edits.
+        - MARKER_LEAKAGE: placeholder marker text leaked into merged output (treated as literal text).
+        - TRUNCATION_DETECTED: merged output shrank drastically while markers were present
+          and no explicit remove directive was provided.
 
-        On success: {status: "ok", diff: str (rendered unified diff)}.
+        On success: {status: "ok", diff: str (rendered unified diff), warnings?: [str]}.
+        Warnings may include weak anchors, skipped symbol guards on non-core languages,
+        possible rename/move/extract detection, or explicit delete-intent allowances.
 
         Do NOT use this tool to delete files or clear file contents.
         Use a dedicated file management tool for those operations.

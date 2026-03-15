@@ -4,12 +4,14 @@ from relace_mcp.tools.apply.snippet import (
     anchor_precheck,
     check_symbol_preservation,
     concrete_lines,
+    contains_truncation_markers,
     count_effective_diff_lines,
-    estimate_removed_lines,
+    count_nonempty_diff_lines,
     expects_changes,
     extract_remove_targets,
     extract_top_level_symbols,
     is_truncation_placeholder,
+    normalize_edit_snippet,
     post_check_merged_code,
     validate_syntax_delta,
 )
@@ -23,8 +25,12 @@ class TestIsTruncationPlaceholder:
         [
             ("// ... existing code ...", True),
             ("# ... existing code ...", True),
+            ("//... existing code ...", True),
+            ("#... existing code ...", True),
             ("// ...", True),
             ("# ...", True),
+            ("//...", True),
+            ("#...", True),
             ("  // ... existing code ...  ", True),
             ("", True),
             ("   ", True),
@@ -37,6 +43,34 @@ class TestIsTruncationPlaceholder:
     def test_placeholder_detection(self, line: str, expected: bool) -> None:
         """Should correctly identify truncation placeholders."""
         assert is_truncation_placeholder(line) == expected
+
+
+class TestNormalizeEditSnippet:
+    def test_strips_markdown_fence_with_language(self) -> None:
+        snippet = "```python\ndef foo():\n    pass\n```"
+        assert normalize_edit_snippet(snippet) == "def foo():\n    pass"
+
+    def test_strips_markdown_fence_without_language(self) -> None:
+        snippet = "```\nconst x = 1;\n```"
+        assert normalize_edit_snippet(snippet) == "const x = 1;"
+
+    def test_does_not_strip_incomplete_fence(self) -> None:
+        snippet = "```python\ndef foo():\n    pass\n"
+        assert normalize_edit_snippet(snippet) == snippet
+
+    def test_does_not_strip_if_closing_has_extra_text(self) -> None:
+        snippet = "```python\ndef foo():\n    pass\n``` trailing"
+        assert normalize_edit_snippet(snippet) == snippet
+
+    def test_preserves_trailing_newline(self) -> None:
+        snippet = "```python\ndef foo():\n    pass\n```\n"
+        assert normalize_edit_snippet(snippet).endswith("\n")
+
+
+class TestContainsTruncationMarkers:
+    def test_detects_marker_lines(self) -> None:
+        assert contains_truncation_markers("# ... existing code ...\n") is True
+        assert contains_truncation_markers("   \n") is False
 
 
 class TestConcreteLines:
@@ -87,6 +121,14 @@ class TestAnchorPrecheck:
         initial_code = "def foo():\n    return\n"
         passed, warning = anchor_precheck(concrete, initial_code)
         assert passed is False
+
+    def test_accepts_short_but_specific_anchor(self) -> None:
+        """Short non-trivial lines should be usable when they are distinctive."""
+        concrete = ["x=1"]
+        initial_code = "x=1\ny = 2\n"
+        passed, warning = anchor_precheck(concrete, initial_code)
+        assert passed is True
+        assert warning is None
 
 
 class TestAnchorPrecheckEdgeCases:
@@ -197,6 +239,26 @@ class TestExpectsChanges:
         initial = "def OldFunction(): pass"
         assert expects_changes(snippet, initial) is True
 
+    def test_omission_deletion_no_longer_expects_changes(self) -> None:
+        """Omission-style context alone should not trigger APPLY_NOOP expectations."""
+        initial = (
+            "Header line that is unique\nTakes no parameters.\nFooter line that is also unique\n"
+        )
+        snippet = "Header line that is unique\nFooter line that is also unique\n"
+        assert expects_changes(snippet, initial) is False
+
+    def test_omission_deletion_idempotent_no_changes(self) -> None:
+        initial = "Header line that is unique\nFooter line that is also unique\n"
+        snippet = "Header line that is unique\nFooter line that is also unique\n"
+        assert expects_changes(snippet, initial) is False
+
+    def test_omission_deletion_with_adjacent_duplicate_stays_idempotent(self) -> None:
+        initial = (
+            "alpha unique line\nremove me\nbeta unique line\nalpha unique line\nbeta unique line\n"
+        )
+        snippet = "alpha unique line\nbeta unique line\n"
+        assert expects_changes(snippet, initial) is False
+
 
 class TestPostCheckMergedCode:
     """Test post_check_merged_code function."""
@@ -229,6 +291,17 @@ class TestPostCheckMergedCode:
         assert passed is False
         assert reason is not None
         assert "OldFunction" in reason
+
+    def test_fails_when_omission_style_deletion_not_applied(self) -> None:
+        snippet = "Header line that is unique\nFooter line that is also unique\n"
+        initial = (
+            "Header line that is unique\nTakes no parameters.\nFooter line that is also unique\n"
+        )
+        merged = initial
+        passed, reason = post_check_merged_code(snippet, merged, initial)
+        assert passed is False
+        assert reason is not None
+        assert "Omission-style deletion" in reason
 
 
 class TestValidateSyntaxDelta:
@@ -353,6 +426,18 @@ class TestCountEffectiveDiffLines:
         )
         assert count_effective_diff_lines(diff) == 1
 
+    def test_count_nonempty_diff_lines_tracks_adds_and_deletes(self) -> None:
+        diff = (
+            "--- before\n"
+            "+++ after\n"
+            "@@ -1,4 +1,3 @@\n"
+            "-old_line_one\n"
+            "-old_line_two\n"
+            "+new_line_one\n"
+            " unchanged\n"
+        )
+        assert count_nonempty_diff_lines(diff) == (1, 2)
+
 
 class TestExtractTopLevelSymbols:
     """Test extract_top_level_symbols for Python files."""
@@ -472,6 +557,16 @@ class TestCheckSymbolPreservation:
         passed, _ = check_symbol_preservation(initial, merged, "# remove bar", "test.py")
         assert passed is True
 
+    def test_warns_for_possible_python_rename(self) -> None:
+        initial = "def foo():\n    pass\n"
+        merged = "def bar():\n    pass\n"
+        passed, reason = check_symbol_preservation(initial, merged, "", "test.py")
+        assert passed is True
+        assert reason is not None
+        assert "SYMBOL_CHANGE_DETECTED" in reason
+        assert "foo" in reason
+        assert "bar" in reason
+
     def test_ts_import_removal_not_flagged(self) -> None:
         """Removing TS imports should NOT trigger SYMBOL_LOST."""
         initial = "import React from 'react'\nexport function App() { return null }\n"
@@ -479,34 +574,20 @@ class TestCheckSymbolPreservation:
         passed, _ = check_symbol_preservation(initial, merged, "", "app.tsx")
         assert passed is True
 
+    def test_warns_for_possible_typescript_rename(self) -> None:
+        initial = "export function oldHandler() { return null }\n"
+        merged = "export function newHandler() { return null }\n"
+        passed, reason = check_symbol_preservation(initial, merged, "", "app.ts")
+        assert passed is True
+        assert reason is not None
+        assert "SYMBOL_CHANGE_DETECTED" in reason
 
-class TestEstimateRemovedLines:
-    """Test estimate_removed_lines function."""
 
-    def test_python_function(self) -> None:
-        """Should count lines of a matching Python function."""
-        code = "def small():\n    return 1\n\ndef big_func():\n    x = 1\n    y = 2\n    return x + y\n"
-        # big_func has 4 lines (def + 3 body lines)
-        result = estimate_removed_lines(code, ["big_func"])
-        assert result == 4
-
-    def test_no_match(self) -> None:
-        """Should return 0 when target is not found."""
-        code = "def foo():\n    return 1\n"
-        assert estimate_removed_lines(code, ["nonexistent"]) == 0
-
-    def test_empty_targets(self) -> None:
-        """Should return 0 for empty target list."""
-        code = "def foo():\n    return 1\n"
-        assert estimate_removed_lines(code, []) == 0
-
-    def test_multiple_targets(self) -> None:
-        """Should sum lines of multiple targets."""
-        code = (
-            "def alpha():\n    return 1\n\n"
-            "def beta():\n    return 2\n\n"
-            "def gamma():\n    return 3\n"
-        )
-        # alpha: def + body + blank separator = 3 lines, beta: def + body + blank = 3 lines
-        result = estimate_removed_lines(code, ["alpha", "beta"])
-        assert result == 6
+class TestSymbolPreservationWhitelist:
+    def test_non_whitelist_does_not_block(self) -> None:
+        initial = "class Foo {}\nclass Bar {}\n"
+        merged = "class Foo {}\n"
+        passed, reason = check_symbol_preservation(initial, merged, "", "test.java")
+        assert passed is True
+        assert reason is not None
+        assert "SYMBOL_GUARD_SKIPPED" in reason

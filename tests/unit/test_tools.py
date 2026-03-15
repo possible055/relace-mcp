@@ -778,7 +778,7 @@ class TestApplyFileLogicRecoverableErrors:
         mock_backend: AsyncMock,
         tmp_path: Path,
     ) -> None:
-        """Instruction with explicit position directive should skip precheck to avoid false blocking."""
+        """Append-like instructions should still require anchors (no instruction-based skip)."""
         test_file = tmp_path / "test.py"
         original = "def existing_function():\n    return 42\n"
         # Use binary write to avoid Windows newline conversion
@@ -790,7 +790,7 @@ class TestApplyFileLogicRecoverableErrors:
         result = await apply_file_logic(
             backend=mock_backend,
             file_path=str(test_file),
-            edit_snippet="// ... existing code ...\n# appended\n// ... existing code ...\n",
+            edit_snippet="def existing_function():\n# appended\n",
             instruction="Append to end of file",
             base_dir=str(tmp_path),
         )
@@ -1212,6 +1212,32 @@ class TestApplyNoopDetection:
 
         assert result["status"] == "error"
         assert result["code"] == "APPLY_NOOP"
+
+    @pytest.mark.asyncio
+    async def test_noop_with_omission_style_context_returns_ok(
+        self,
+        _mock_config: RelaceConfig,
+        mock_backend: AsyncMock,
+        tmp_path: Path,
+    ) -> None:
+        """Context-only omission syntax should not force APPLY_NOOP when merge is idempotent."""
+        test_file = tmp_path / "test.py"
+        original_content = (
+            "Header line that is unique\nTakes no parameters.\nFooter line that is also unique\n"
+        )
+        test_file.write_bytes(original_content.encode("utf-8"))
+
+        mock_backend.apply.return_value = ApplyResponse(merged_code=original_content, usage={})
+
+        result = await apply_file_logic(
+            backend=mock_backend,
+            file_path=str(test_file),
+            edit_snippet="Header line that is unique\nFooter line that is also unique\n",
+            instruction="Keep this block intact",
+            base_dir=str(tmp_path),
+        )
+
+        assert result["status"] == "ok"
 
     @pytest.mark.asyncio
     async def test_noop_with_trivial_line_returns_ok(
