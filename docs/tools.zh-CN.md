@@ -63,19 +63,16 @@
 
 ## `index_status`
 
-在不执行 retrieval 的前提下，检查 cloud/local indexing readiness。
+检查 cloud/local indexing readiness。若本地 backend（Codanna/ChunkHound）的 index 过期或缺失，自动安排后台 reindex 任务。
 
-### 参数
-
-| 参数 | 必需 | 默认值 | 描述 |
-|------|------|--------|------|
-| `probe` | ❌ | `false` | 对所有已安装 CLI 的本地 backend（codanna/chunkhound）运行主动 health probe，并在启用 cloud tools 时对 Relace cloud 进行检查 |
+此工具无参数。
 
 ### 返回
 
 - `relace`、`codanna`、`chunkhound` 都会包含 `freshness`：`fresh`、`stale`、`missing` 或 `unknown`
 - `relace`、`codanna`、`chunkhound` 都会包含 `hints_usable`：表示在 `prefer-stale` 下 `agentic_retrieval` 是否可以使用该 backend 的 semantic hints
-- `probe=true` 会对所有已安装 CLI 的本地 backend 执行健康检查
+- `codanna` 和 `chunkhound` 包含 `background_refresh_scheduled`：`true` 表示已触发后台 reindex
+- Relace cloud 若过期，`status.recommended_action` 会告知调用 `cloud_sync()`
 
 ---
 
@@ -112,7 +109,7 @@
 | 参数 | 必需 | 描述 |
 |------|------|------|
 | `query` | ✅ | 自然语言搜索查询 |
-| `branch` | ❌ | 要搜索的分支（空值使用 API 默认值） |
+| `branch` | ❌ | 要搜索的分支（null 使用 API 默认分支） |
 
 > **注意：** 内部参数（`score_threshold=0.3`、`token_limit=30000`）不暴露给 LLM。
 
@@ -122,11 +119,8 @@
 
 列出 Relace Cloud 账户中的所有仓库。
 
-### 参数
-
-| 参数 | 必需 | 描述 |
-|------|------|------|
-| `reason` | ❌ | LLM 链式思维的简要说明（工具会忽略） |
+此工具无参数。返回仓库 ID、名称和索引状态。
+用于获取 `cloud_clear` 所需的 `repo_id`；正常搜索/同步流程不需要调用。
 
 ---
 
@@ -143,6 +137,7 @@
 | 参数 | 必需 | 默认值 | 描述 |
 |------|------|--------|------|
 | `confirm` | ✅ | `false` | 必须为 `true` 才能继续（安全保护） |
+| `repo_id` | ❌ | `null` | 要直接删除的仓库 UUID（用 `cloud_list` 查找）。省略时删除当前目录对应的仓库。**注意：** 直接 `repo_id` 模式不会清除本地 sync state。 |
 
 ### 返回
 

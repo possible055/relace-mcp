@@ -1,8 +1,7 @@
-"""Regression tests for index_status probe loop (P2).
+"""Regression tests for index_status auto-refresh scheduling (P2).
 
-Verifies that probe=True always executes health checks for available local
-backends regardless of MCP_RETRIEVAL_BACKEND value (auto/relace/none/codanna).
-These tests will fail immediately if the RETRIEVAL_BACKEND guard is re-introduced.
+Verifies that index_status always schedules background refresh for stale/missing local
+backends regardless of MCP_RETRIEVAL_BACKEND value.
 """
 
 from unittest.mock import patch
@@ -12,10 +11,8 @@ import pytest
 from relace_mcp.config import RelaceConfig
 from relace_mcp.server import build_server
 
-# check_backend_health is lazy-imported from ..repo.backends inside the probe branch.
-# Patch it at the source module so the import inside the closure picks up the mock.
-_BACKENDS_PKG = "relace_mcp.repo.backends"
 _TOOLS_MOD = "relace_mcp.tools.__init__"
+_BACKENDS_PKG = "relace_mcp.repo.backends"
 
 
 def _make_config(tmp_path) -> RelaceConfig:
@@ -27,20 +24,23 @@ def _make_config(tmp_path) -> RelaceConfig:
     ["auto", "relace", "none", "codanna", "chunkhound"],
 )
 @pytest.mark.asyncio
-async def test_probe_not_skipped_for_local_backends_on_any_retrieval_backend(
+async def test_refresh_scheduled_when_stale_on_any_retrieval_backend(
     tmp_path, retrieval_backend: str
 ) -> None:
-    """codanna/chunkhound probe should never be 'skipped' due to RETRIEVAL_BACKEND mismatch.
-
-    With probe=True and both CLIs present, probe.status should be 'ok' or 'error',
-    never 'skipped'. This test would catch a re-introduced RETRIEVAL_BACKEND guard.
+    """index_status should schedule background refresh for stale local backends,
+    regardless of MCP_RETRIEVAL_BACKEND.
     """
     config = _make_config(tmp_path)
+
+    # Create stale index dirs so freshness = "stale" (not missing)
+    (tmp_path / ".codanna").mkdir()
+    (tmp_path / ".chunkhound").mkdir()
 
     with (
         patch(f"{_TOOLS_MOD}._settings") as mock_settings,
         patch(f"{_TOOLS_MOD}.shutil.which", return_value="/usr/local/bin/fake"),
-        patch(f"{_BACKENDS_PKG}.check_backend_health", return_value="ok") as mock_health,
+        patch(f"{_BACKENDS_PKG}.schedule_bg_codanna_full_index"),
+        patch(f"{_BACKENDS_PKG}.schedule_bg_chunkhound_index"),
     ):
         mock_settings.RETRIEVAL_BACKEND = retrieval_backend
         mock_settings.RELACE_CLOUD_TOOLS = False
@@ -51,29 +51,19 @@ async def test_probe_not_skipped_for_local_backends_on_any_retrieval_backend(
         from fastmcp import Client
 
         async with Client(server) as client:
-            result = await client.call_tool("index_status", {"probe": True})
+            result = await client.call_tool("index_status", {})
 
     payload = result.structured_content
     assert payload is not None
 
     for backend in ("codanna", "chunkhound"):
-        probe = payload[backend]["probe"]
-        assert probe is not None, f"{backend} probe must not be None"
-        assert probe.get("status") != "skipped", (
-            f"{backend} probe was skipped with RETRIEVAL_BACKEND={retrieval_backend!r}; "
-            "this indicates the backend guard was re-introduced"
-        )
-
-    # Verify check_backend_health was actually invoked for both backends
-    assert mock_health.call_count == 2, (
-        f"Expected 2 health probe calls (codanna+chunkhound), got {mock_health.call_count}. "
-        f"RETRIEVAL_BACKEND={retrieval_backend!r}"
-    )
+        scheduled = payload[backend]["background_refresh_scheduled"]
+        assert isinstance(scheduled, bool), f"{backend}.background_refresh_scheduled must be bool"
 
 
 @pytest.mark.asyncio
-async def test_probe_error_not_skipped_when_cli_missing(tmp_path) -> None:
-    """When CLI is not found, probe.status should be 'error' (cli_not_found), not 'skipped'."""
+async def test_no_refresh_when_cli_missing(tmp_path) -> None:
+    """When CLI is not found, background_refresh_scheduled must be False."""
     config = _make_config(tmp_path)
 
     with (
@@ -89,13 +79,14 @@ async def test_probe_error_not_skipped_when_cli_missing(tmp_path) -> None:
         from fastmcp import Client
 
         async with Client(server) as client:
-            result = await client.call_tool("index_status", {"probe": True})
+            result = await client.call_tool("index_status", {})
 
     payload = result.structured_content
     for backend in ("codanna", "chunkhound"):
-        probe = payload[backend]["probe"]
-        assert probe is not None
-        assert probe.get("status") == "error", (
-            f"{backend}: expected 'error' (cli_not_found) but got {probe.get('status')!r}"
+        assert payload[backend]["background_refresh_scheduled"] is False, (
+            f"{backend}: expected False when CLI missing, got "
+            f"{payload[backend]['background_refresh_scheduled']!r}"
         )
-        assert probe.get("kind") == "cli_not_found"
+        assert payload[backend]["hints_usable"] is False, (
+            f"{backend}: hints_usable must be False when CLI missing"
+        )

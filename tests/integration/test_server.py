@@ -129,9 +129,7 @@ class TestServerToolExecution:
         async with Client(server) as client:
             result = await client.call_tool(
                 "index_status",
-                {
-                    "probe": False,
-                },
+                {},
             )
 
             assert result.structured_content is not None

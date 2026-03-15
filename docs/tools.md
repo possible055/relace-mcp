@@ -63,19 +63,17 @@ Search the codebase and return relevant files and line ranges. Uses an agentic l
 
 ## `index_status`
 
-Inspect cloud/local indexing readiness without running retrieval.
+Inspect cloud/local indexing readiness. Automatically schedules a background reindex
+for local backends (Codanna/ChunkHound) when their index is stale or missing.
 
-### Parameters
-
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| `probe` | ❌ | `false` | Run active health probes for all available local backends (codanna/chunkhound) and Relace cloud when cloud tools are enabled |
+This tool takes no parameters.
 
 ### Returns
 
 - `relace`, `codanna`, and `chunkhound` each include `freshness`: `fresh`, `stale`, `missing`, or `unknown`
 - `relace`, `codanna`, and `chunkhound` each include `hints_usable`: whether `agentic_retrieval` may use that backend's semantic hints under `prefer-stale`
-- `probe=true` triggers health checks for all local backends that have their CLI installed
+- `codanna` and `chunkhound` include `background_refresh_scheduled`: `true` if a background reindex was triggered
+- For Relace cloud: if stale, `status.recommended_action` tells you to run `cloud_sync()`
 
 ---
 
@@ -112,7 +110,7 @@ Semantic code search over the cloud-synced repository. Requires running `cloud_s
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `query` | ✅ | Natural language search query |
-| `branch` | ❌ | Branch to search (empty uses API default) |
+| `branch` | ❌ | Branch to search (null = API default branch) |
 
 > **Note:** Internal parameters (`score_threshold=0.3`, `token_limit=30000`) are not exposed to LLM.
 
@@ -122,13 +120,8 @@ Semantic code search over the cloud-synced repository. Requires running `cloud_s
 
 List all repositories in your Relace Cloud account.
 
-### Parameters
-
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `reason` | ❌ | Brief explanation for LLM chain-of-thought (ignored by tool) |
-
----
+This tool takes no parameters. Returns repository IDs, names, and indexing status.
+Use to find `repo_id` for `cloud_clear`; not needed for normal search/sync workflow.
 
 ---
 
@@ -143,6 +136,7 @@ If `confirm=false`, returns `status="cancelled"` and does nothing.
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `confirm` | ✅ | `false` | Must be `true` to proceed (safety guard) |
+| `repo_id` | ❌ | `null` | Repo UUID to delete directly (use `cloud_list` to find). If omitted, deletes the repo for the current directory. **Note:** direct `repo_id` mode skips clearing local sync state. |
 
 ### Returns
 

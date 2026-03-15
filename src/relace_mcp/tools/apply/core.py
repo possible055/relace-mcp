@@ -62,6 +62,7 @@ def _ok_result(
     path: str,
     message: str,
     diff: str | None = None,
+    warnings: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "status": "ok",
@@ -70,6 +71,7 @@ def _ok_result(
         "timing_ms": ctx.elapsed_ms(),
         "diff": diff,
         "message": message,
+        "warnings": warnings or [],
     }
 
 
@@ -201,8 +203,11 @@ async def _apply_to_existing_file(
         initial_code, detected_encoding = read_text_with_fallback(resolved_path)
         initial_hash = hashlib.sha256(resolved_path.read_bytes()).hexdigest()
 
+        warnings: list[str] = []
+
         if snippet.should_run_anchor_precheck(edit_snippet, ctx.instruction):
-            if not snippet.anchor_precheck(concrete, initial_code):
+            anchor_passed, anchor_warning = snippet.anchor_precheck(concrete, initial_code)
+            if not anchor_passed:
                 symbols = snippet.extract_top_level_symbols(initial_code, str(resolved_path))
                 hint = ""
                 if symbols:
@@ -221,6 +226,9 @@ async def _apply_to_existing_file(
                     ctx.elapsed_ms(),
                     file_lines=file_lines,
                 )
+            if anchor_warning:
+                logger.warning("[%s] %s for %s", ctx.trace_id, anchor_warning, resolved_path)
+                warnings.append(anchor_warning)
 
         metadata = {
             "source": "fastmcp",
@@ -278,6 +286,7 @@ async def _apply_to_existing_file(
                 str(resolved_path),
                 "No changes needed (already matches)",
                 diff=None,
+                warnings=warnings,
             )
 
         # L1 Syntax validation (always enabled for Python files)
@@ -302,38 +311,26 @@ async def _apply_to_existing_file(
                 file_lines=file_lines,
             )
 
-        # Blast-radius guard: reject diffs that touch too many lines relative to snippet scope
-        effective_diff_lines = snippet.count_effective_diff_lines(diff)
-        # Exclude remove directives from scope calculation — large deletes need
-        # proportionally larger snippets, but directives alone shouldn't inflate scope.
-        scope_lines = [
-            line
-            for line in concrete
-            if not any(line.strip().startswith(pat) for pat in snippet._REMOVE_DIRECTIVE_PATTERNS)
-        ]
-        snippet_scope = max(len(scope_lines), 1)
-
-        # Subtract lines belonging to explicitly-removed symbols so intentional
-        # deletions (// remove BigFunction) don't trigger the guard.
-        remove_targets = snippet.extract_remove_targets(edit_snippet)
-        removed_estimate = snippet.estimate_removed_lines(initial_code, remove_targets)
-        adjusted_diff_lines = max(0, effective_diff_lines - removed_estimate)
-
-        if adjusted_diff_lines > snippet_scope * 3:
+        # Blast-radius guard: reject diffs that rewrite most of the file.
+        # count_effective_diff_lines returns max(added, deleted) — already
+        # a single-sided metric, no halving needed.
+        lines_touched = snippet.count_effective_diff_lines(diff)
+        file_lines = initial_code.count("\n") + 1
+        blast_radius_limit = max(int(file_lines * 0.8), 100)
+        if lines_touched > blast_radius_limit:
             logger.warning(
-                "[%s] BLAST_RADIUS_EXCEEDED for %s: diff=%d lines (adjusted), snippet=%d lines",
+                "[%s] BLAST_RADIUS_EXCEEDED for %s: %d lines touched, file=%d lines, limit=%d",
                 ctx.trace_id,
                 resolved_path,
-                adjusted_diff_lines,
-                snippet_scope,
+                lines_touched,
+                file_lines,
+                blast_radius_limit,
             )
-            file_lines = initial_code.count("\n") + 1
             return errors.recoverable_error(
                 "BLAST_RADIUS_EXCEEDED",
-                f"Diff touches {adjusted_diff_lines} lines (after excluding remove-directive targets) "
-                f"but snippet only covers {snippet_scope} lines "
-                f"(file has {file_lines} lines). "
-                "Add more anchor lines or split into smaller edits.",
+                f"Diff touches {lines_touched} lines but file only has {file_lines} lines "
+                f"(limit={blast_radius_limit}, 80% of file or 100 lines). "
+                "This looks like a full-file rewrite. Split into smaller edits.",
                 ctx.file_path,
                 ctx.instruction,
                 ctx.trace_id,
@@ -426,6 +423,7 @@ async def _apply_to_existing_file(
             str(resolved_path),
             "Applied code changes successfully.",
             diff=diff,
+            warnings=warnings,
         )
 
 

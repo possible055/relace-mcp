@@ -67,67 +67,90 @@ class TestAnchorPrecheck:
     """Test anchor_precheck function."""
 
     def test_finds_anchors(self) -> None:
-        """Should return True when anchors are found."""
+        """Should pass when 2+ anchors found (both unique)."""
         concrete = ["def hello_world():", "    print('Hello, World!')"]
         initial_code = "def hello_world():\n    print('Hello, World!')\n"
-        assert anchor_precheck(concrete, initial_code) is True
+        passed, warning = anchor_precheck(concrete, initial_code)
+        assert passed is True
+        assert warning is None
 
     def test_rejects_no_anchors(self) -> None:
-        """Should return False when no anchors are found."""
+        """Should block when no anchors match."""
         concrete = ["def totally_different():", "    return 999"]
         initial_code = "def hello_world():\n    print('Hello')\n"
-        assert anchor_precheck(concrete, initial_code) is False
+        passed, warning = anchor_precheck(concrete, initial_code)
+        assert passed is False
 
     def test_rejects_short_anchors_only(self) -> None:
-        """Should reject when only short anchors (like 'return') are found."""
+        """Should block when only short anchors (like 'return') are found."""
         concrete = ["return", "}"]
         initial_code = "def foo():\n    return\n"
-        assert anchor_precheck(concrete, initial_code) is False
+        passed, warning = anchor_precheck(concrete, initial_code)
+        assert passed is False
 
 
-class TestAnchorPrecheckCluster:
-    """Test anchor cluster validation (80-line window)."""
+class TestAnchorPrecheckEdgeCases:
+    """Test anchor_precheck 3-tier logic."""
 
-    def test_accepts_clustered_anchors(self) -> None:
-        """Anchors in same region should pass."""
-        # Build a file where anchors are close together (lines 2 and 3)
+    def test_single_unique_anchor_no_warning(self) -> None:
+        """1 unique match → pass, no warning."""
         lines = [f"line_{i}_padding_content" for i in range(100)]
-        lines[2] = "def target_function_here():"
-        lines[3] = "    return important_value_42"
+        lines[50] = "def single_valid_anchor_fn():"
         initial_code = "\n".join(lines)
 
-        concrete = ["def target_function_here():", "    return important_value_42"]
-        assert anchor_precheck(concrete, initial_code) is True
+        passed, warning = anchor_precheck(["def single_valid_anchor_fn():"], initial_code)
+        assert passed is True
+        assert warning is None  # unique → no warning
 
-    def test_rejects_scattered_anchors(self) -> None:
-        """Anchors separated by more than 80 lines should fail."""
-        lines = [f"line_{i}_padding_content" for i in range(200)]
-        lines[5] = "def first_anchor_function():"
-        lines[150] = "def second_anchor_far_away():"
+    def test_two_anchors_no_warning(self) -> None:
+        """2+ matches → pass, no warning regardless of uniqueness."""
+        lines = [f"line_{i}_padding_content" for i in range(500)]
+        lines[10] = "def function_at_start():"
+        lines[490] = "def function_at_end():"
         initial_code = "\n".join(lines)
 
-        concrete = ["def first_anchor_function():", "def second_anchor_far_away():"]
-        assert anchor_precheck(concrete, initial_code) is False
+        passed, warning = anchor_precheck(
+            ["def function_at_start():", "def function_at_end():"], initial_code
+        )
+        assert passed is True
+        assert warning is None
 
-    def test_accepts_anchors_at_boundary(self) -> None:
-        """Anchors exactly 80 lines apart should pass."""
-        lines = [f"line_{i}_padding_content" for i in range(200)]
-        lines[10] = "def boundary_start_function():"
-        lines[90] = "def boundary_end_function():"
-        initial_code = "\n".join(lines)
+    def test_single_ambiguous_anchor_warns(self) -> None:
+        """1 match that appears multiple times → pass with WEAK_ANCHOR warning."""
+        initial_code = (
+            "def handler():\n"
+            "    logger.info('processing request')\n"
+            "    return 1\n\n"
+            "def other_handler():\n"
+            "    logger.info('processing request')\n"
+            "    return 2\n"
+        )
+        passed, warning = anchor_precheck(["    logger.info('processing request')"], initial_code)
+        assert passed is True
+        assert warning is not None
+        assert "WEAK_ANCHOR" in warning
 
-        concrete = ["def boundary_start_function():", "def boundary_end_function():"]
-        assert anchor_precheck(concrete, initial_code) is True
+    def test_rejects_when_no_anchor_matches(self) -> None:
+        """Should block when no anchor line (≥10 chars) exists in the file."""
+        initial_code = "def existing_function():\n    return 42\n"
+        concrete = ["def completely_wrong_function():", "    return totally_different"]
+        passed, _ = anchor_precheck(concrete, initial_code)
+        assert passed is False
 
-    def test_rejects_anchors_just_beyond_boundary(self) -> None:
-        """Anchors 81 lines apart should fail."""
-        lines = [f"line_{i}_padding_content" for i in range(200)]
-        lines[10] = "def just_beyond_start_fn():"
-        lines[91] = "def just_beyond_end_fn():"
-        initial_code = "\n".join(lines)
+    def test_accepts_with_remove_directive_and_anchor(self) -> None:
+        """Remove directives alone don't count, but a real anchor alongside does."""
+        initial_code = "def keep_me():\n    return 1\n\ndef delete_me():\n    return 2\n"
+        concrete = ["// remove delete_me", "def keep_me():"]
+        passed, warning = anchor_precheck(concrete, initial_code)
+        assert passed is True
+        assert warning is None  # "def keep_me():" is unique → no warning
 
-        concrete = ["def just_beyond_start_fn():", "def just_beyond_end_fn():"]
-        assert anchor_precheck(concrete, initial_code) is False
+    def test_rejects_only_remove_directives(self) -> None:
+        """Only remove directives, no real anchors → block."""
+        initial_code = "def foo():\n    return 1\n"
+        concrete = ["// remove foo", "# remove bar"]
+        passed, _ = anchor_precheck(concrete, initial_code)
+        assert passed is False
 
 
 class TestExtractRemoveTargets:
@@ -284,7 +307,7 @@ class TestCountEffectiveDiffLines:
     """Test count_effective_diff_lines function."""
 
     def test_counts_real_changes(self) -> None:
-        """Should count added/deleted lines with content."""
+        """Should return max(added, deleted) for paired replacements."""
         diff = (
             "--- before\n"
             "+++ after\n"
@@ -295,7 +318,8 @@ class TestCountEffectiveDiffLines:
             "-old_line_two\n"
             "+new_line_two\n"
         )
-        assert count_effective_diff_lines(diff) == 4
+        # 2 deleted, 2 added → max(2, 2) = 2
+        assert count_effective_diff_lines(diff) == 2
 
     def test_excludes_whitespace_only(self) -> None:
         """Should not count whitespace-only changes."""
@@ -310,7 +334,8 @@ class TestCountEffectiveDiffLines:
             "-\t\n"
             "+\t\t\n"
         )
-        assert count_effective_diff_lines(diff) == 2
+        # 1 real deleted, 1 real added → max(1, 1) = 1
+        assert count_effective_diff_lines(diff) == 1
 
     def test_empty_diff(self) -> None:
         """Should return 0 for empty diff."""
@@ -327,36 +352,6 @@ class TestCountEffectiveDiffLines:
             " another_context_line\n"
         )
         assert count_effective_diff_lines(diff) == 1
-
-
-class TestAnchorPrecheckRepeatedAnchors:
-    """Test anchor cluster validation with repeated anchor text in file."""
-
-    def test_accepts_when_close_occurrence_exists(self) -> None:
-        """Should accept when a closer occurrence of anchor exists near target."""
-        lines = [f"line_{i}_padding_content" for i in range(250)]
-        # First occurrence far away
-        lines[5] = 'logger.info("processing started")'
-        # Target cluster near line 200
-        lines[200] = 'logger.info("processing started")'
-        lines[201] = "result = compute_important_value()"
-        initial_code = "\n".join(lines)
-
-        concrete = [
-            'logger.info("processing started")',
-            "result = compute_important_value()",
-        ]
-        assert anchor_precheck(concrete, initial_code) is True
-
-    def test_rejects_when_all_occurrences_scattered(self) -> None:
-        """Should reject when no combination of occurrences clusters."""
-        lines = [f"line_{i}_padding_content" for i in range(300)]
-        lines[5] = "def handler_function_alpha():"
-        lines[250] = "def handler_function_beta():"
-        initial_code = "\n".join(lines)
-
-        concrete = ["def handler_function_alpha():", "def handler_function_beta():"]
-        assert anchor_precheck(concrete, initial_code) is False
 
 
 class TestExtractTopLevelSymbols:
@@ -383,10 +378,68 @@ class TestExtractTopLevelSymbols:
         assert "App" in symbols
 
     def test_go_excludes_imports(self) -> None:
-        """Go import names should not be included as symbols."""
+        """Go import names should not be included, but func should be extracted."""
         code = 'import "fmt"\n\nfunc main() {\n}\n'
         symbols = extract_top_level_symbols(code, "main.go")
         assert "fmt" not in symbols
+        assert "main" in symbols
+
+    def test_go_func_and_type(self) -> None:
+        """Should extract Go func (including methods) and type declarations."""
+        code = (
+            "package server\n\n"
+            "type Config struct {\n    Port int\n}\n\n"
+            "func NewServer() *Server {\n    return nil\n}\n\n"
+            "func (s *Server) Handle() {\n}\n"
+        )
+        symbols = extract_top_level_symbols(code, "server.go")
+        assert "Config" in symbols
+        assert "NewServer" in symbols
+        assert "Handle" in symbols
+
+    def test_rust_fn_struct_enum_trait(self) -> None:
+        """Should extract Rust fn, struct, enum, trait, impl (with pub variants)."""
+        code = (
+            "use std::io;\n\n"
+            "fn helper() -> i32 { 0 }\n\n"
+            "pub fn new() -> Self { Self {} }\n\n"
+            "struct Foo {\n    x: i32,\n}\n\n"
+            "pub(crate) enum Bar {\n    A,\n    B,\n}\n\n"
+            "trait Baz {\n    fn do_it(&self);\n}\n\n"
+            "impl Foo {\n    fn method(&self) {}\n}\n"
+        )
+        symbols = extract_top_level_symbols(code, "lib.rs")
+        assert "helper" in symbols
+        assert "new" in symbols
+        assert "Foo" in symbols
+        assert "Bar" in symbols
+        assert "Baz" in symbols
+        # impl block — Foo extracted as the impl target
+        assert symbols.count("Foo") == 1  # deduplicated
+
+    def test_ts_arrow_functions(self) -> None:
+        """Should extract TS/JS const/let/var arrow function declarations."""
+        code = (
+            "import React from 'react'\n\n"
+            "export const App = () => {\n  return null\n}\n\n"
+            "const handler = async () => {\n  await fetch()\n}\n\n"
+            "let mutable = () => {}\n"
+        )
+        symbols = extract_top_level_symbols(code, "app.tsx")
+        assert "React" not in symbols
+        assert "App" in symbols
+        assert "handler" in symbols
+        assert "mutable" in symbols
+
+    def test_ts_interface(self) -> None:
+        """Should extract TS interface declarations."""
+        code = (
+            "export interface UserProps {\n  name: string\n}\n\n"
+            "interface InternalConfig {\n  port: number\n}\n"
+        )
+        symbols = extract_top_level_symbols(code, "types.ts")
+        assert "UserProps" in symbols
+        assert "InternalConfig" in symbols
 
 
 class TestCheckSymbolPreservation:

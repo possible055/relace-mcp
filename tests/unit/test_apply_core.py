@@ -101,25 +101,68 @@ class TestContentConflict:
 
 class TestBlastRadiusGuard:
     @pytest.mark.asyncio
-    async def test_rejects_excessive_diff(self, tmp_path: Path) -> None:
-        """Should reject when diff is much larger than snippet scope."""
-        # Create a file with 20 lines of real code
-        lines = [f"variable_{i} = compute_value({i})" for i in range(20)]
+    async def test_rejects_full_file_rewrite(self, tmp_path: Path) -> None:
+        """Should reject when LLM rewrites >80% of the file."""
+        # 200-line file; blast_limit = max(200*0.8, 100) = 160
+        lines = [f"variable_{i} = compute_value({i})" for i in range(200)]
         source = tmp_path / "blast.py"
         source.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="")
 
-        # Snippet has 2 concrete anchor lines that exist in the file
         edit_snippet = (
             "variable_0 = compute_value(0)\n"
             "variable_1 = compute_value(1)\n"
             "# ... existing code ...\n"
         )
 
-        # But LLM returns a massively different file (all lines changed)
-        merged_lines = [f"completely_different_{i} = {i}" for i in range(20)]
+        # LLM rewrites all 200 lines → max(200 del, 200 add) = 200 > 160
+        merged_lines = [f"completely_different_{i} = {i}" for i in range(200)]
         merged_code = "\n".join(merged_lines) + "\n"
 
         backend = _make_mock_backend(merged_code)
+        result = await apply_file_logic(backend, str(source), edit_snippet, None, str(tmp_path))
+
+        assert result["status"] == "error"
+        assert result["code"] == "BLAST_RADIUS_EXCEEDED"
+
+    @pytest.mark.asyncio
+    async def test_accepts_diff_under_100_line_floor(self, tmp_path: Path) -> None:
+        """Should accept when lines touched is under 100 (absolute floor)."""
+        # 30-line file; blast_limit = max(30*0.8, 100) = 100
+        lines = [f"variable_{i} = compute_value({i})" for i in range(30)]
+        source = tmp_path / "moderate.py"
+        source.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="")
+
+        edit_snippet = (
+            "variable_0 = compute_value(0)\n"
+            "variable_1 = compute_value(1)\n"
+            "# ... existing code ...\n"
+        )
+        # Changing 25 lines → max(25 del, 25 add) = 25; limit = 100 → passes
+        merged_lines = list(lines)
+        for i in range(5, 30):
+            merged_lines[i] = f"updated_{i} = new_value({i})"
+        merged_code = "\n".join(merged_lines) + "\n"
+
+        backend = _make_mock_backend(merged_code)
+        result = await apply_file_logic(backend, str(source), edit_snippet, None, str(tmp_path))
+
+        assert result.get("code") != "BLAST_RADIUS_EXCEEDED"
+
+    @pytest.mark.asyncio
+    async def test_rejects_pure_delete_to_empty(self, tmp_path: Path) -> None:
+        """Should reject when LLM deletes most of a file (pure deletion)."""
+        # 200-line file of constants (no top-level symbols) → blast_limit = 160
+        lines = [f"constant_value_{i} = compute({i})" for i in range(200)]
+        source = tmp_path / "constants.py"
+        source.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="")
+
+        edit_snippet = (
+            "constant_value_0 = compute(0)\n"
+            "constant_value_1 = compute(1)\n"
+            "# ... existing code ...\n"
+        )
+        # LLM returns empty file → max(0 added, 200 deleted) = 200 > 160
+        backend = _make_mock_backend("")
 
         result = await apply_file_logic(backend, str(source), edit_snippet, None, str(tmp_path))
 
