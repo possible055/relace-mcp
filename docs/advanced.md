@@ -314,9 +314,6 @@ Trace logs are also JSONL. Each line is one event.
 | `cloud_search_start` | Cloud search started |
 | `cloud_search_complete` | Cloud search completed |
 | `cloud_search_error` | Cloud search failed |
-| `cloud_info_start` | Cloud info started |
-| `cloud_info_complete` | Cloud info completed |
-| `cloud_info_error` | Cloud info failed |
 | `cloud_list_start` | Cloud list started |
 | `cloud_list_complete` | Cloud list completed |
 | `cloud_list_error` | Cloud list failed |

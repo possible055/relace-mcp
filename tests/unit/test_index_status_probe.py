@@ -32,15 +32,19 @@ async def test_refresh_scheduled_when_stale_on_any_retrieval_backend(
     """
     config = _make_config(tmp_path)
 
-    # Create stale index dirs so freshness = "stale" (not missing)
-    (tmp_path / ".codanna").mkdir()
-    (tmp_path / ".chunkhound").mkdir()
+    # Create stale local indexes with artifacts present but marker absent.
+    codanna_index_dir = tmp_path / ".codanna" / "index" / "semantic"
+    codanna_index_dir.mkdir(parents=True)
+    (codanna_index_dir / "metadata.json").write_text("{}")
+    chunkhound_dir = tmp_path / ".chunkhound"
+    chunkhound_dir.mkdir()
+    (chunkhound_dir / "db").write_bytes(b"index")
 
     with (
         patch(f"{_TOOLS_MOD}._settings") as mock_settings,
         patch(f"{_TOOLS_MOD}.shutil.which", return_value="/usr/local/bin/fake"),
-        patch(f"{_BACKENDS_PKG}.schedule_bg_codanna_full_index"),
-        patch(f"{_BACKENDS_PKG}.schedule_bg_chunkhound_index"),
+        patch(f"{_BACKENDS_PKG}.schedule_bg_codanna_full_index") as mock_codanna_refresh,
+        patch(f"{_BACKENDS_PKG}.schedule_bg_chunkhound_index") as mock_chunkhound_refresh,
     ):
         mock_settings.RETRIEVAL_BACKEND = retrieval_backend
         mock_settings.RELACE_CLOUD_TOOLS = False
@@ -58,7 +62,10 @@ async def test_refresh_scheduled_when_stale_on_any_retrieval_backend(
 
     for backend in ("codanna", "chunkhound"):
         scheduled = payload[backend]["background_refresh_scheduled"]
-        assert isinstance(scheduled, bool), f"{backend}.background_refresh_scheduled must be bool"
+        assert scheduled is True, f"{backend}.background_refresh_scheduled must be True"
+
+    mock_codanna_refresh.assert_called_once_with(str(tmp_path))
+    mock_chunkhound_refresh.assert_called_once_with(str(tmp_path))
 
 
 @pytest.mark.asyncio

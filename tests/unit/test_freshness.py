@@ -10,8 +10,18 @@ class TestClassifyLocalIndexFreshness:
         assert result.hints_usable is False
         assert result.reason == "index_dir_missing"
 
-    def test_stale_when_dir_exists_but_marker_absent(self, tmp_path):
+    def test_missing_when_codanna_dir_exists_but_artifacts_absent(self, tmp_path):
         (tmp_path / ".codanna").mkdir()
+        result = classify_local_index_freshness(str(tmp_path), "codanna")
+        assert result.freshness == "missing"
+        assert result.hints_usable is False
+        assert result.refresh_recommended is True
+        assert result.reason == "index_artifact_missing"
+
+    def test_stale_when_codanna_artifacts_exist_but_marker_absent(self, tmp_path):
+        codanna_index_dir = tmp_path / ".codanna" / "index" / "semantic"
+        codanna_index_dir.mkdir(parents=True)
+        (codanna_index_dir / "metadata.json").write_text("{}")
         result = classify_local_index_freshness(str(tmp_path), "codanna")
         assert result.freshness == "stale"
         assert result.hints_usable is True
@@ -53,8 +63,17 @@ class TestClassifyLocalIndexFreshness:
         assert result.hints_usable is True
         assert result.reason == "git_head_changed"
 
-    def test_chunkhound_stale_when_dir_exists_but_marker_absent(self, tmp_path):
+    def test_missing_when_chunkhound_dir_exists_but_artifacts_absent(self, tmp_path):
         (tmp_path / ".chunkhound").mkdir()
+        result = classify_local_index_freshness(str(tmp_path), "chunkhound")
+        assert result.freshness == "missing"
+        assert result.hints_usable is False
+        assert result.reason == "index_artifact_missing"
+
+    def test_chunkhound_stale_when_dir_exists_but_marker_absent(self, tmp_path):
+        chunkhound_dir = tmp_path / ".chunkhound"
+        chunkhound_dir.mkdir()
+        (chunkhound_dir / "db").write_bytes(b"index")
         result = classify_local_index_freshness(str(tmp_path), "chunkhound")
         assert result.freshness == "stale"
         assert result.hints_usable is True

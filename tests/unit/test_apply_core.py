@@ -1,6 +1,6 @@
 import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -97,6 +97,136 @@ class TestContentConflict:
 
         assert result["status"] == "error"
         assert result["code"] == "CONTENT_CONFLICT"
+
+
+class TestProgressReporting:
+    @pytest.mark.asyncio
+    async def test_success_reports_done_after_write(self, tmp_path: Path) -> None:
+        source = tmp_path / "progress.py"
+        initial = "def foo():\n    return 1\n"
+        source.write_text(initial, encoding="utf-8", newline="")
+
+        backend = _make_mock_backend("def foo():\n    return 2\n")
+        progress_events: list[tuple[int, int, str]] = []
+
+        async def on_progress(progress: int, total: int, message: str) -> None:
+            progress_events.append((progress, total, message))
+
+        result = await apply_file_logic(
+            backend,
+            str(source),
+            "def foo():\n    return 2\n",
+            None,
+            str(tmp_path),
+            on_progress=on_progress,
+        )
+
+        assert result["status"] == "ok"
+        assert progress_events == [(1, 2, "Merging"), (2, 2, "Done")]
+
+    @pytest.mark.asyncio
+    async def test_idempotent_success_reports_done(self, tmp_path: Path) -> None:
+        source = tmp_path / "idempotent.py"
+        initial = "def foo():\n    return 1\n"
+        source.write_text(initial, encoding="utf-8", newline="")
+
+        backend = _make_mock_backend(initial)
+        progress_events: list[tuple[int, int, str]] = []
+
+        async def on_progress(progress: int, total: int, message: str) -> None:
+            progress_events.append((progress, total, message))
+
+        result = await apply_file_logic(
+            backend,
+            str(source),
+            initial,
+            None,
+            str(tmp_path),
+            on_progress=on_progress,
+        )
+
+        assert result["status"] == "ok"
+        assert progress_events == [(1, 2, "Merging"), (2, 2, "Done")]
+
+    @pytest.mark.asyncio
+    async def test_failed_merge_does_not_report_done(self, tmp_path: Path) -> None:
+        source = tmp_path / "marker_leak.py"
+        initial = "def foo():\n    return 1\n"
+        source.write_text(initial, encoding="utf-8", newline="")
+
+        edit_snippet = "def foo():\n    return 2\n# ... existing code ...\n"
+        backend = _make_mock_backend(edit_snippet)
+        progress_events: list[tuple[int, int, str]] = []
+
+        async def on_progress(progress: int, total: int, message: str) -> None:
+            progress_events.append((progress, total, message))
+
+        result = await apply_file_logic(
+            backend,
+            str(source),
+            edit_snippet,
+            None,
+            str(tmp_path),
+            on_progress=on_progress,
+        )
+
+        assert result["status"] == "error"
+        assert result["code"] == "MARKER_LEAKAGE"
+        assert progress_events == [(1, 2, "Merging")]
+
+
+class TestSemanticCheckGate:
+    @pytest.mark.asyncio
+    async def test_omission_style_deletion_stays_disabled_by_default(self, tmp_path: Path) -> None:
+        source = tmp_path / "omission_default.py"
+        initial = (
+            "Header line that is unique\n"
+            "Takes no parameters.\n"
+            "Footer line that is also unique\n"
+            "value = 1\n"
+        )
+        source.write_text(initial, encoding="utf-8", newline="")
+
+        merged = (
+            "Header line that is unique\n"
+            "Takes no parameters.\n"
+            "Footer line that is also unique\n"
+            "value = 2\n"
+        )
+        backend = _make_mock_backend(merged)
+        edit_snippet = "Header line that is unique\nFooter line that is also unique\nvalue = 2\n"
+
+        result = await apply_file_logic(backend, str(source), edit_snippet, None, str(tmp_path))
+
+        assert result["status"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_omission_style_deletion_fails_when_semantic_check_enabled(
+        self, tmp_path: Path
+    ) -> None:
+        source = tmp_path / "omission_semantic.py"
+        initial = (
+            "Header line that is unique\n"
+            "Takes no parameters.\n"
+            "Footer line that is also unique\n"
+            "value = 1\n"
+        )
+        source.write_text(initial, encoding="utf-8", newline="")
+
+        merged = (
+            "Header line that is unique\n"
+            "Takes no parameters.\n"
+            "Footer line that is also unique\n"
+            "value = 2\n"
+        )
+        backend = _make_mock_backend(merged)
+        edit_snippet = "Header line that is unique\nFooter line that is also unique\nvalue = 2\n"
+
+        with patch("relace_mcp.tools.apply.core.APPLY_SEMANTIC_CHECK", True):
+            result = await apply_file_logic(backend, str(source), edit_snippet, None, str(tmp_path))
+
+        assert result["status"] == "error"
+        assert result["code"] == "SEMANTIC_CHECK_FAILED"
 
 
 class TestBlastRadiusGuard:

@@ -75,6 +75,13 @@ def _ok_result(
     }
 
 
+async def _report_apply_done(
+    on_progress: Callable[[int, int, str], Awaitable[None]] | None,
+) -> None:
+    if on_progress:
+        await on_progress(2, 2, "Done")
+
+
 def _resolve_path(
     file_path: str,
     base_dir: str | None,
@@ -347,6 +354,7 @@ async def _apply_to_existing_file(
                 )
 
             logger.debug("[%s] No changes needed (idempotent) for %s", ctx.trace_id, resolved_path)
+            await _report_apply_done(on_progress)
             return _ok_result(
                 ctx,
                 str(resolved_path),
@@ -428,7 +436,7 @@ async def _apply_to_existing_file(
                 file_lines=file_lines,
             )
 
-        # Semantic check (validates new/delete intent, disabled by default)
+        # Semantic check is opt-in because context-only intent checks can add false positives.
         if APPLY_SEMANTIC_CHECK:
             post_check_passed, post_check_reason = snippet.post_check_merged_code(
                 edit_snippet, merged_code, initial_code
@@ -486,6 +494,7 @@ async def _apply_to_existing_file(
             ctx.elapsed_ms(),
         )
 
+        await _report_apply_done(on_progress)
         return _ok_result(
             ctx,
             str(resolved_path),

@@ -11,6 +11,7 @@
 - truncation markers 更适合较大范围的 scoped edit，但 anchor-only edit 仍然支持。
 - 创建新文件时，请提供完整文件内容，不要包含 truncation markers。
 - 仅靠 omission-style 的 context adjacency 不会再单独触发 `APPLY_NOOP`；`APPLY_NOOP` 现在主要用于 explicit remove directive 或明确新增行却没有产生 diff 的情况。
+- omission-style deletion detection 仍属于 `APPLY_SEMANTIC_CHECK=1` 的 opt-in 语义校验；默认不启用，以避免仅靠 context adjacency 带来的额外失败。
 - 显式 `// remove X` / `# remove X` directive 可让 deletion-dominant 的大删改以 warning 形式放行，而不是直接 hard fail。
 
 ### 参数
@@ -97,6 +98,7 @@
 - `relace`、`codanna`、`chunkhound` 都会包含 `freshness`：`fresh`、`stale`、`missing` 或 `unknown`
 - `relace`、`codanna`、`chunkhound` 都会包含 `hints_usable`：表示在 `prefer-stale` 下 `agentic_retrieval` 是否可以使用该 backend 的 semantic hints
 - `codanna` 和 `chunkhound` 包含 `background_refresh_scheduled`：`true` 表示已触发后台 reindex
+- 对 local backend 而言，`missing` 也包括仅创建了目录、但尚未生成可用 index artifact 的 bootstrap / empty 目录
 - Relace cloud 若过期，`status.recommended_action` 会告知调用 `cloud_sync()`
 
 ---

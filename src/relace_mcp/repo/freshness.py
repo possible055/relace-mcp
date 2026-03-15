@@ -22,6 +22,23 @@ class FreshnessStatus:
     reason: str | None = None
 
 
+def _has_local_index_artifacts(base_dir: str, backend: str) -> bool:
+    if backend == "codanna":
+        artifact_root = os.path.join(base_dir, ".codanna", "index")
+        if not os.path.isdir(artifact_root):
+            return False
+        for _root, _dirs, files in os.walk(artifact_root):
+            if files:
+                return True
+        return False
+
+    if backend == "chunkhound":
+        db_path = os.path.join(base_dir, ".chunkhound", "db")
+        return os.path.isfile(db_path) and os.path.getsize(db_path) > 0
+
+    raise ValueError(f"Unsupported local backend: {backend}")
+
+
 def classify_cloud_index_freshness(base_dir: str) -> FreshnessStatus:
     sync_state = load_sync_state(base_dir)
     if sync_state is None:
@@ -87,6 +104,13 @@ def classify_local_index_freshness(base_dir: str, backend: str) -> FreshnessStat
 
     last_indexed_head = _read_indexed_head(base_dir, head_file)
     if not last_indexed_head:
+        if not _has_local_index_artifacts(base_dir, backend):
+            return FreshnessStatus(
+                freshness="missing",
+                hints_usable=False,
+                refresh_recommended=True,
+                reason="index_artifact_missing",
+            )
         return FreshnessStatus(
             freshness="stale",
             hints_usable=True,

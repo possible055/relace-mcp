@@ -11,6 +11,7 @@ Notes:
 - Truncation markers are recommended for larger scoped edits, but anchor-only edits are still supported.
 - For new files, provide the complete file content and do not include truncation markers.
 - Context-only omission syntax no longer triggers `APPLY_NOOP` by itself; `APPLY_NOOP` is reserved for explicit remove directives or concrete new lines that should have changed the file.
+- Omission-style deletion detection remains part of opt-in semantic validation via `APPLY_SEMANTIC_CHECK=1`; it is not enabled by default because context-only adjacency can produce extra failures.
 - Explicit `// remove X` / `# remove X` directives can allow large deletion-dominant edits to succeed with warnings instead of hard-failing.
 
 ### Parameters
@@ -98,6 +99,7 @@ This tool takes no parameters.
 - `relace`, `codanna`, and `chunkhound` each include `freshness`: `fresh`, `stale`, `missing`, or `unknown`
 - `relace`, `codanna`, and `chunkhound` each include `hints_usable`: whether `agentic_retrieval` may use that backend's semantic hints under `prefer-stale`
 - `codanna` and `chunkhound` include `background_refresh_scheduled`: `true` if a background reindex was triggered
+- For local backends, `missing` also covers bootstrap/empty index directories that do not yet contain usable index artifacts
 - For Relace cloud: if stale, `status.recommended_action` tells you to run `cloud_sync()`
 
 ---

@@ -203,9 +203,6 @@ Cloud 操作会记录结构化事件：
 | `cloud_search_start` | Cloud 搜索开始 | `cloud_search` |
 | `cloud_search_complete` | Cloud 搜索完成 | `cloud_search` |
 | `cloud_search_error` | Cloud 搜索失败 | `cloud_search` |
-| `cloud_info_start` | Cloud 信息查询开始 | `cloud_info` |
-| `cloud_info_complete` | Cloud 信息查询完成 | `cloud_info` |
-| `cloud_info_error` | Cloud 信息查询失败 | `cloud_info` |
 | `cloud_list_start` | Cloud 列表开始 | `cloud_list` |
 | `cloud_list_complete` | Cloud 列表完成 | `cloud_list` |
 | `cloud_list_error` | Cloud 列表失败 | `cloud_list` |
