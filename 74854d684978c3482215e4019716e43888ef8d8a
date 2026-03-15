@@ -1,0 +1,23 @@
+src/relace_mcp/tools/__init__.py
+  abbe82edd565eeab 97-98,141-145,153,157,198-199,204-206,208-211,213,581-586,591-597,600-601
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.12",
+  "base_commit_sha": "74854d684978c3482215e4019716e43888ef8d8a",
+  "prompts": {
+    "abbe82edd565eeab": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019cef1c-e464-75b3-b8ec-229861884948",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 39,
+      "total_deletions": 15,
+      "accepted_lines": 36,
+      "overriden_lines": 1
+    }
+  }
+}
