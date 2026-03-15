@@ -94,6 +94,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
           add 1-2 unique anchor lines from immediately around the edit location.
         - BLAST_RADIUS_EXCEEDED: edit scope too large - split into smaller edits.
 
+        On success: {status: "ok", diff: str (rendered unified diff)}.
+
         Do NOT use this tool to delete files or clear file contents.
         Use a dedicated file management tool for those operations.
         """
@@ -136,18 +138,23 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         query: Annotated[
             str,
             Field(
-                description="What to find. Natural language (e.g., 'where is auth handled') "
-                "or specific patterns (e.g., 'UserService class')."
+                description="What to find. Prefer specific identifiers over vague concepts.\n"
+                "  ✅ 'UserService class'\n"
+                "  ✅ 'where is JWT validation done'\n"
+                "  ❌ 'error handling' (too vague — results will be poor)\n"
+                "Natural language or exact symbol names both accepted."
             ),
         ],
         ctx: Context,
     ) -> dict[str, Any]:
         """Search codebase for code locations matching a query.
 
-        Finds functions, classes, modules, and traces how components connect.
-        Accepts natural language or specific patterns like class/function names.
+        Use when you know the name or structure you're looking for —
+        function names, class names, modules, or how components connect.
+        For conceptual/behavioral queries without known identifiers, use agentic_retrieval instead.
 
         Returns file paths with line ranges and an explanation of findings.
+        Keys: explanation (str), files (dict[path → {lines, snippet}]), turns_used (int).
         """
         from .search import FastAgenticSearchHarness
 
@@ -188,16 +195,22 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     async def index_status(
         ctx: Context | None = None,
     ) -> dict[str, Any]:
-        """Inspect indexing services status. Auto-schedules refresh for stale local backends.
+        """Inspect indexing services status. Call before retrieval when hints seem stale or missing,
+        or after index errors to check backend health.
 
         Single status entry point for all backends (Relace cloud, Codanna, ChunkHound).
         Reports freshness, hints_usable, and recommended_action for each backend.
 
-        For local backends (Codanna/ChunkHound): if index is stale or missing and the
-        CLI is available, automatically schedules a background reindex and sets
-        background_refresh_scheduled=true in the response.
+        Side-effect: for local backends (Codanna/ChunkHound), automatically schedules
+        a background reindex if the index is stale or missing AND the CLI is available,
+        setting background_refresh_scheduled=true in the response.
 
-        For Relace cloud: read-only. If stale, follow recommended_action (call cloud_sync).
+        Return structure (top-level keys):
+          relace     → {freshness, hints_usable, status.recommended_action, ...}
+          codanna    → {freshness, hints_usable, background_refresh_scheduled, ...}
+          chunkhound → {freshness, hints_usable, background_refresh_scheduled, ...}
+
+        For Relace cloud: read-only; if stale, call cloud_sync().
         """
         from ..repo.backends import schedule_bg_chunkhound_index, schedule_bg_codanna_full_index
         from ..repo.core import get_current_git_info, is_git_dirty
@@ -420,6 +433,10 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
           force=True              Re-upload all files; use after large refactors.
           force=True+mirror=True  Delete cloud files absent locally; use after branch switch.
 
+        Returns: {sync_mode (str), files_created (int), files_updated (int),
+                  files_deleted (int), files_unchanged (int), warnings (list[str]),
+                  repo_id (str), repo_head (str)}.
+        Check warnings[] for truncation or suppressed deletes.
         Fails if not in a git repo or RELACE_API_KEY is not set.
         """
         from ..repo.cloud.sync import cloud_sync_logic
@@ -444,15 +461,32 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         },
     )
     async def cloud_search(
-        query: Annotated[str, Field(description="Natural language search query.")],
+        query: Annotated[
+            str,
+            Field(
+                description="Natural language description of the code to find.\n"
+                "  ✅ 'function that validates JWT and returns user ID'\n"
+                "  ✅ 'rate limiting middleware for HTTP requests'\n"
+                "  ❌ 'auth' (too vague — low-relevance results)\n"
+                "Be specific about behavior, not just topic.",
+            ),
+        ],
         branch: Annotated[
             str | None, Field(description="Branch to search (null = API default branch).")
         ] = None,
         ctx: Context | None = None,
     ) -> dict[str, Any]:
-        """Semantic code search using AI embeddings. Requires cloud_sync first.
+        """Search for code by meaning using AI embeddings. Requires cloud_sync first.
 
-        Finds code by meaning, not just keywords. Returns ranked results with relevance scores.
+        Use for conceptual queries where you don't know the exact file, class, or function name.
+        Prefer agentic_search when you know the exact identifier or symbol name.
+
+        Prerequisite: cloud_sync must have been run at least once.
+        Fails if RELACE_API_KEY is not set or no sync state exists.
+
+        Returns: {results (list), result_count (int), warnings (list[str]),
+                  query (str), branch (str), repo_id (str)}.
+        Check warnings[] for stale index alerts (e.g., uncommitted local changes).
         """
         from ..repo.cloud.search import cloud_search_logic
 
@@ -544,19 +578,27 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
             query: Annotated[
                 str,
                 Field(
-                    description="Be SPECIFIC. Examples: "
-                    "❌ 'auth logic' "
-                    "✅ 'function that validates JWT tokens and extracts user ID' "
-                    "❌ 'error handling' "
-                    "✅ 'where HTTP 4xx errors are caught and transformed to user messages'"
+                    description="Describe the behavior or concept to find. Be SPECIFIC — vague queries skip semantic hints.\n"
+                    "  ❌ 'auth logic'\n"
+                    "  ✅ 'function that validates JWT tokens and extracts user ID'\n"
+                    "  ❌ 'error handling'\n"
+                    "  ✅ 'where HTTP 4xx errors are caught and transformed to user messages'\n"
+                    "Natural language only; do not use bare symbol names."
                 ),
             ],
             ctx: Context | None = None,
         ) -> dict[str, Any]:
-            """Find code by semantic similarity. Best for conceptual queries.
+            """Find code by meaning using two-stage retrieval: semantic hints + agentic exploration.
 
-            When you know what behavior you're looking for but not the exact names or keywords.
+            Use when the query is conceptual and you don't know exact names or keywords —
+            searching for behaviors, patterns, or side-effects.
+
+            Requires a semantic index (Codanna, ChunkHound, or Relace Cloud) for semantic hints;
+            falls back to agentic exploration only if no index is available.
+
             Returns file paths with line ranges and relevance-ranked results.
+            Keys: explanation (str), files (dict[path → {lines, snippet}]),
+                  semantic_hints_used (int), retrieval_backend (str), warnings (list[str]).
             """
             from .retrieval import agentic_retrieval_logic
 
