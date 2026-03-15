@@ -17,6 +17,7 @@ from .constants import COMMON_IGNORED_DIRS, GREP_TIMEOUT_SECONDS, MAX_GREP_DEPTH
 from .gitignore import collect_gitignore_specs, is_ignored
 
 logger = logging.getLogger(__name__)
+_REGEX_META_CHARS = frozenset(r"\.^$*+?{}[]|()")
 
 
 def _timeout_context(seconds: int) -> "AbstractContextManager[None]":
@@ -112,6 +113,31 @@ def _compile_search_pattern(query: str, case_sensitive: bool) -> re.Pattern[str]
         return re.compile(query, flags)
     except re.error as exc:
         return f"Invalid regex pattern: {exc}"
+
+
+def _normalize_glob_pattern(pattern: str | None) -> str | None:
+    """Normalize optional glob input from tool arguments."""
+    if pattern is None:
+        return None
+    normalized = pattern.strip()
+    return normalized or None
+
+
+def _normalize_include_pattern(pattern: str | None) -> str | None:
+    """Collapse sentinel "match everything" include globs to None.
+
+    Passing `-g '*'` changes ripgrep's default filtering semantics and can force
+    large ignored trees back into scope. Treat it as "no include filter" instead.
+    """
+    normalized = _normalize_glob_pattern(pattern)
+    if normalized in {"*", "**", "**/*", "./*", "./**", "./**/*"}:
+        return None
+    return normalized
+
+
+def _is_literal_query(query: str) -> bool:
+    """Return True when the query can safely use ripgrep fixed-string mode."""
+    return not any(ch in _REGEX_META_CHARS for ch in query)
 
 
 def _filter_visible_dirs(dirs: list[str]) -> list[str]:
@@ -252,16 +278,29 @@ def _build_ripgrep_command(params: GrepSearchParams) -> list[str]:
     """
     # Use NUL as field separator (via escape sequence) to handle filenames containing colons
     # ripgrep interprets \x00 as a literal NUL byte
-    cmd = ["rg", "--line-number", "--no-heading", "--color=never", r"--field-match-separator=\x00"]
+    # Use `--no-config` for deterministic behavior (ignore user/global ripgreprc).
+    cmd = [
+        "rg",
+        "--no-config",
+        "--line-number",
+        "--no-heading",
+        "--color=never",
+        r"--field-match-separator=\x00",
+    ]
+    include_pattern = _normalize_include_pattern(params.include_pattern)
+    exclude_pattern = _normalize_glob_pattern(params.exclude_pattern)
+
+    if _is_literal_query(params.query):
+        cmd.append("-F")
 
     if not params.case_sensitive:
         cmd.append("-i")
 
-    if params.include_pattern:
-        cmd.extend(["-g", params.include_pattern])
+    if include_pattern:
+        cmd.extend(["-g", include_pattern])
 
-    if params.exclude_pattern:
-        cmd.extend(["-g", f"!{params.exclude_pattern}"])
+    if exclude_pattern:
+        cmd.extend(["-g", f"!{exclude_pattern}"])
 
     cmd.extend(["--max-count", "100"])
     cmd.append("--")
@@ -350,6 +389,13 @@ def _try_ripgrep(params: GrepSearchParams) -> str:
 
 def grep_search_handler(params: GrepSearchParams) -> str:
     """grep_search tool implementation (uses ripgrep or fallback to Python re)."""
+    params = GrepSearchParams(
+        query=params.query,
+        case_sensitive=params.case_sensitive,
+        exclude_pattern=_normalize_glob_pattern(params.exclude_pattern),
+        include_pattern=_normalize_include_pattern(params.include_pattern),
+        base_dir=params.base_dir,
+    )
     try:
         # Non-ASCII patterns cannot be reliably matched across unknown legacy encodings via rg.
         # Fall back to per-file decoding to support GBK/Big5 mixed repos.
