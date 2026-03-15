@@ -67,13 +67,18 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         edit_snippet: Annotated[
             str,
             Field(
-                description="New content. Use placeholders for unchanged parts: "
-                "`// ... existing code ...` (C/JS/TS), `# ... existing code ...` (Python/shell)."
+                description="Code snippet representing the changes. Include only the lines being added or "
+                "modified, plus placeholder comments for unchanged parts: "
+                "`// ... existing code ...` (JS/TS), `# ... existing code ...` (Python/shell). "
+                "Anchor the edit with 1-2 verbatim lines from the existing file."
             ),
         ],
         instruction: Annotated[
             str,
-            Field(description="Optional hint when edit is ambiguous (e.g., 'add after imports')."),
+            Field(
+                description="Optional natural language hint to disambiguate the target location "
+                "(e.g., 'add after imports', 'inside the if block')."
+            ),
         ] = "",
         ctx: Context | None = None,
     ) -> dict[str, Any]:
@@ -81,11 +86,16 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
         For new files: writes content directly.
         For existing files: merges edit_snippet with current content using anchor lines.
-        If anchors cannot be located, returns NEEDS_MORE_CONTEXT—add 1-2 unique lines
-        from near the target location as anchors.
+        Anchor lines are verbatim lines copied from the existing file that help locate
+        the exact edit target. Include 1-2 unique lines adjacent to the change.
+
+        On error, the response includes a code field:
+        - NEEDS_MORE_CONTEXT or APPLY_NOOP: merge model could not locate the target -
+          add 1-2 unique anchor lines from immediately around the edit location.
+        - BLAST_RADIUS_EXCEEDED: edit scope too large - split into smaller edits.
 
         Do NOT use this tool to delete files or clear file contents.
-        Use shell commands (rm, truncate) for those operations instead.
+        Use a dedicated file management tool for those operations.
         """
         from .apply import apply_file_logic
 

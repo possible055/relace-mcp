@@ -232,7 +232,7 @@ async def _apply_to_existing_file(
                 warnings.append(anchor_warning)
 
         if on_progress:
-            await on_progress(1, 3, "Merging")
+            await on_progress(1, 2, "Merging")
 
         metadata = {
             "source": "fastmcp",
@@ -251,9 +251,6 @@ async def _apply_to_existing_file(
 
         merged_code = response.merged_code
         usage = response.usage
-
-        if on_progress:
-            await on_progress(2, 3, "Verifying")
 
         if not isinstance(merged_code, str):
             raise ApiInvalidResponseError()
