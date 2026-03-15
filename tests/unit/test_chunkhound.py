@@ -227,26 +227,20 @@ class TestChunkhoundHealthCheck:
 
         assert exc_info.value.kind == "index_missing"
 
-    @patch("relace_mcp.repo.backends.chunkhound._write_indexed_head")
-    @patch("relace_mcp.repo.backends.chunkhound.get_git_head")
-    @patch("relace_mcp.repo.backends.chunkhound._ensure_chunkhound_index")
     @patch("relace_mcp.repo.backends.chunkhound._run_cli_text")
-    def test_writes_head_after_auto_index(self, mock_run, mock_ensure, mock_head, mock_write):
+    def test_raises_external_cli_error_on_index_missing(self, mock_run):
         mock_run.side_effect = RuntimeError("chunkhound error (exit 1): not indexed")
-        mock_head.return_value = "cafebabe"
-        _chunkhound_health_probe("/project")
-        mock_ensure.assert_called_once()
-        mock_write.assert_called_once_with("/project", "cafebabe", ".chunkhound/last_indexed_head")
+        with pytest.raises(ExternalCLIError) as exc_info:
+            _chunkhound_health_probe("/project")
+        assert exc_info.value.kind == "index_missing"
+        assert exc_info.value.backend == "chunkhound"
 
-    @patch("relace_mcp.repo.backends.chunkhound._write_indexed_head")
-    @patch("relace_mcp.repo.backends.chunkhound.get_git_head")
-    @patch("relace_mcp.repo.backends.chunkhound._ensure_chunkhound_index")
     @patch("relace_mcp.repo.backends.chunkhound._run_cli_text")
-    def test_no_write_when_not_git_repo(self, mock_run, _mock_ensure, mock_head, mock_write):
+    def test_raises_external_cli_error_on_index_missing_no_git(self, mock_run):
         mock_run.side_effect = RuntimeError("chunkhound error (exit 1): not indexed")
-        mock_head.return_value = None
-        _chunkhound_health_probe("/project")
-        mock_write.assert_not_called()
+        with pytest.raises(ExternalCLIError) as exc_info:
+            _chunkhound_health_probe("/project")
+        assert exc_info.value.kind == "index_missing"
 
 
 class TestChunkHoundTraceBackgroundField:

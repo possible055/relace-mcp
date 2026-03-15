@@ -70,7 +70,6 @@ async def _run() -> None:
             "cloud_search",
             "cloud_clear",
             "cloud_list",
-            "cloud_info",
             "agentic_retrieval",
         }
         missing = expected - tool_names

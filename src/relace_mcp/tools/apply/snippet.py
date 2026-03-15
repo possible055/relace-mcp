@@ -1,9 +1,13 @@
 import ast
 import os
 import re
+from bisect import bisect_right
 
 # Directive patterns for remove operations
 _REMOVE_DIRECTIVE_PATTERNS = ("// remove ", "# remove ")
+
+_FENCE_PREFIX = "```"
+_MARKDOWN_FENCE_LITERAL_EXTENSIONS = {".md", ".mdx"}
 
 
 def is_truncation_placeholder(line: str) -> bool:
@@ -22,7 +26,67 @@ def is_truncation_placeholder(line: str) -> bool:
         return True
 
     lower = s.lower()
-    return lower.startswith("// ...") or lower.startswith("# ...")
+    return (
+        lower.startswith("// ...")
+        or lower.startswith("# ...")
+        or lower.startswith("//...")
+        or lower.startswith("#...")
+    )
+
+
+def normalize_edit_snippet(edit_snippet: str, file_path: str | None = None) -> str:
+    """Normalize edit_snippet input.
+
+    Agents sometimes wrap tool arguments in markdown fences. When nested inside
+    apply XML tags, fences can confuse merge models and anchors.
+
+    This strips a single outer fence pair:
+      ```lang
+      ...
+      ```
+    """
+    if file_path and os.path.splitext(file_path)[1].lower() in _MARKDOWN_FENCE_LITERAL_EXTENSIONS:
+        return edit_snippet
+
+    trimmed = edit_snippet.strip()
+    lines = trimmed.splitlines()
+    if len(lines) < 3:
+        return edit_snippet
+
+    first = lines[0].strip()
+    last = lines[-1].strip()
+    if not first.startswith(_FENCE_PREFIX) or last != _FENCE_PREFIX:
+        return edit_snippet
+
+    lang = first[len(_FENCE_PREFIX) :].strip()
+    for ch in lang:
+        if ch.isalnum() or ch in "-_":
+            continue
+        return edit_snippet
+
+    inner = "\n".join(lines[1:-1])
+    if edit_snippet.endswith("\n") and not inner.endswith("\n"):
+        inner += "\n"
+    return inner
+
+
+def _is_explicit_marker_line(line: str) -> bool:
+    """True if line is an explicit truncation marker (not just whitespace)."""
+    s = line.strip()
+    if not s:
+        return False
+    lower = s.lower()
+    return (
+        lower.startswith("// ...")
+        or lower.startswith("# ...")
+        or lower.startswith("//...")
+        or lower.startswith("#...")
+    )
+
+
+def contains_truncation_markers(text: str) -> bool:
+    """Return True if text contains any explicit truncation marker line."""
+    return any(_is_explicit_marker_line(line) for line in text.splitlines())
 
 
 def concrete_lines(text: str) -> list[str]:
@@ -37,64 +101,25 @@ def concrete_lines(text: str) -> list[str]:
     return [line for line in text.splitlines() if not is_truncation_placeholder(line)]
 
 
-def should_run_anchor_precheck(edit_snippet: str, instruction: str | None) -> bool:
-    """Determine if anchor precheck should be run.
+def anchor_precheck(concrete_lines_list: list[str], initial_code: str) -> tuple[bool, str | None]:
+    """Check if concrete lines can be located in initial_code.
 
-    Runs precheck for all existing file edits (fail-fast strategy).
-    Only allows skipping for instructions with explicit position directives.
+    Result tiers:
+      0 matches  → (False, None)  hard block
+      1+ matches → (True, None)   allow clean
 
-    Args:
-        edit_snippet: Edit snippet (unused, kept for interface compatibility).
-        instruction: Optional instruction.
-
-    Returns:
-        Whether precheck should be run.
-    """
-    del edit_snippet  # Kept for interface compatibility
-
-    # Check if instruction contains explicit position directive
-    if instruction:
-        instruction_lower = instruction.lower()
-        position_directives = (
-            "append to end of file",
-            "prepend to start of file",
-            "add to end of file",
-            "add to start of file",
-            "insert at the beginning",
-            "insert at the end",
-        )
-        if any(directive in instruction_lower for directive in position_directives):
-            # Explicit position directive, allow skipping precheck
-            return False
-
-    # Run precheck for all existing file edits
-    return True
-
-
-def _find_all_line_numbers(text_lines: list[str], substring: str) -> list[int]:
-    return [i for i, line in enumerate(text_lines) if substring in line]
-
-
-def anchor_precheck(concrete_lines_list: list[str], initial_code: str) -> bool:
-    """Check if concrete lines have sufficient anchors to locate in initial_code.
-
-    Uses loose matching (after strip()) to avoid false negatives from indentation/whitespace differences.
-    Filters out short lines (like }, return) to avoid false positives.
-    When multiple anchors are found, validates they cluster within an 80-line window.
-    Considers all occurrences of each anchor to avoid false negatives from repeated lines.
+    A match is a stripped, non-trivial line that appears in initial_code.
 
     Args:
-        concrete_lines_list: Non-placeholder lines.
+        concrete_lines_list: Non-placeholder lines from the edit snippet.
         initial_code: Original file content.
 
     Returns:
-        True if at least 2 valid anchors are found in the same region, False otherwise.
+        (passed, warning) tuple. warning is always None.
     """
     if not concrete_lines_list:
-        return False
+        return False, None
 
-    # Filter out pure directive lines (like "// remove BlockName")
-    # These should not be used for anchor positioning
     anchor_lines = [
         line
         for line in concrete_lines_list
@@ -102,46 +127,19 @@ def anchor_precheck(concrete_lines_list: list[str], initial_code: str) -> bool:
     ]
 
     if not anchor_lines:
-        # Only directives, no real anchors
-        return False
+        return False, None
 
-    # Count valid anchor hits and record their line positions
-    MIN_ANCHOR_LENGTH = (
-        10  # Minimum valid anchor length (avoid false positives from }, return, etc.)
-    )
-    MIN_ANCHOR_HITS = 2  # Minimum number of anchor hits required
-    CLUSTER_WINDOW = 80  # Maximum line span for anchor cluster
+    initial_lines = [line.strip() for line in initial_code.splitlines()]
+    initial_normalized = {re.sub(r"\s+", " ", il) for il in initial_lines if il}
 
-    initial_lines = initial_code.splitlines()
-    all_positions: list[list[int]] = []
     for line in anchor_lines:
         stripped = line.strip()
-        # Only count sufficiently long lines to avoid false positives from }, return, pass, etc.
-        if len(stripped) >= MIN_ANCHOR_LENGTH and stripped in initial_code:
-            positions = _find_all_line_numbers(initial_lines, stripped)
-            if positions:
-                all_positions.append(positions)
+        if not stripped or _is_trivial_line(stripped):
+            continue
+        if re.sub(r"\s+", " ", stripped) in initial_normalized:
+            return True, None
 
-    if len(all_positions) >= MIN_ANCHOR_HITS:
-        # Cluster check: find if any combination of positions falls within CLUSTER_WINDOW.
-        # Greedy: try each position of the first anchor as seed.
-        for seed in all_positions[0]:
-            cluster = [seed]
-            for other in all_positions[1:]:
-                best = min(other, key=lambda p: abs(p - seed))
-                cluster.append(best)
-            if max(cluster) - min(cluster) <= CLUSTER_WINDOW:
-                return True
-        return False
-
-    # If only one valid anchor but it's sufficiently unique (length >= 20), accept it
-    if len(all_positions) == 1:
-        for line in anchor_lines:
-            stripped = line.strip()
-            if len(stripped) >= 20 and stripped in initial_code:
-                return True
-
-    return False
+    return False, None
 
 
 def _is_trivial_line(line: str) -> bool:
@@ -182,6 +180,69 @@ def _is_trivial_line(line: str) -> bool:
         "return false;",
     }
     return line in trivial_tokens
+
+
+def _has_omission_style_deletion(edit_snippet: str, initial_code: str) -> bool:
+    """Detect omission-style deletion intent.
+
+    If two concrete lines appear adjacent in edit_snippet (no truncation marker
+    between them), but those same lines are not adjacent in the original file
+    in at least one occurrence, treat as deletion intent.
+    """
+    snippet_lines = edit_snippet.splitlines()
+    if len(snippet_lines) < 2:
+        return False
+
+    initial_lines = [line.strip() for line in initial_code.splitlines()]
+    if len(initial_lines) < 2:
+        return False
+
+    initial_index: dict[str, list[int]] = {}
+    for i, line in enumerate(initial_lines):
+        if line:
+            initial_index.setdefault(line, []).append(i)
+
+    def is_remove_directive(s: str) -> bool:
+        return any(s.startswith(pat) for pat in _REMOVE_DIRECTIVE_PATTERNS)
+
+    MIN_CONTEXT_LINE_LENGTH = 5
+
+    for i in range(len(snippet_lines) - 1):
+        a = snippet_lines[i].strip()
+        b = snippet_lines[i + 1].strip()
+        if not a or not b:
+            continue
+        if _is_explicit_marker_line(a) or _is_explicit_marker_line(b):
+            continue
+        if is_remove_directive(a) or is_remove_directive(b):
+            continue
+        if len(a) < MIN_CONTEXT_LINE_LENGTH or len(b) < MIN_CONTEXT_LINE_LENGTH:
+            continue
+        if _is_trivial_line(a) or _is_trivial_line(b):
+            continue
+
+        a_idx = initial_index.get(a)
+        b_idx = initial_index.get(b)
+        if not a_idx or not b_idx:
+            continue
+
+        b_set = set(b_idx)
+        has_adjacent = any((ai + 1) in b_set for ai in a_idx)
+        has_gapped = False
+
+        # If any B occurs after A with at least one line gap, it's also deletion intent.
+        for ai in a_idx:
+            j = bisect_right(b_idx, ai + 1)
+            if j < len(b_idx):
+                has_gapped = True
+                break
+
+        # Be conservative: if the original file already contains an adjacent A/B pair,
+        # treat the snippet as potentially idempotent rather than inferred deletion.
+        if has_gapped and not has_adjacent:
+            return True
+
+    return False
 
 
 def expects_changes(edit_snippet: str, initial_code: str) -> bool:
@@ -263,49 +324,6 @@ def extract_remove_targets(edit_snippet: str) -> list[str]:
     return targets
 
 
-def estimate_removed_lines(initial_code: str, remove_targets: list[str]) -> int:
-    """Estimate total lines occupied by remove-directive targets in initial_code.
-
-    Scans for top-level symbol definitions matching targets and counts their
-    lines (including body). Used to adjust blast-radius calculations.
-
-    Args:
-        initial_code: Original file content.
-        remove_targets: List of symbol names from remove directives.
-
-    Returns:
-        Estimated total lines belonging to targeted symbols.
-    """
-    if not remove_targets:
-        return 0
-
-    target_set = set(remove_targets)
-    lines = initial_code.splitlines()
-    total = 0
-
-    i = 0
-    while i < len(lines):
-        stripped = lines[i].lstrip()
-        m = _SYMBOL_RE.match(stripped)
-        if m and m.group(1) in target_set:
-            indent = len(lines[i]) - len(stripped)
-            start = i
-            i += 1
-            while i < len(lines):
-                if not lines[i].strip():
-                    i += 1
-                    continue
-                line_indent = len(lines[i]) - len(lines[i].lstrip())
-                if line_indent <= indent:
-                    break
-                i += 1
-            total += i - start
-        else:
-            i += 1
-
-    return total
-
-
 def _extract_new_lines(edit_snippet: str, initial_code: str) -> list[str]:
     """Extract "new lines" from snippet (lines not in initial_code).
 
@@ -349,6 +367,9 @@ def post_check_merged_code(
        At least 80% of new lines must be present (allowing minor reformatting).
     2. Deletion validation: If there's a // remove X or # remove X directive,
        X (identifier) should not appear in merged_code.
+    3. Omission-style deletion validation: if adjacent context lines in edit_snippet
+       implied deletion against initial_code, the same omission pattern should not
+       still be present in merged_code.
 
     Args:
         edit_snippet: Edit snippet.
@@ -366,7 +387,12 @@ def post_check_merged_code(
         if re.search(pattern, merged_code):
             return False, f"Remove target '{target}' still exists in merged code."
 
-    # 2. New line validation
+    if _has_omission_style_deletion(edit_snippet, initial_code) and _has_omission_style_deletion(
+        edit_snippet, merged_code
+    ):
+        return False, "Omission-style deletion intent was not reflected in merged code."
+
+    # 3. New line validation
     new_lines = _extract_new_lines(edit_snippet, initial_code)
     if new_lines:
         found_count = sum(1 for line in new_lines if line in merged_code)
@@ -426,23 +452,36 @@ def validate_syntax_delta(
 
 
 def count_effective_diff_lines(diff: str) -> int:
-    """Count non-whitespace-only changed lines in a unified diff.
+    """Estimate lines touched from a unified diff.
+
+    Returns max(added_lines, deleted_lines) among non-whitespace-only changes.
+    This avoids double-counting (add+delete) while correctly handling pure
+    deletions, pure additions, and paired replacements.
 
     Args:
         diff: Unified diff string.
 
     Returns:
-        Number of effective (non-whitespace-only) added/deleted lines.
+        Approximate number of effective lines touched.
     """
-    count = 0
+    added, deleted = count_nonempty_diff_lines(diff)
+    return max(added, deleted)
+
+
+def count_nonempty_diff_lines(diff: str) -> tuple[int, int]:
+    """Count non-whitespace additions and deletions in a unified diff."""
+    added = 0
+    deleted = 0
     for line in diff.splitlines():
         if line.startswith("--- ") or line.startswith("+++ ") or line.startswith("@@"):
             continue
-        if line.startswith("+") or line.startswith("-"):
-            content = line[1:]
-            if content.strip():
-                count += 1
-    return count
+        if line.startswith("+"):
+            if line[1:].strip():
+                added += 1
+        elif line.startswith("-"):
+            if line[1:].strip():
+                deleted += 1
+    return added, deleted
 
 
 def extract_top_level_symbols(code: str, file_path: str) -> list[str]:
@@ -481,16 +520,26 @@ def _extract_python_symbols(code: str) -> list[str]:
     return sorted(names)
 
 
-_SYMBOL_RE = re.compile(
-    r"^(?:export\s+)?(?:async\s+)?(?:def|class|function)\s+(\w+)",
-    re.MULTILINE,
-)
+_SYMBOL_PATTERNS = [
+    # Python/JS/TS: def, class, function
+    re.compile(r"^(?:export\s+)?(?:async\s+)?(?:def|class|function)\s+(\w+)", re.MULTILINE),
+    # Go: func (with optional method receiver), type
+    re.compile(r"^func\s+(?:\([^)]*\)\s+)?(\w+)", re.MULTILINE),
+    re.compile(r"^type\s+(\w+)\s+", re.MULTILINE),
+    # Rust: fn, struct, enum, trait, impl (with optional pub)
+    re.compile(r"^(?:pub(?:\([^)]*\))?\s+)?(?:fn|struct|enum|trait|impl)\s+(\w+)", re.MULTILINE),
+    # JS/TS: const/let/var assignment (arrow functions, object literals)
+    re.compile(r"^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=", re.MULTILINE),
+    # TS: interface
+    re.compile(r"^(?:export\s+)?interface\s+(\w+)", re.MULTILINE),
+]
 
 
 def _extract_symbols_regex(code: str) -> list[str]:
     names: set[str] = set()
-    for m in _SYMBOL_RE.finditer(code):
-        names.add(m.group(1))
+    for pat in _SYMBOL_PATTERNS:
+        for m in pat.finditer(code):
+            names.add(m.group(1))
     return sorted(names)
 
 
@@ -515,6 +564,11 @@ def check_symbol_preservation(
     Returns:
         (passed, failure_reason): failure_reason is None when passed=True.
     """
+    ext = os.path.splitext(file_path)[1].lower()
+    blocking_exts = {".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs"}
+    if ext not in blocking_exts:
+        return True, None
+
     initial_symbols = set(extract_top_level_symbols(initial_code, file_path))
     merged_symbols = set(extract_top_level_symbols(merged_code, file_path))
 
@@ -522,6 +576,7 @@ def check_symbol_preservation(
         return True, None  # Cannot extract symbols, skip check
 
     disappeared = initial_symbols - merged_symbols
+    appeared = merged_symbols - initial_symbols
 
     if not disappeared:
         return True, None
@@ -532,6 +587,15 @@ def check_symbol_preservation(
 
     if not unexpected:
         return True, None
+
+    if appeared:
+        disappeared_list = ", ".join(sorted(unexpected))
+        appeared_list = ", ".join(sorted(appeared))
+        return (
+            True,
+            "SYMBOL_CHANGE_DETECTED: possible rename/move/extract "
+            f"(removed: {disappeared_list}; added: {appeared_list})",
+        )
 
     missing_list = ", ".join(sorted(unexpected))
     return False, f"Symbols unexpectedly removed: {missing_list}"

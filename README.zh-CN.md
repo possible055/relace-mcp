@@ -154,7 +154,7 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 
 ## 工具
 
-始终可用的工具有：`fast_apply`、`agentic_search`、`indexing_status`。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`agentic_retrieval` 需设置 `MCP_SEARCH_RETRIEVAL=1`。
+始终可用的工具有：`fast_apply`、`agentic_search`、`index_status`。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`agentic_retrieval` 需设置 `MCP_SEARCH_RETRIEVAL=1`。
 
 `agentic_retrieval` 可以先使用 stale semantic hints，再回到 live code 做确认；它不会隐式执行 `cloud_sync`。如果你要主动刷新 cloud index，请显式调用 `cloud_sync`。
 

@@ -9,7 +9,7 @@ apply_system_prompt: |
   2. Preserve exact indentation and formatting from the original
   3. Apply edits exactly as specified in the <update> block
   4. Expand "// ... existing code ..." placeholders with original code
-  5. Handle deletions: remove code between context lines when marked
+  5. Handle deletions: if two non-placeholder context lines are adjacent in <update> with no marker between them, remove the original code between those lines
   6. Do NOT wrap output in markdown code fences unless the original was
   7. Preserve trailing newlines exactly as in the original
 

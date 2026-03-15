@@ -6,6 +6,15 @@
 
 对文件应用编辑（或创建新文件）。使用 `// ... existing code ...` 或 `# ... existing code ...` 等截断占位符。
 
+注意：
+- 对既有文件编辑时，必须包含 1-2 行从目标文件原文复制的 anchor lines（位于改动附近）。
+- truncation markers 更适合较大范围的 scoped edit，但 anchor-only edit 仍然支持。
+- 对 `.md` / `.mdx` 目标文件会保留外层 markdown fences，以便原样插入 fenced code block。
+- 创建新文件时，请提供完整文件内容，不要包含 truncation markers。
+- 仅靠 omission-style 的 context adjacency 不会再单独触发 `APPLY_NOOP`；`APPLY_NOOP` 现在主要用于 explicit remove directive 或明确新增行却没有产生 diff 的情况。
+- omission-style deletion detection 仍属于 `APPLY_SEMANTIC_CHECK=1` 的 opt-in 语义校验；默认不启用，以避免仅靠 context adjacency 带来的额外失败。
+- 显式 `// remove X` / `# remove X` directive 可让 deletion-dominant 的大删改绕过 truncation 与 blast-radius guard，而不是直接 hard fail。
+
 ### 参数
 
 | 参数 | 必需 | 描述 |
@@ -27,6 +36,14 @@
 ### 返回
 
 更改的 UDiff，或新文件的确认信息。
+
+### 常见错误
+
+- `NEEDS_MORE_CONTEXT`：无法在文件中定位 anchor lines。
+- `APPLY_NOOP`：snippet 中包含 explicit remove directive 或原文件不存在的 concrete 新行，但 merge 结果仍与原文件完全一致。
+- `MARKER_LEAKAGE`：占位符 marker 泄漏到 merged output（被当成字面文本）。
+- `TRUNCATION_DETECTED`：在没有 explicit remove directive 的情况下，merged output 出现异常大幅缩短。
+- `BLAST_RADIUS_EXCEEDED`：diff 范围过大，需要拆分成更小的 edits。若是带 explicit remove directive 的 deletion-dominant 大删改，则会绕过此 guard。
 
 ---
 
@@ -61,21 +78,19 @@
 
 ---
 
-## `indexing_status`
+## `index_status`
 
-在不执行 retrieval 的前提下，检查 cloud/local indexing readiness。
+检查 cloud/local indexing readiness。若本地 backend（Codanna/ChunkHound）的 index 过期或缺失，自动安排后台 reindex 任务。
 
-### 参数
-
-| 参数 | 必需 | 默认值 | 描述 |
-|------|------|--------|------|
-| `probe` | ❌ | `false` | 对本地 backend 运行主动 health probe，并在启用 cloud tools 时调用 `cloud_info` |
+此工具无参数。
 
 ### 返回
 
 - `relace`、`codanna`、`chunkhound` 都会包含 `freshness`：`fresh`、`stale`、`missing` 或 `unknown`
 - `relace`、`codanna`、`chunkhound` 都会包含 `hints_usable`：表示在 `prefer-stale` 下 `agentic_retrieval` 是否可以使用该 backend 的 semantic hints
-- `probe=true` 可能触发 backend health check，以及外部 CLI 的 auto-index side effect
+- `codanna` 和 `chunkhound` 包含 `background_refresh_scheduled`：`true` 表示已触发后台 reindex
+- 对 local backend 而言，`missing` 也包括仅创建了目录、但尚未生成可用 index artifact 的 bootstrap / empty 目录
+- Relace cloud 若过期，`status.recommended_action` 会告知调用 `cloud_sync()`
 
 ---
 
@@ -112,7 +127,7 @@
 | 参数 | 必需 | 描述 |
 |------|------|------|
 | `query` | ✅ | 自然语言搜索查询 |
-| `branch` | ❌ | 要搜索的分支（空值使用 API 默认值） |
+| `branch` | ❌ | 要搜索的分支（null 使用 API 默认分支） |
 
 > **注意：** 内部参数（`score_threshold=0.3`、`token_limit=30000`）不暴露给 LLM。
 
@@ -122,23 +137,10 @@
 
 列出 Relace Cloud 账户中的所有仓库。
 
-### 参数
-
-| 参数 | 必需 | 描述 |
-|------|------|------|
-| `reason` | ❌ | LLM 链式思维的简要说明（工具会忽略） |
+此工具无参数。返回仓库 ID、名称和索引状态。
+用于获取 `cloud_clear` 所需的 `repo_id`；正常搜索/同步流程不需要调用。
 
 ---
-
-## `cloud_info`
-
-获取当前仓库的详细同步状态。在 `cloud_sync` 之前使用以了解需要执行的操作。
-
-### 参数
-
-| 参数 | 必需 | 描述 |
-|------|------|------|
-| `reason` | ❌ | LLM 链式思维的简要说明（工具会忽略） |
 
 ---
 
@@ -153,6 +155,7 @@
 | 参数 | 必需 | 默认值 | 描述 |
 |------|------|--------|------|
 | `confirm` | ✅ | `false` | 必须为 `true` 才能继续（安全保护） |
+| `repo_id` | ❌ | `null` | 要直接删除的仓库 UUID（用 `cloud_list` 查找）。省略时删除当前目录对应的仓库。**注意：** 直接 `repo_id` 模式不会清除本地 sync state。 |
 
 ### 返回
 
