@@ -1,0 +1,37 @@
+docs/tools.zh-CN.md
+  f07e31335c98c8fb 12,45
+tests/unit/test_tools.py
+  f07e31335c98c8fb 415-416,419,423,428
+docs/tools.md
+  f07e31335c98c8fb 12
+src/relace_mcp/tools/__init__.py
+  f07e31335c98c8fb 92-93
+src/relace_mcp/tools/apply/core.py
+  f07e31335c98c8fb 5,284-287,380,400,533
+tests/unit/test_snippet.py
+  f07e31335c98c8fb 69-72,154-155,159
+tests/unit/test_apply_core.py
+  f07e31335c98c8fb 236,258-260,270,272,279-302,307,326-339,474-475,488-491,493
+src/relace_mcp/tools/apply/snippet.py
+  f07e31335c98c8fb 10,37,48-50,107,140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.12",
+  "base_commit_sha": "8da01b201cb2c5db5e085871c84d4ad448d3fc59",
+  "prompts": {
+    "f07e31335c98c8fb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019cf2c1-7baf-7093-b03b-f2831912324c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 172,
+      "total_deletions": 55,
+      "accepted_lines": 103,
+      "overriden_lines": 2
+    }
+  }
+}
