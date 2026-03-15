@@ -403,7 +403,6 @@ class TestApplyFileLogicFileSize:
         _mock_config: RelaceConfig,
         mock_backend: AsyncMock,
         tmp_path: Path,
-        successful_api_response: dict[str, Any],
     ) -> None:
         """Should allow files exactly at size limit."""
         # Create file exactly at limit (10MB) with recognizable anchor content
@@ -413,19 +412,20 @@ class TestApplyFileLogicFileSize:
         limit_file.write_bytes(content.encode("utf-8"))
 
         mock_backend.apply.return_value = ApplyResponse(
-            merged_code=successful_api_response["choices"][0]["message"]["content"],
-            usage=successful_api_response["usage"],
+            merged_code=content,
+            usage={},
         )
 
-        # edit_snippet contains locatable anchor lines
+        # Idempotent anchor-only edit verifies the size limit does not block apply.
         result = await apply_file_logic(
             backend=mock_backend,
             file_path=str(limit_file),
-            edit_snippet="def placeholder_function():\n    pass\n",
+            edit_snippet="def placeholder_function():\n",
             instruction=None,
             base_dir=str(tmp_path),
         )
         assert result["status"] == "ok"
+        mock_backend.apply.assert_awaited_once()
 
 
 class TestApplyFileLogicEncoding:

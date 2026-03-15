@@ -9,6 +9,7 @@
 注意：
 - 对既有文件编辑时，必须包含 1-2 行从目标文件原文复制的 anchor lines（位于改动附近）。
 - truncation markers 更适合较大范围的 scoped edit，但 anchor-only edit 仍然支持。
+- 对 `.md` / `.mdx` 目标文件会保留外层 markdown fences，以便原样插入 fenced code block。
 - 创建新文件时，请提供完整文件内容，不要包含 truncation markers。
 - 仅靠 omission-style 的 context adjacency 不会再单独触发 `APPLY_NOOP`；`APPLY_NOOP` 现在主要用于 explicit remove directive 或明确新增行却没有产生 diff 的情况。
 - omission-style deletion detection 仍属于 `APPLY_SEMANTIC_CHECK=1` 的 opt-in 语义校验；默认不启用，以避免仅靠 context adjacency 带来的额外失败。
@@ -36,22 +37,12 @@
 
 更改的 UDiff，或新文件的确认信息。
 
-成功响应还可能包含 `warnings` 数组。
-
-### 常见警告
-
-- `MISSING_MARKERS`：在较大文件中仅使用了 anchors；建议补上 markers 以提高 merge 稳定性。
-- `WEAK_ANCHOR`：只匹配到一个有歧义的 anchor；merge 可能落到错误位置。
-- `SYMBOL_GUARD_SKIPPED`：对于非核心语言，跳过了 top-level symbol preservation 检查。
-- `SYMBOL_CHANGE_DETECTED`：同一次编辑中既有 symbol 消失，也有新 symbol 出现；系统将其视为可能的 rename / move / extract，并以 warning 放行。
-- `EXPLICIT_DELETE_INTENT`：检测到 deletion-dominant 的大 diff，且 snippet 中带有 explicit remove directive，因此以 warning 放行。
-
 ### 常见错误
 
 - `NEEDS_MORE_CONTEXT`：无法在文件中定位 anchor lines。
 - `APPLY_NOOP`：snippet 中包含 explicit remove directive 或原文件不存在的 concrete 新行，但 merge 结果仍与原文件完全一致。
 - `MARKER_LEAKAGE`：占位符 marker 泄漏到 merged output（被当成字面文本）。
-- `TRUNCATION_DETECTED`：在存在 markers 且没有 explicit remove directive 的情况下，merged output 出现异常大幅缩短。
+- `TRUNCATION_DETECTED`：在没有 explicit remove directive 的情况下，merged output 出现异常大幅缩短。
 - `BLAST_RADIUS_EXCEEDED`：diff 范围过大，需要拆分成更小的 edits。若是带 explicit remove directive 的 deletion-dominant 大删改，则可能改为 warning 放行。
 
 ---

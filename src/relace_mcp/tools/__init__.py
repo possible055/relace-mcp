@@ -89,6 +89,8 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
         Anchor lines are verbatim lines copied from the existing file that help locate
         the exact edit target. Include 1-2 unique lines adjacent to the change.
         Truncation markers are recommended for larger scoped edits but not required.
+        Markdown files keep fenced code blocks verbatim; outer fence stripping is skipped
+        for .md/.mdx targets.
 
         On error, the response includes a code field:
         - NEEDS_MORE_CONTEXT: merge model could not locate the target -
@@ -97,12 +99,10 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
           explicit remove directives or concrete new lines not present in the original.
         - BLAST_RADIUS_EXCEEDED: edit scope too large - split into smaller edits.
         - MARKER_LEAKAGE: placeholder marker text leaked into merged output (treated as literal text).
-        - TRUNCATION_DETECTED: merged output shrank drastically while markers were present
-          and no explicit remove directive was provided.
+        - TRUNCATION_DETECTED: merged output shrank drastically and no explicit remove
+          directive was provided.
 
-        On success: {status: "ok", diff: str (rendered unified diff), warnings?: [str]}.
-        Warnings may include weak anchors, skipped symbol guards on non-core languages,
-        possible rename/move/extract detection, or explicit delete-intent allowances.
+        On success: {status: "ok", diff: str | None (unified diff, None for new files or no-op)}.
 
         Do NOT use this tool to delete files or clear file contents.
         Use a dedicated file management tool for those operations.

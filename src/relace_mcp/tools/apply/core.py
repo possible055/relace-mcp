@@ -2,6 +2,7 @@ import asyncio
 import difflib
 import hashlib
 import logging
+import math
 import os
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
@@ -62,7 +63,6 @@ def _ok_result(
     path: str,
     message: str,
     diff: str | None = None,
-    warnings: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "status": "ok",
@@ -71,7 +71,6 @@ def _ok_result(
         "timing_ms": ctx.elapsed_ms(),
         "diff": diff,
         "message": message,
-        "warnings": warnings or [],
     }
 
 
@@ -224,15 +223,9 @@ async def _apply_to_existing_file(
         initial_code, detected_encoding = read_text_with_fallback(resolved_path)
         initial_hash = hashlib.sha256(resolved_path.read_bytes()).hexdigest()
 
-        warnings: list[str] = []
         file_lines = initial_code.count("\n") + 1
 
-        if not has_markers and file_lines > 10:
-            warnings.append(
-                "MISSING_MARKERS: edit_snippet uses anchors only; add truncation markers for larger scoped edits."
-            )
-
-        anchor_passed, anchor_warning = snippet.anchor_precheck(concrete, initial_code)
+        anchor_passed, _ = snippet.anchor_precheck(concrete, initial_code)
         if not anchor_passed:
             symbols = snippet.extract_top_level_symbols(initial_code, str(resolved_path))
             hint = ""
@@ -251,9 +244,6 @@ async def _apply_to_existing_file(
                 ctx.elapsed_ms(),
                 file_lines=file_lines,
             )
-        if anchor_warning:
-            logger.warning("[%s] %s for %s", ctx.trace_id, anchor_warning, resolved_path)
-            warnings.append(anchor_warning)
 
         if on_progress:
             await on_progress(1, 2, "Merging")
@@ -291,7 +281,10 @@ async def _apply_to_existing_file(
         lines_touched = max(added_lines, deleted_lines)
         deletion_dominant_diff = deleted_lines > added_lines
 
-        explicit_delete_warning = "EXPLICIT_DELETE_INTENT: deletion-dominant diff allowed because remove directives were provided"
+        original_chars = len(initial_code)
+        original_lines = file_lines if initial_code else 0
+        merged_chars = len(merged_code)
+        merged_lines = merged_code.count("\n") + 1 if merged_code else 0
 
         if has_markers:
             initial_had_markers = snippet.contains_truncation_markers(initial_code)
@@ -310,28 +303,27 @@ async def _apply_to_existing_file(
                     file_lines=file_lines,
                 )
 
-            original_chars = len(initial_code)
-            original_lines = initial_code.count("\n") + 1 if initial_code else 0
-            merged_chars = len(merged_code)
-            merged_lines = merged_code.count("\n") + 1 if merged_code else 0
-            if original_chars > 0 and original_lines > 0:
-                char_loss = max(0.0, (original_chars - merged_chars) / original_chars)
-                line_loss = max(0.0, (original_lines - merged_lines) / original_lines)
-                if char_loss > 0.6 and line_loss > 0.5:
-                    if has_explicit_remove:
-                        if explicit_delete_warning not in warnings:
-                            warnings.append(explicit_delete_warning)
-                    else:
-                        return errors.recoverable_error(
-                            "TRUNCATION_DETECTED",
-                            f"Catastrophic truncation detected (charLoss={int(char_loss * 100)}%, "
-                            f"lineLoss={int(line_loss * 100)}%).",
-                            ctx.file_path,
-                            ctx.instruction,
-                            ctx.trace_id,
-                            ctx.elapsed_ms(),
-                            file_lines=file_lines,
-                        )
+        if original_chars > 0 and original_lines > 0:
+            char_loss = max(0.0, (original_chars - merged_chars) / original_chars)
+            line_loss = max(0.0, (original_lines - merged_lines) / original_lines)
+            if char_loss > 0.6 and line_loss > 0.5:
+                if has_explicit_remove:
+                    logger.debug(
+                        "[%s] EXPLICIT_DELETE_INTENT for %s: skipping TRUNCATION_DETECTED (remove directives present)",
+                        ctx.trace_id,
+                        resolved_path,
+                    )
+                else:
+                    return errors.recoverable_error(
+                        "TRUNCATION_DETECTED",
+                        f"Catastrophic truncation detected (charLoss={int(char_loss * 100)}%, "
+                        f"lineLoss={int(line_loss * 100)}%).",
+                        ctx.file_path,
+                        ctx.instruction,
+                        ctx.trace_id,
+                        ctx.elapsed_ms(),
+                        file_lines=file_lines,
+                    )
 
         if not diff:
             if snippet.expects_changes(edit_snippet, initial_code):
@@ -360,7 +352,6 @@ async def _apply_to_existing_file(
                 str(resolved_path),
                 "No changes needed (already matches)",
                 diff=None,
-                warnings=warnings,
             )
 
         # L1 Syntax validation (always enabled for Python files)
@@ -386,11 +377,14 @@ async def _apply_to_existing_file(
             )
 
         # Blast-radius guard: reject diffs that rewrite most of the file.
-        blast_radius_limit = max(int(file_lines * 0.8), 100)
+        blast_radius_limit = max(1, math.ceil(file_lines * 0.8))
         if lines_touched > blast_radius_limit:
             if has_explicit_remove and deletion_dominant_diff:
-                if explicit_delete_warning not in warnings:
-                    warnings.append(explicit_delete_warning)
+                logger.debug(
+                    "[%s] EXPLICIT_DELETE_INTENT for %s: skipping BLAST_RADIUS_EXCEEDED (remove directives present)",
+                    ctx.trace_id,
+                    resolved_path,
+                )
             else:
                 logger.warning(
                     "[%s] BLAST_RADIUS_EXCEEDED for %s: %d lines touched, file=%d lines, limit=%d",
@@ -403,7 +397,7 @@ async def _apply_to_existing_file(
                 return errors.recoverable_error(
                     "BLAST_RADIUS_EXCEEDED",
                     f"Diff touches {lines_touched} lines but file only has {file_lines} lines "
-                    f"(limit={blast_radius_limit}, 80% of file or 100 lines). "
+                    f"(limit={blast_radius_limit}, 80% of file). "
                     "This looks like a full-file rewrite. Split into smaller edits.",
                     ctx.file_path,
                     ctx.instruction,
@@ -417,7 +411,9 @@ async def _apply_to_existing_file(
             initial_code, merged_code, edit_snippet, str(resolved_path)
         )
         if sym_passed and sym_reason:
-            warnings.append(sym_reason)
+            logger.debug(
+                "[%s] SYMBOL_CHANGE_DETECTED for %s: %s", ctx.trace_id, resolved_path, sym_reason
+            )
         if not sym_passed:
             logger.warning(
                 "[%s] SYMBOL_LOST for %s: %s",
@@ -500,7 +496,6 @@ async def _apply_to_existing_file(
             str(resolved_path),
             "Applied code changes successfully.",
             diff=diff,
-            warnings=warnings,
         )
 
 
@@ -535,7 +530,7 @@ async def apply_file_logic(
         instruction=instruction,
     )
 
-    edit_snippet = snippet.normalize_edit_snippet(edit_snippet)
+    edit_snippet = snippet.normalize_edit_snippet(edit_snippet, file_path)
 
     if not edit_snippet or not edit_snippet.strip():
         empty_result = errors.recoverable_error(

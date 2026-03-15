@@ -66,6 +66,11 @@ class TestNormalizeEditSnippet:
         snippet = "```python\ndef foo():\n    pass\n```\n"
         assert normalize_edit_snippet(snippet).endswith("\n")
 
+    @pytest.mark.parametrize("path", ["README.md", "docs/example.mdx"])
+    def test_preserves_outer_fence_for_markdown_files(self, path: str) -> None:
+        snippet = "```python\nprint('hello')\n```"
+        assert normalize_edit_snippet(snippet, path) == snippet
+
 
 class TestContainsTruncationMarkers:
     def test_detects_marker_lines(self) -> None:
@@ -145,32 +150,16 @@ class TestAnchorPrecheckEdgeCases:
         assert warning is None  # unique → no warning
 
     def test_two_anchors_no_warning(self) -> None:
-        """2+ matches → pass, no warning regardless of uniqueness."""
         lines = [f"line_{i}_padding_content" for i in range(500)]
-        lines[10] = "def function_at_start():"
-        lines[490] = "def function_at_end():"
+        lines[100] = "def nearby_anchor_one():"
+        lines[140] = "def nearby_anchor_two():"
         initial_code = "\n".join(lines)
 
         passed, warning = anchor_precheck(
-            ["def function_at_start():", "def function_at_end():"], initial_code
+            ["def nearby_anchor_one():", "def nearby_anchor_two():"], initial_code
         )
         assert passed is True
         assert warning is None
-
-    def test_single_ambiguous_anchor_warns(self) -> None:
-        """1 match that appears multiple times → pass with WEAK_ANCHOR warning."""
-        initial_code = (
-            "def handler():\n"
-            "    logger.info('processing request')\n"
-            "    return 1\n\n"
-            "def other_handler():\n"
-            "    logger.info('processing request')\n"
-            "    return 2\n"
-        )
-        passed, warning = anchor_precheck(["    logger.info('processing request')"], initial_code)
-        assert passed is True
-        assert warning is not None
-        assert "WEAK_ANCHOR" in warning
 
     def test_rejects_when_no_anchor_matches(self) -> None:
         """Should block when no anchor line (≥10 chars) exists in the file."""
@@ -589,5 +578,4 @@ class TestSymbolPreservationWhitelist:
         merged = "class Foo {}\n"
         passed, reason = check_symbol_preservation(initial, merged, "", "test.java")
         assert passed is True
-        assert reason is not None
-        assert "SYMBOL_GUARD_SKIPPED" in reason
+        assert reason is None

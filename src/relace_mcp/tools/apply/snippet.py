@@ -2,12 +2,12 @@ import ast
 import os
 import re
 from bisect import bisect_right
-from collections import Counter
 
 # Directive patterns for remove operations
 _REMOVE_DIRECTIVE_PATTERNS = ("// remove ", "# remove ")
 
 _FENCE_PREFIX = "```"
+_MARKDOWN_FENCE_LITERAL_EXTENSIONS = {".md", ".mdx"}
 
 
 def is_truncation_placeholder(line: str) -> bool:
@@ -34,7 +34,7 @@ def is_truncation_placeholder(line: str) -> bool:
     )
 
 
-def normalize_edit_snippet(edit_snippet: str) -> str:
+def normalize_edit_snippet(edit_snippet: str, file_path: str | None = None) -> str:
     """Normalize edit_snippet input.
 
     Agents sometimes wrap tool arguments in markdown fences. When nested inside
@@ -45,6 +45,9 @@ def normalize_edit_snippet(edit_snippet: str) -> str:
       ...
       ```
     """
+    if file_path and os.path.splitext(file_path)[1].lower() in _MARKDOWN_FENCE_LITERAL_EXTENSIONS:
+        return edit_snippet
+
     trimmed = edit_snippet.strip()
     lines = trimmed.splitlines()
     if len(lines) < 3:
@@ -101,20 +104,18 @@ def concrete_lines(text: str) -> list[str]:
 def anchor_precheck(concrete_lines_list: list[str], initial_code: str) -> tuple[bool, str | None]:
     """Check if concrete lines can be located in initial_code.
 
-    Three-tier result:
-      0 matches            → (False, None)          hard block
-      1 ambiguous match    → (True, warning_str)     allow with warning
-      1 unique or 2+ match → (True, None)            allow clean
+    Result tiers:
+      0 matches  → (False, None)  hard block
+      1+ matches → (True, None)   allow clean
 
     A match is a stripped, non-trivial line that appears in initial_code.
-    A match is 'unique' if it appears exactly once in initial_code.
 
     Args:
         concrete_lines_list: Non-placeholder lines from the edit snippet.
         initial_code: Original file content.
 
     Returns:
-        (passed, warning) tuple.
+        (passed, warning) tuple. warning is always None.
     """
     if not concrete_lines_list:
         return False, None
@@ -128,31 +129,17 @@ def anchor_precheck(concrete_lines_list: list[str], initial_code: str) -> tuple[
     if not anchor_lines:
         return False, None
 
-    matches: list[str] = []
-    unique_count = 0
     initial_lines = [line.strip() for line in initial_code.splitlines()]
-    initial_counts = Counter(initial_lines)
+    initial_normalized = {re.sub(r"\s+", " ", il) for il in initial_lines if il}
 
     for line in anchor_lines:
         stripped = line.strip()
         if not stripped or _is_trivial_line(stripped):
             continue
-        if initial_counts.get(stripped, 0) > 0:
-            matches.append(stripped)
-            if initial_counts.get(stripped, 0) == 1:
-                unique_count += 1
+        if re.sub(r"\s+", " ", stripped) in initial_normalized:
+            return True, None
 
-    if not matches:
-        return False, None
-
-    if len(matches) >= 2 or unique_count >= 1:
-        return True, None
-
-    # Exactly 1 match, and it's ambiguous (appears multiple times)
-    return True, (
-        "WEAK_ANCHOR: only 1 ambiguous anchor matched; "
-        "edit may target the wrong location. Add more unique context lines."
-    )
+    return False, None
 
 
 def _is_trivial_line(line: str) -> bool:
@@ -580,8 +567,7 @@ def check_symbol_preservation(
     ext = os.path.splitext(file_path)[1].lower()
     blocking_exts = {".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs"}
     if ext not in blocking_exts:
-        label = ext or "<none>"
-        return True, f"SYMBOL_GUARD_SKIPPED: ext={label}"
+        return True, None
 
     initial_symbols = set(extract_top_level_symbols(initial_code, file_path))
     merged_symbols = set(extract_top_level_symbols(merged_code, file_path))
