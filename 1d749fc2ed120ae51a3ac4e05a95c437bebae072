@@ -1,0 +1,27 @@
+benchmark/experiment_paths.py
+  fa6e5d5f773f826f 1-80
+benchmark/config.py
+  fa6e5d5f773f826f 14,81-84
+benchmark/analysis/trace_artifacts.py
+  fa6e5d5f773f826f 337,339
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.12",
+  "base_commit_sha": "1d749fc2ed120ae51a3ac4e05a95c437bebae072",
+  "prompts": {
+    "fa6e5d5f773f826f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019cf805-72e6-7851-9311-7f324a54325f",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 88,
+      "total_deletions": 4,
+      "accepted_lines": 87,
+      "overriden_lines": 0
+    }
+  }
+}
