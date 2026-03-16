@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 from benchmark.analysis.trace_artifacts import TRACE_ARTIFACT_SCHEMA_VERSION
 from benchmark.runner.executor import BenchmarkRunner
 from benchmark.runner.results import BenchmarkResult, BenchmarkSummary
+from benchmark.runner.trace_recorder import BenchmarkTraceRecorder
 from benchmark.schemas import DatasetCase
 from relace_mcp.config import RelaceConfig
 
@@ -12,12 +13,17 @@ from relace_mcp.config import RelaceConfig
 def test_execute_search_writes_trace_meta_without_turns_log(tmp_path: Path) -> None:
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
-    traces_dir = tmp_path / "traces"
-    traces_dir.mkdir()
+    experiment_root = tmp_path / "experiment"
 
     config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
     runner = BenchmarkRunner(config, progress=False, trace=True, search_mode="indexed")
-    runner._traces_dir = traces_dir
+    runner.trace_recorder = BenchmarkTraceRecorder(
+        enabled=True,
+        experiment_root=experiment_root,
+        run_id="run_1",
+        search_mode="indexed",
+    )
+    runner.trace_recorder.start_run()
 
     case = DatasetCase(
         id="case_1",
@@ -44,17 +50,23 @@ def test_execute_search_writes_trace_meta_without_turns_log(tmp_path: Path) -> N
             ],
         }
 
-    with (
-        patch("benchmark.runner.executor.SearchLLMClient", return_value=MagicMock()),
-        patch("benchmark.runner.executor.get_lsp_languages", return_value=frozenset()),
-        patch("benchmark.runner.preflight.check_retrieval_backend", return_value={"ok": True}),
-        patch("relace_mcp.clients.RelaceRepoClient", return_value=MagicMock()),
-        patch(
-            "relace_mcp.tools.retrieval.agentic_retrieval_logic", new=fake_agentic_retrieval_logic
-        ),
-    ):
-        result = runner._execute_search(case, repo_path)
+    try:
+        with (
+            patch("benchmark.runner.executor.SearchLLMClient", return_value=MagicMock()),
+            patch("benchmark.runner.executor.get_lsp_languages", return_value=frozenset()),
+            patch("benchmark.runner.preflight.check_retrieval_backend", return_value={"ok": True}),
+            patch("relace_mcp.clients.RelaceRepoClient", return_value=MagicMock()),
+            patch(
+                "relace_mcp.tools.retrieval.agentic_retrieval_logic",
+                new=fake_agentic_retrieval_logic,
+            ),
+        ):
+            result = runner._execute_search(case, repo_path)
+    finally:
+        runner.trace_recorder.finish_run()
 
+    traces_dir = runner.trace_recorder.traces_dir
+    assert traces_dir is not None
     meta_path = traces_dir / "case_1.meta.json"
     trace_path = traces_dir / "case_1.jsonl"
 
@@ -82,16 +94,17 @@ def test_execute_search_writes_trace_meta_without_turns_log(tmp_path: Path) -> N
 def test_execute_search_emits_search_complete_with_retrieval_fields(tmp_path: Path) -> None:
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
-    traces_dir = tmp_path / "traces"
-    traces_dir.mkdir()
-    events_path = tmp_path / "events.jsonl"
+    experiment_root = tmp_path / "experiment"
 
     config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
     runner = BenchmarkRunner(config, progress=False, trace=True, search_mode="indexed")
-    runner._traces_dir = traces_dir
-    runner._events_path = events_path
-    runner._run_id = "run_1"
-    runner._events_file = events_path.open("w", encoding="utf-8")
+    runner.trace_recorder = BenchmarkTraceRecorder(
+        enabled=True,
+        experiment_root=experiment_root,
+        run_id="run_1",
+        search_mode="indexed",
+    )
+    runner.trace_recorder.start_run()
 
     case = DatasetCase(
         id="case_1",
@@ -131,8 +144,10 @@ def test_execute_search_emits_search_complete_with_retrieval_fields(tmp_path: Pa
         ):
             runner._execute_search(case, repo_path)
     finally:
-        runner._events_file.close()
+        runner.trace_recorder.finish_run()
 
+    events_path = runner.trace_recorder.events_path
+    assert events_path is not None
     events = [json.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines()]
     search_complete = [event for event in events if event.get("kind") == "search_complete"]
     assert len(search_complete) == 1

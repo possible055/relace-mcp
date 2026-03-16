@@ -54,13 +54,14 @@ uv run --extra benchmark python -m benchmark.cli.run \
 ```
 
 **输出**:
-- Results: `benchmark/artifacts/results/<name>.jsonl`
-- Report: `benchmark/artifacts/reports/<name>.report.json`
-- Traces (启用 `--trace`): `benchmark/artifacts/traces/<run_id>/<case_id>.jsonl`
-- Trace metadata (启用 `--trace`): `benchmark/artifacts/traces/<run_id>/<case_id>.meta.json`
-- Events (启用 `--trace`): `benchmark/artifacts/events/<run_id>.jsonl`
+- Experiment root: `benchmark/artifacts/experiments/<experiment_name>/`
+- Results: `benchmark/artifacts/experiments/<experiment_name>/results/results.jsonl`
+- Report: `benchmark/artifacts/experiments/<experiment_name>/reports/summary.report.json`
+- Traces (启用 `--trace`): `benchmark/artifacts/experiments/<experiment_name>/traces/<case_id>.jsonl`
+- Trace metadata (启用 `--trace`): `benchmark/artifacts/experiments/<experiment_name>/traces/<case_id>.meta.json`
+- Events (启用 `--trace`): `benchmark/artifacts/experiments/<experiment_name>/events/events.jsonl`
 
-Run report 的 `metadata.artifacts` 也会写入 trace `schema_version`、`run_id`、`traces_dir` 与 `events_path`，方便机器消费这些 artifact。
+Run report 的 `metadata.artifacts` 也会写入 trace `schema_version`、`experiment_root`、`traces_dir` 与 `events_path`，方便机器消费这些 artifact。
 
 **Trace 工作流**:
 ```bash
@@ -78,13 +79,13 @@ uv run --extra benchmark python -m benchmark.cli.trace \
   --latest --validate
 ```
 
-`<case_id>.meta.json` 会保存该 case 的 retrieval metadata，包括外部索引 backend 返回的 `semantic_hints` 文件列表。Trace metadata 与 run-level events 都会带上 `schema_version` 字段，方便 consumer 做兼容性检查。
+现在单次 run 的所有输出都会归档在同一个 experiment 目录下。`<case_id>.meta.json` 会保存该 case 的 retrieval metadata，包括外部索引 backend 返回的 `semantic_hints` 文件列表。Trace metadata 与 run-level events 都会带上 `schema_version` 字段，方便 consumer 做兼容性检查。
 
 **常用参数**:
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `--dataset` | locbench_v1.jsonl | 数据集路径 |
-| `-o, --output` | 自动 | 输出文件前缀 |
+| `-o, --output` | 自动 | Experiment 目录名/路径 |
 | `--limit` | 全部 | Case 数量 |
 | `--seed` | `0` | 随机种子 |
 | `--shuffle` | 关闭 | 随机选择 |
@@ -121,10 +122,10 @@ uv run --extra benchmark python -m benchmark.cli.grid \
 | `--max-turns` | ✓ | `SEARCH_MAX_TURNS` 网格值 (可重复) |
 | `--temperatures` | ✓ | `SEARCH_TEMPERATURE` 网格值 (可重复) |
 | `--prompt-file` | | 覆盖所有 run 的 `SEARCH_PROMPT_FILE` |
-| `--output` | | 输出目录前缀 |
+| `--output` | | Grid experiment 目录 |
 | `--dry-run` | | 仅打印计划的 run，不执行 |
 
-**输出**: 网格摘要保存至 `artifacts/reports/<grid_name>.grid.json`
+**输出**: 网格摘要保存至 `artifacts/experiments/<grid_name>/reports/grid.report.json`
 
 ## 4. 数据集验证
 
@@ -230,9 +231,11 @@ benchmark/
 ├── schemas.py           # 数据结构定义
 └── artifacts/           # (运行时生成，不在版控中)
     ├── data/            # 数据集文件
-    ├── events/          # Run 级别 events (.jsonl)
+    ├── experiments/     # 按 experiment 归档的输出
+    │   └── <experiment_name>/
+    │       ├── events/  # Run 级别 events (.jsonl)
+    │       ├── reports/ # 汇总报告 (.report.json, .grid.json)
+    │       ├── results/ # 运行输出 (.jsonl)
+    │       └── traces/  # 逐 case traces (.jsonl + .meta.json)
     ├── repos/           # 缓存仓库
-    ├── results/         # 运行输出 (.jsonl)
-    ├── reports/         # 汇总报告 (.report.json, .grid.json)
-    └── traces/          # 逐 case traces (.jsonl)
 ```

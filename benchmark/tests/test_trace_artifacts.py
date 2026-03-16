@@ -107,5 +107,8 @@ def test_run_benchmark_metadata_includes_trace_artifacts(tmp_path: Path) -> None
     assert artifacts["trace_enabled"] is True
     assert artifacts["schema_version"] == TRACE_ARTIFACT_SCHEMA_VERSION
     assert artifacts["run_id"]
-    assert artifacts["traces_dir"].endswith(f"/traces/{artifacts['run_id']}")
-    assert artifacts["events_path"].endswith(f"/events/{artifacts['run_id']}.jsonl")
+    assert artifacts["experiment_root"].endswith(f"/experiments/{artifacts['run_id']}")
+    assert artifacts["traces_dir"].endswith(f"/experiments/{artifacts['run_id']}/traces")
+    assert artifacts["events_path"].endswith(
+        f"/experiments/{artifacts['run_id']}/events/events.jsonl"
+    )

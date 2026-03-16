@@ -8,7 +8,14 @@ from pathlib import Path
 
 import click
 
-from ..config import DEFAULT_LOCBENCH_PATH, get_benchmark_dir, get_reports_dir, get_results_dir
+from ..config import DEFAULT_LOCBENCH_PATH, get_benchmark_dir, get_experiments_dir
+from ..experiment_paths import (
+    experiment_grid_report_path,
+    experiment_report_path,
+    experiment_results_path,
+    grid_runs_dir,
+    resolve_experiment_root,
+)
 from ..schemas import generate_output_path
 
 
@@ -96,16 +103,13 @@ def main(
     )
     dataset_id = resolved_dataset_path.stem
 
-    results_dir = get_results_dir()
-    default_grid_root = generate_output_path(results_dir, "grid", dataset_id)
-    grid_root = (
-        (Path(output) if Path(output).is_absolute() else (results_dir / output))
-        if output
-        else default_grid_root
-    )
-
+    experiments_dir = get_experiments_dir()
+    default_grid_root = generate_output_path(experiments_dir, "grid", dataset_id)
+    grid_root = resolve_experiment_root(output) if output else default_grid_root
     grid_dir = grid_root
     grid_dir.mkdir(parents=True, exist_ok=True)
+    runs_dir = grid_runs_dir(grid_dir)
+    runs_dir.mkdir(parents=True, exist_ok=True)
 
     project_root = Path(__file__).resolve().parents[2]
 
@@ -119,12 +123,12 @@ def main(
             f"temp{_format_float_for_filename(temp)}",
         ]
         run_name = "__".join(name_parts)
-        output_prefix = grid_dir / run_name
+        experiment_root = runs_dir / run_name
         planned.append(
             {
                 "search_max_turns": turns,
                 "search_temperature": temp,
-                "output_prefix": str(output_prefix),
+                "experiment_root": str(experiment_root),
             }
         )
 
@@ -173,7 +177,7 @@ def main(
             "--seed",
             str(seed),
             "--output",
-            str(item["output_prefix"]),
+            str(item["experiment_root"]),
             "--search-mode",
             search_mode,
         ]
@@ -196,23 +200,16 @@ def main(
         if completed.returncode != 0:
             raise SystemExit(completed.returncode)
 
-        output_prefix = Path(str(item["output_prefix"]))
-        jsonl_path = (
-            output_prefix
-            if output_prefix.suffix == ".jsonl"
-            else output_prefix.with_suffix(".jsonl")
-        )
-        report_path = (
-            (get_reports_dir() / jsonl_path.relative_to(results_dir)).with_suffix(".report.json")
-            if jsonl_path.is_relative_to(results_dir)
-            else jsonl_path.with_suffix(".report.json")
-        )
+        experiment_root = Path(str(item["experiment_root"]))
+        jsonl_path = experiment_results_path(experiment_root)
+        report_path = experiment_report_path(experiment_root)
         report = json.loads(report_path.read_text(encoding="utf-8"))
 
         summaries.append(
             {
                 "config": item,
                 "paths": {
+                    "experiment_root": str(experiment_root),
                     "jsonl": str(jsonl_path),
                     "report": str(report_path),
                 },
@@ -235,7 +232,7 @@ def main(
     mins, secs = divmod(int(elapsed), 60)
     click.echo(f"\nGrid completed: {total_runs} runs in {mins:02d}:{secs:02d}")
 
-    report_out = get_reports_dir() / f"{grid_dir.name}.grid.json"
+    report_out = experiment_grid_report_path(grid_dir)
     report_out.parent.mkdir(parents=True, exist_ok=True)
     report_out.write_text(
         json.dumps(

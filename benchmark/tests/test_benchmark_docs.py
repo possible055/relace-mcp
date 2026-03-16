@@ -25,3 +25,5 @@ def test_benchmark_docs_match_current_cli_contract(doc_path: Path) -> None:
     assert "--latest --validate" in text
     assert "<case_id>.meta.json" in text
     assert "metadata.artifacts" in text
+    assert "artifacts/experiments/<experiment_name>" in text
+    assert "results/results.jsonl" in text

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import click
 
-from ..config import get_reports_dir, get_results_dir
+from ..config import get_experiments_dir
 
 
 def _load_report(path: Path) -> dict:
@@ -253,20 +253,17 @@ def main(
       # Output to file
       python -m benchmark.cli.report -o comparison.md *.report.json
     """
-    reports_dir = get_reports_dir()
-    results_dir = get_results_dir()
+    experiments_dir = get_experiments_dir()
     input_paths = []
 
     for inp in inputs:
         p = Path(inp)
         if not p.is_absolute():
-            # Try reports dir first, then results dir
-            if (reports_dir / inp).exists():
-                p = reports_dir / inp
-            elif (results_dir / inp).exists():
-                p = results_dir / inp
+            if (experiments_dir / inp).exists():
+                p = experiments_dir / inp
             else:
-                p = Path(inp)
+                matches = sorted(experiments_dir.rglob(inp)) if experiments_dir.exists() else []
+                p = matches[0] if len(matches) == 1 else Path(inp)
         if not p.exists():
             click.echo(f"Warning: File not found: {p}", err=True)
             continue
@@ -300,7 +297,7 @@ def main(
     if output:
         out_path = Path(output)
         if not out_path.is_absolute():
-            out_path = reports_dir / output
+            out_path = experiments_dir / output
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(content + "\n", encoding="utf-8")
         click.echo(f"Report saved to: {out_path}")

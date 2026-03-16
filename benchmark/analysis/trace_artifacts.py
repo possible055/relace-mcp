@@ -334,10 +334,9 @@ def build_search_complete_event(
 
 
 def infer_events_path(traces_dir: Path) -> Path | None:
-    parent = traces_dir.parent
-    if parent.name != "traces":
+    if traces_dir.name != "traces":
         return None
-    return parent.parent / "events" / f"{traces_dir.name}.jsonl"
+    return traces_dir.parent / "events" / "events.jsonl"
 
 
 def _validate_trace_turns(case_id: str, turns: list[dict[str, Any]]) -> tuple[list[str], list[str]]:

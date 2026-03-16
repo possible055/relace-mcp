@@ -11,10 +11,14 @@ from ..config import (
     DEFAULT_LOCBENCH_PATH,
     EXCLUDED_REPOS,
     get_benchmark_dir,
-    get_reports_dir,
-    get_results_dir,
+    get_experiments_dir,
 )
 from ..datasets import load_dataset
+from ..experiment_paths import (
+    experiment_report_path,
+    experiment_results_path,
+    resolve_experiment_root,
+)
 from ..schemas import generate_output_path
 
 logger = logging.getLogger(__name__)
@@ -76,7 +80,7 @@ def _load_benchmark_config():
     "-o",
     "--output",
     default=None,
-    help="Output file prefix (default: run_<dataset>_<timestamp>)",
+    help="Experiment directory name/path (default: run_<dataset>_<timestamp>/)",
 )
 @click.option("--limit", default=None, type=int, help="Maximum cases to run (default: all)")
 @click.option("--seed", default=0, type=int, help="Random seed for shuffling")
@@ -205,22 +209,21 @@ def main(
         )
         sys.exit(1)
 
-    # Determine checkpoint path for resume functionality
-    results_dir = get_results_dir()
+    experiments_dir = get_experiments_dir()
     checkpoint_path = None
 
-    # Generate output path once upfront to ensure checkpoint and results share the same path
+    # Generate experiment root once upfront to ensure all outputs land together.
     if output:
-        output_candidate = Path(output)
-        if output_candidate.is_absolute():
-            resolved_output_path = output_candidate
-        else:
-            resolved_output_path = results_dir / output_candidate
+        experiment_root = resolve_experiment_root(output)
     else:
-        resolved_output_path = generate_output_path(results_dir, "run", dataset_id)
+        experiment_root = generate_output_path(experiments_dir, "run", dataset_id)
+
+    experiment_root.mkdir(parents=True, exist_ok=True)
+    results_path = experiment_results_path(experiment_root)
+    report_path = experiment_report_path(experiment_root)
 
     if resume or timeout or fail_fast:
-        checkpoint_path = resolved_output_path.with_suffix(".checkpoint.jsonl")
+        checkpoint_path = results_path.with_name("checkpoint.jsonl")
 
     if resume and checkpoint_path and not checkpoint_path.exists():
         click.echo(f"Warning: --resume specified but checkpoint not found: {checkpoint_path}")
@@ -235,6 +238,7 @@ def main(
         search_mode=search_mode,
         resume=resume,
         trace=trace,
+        artifact_root=experiment_root,
     )
 
     click.echo("\nRunning benchmark...")
@@ -252,30 +256,20 @@ def main(
         },
     )
 
-    # Save results with standardized naming
-    reports_dir = get_reports_dir()
-    reports_dir.mkdir(parents=True, exist_ok=True)
-
-    output_path = resolved_output_path
-
-    jsonl_path = (
-        output_path if output_path.suffix == ".jsonl" else output_path.with_suffix(".jsonl")
-    )
-    report_path = (
-        (reports_dir / jsonl_path.relative_to(results_dir)).with_suffix(".report.json")
-        if jsonl_path.is_relative_to(results_dir)
-        else jsonl_path.with_suffix(".report.json")
-    )
-
-    summary.save(output_path, report_path=report_path)
+    summary.save(results_path, report_path=report_path)
 
     click.echo("\nResults saved to:")
-    click.echo(f"  - {jsonl_path}")
+    click.echo(f"  - experiment: {experiment_root}")
+    click.echo(f"  - {results_path}")
     click.echo(f"  - {report_path}")
-    if trace and hasattr(runner, "_traces_dir") and runner._traces_dir:
-        click.echo(f"  - traces: {runner._traces_dir}")
-    if trace and hasattr(runner, "_events_path") and runner._events_path:
-        click.echo(f"  - events: {runner._events_path}")
+    if trace and runner.trace_recorder is not None and runner.trace_recorder.traces_dir is not None:
+        click.echo(f"  - traces: {runner.trace_recorder.traces_dir}")
+    if (
+        trace
+        and runner.trace_recorder is not None
+        and runner.trace_recorder.events_path is not None
+    ):
+        click.echo(f"  - events: {runner.trace_recorder.events_path}")
 
     # Print summary
     click.echo("\n" + "=" * 50)

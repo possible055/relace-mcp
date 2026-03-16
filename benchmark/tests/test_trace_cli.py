@@ -48,7 +48,7 @@ def test_trace_search_map_json_out_includes_semantic_hints(tmp_path: Path) -> No
     )
 
     assert result.exit_code == 0
-    output_path = traces_dir / "search_map.json"
+    output_path = tmp_path / "reports" / "search_map.json"
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["cases_with_semantic_hints"] == 1
     assert payload["avg_semantic_hints_per_case"] == 2.0
@@ -83,7 +83,7 @@ def test_trace_search_map_json_out_includes_meta_only_case(tmp_path: Path) -> No
     )
 
     assert result.exit_code == 0
-    payload = json.loads((traces_dir / "search_map.json").read_text(encoding="utf-8"))
+    payload = json.loads((tmp_path / "reports" / "search_map.json").read_text(encoding="utf-8"))
     assert payload["cases"] == 1
     assert payload["cases_with_semantic_hints"] == 1
     assert payload["per_case"][0]["case_id"] == "case_meta"
@@ -119,7 +119,7 @@ def test_trace_validate_json_out_reports_metadata_only_case(tmp_path: Path) -> N
     )
 
     assert result.exit_code == 0
-    payload = json.loads((traces_dir / "validate.json").read_text(encoding="utf-8"))
+    payload = json.loads((tmp_path / "reports" / "validate.json").read_text(encoding="utf-8"))
     assert payload["total_cases"] == 1
     assert payload["valid_cases"] == 1
     assert payload["total_warnings"] >= 1

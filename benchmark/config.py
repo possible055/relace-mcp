@@ -11,6 +11,7 @@ RESULTS_DIR = ARTIFACTS_DIR / "results"
 REPORTS_DIR = ARTIFACTS_DIR / "reports"
 TRACES_DIR = ARTIFACTS_DIR / "traces"
 EVENTS_DIR = ARTIFACTS_DIR / "events"
+EXPERIMENTS_DIR = ARTIFACTS_DIR / "experiments"
 
 # Subdirectory structure
 RAW_DATA_DIR = DATA_DIR / "raw"
@@ -77,3 +78,7 @@ def get_traces_dir() -> Path:
 
 def get_events_dir() -> Path:
     return EVENTS_DIR
+
+
+def get_experiments_dir() -> Path:
+    return EXPERIMENTS_DIR
