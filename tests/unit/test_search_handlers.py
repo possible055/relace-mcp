@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import relace_mcp.tools.search._impl.grep_search as grep_mod
 from relace_mcp.encoding import set_project_encoding
 from relace_mcp.tools.search._impl import (
     MAX_TOOL_RESULT_CHARS,
@@ -451,6 +452,142 @@ class TestGrepSearchHandler:
         )
         result2 = grep_search_handler(params2)
         assert "visible.py" in result2
+
+
+class TestGrepNormalization:
+    """Test grep_search normalization and command building."""
+
+    @pytest.mark.parametrize(
+        ("pattern", "expected"),
+        [
+            (None, None),
+            ("", None),
+            ("   ", None),
+            (" *.py ", "*.py"),
+        ],
+    )
+    def test_normalize_glob_pattern(self, pattern: str | None, expected: str | None) -> None:
+        """Should strip whitespace and collapse empty glob inputs."""
+        assert grep_mod._normalize_glob_pattern(pattern) == expected
+
+    @pytest.mark.parametrize(
+        ("pattern", "expected"),
+        [
+            ("*", None),
+            ("**", None),
+            ("**/*", None),
+            ("./*", None),
+            ("./**", None),
+            ("./**/*", None),
+            ("*.py", "*.py"),
+            ("*.*", "*.*"),
+        ],
+    )
+    def test_normalize_include_pattern(self, pattern: str, expected: str | None) -> None:
+        """Should collapse wildcard-all sentinels but keep real include filters."""
+        assert grep_mod._normalize_include_pattern(pattern) == expected
+
+    @pytest.mark.parametrize(
+        ("query", "expected"),
+        [
+            ("hello", True),
+            ("foo.bar", False),
+            (r"\bfoo\b", False),
+            ("", True),
+        ],
+    )
+    def test_is_literal_query(self, query: str, expected: bool) -> None:
+        """Should only enable fixed-string mode for safe literal queries."""
+        assert grep_mod._is_literal_query(query) is expected
+
+    def test_build_ripgrep_command_adds_expected_flags(self) -> None:
+        """Should build a deterministic fixed-string ripgrep command."""
+        params = GrepSearchParams(
+            query="hello",
+            case_sensitive=True,
+            include_pattern="*.py",
+            exclude_pattern="*.tmp",
+            base_dir="/repo",
+        )
+
+        cmd = grep_mod._build_ripgrep_command(params)
+
+        assert cmd[:6] == [
+            "rg",
+            "--no-config",
+            "--line-number",
+            "--no-heading",
+            "--color=never",
+            r"--field-match-separator=\x00",
+        ]
+        assert "-F" in cmd
+        assert ["-g", "*.py"] == cmd[cmd.index("-g") : cmd.index("-g") + 2]
+        assert "!*.tmp" in cmd
+
+    def test_build_ripgrep_command_skips_fixed_string_for_regex_query(self) -> None:
+        """Should keep regex queries on the regex engine path."""
+        params = GrepSearchParams(
+            query="foo.bar",
+            case_sensitive=True,
+            include_pattern=None,
+            exclude_pattern=None,
+            base_dir="/repo",
+        )
+
+        cmd = grep_mod._build_ripgrep_command(params)
+
+        assert "-F" not in cmd
+
+    def test_handler_normalizes_patterns_before_ripgrep(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should normalize include/exclude patterns before the ripgrep path."""
+        captured: dict[str, GrepSearchParams] = {}
+
+        def fake_try(params: GrepSearchParams) -> str:
+            captured["params"] = params
+            return "normalized"
+
+        monkeypatch.setattr(grep_mod, "_try_ripgrep", fake_try)
+
+        params = GrepSearchParams(
+            query="hello",
+            case_sensitive=True,
+            include_pattern=" *.py ",
+            exclude_pattern=" *.tmp ",
+            base_dir=str(tmp_path),
+        )
+
+        result = grep_search_handler(params)
+
+        assert result == "normalized"
+        assert captured["params"].include_pattern == "*.py"
+        assert captured["params"].exclude_pattern == "*.tmp"
+
+    def test_handler_collapses_wildcard_include_before_ripgrep(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should treat wildcard-all include patterns as no include filter."""
+        captured: dict[str, GrepSearchParams] = {}
+
+        def fake_try(params: GrepSearchParams) -> str:
+            captured["params"] = params
+            return "normalized"
+
+        monkeypatch.setattr(grep_mod, "_try_ripgrep", fake_try)
+
+        params = GrepSearchParams(
+            query="hello",
+            case_sensitive=True,
+            include_pattern=" * ",
+            exclude_pattern=None,
+            base_dir=str(tmp_path),
+        )
+
+        result = grep_search_handler(params)
+
+        assert result == "normalized"
+        assert captured["params"].include_pattern is None
 
 
 class TestGlobHandler:
