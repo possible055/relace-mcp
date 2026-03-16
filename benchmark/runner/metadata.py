@@ -68,6 +68,7 @@ def build_run_metadata(
     started_at: datetime,
     completed_at: datetime,
     duration_s: float,
+    artifact_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build reproducibility metadata for this benchmark run (no secrets)."""
     config_meta: dict[str, Any] = {
@@ -153,4 +154,5 @@ def build_run_metadata(
             "relace_mcp_version": relace_mcp_version,
             "relace_mcp_git_commit": relace_mcp_commit,
         },
+        "artifacts": dict(artifact_metadata) if isinstance(artifact_metadata, dict) else {},
     }

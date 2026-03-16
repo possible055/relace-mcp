@@ -13,6 +13,12 @@ from relace_mcp.config import RelaceConfig
 from relace_mcp.lsp.languages import get_lsp_languages
 from relace_mcp.tools.search import FastAgenticSearchHarness
 
+from ..analysis.trace_artifacts import (
+    TRACE_ARTIFACT_SCHEMA_VERSION,
+    ArtifactStatus,
+    build_search_complete_event,
+    build_trace_meta_payload,
+)
 from ..config import get_events_dir, get_repos_dir
 from ..metrics import (
     compute_file_precision,
@@ -101,43 +107,43 @@ class BenchmarkRunner:
         self._events_path: Path | None = None
         self._events_file: Any | None = None
 
-    def _write_turns_log(self, turns_log: list[dict[str, Any]], trace_file: Path) -> str | None:
+    def _write_turns_log(
+        self, turns_log: list[dict[str, Any]], trace_file: Path
+    ) -> tuple[str | None, str | None]:
         try:
             with trace_file.open("w", encoding="utf-8") as tf:
                 for entry in turns_log:
                     tf.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
-            return str(trace_file)
-        except Exception:
-            return None
+            return str(trace_file), None
+        except Exception as exc:
+            return None, str(exc)
 
     def _build_trace_meta(self, case: DatasetCase, result: dict[str, Any]) -> dict[str, Any]:
-        payload: dict[str, Any] = {
-            "case_id": case.id,
-            "repo": case.repo,
-            "search_mode": self.search_mode,
-            "retrieval_backend": result.get("retrieval_backend"),
-            "retrieval_latency_s": result.get("retrieval_latency_s"),
-            "hint_policy": result.get("hint_policy"),
-            "hints_index_freshness": result.get("hints_index_freshness"),
-            "background_refresh_scheduled": result.get("background_refresh_scheduled"),
-            "reindex_action": result.get("reindex_action"),
-            "semantic_hints_used": int(result.get("semantic_hints_used", 0) or 0),
-            "semantic_hints": result.get("semantic_hints")
-            if isinstance(result.get("semantic_hints"), list)
-            else [],
-        }
-        warnings = result.get("warnings")
-        if isinstance(warnings, list) and warnings:
-            payload["warnings"] = [w for w in warnings if isinstance(w, str)]
-        return payload
+        return build_trace_meta_payload(
+            case_id=case.id,
+            repo=case.repo,
+            search_mode=self.search_mode,
+            retrieval_backend=result.get("retrieval_backend"),
+            retrieval_latency_s=result.get("retrieval_latency_s"),
+            hint_policy=result.get("hint_policy"),
+            hints_index_freshness=result.get("hints_index_freshness"),
+            background_refresh_scheduled=result.get("background_refresh_scheduled"),
+            reindex_action=result.get("reindex_action"),
+            semantic_hints_used=int(result.get("semantic_hints_used", 0) or 0),
+            semantic_hints=result.get("semantic_hints"),
+            warnings=result.get("warnings"),
+        )
 
-    def _write_trace_meta(self, payload: dict[str, Any], meta_file: Path) -> None:
+    def _write_trace_meta(
+        self, payload: dict[str, Any], meta_file: Path
+    ) -> tuple[str | None, str | None]:
         try:
             with meta_file.open("w", encoding="utf-8") as mf:
                 json.dump(payload, mf, ensure_ascii=False, indent=2, default=str)
                 mf.write("\n")
-        except Exception:
-            return
+            return str(meta_file), None
+        except Exception as exc:
+            return None, str(exc)
 
     def _emit_event(self, event: dict[str, Any]) -> None:
         if self._events_file is None:
@@ -146,12 +152,25 @@ class BenchmarkRunner:
         payload = dict(event)
         payload.setdefault("timestamp", datetime.now(UTC).isoformat())
         payload.setdefault("run_id", self._run_id or "")
+        payload.setdefault("schema_version", TRACE_ARTIFACT_SCHEMA_VERSION)
 
         try:
             self._events_file.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
         except Exception:
             # Benchmark reporting must never crash the run.
             return
+
+    def _build_artifact_metadata(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "trace_enabled": self.trace,
+            "schema_version": TRACE_ARTIFACT_SCHEMA_VERSION if self.trace else None,
+            "run_id": self._run_id,
+        }
+        if self.trace and self._traces_dir is not None:
+            payload["traces_dir"] = str(self._traces_dir)
+        if self.trace and self._events_path is not None:
+            payload["events_path"] = str(self._events_path)
+        return payload
 
     def run_benchmark(
         self,
@@ -334,6 +353,7 @@ class BenchmarkRunner:
             started_at=started_at,
             completed_at=completed_at,
             duration_s=duration_s,
+            artifact_metadata=self._build_artifact_metadata(),
         )
         return self._compute_summary(results, metadata=metadata)
 
@@ -458,7 +478,13 @@ class BenchmarkRunner:
 
         # Write trace file if tracing is enabled
         trace_path_str: str | None = None
+        trace_meta_path_str: str | None = None
         turns_log: list[dict[str, Any]] | None = None
+        artifact_status: ArtifactStatus = (
+            {"trace_jsonl": "disabled", "trace_meta": "disabled"}
+            if not self.trace
+            else {"trace_jsonl": "missing", "trace_meta": "missing"}
+        )
         if self.trace and self._traces_dir:
             trace_file = self._traces_dir / f"{case.id}.jsonl"
             meta_file = self._traces_dir / f"{case.id}.meta.json"
@@ -466,8 +492,21 @@ class BenchmarkRunner:
             if isinstance(raw_turns_log, list):
                 turns_log = raw_turns_log
             if turns_log:
-                trace_path_str = self._write_turns_log(turns_log, trace_file)
-            self._write_trace_meta(self._build_trace_meta(case, result), meta_file)
+                trace_path_str, trace_error = self._write_turns_log(turns_log, trace_file)
+                artifact_status["trace_jsonl"] = "written" if trace_path_str else "write_error"
+                if trace_error and isinstance(result.get("warnings"), list):
+                    result["warnings"].append(f"trace_jsonl_write_error: {trace_error}")
+                elif trace_error:
+                    result["warnings"] = [f"trace_jsonl_write_error: {trace_error}"]
+            trace_meta_path_str, meta_error = self._write_trace_meta(
+                self._build_trace_meta(case, result),
+                meta_file,
+            )
+            artifact_status["trace_meta"] = "written" if trace_meta_path_str else "write_error"
+            if meta_error and isinstance(result.get("warnings"), list):
+                result["warnings"].append(f"trace_meta_write_error: {meta_error}")
+            elif meta_error:
+                result["warnings"] = [f"trace_meta_write_error: {meta_error}"]
 
         returned_files_raw = result.get("files", {})
         if not isinstance(returned_files_raw, dict):
@@ -544,8 +583,9 @@ class BenchmarkRunner:
             partial=partial,
             error=error,
             returned_files=returned_files,
-            raw_result=result,
             trace_path=trace_path_str,
+            trace_meta_path=trace_meta_path_str,
+            artifact_status=artifact_status,
             hints_used=result.get("semantic_hints_used", 0) if self.search_mode == "indexed" else 0,
             search_mode=self.search_mode,
             retrieval_backend=result.get("retrieval_backend"),
@@ -605,19 +645,21 @@ class BenchmarkRunner:
                         )
 
             self._emit_event(
-                {
-                    **base,
-                    "kind": "search_complete",
-                    "turns_used": benchmark_result.turns_used,
-                    "partial": benchmark_result.partial,
-                    "files_found": benchmark_result.returned_files_count,
-                    "retrieval_backend": benchmark_result.retrieval_backend,
-                    "semantic_hints_used": benchmark_result.hints_used,
-                    "hint_policy": result.get("hint_policy"),
-                    "hints_index_freshness": result.get("hints_index_freshness"),
-                    "background_refresh_scheduled": result.get("background_refresh_scheduled"),
-                    "reindex_action": benchmark_result.reindex_action,
-                }
+                build_search_complete_event(
+                    case_id=case.id,
+                    repo=case.repo,
+                    search_mode=benchmark_result.search_mode,
+                    turns_used=benchmark_result.turns_used,
+                    partial=benchmark_result.partial,
+                    files_found=benchmark_result.returned_files_count,
+                    total_latency_ms=round(latency_s * 1000, 1),
+                    retrieval_backend=benchmark_result.retrieval_backend,
+                    semantic_hints_used=benchmark_result.hints_used,
+                    hint_policy=result.get("hint_policy"),
+                    hints_index_freshness=result.get("hints_index_freshness"),
+                    background_refresh_scheduled=result.get("background_refresh_scheduled"),
+                    reindex_action=benchmark_result.reindex_action,
+                )
             )
             if benchmark_result.error:
                 self._emit_event(

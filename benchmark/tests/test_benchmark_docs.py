@@ -22,4 +22,6 @@ def test_benchmark_docs_match_current_cli_contract(doc_path: Path) -> None:
     assert "| Line Precision |" not in text
     assert "benchmark.cli.trace" in text
     assert "--latest --search-map --json-out -o search_map.json" in text
+    assert "--latest --validate" in text
     assert "<case_id>.meta.json" in text
+    assert "metadata.artifacts" in text

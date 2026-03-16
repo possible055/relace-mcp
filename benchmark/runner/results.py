@@ -3,6 +3,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ..analysis.trace_artifacts import ArtifactStatus
+
 
 @dataclass
 class BenchmarkResult:
@@ -25,8 +27,9 @@ class BenchmarkResult:
     partial: bool = False
     error: str | None = None
     returned_files: dict[str, list[list[int]]] = field(default_factory=dict)
-    raw_result: dict[str, Any] = field(default_factory=dict)
     trace_path: str | None = None
+    trace_meta_path: str | None = None
+    artifact_status: ArtifactStatus = field(default_factory=dict)
     hints_used: int = 0
     search_mode: str = "agentic"
     retrieval_backend: str | None = None

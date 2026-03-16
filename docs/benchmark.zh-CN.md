@@ -60,6 +60,8 @@ uv run --extra benchmark python -m benchmark.cli.run \
 - Trace metadata (启用 `--trace`): `benchmark/artifacts/traces/<run_id>/<case_id>.meta.json`
 - Events (启用 `--trace`): `benchmark/artifacts/events/<run_id>.jsonl`
 
+Run report 的 `metadata.artifacts` 也会写入 trace `schema_version`、`run_id`、`traces_dir` 与 `events_path`，方便机器消费这些 artifact。
+
 **Trace 工作流**:
 ```bash
 # 采集 raw trace 与 indexed retrieval hint metadata
@@ -70,9 +72,13 @@ uv run --extra benchmark python -m benchmark.cli.run \
 # 导出派生后的 search map JSON
 uv run --extra benchmark python -m benchmark.cli.trace \
   --latest --search-map --json-out -o search_map.json
+
+# 校验最新一轮 run 的 trace/meta/events 一致性
+uv run --extra benchmark python -m benchmark.cli.trace \
+  --latest --validate
 ```
 
-`<case_id>.meta.json` 会保存该 case 的 retrieval metadata，包括外部索引 backend 返回的 `semantic_hints` 文件列表。
+`<case_id>.meta.json` 会保存该 case 的 retrieval metadata，包括外部索引 backend 返回的 `semantic_hints` 文件列表。Trace metadata 与 run-level events 都会带上 `schema_version` 字段，方便 consumer 做兼容性检查。
 
 **常用参数**:
 | 参数 | 默认值 | 说明 |

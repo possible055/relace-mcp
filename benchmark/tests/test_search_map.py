@@ -5,6 +5,7 @@ from pathlib import Path
 from benchmark.analysis.search_map import (
     _normalize_repo_path,
     aggregate_search_maps,
+    extract_batch,
     extract_search_map,
     format_search_map_report,
 )
@@ -245,6 +246,53 @@ class TestSearchMapMetadata:
         sm = extract_search_map(path)
         assert sm.meta == {}
         assert sm.semantic_hints_files == []
+
+    def test_extract_batch_includes_meta_only_case(self, tmp_path: Path) -> None:
+        trace_path = tmp_path / "case_1.jsonl"
+        trace_path.write_text(
+            json.dumps(
+                {
+                    "turn": 1,
+                    "tool_calls_raw": [],
+                    "tool_results": [],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        _write_meta(
+            trace_path,
+            {
+                "schema_version": "1.0",
+                "case_id": "case_1",
+                "repo": "example/repo",
+                "search_mode": "indexed",
+                "semantic_hints_used": 0,
+                "semantic_hints": [],
+            },
+        )
+        (tmp_path / "case_2.meta.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "case_id": "case_2",
+                    "repo": "example/repo",
+                    "search_mode": "indexed",
+                    "semantic_hints_used": 1,
+                    "semantic_hints": [{"filename": "src/only_hint.py", "score": 0.82}],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        maps = extract_batch(tmp_path)
+
+        assert [m.case_id for m in maps] == ["case_1", "case_2"]
+        assert maps[1].total_turns == 0
+        assert maps[1].semantic_hints_files == ["src/only_hint.py"]
 
 
 class TestSearchMapMetrics:

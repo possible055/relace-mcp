@@ -60,6 +60,8 @@ uv run --extra benchmark python -m benchmark.cli.run \
 - Trace metadata (when `--trace`): `benchmark/artifacts/traces/<run_id>/<case_id>.meta.json`
 - Events (when `--trace`): `benchmark/artifacts/events/<run_id>.jsonl`
 
+Run reports also include `metadata.artifacts` with the trace `schema_version`, `run_id`, `traces_dir`, and `events_path`.
+
 **Trace workflow**:
 ```bash
 # Collect raw traces plus indexed retrieval hint metadata
@@ -70,9 +72,13 @@ uv run --extra benchmark python -m benchmark.cli.run \
 # Export the derived search map as JSON
 uv run --extra benchmark python -m benchmark.cli.trace \
   --latest --search-map --json-out -o search_map.json
+
+# Validate trace/meta/events consistency for the latest run
+uv run --extra benchmark python -m benchmark.cli.trace \
+  --latest --validate
 ```
 
-`<case_id>.meta.json` stores retrieval-side metadata for the case, including `semantic_hints` file lists from external index backends.
+`<case_id>.meta.json` stores retrieval-side metadata for the case, including `semantic_hints` file lists from external index backends. Both trace metadata and run-level events include a `schema_version` field so consumers can validate artifact compatibility.
 
 **Key options**:
 | Option | Default | Description |

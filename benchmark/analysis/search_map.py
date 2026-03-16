@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from .trace_artifacts import collect_trace_artifacts, load_trace_meta, load_trace_turns
+
 _GREP_LINE_RE = re.compile(r"^(?P<path>.+?):(?P<line>\d+):")
 _LSP_SYMBOL_RE = re.compile(
     r"^\[(?P<kind>[^\]]+)\]\s+(?P<path>.+?):(?P<line>\d+):(?P<column>\d+)(?:\s|$)"
@@ -207,11 +209,6 @@ def _join_repo_path(base_path: Any, child_path: Any) -> str:
     return joined
 
 
-# ---------------------------------------------------------------------------
-# Trace/meta loading helpers
-# ---------------------------------------------------------------------------
-
-
 def _extract_view_file_lines(result: Any) -> tuple[int, int] | None:
     if not isinstance(result, str) or result.startswith("Error"):
         return None
@@ -229,18 +226,6 @@ def _extract_view_file_lines(result: Any) -> tuple[int, int] | None:
     if start is None or end is None:
         return None
     return (start, end)
-
-
-def _load_trace_meta(trace_path: Path) -> dict[str, Any]:
-    meta_path = trace_path.with_suffix(".meta.json")
-    if not meta_path.exists():
-        return {}
-
-    try:
-        data = json.loads(meta_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return data if isinstance(data, dict) else {}
 
 
 # ---------------------------------------------------------------------------
@@ -534,16 +519,27 @@ def _parse_tool_results(
     return events
 
 
-def extract_search_map(trace_path: Path, case_id: str | None = None) -> SearchMap:
-    cid = case_id or trace_path.stem
-    turns: list[dict[str, Any]] = []
-    with trace_path.open("r", encoding="utf-8") as f:
-        for line in f:
-            stripped = line.strip()
-            if stripped:
-                turns.append(json.loads(stripped))
+def extract_search_map(
+    trace_path: Path | None,
+    case_id: str | None = None,
+    *,
+    meta_path: Path | None = None,
+) -> SearchMap:
+    if case_id:
+        cid = case_id
+    elif trace_path is not None:
+        cid = trace_path.stem
+    elif meta_path is not None:
+        cid = meta_path.name[: -len(".meta.json")]
+    else:
+        cid = ""
 
-    sm = SearchMap(case_id=cid, total_turns=len(turns), meta=_load_trace_meta(trace_path))
+    turns, _ = load_trace_turns(trace_path)
+    meta, _ = load_trace_meta(meta_path if meta_path is not None else None)
+    if not meta and trace_path is not None and meta_path is None:
+        meta, _ = load_trace_meta(trace_path.with_suffix(".meta.json"))
+
+    sm = SearchMap(case_id=cid, total_turns=len(turns), meta=meta)
     for entry in turns:
         turn = entry.get("turn", 0)
         if not isinstance(turn, int) or turn <= 0:
@@ -557,8 +553,10 @@ def extract_search_map(trace_path: Path, case_id: str | None = None) -> SearchMa
 
 
 def extract_batch(traces_dir: Path) -> list[SearchMap]:
-    trace_files = sorted(traces_dir.glob("*.jsonl"))
-    return [extract_search_map(f) for f in trace_files]
+    return [
+        extract_search_map(artifact.trace_path, artifact.case_id, meta_path=artifact.meta_path)
+        for artifact in collect_trace_artifacts(traces_dir)
+    ]
 
 
 # ---------------------------------------------------------------------------
