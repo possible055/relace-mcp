@@ -158,6 +158,8 @@ Always-available tools: `fast_apply`, `agentic_search`, `index_status`. Cloud to
 
 `agentic_retrieval` can use stale semantic hints and then verify them against live code. It does not run `cloud_sync` implicitly; use `cloud_sync` as the explicit maintenance tool when you want to refresh the cloud index ahead of retrieval.
 
+Live local exploration keeps `.gitignore` filtering in place, and exact-text probes automatically use a faster literal search path when regex features are unnecessary.
+
 For detailed parameters, see [docs/tools.md](docs/tools.md).
 
 ## Language Support
