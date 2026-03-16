@@ -1,0 +1,29 @@
+tests/integration/test_search_commands.py
+  231e29a4e4163549 2,75-120
+tests/unit/test_search_handlers.py
+  231e29a4e4163549 7,457-590
+src/relace_mcp/tools/search/_impl/grep_search.py
+  231e29a4e4163549 12,21-22,133-134,144,278,301-302,304-305,394-395
+pyproject.toml
+  231e29a4e4163549 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.12",
+  "base_commit_sha": "e7c7509c449358220f2067dd65b98ede7e7358ae",
+  "prompts": {
+    "231e29a4e4163549": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019cf39c-3dd3-7172-a327-154500943b21",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 200,
+      "total_deletions": 15,
+      "accepted_lines": 199,
+      "overriden_lines": 0
+    }
+  }
+}
