@@ -1,0 +1,51 @@
+benchmark/tests/test_trace_metadata.py
+  c61ea450997742d1 5,7,56,63-68,71,80-186
+benchmark/tests/test_benchmark_docs.py
+  c61ea450997742d1 25,27
+benchmark/analysis/trace_artifacts.py
+  c61ea450997742d1 1-605
+benchmark/analysis/search_map.py
+  c61ea450997742d1 7-8,523-528,530-540,542,557-558
+docs/benchmark.zh-CN.md
+  c61ea450997742d1 63-64,75-78,81
+benchmark/tests/test_trace_cli.py
+  c61ea450997742d1 56-126
+src/relace_dashboard/app.py
+  c61ea450997742d1 270-272,274-279
+benchmark/runner/results.py
+  c61ea450997742d1 6,31-32
+benchmark/tests/test_trace_artifacts.py
+  c61ea450997742d1 1-111
+benchmark/runner/executor.py
+  c61ea450997742d1 16-21,112,117-119,122-135,139,144-146,155,163-173,356,481,483-487,495-501,503-509,587-588,648-662
+benchmark/tests/test_search_map.py
+  c61ea450997742d1 8,250-295
+docs/benchmark.md
+  c61ea450997742d1 63-64,75-78,81
+src/relace_dashboard/widgets.py
+  c61ea450997742d1 245-247,254-261,263-266
+benchmark/cli/trace.py
+  c61ea450997742d1 12-16,35,42,49-52,79,82-97,110
+benchmark/runner/metadata.py
+  c61ea450997742d1 71,157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.12",
+  "base_commit_sha": "33ce3f2b923c5f83d2a041407d910353d87c910d",
+  "prompts": {
+    "c61ea450997742d1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019cf802-4d45-7920-a15d-e0b5007b29df",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 1138,
+      "total_deletions": 83,
+      "accepted_lines": 1128,
+      "overriden_lines": 0
+    }
+  }
+}
