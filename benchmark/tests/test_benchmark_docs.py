@@ -20,3 +20,6 @@ def test_benchmark_docs_match_current_cli_contract(doc_path: Path) -> None:
     assert "--search-prompt-file" not in text
     assert "uv run --extra dev --extra benchmark pytest benchmark/tests -v" in text
     assert "| Line Precision |" not in text
+    assert "benchmark.cli.trace" in text
+    assert "--latest --search-map --json-out -o search_map.json" in text
+    assert "<case_id>.meta.json" in text

@@ -3,6 +3,11 @@ from pathlib import Path
 
 import click
 
+from ..analysis.search_map import (
+    aggregate_search_maps,
+    extract_batch,
+    format_search_map_report,
+)
 from ..analysis.trace_analyzer import aggregate_summary, analyze_batch, format_report
 from ..config import ARTIFACTS_DIR
 
@@ -19,11 +24,15 @@ TRACES_DIR = ARTIFACTS_DIR / "traces"
 )
 @click.option("--json-out", is_flag=True, help="Output raw JSON summary instead of text report")
 @click.option("--latest", is_flag=True, help="Analyze the latest trace run")
+@click.option(
+    "--search-map", is_flag=True, help="Generate search map analysis instead of behavioral report"
+)
 def main(
     traces_path: str | None,
     output: str | None,
     json_out: bool,
     latest: bool,
+    search_map: bool,
 ) -> None:
     """Analyze benchmark trace data for behavioral patterns.
 
@@ -63,13 +72,22 @@ def main(
 
     click.echo(f"Analyzing {len(trace_files)} trace files from: {traces_dir}")
 
-    analyses = analyze_batch(traces_dir)
-
-    if json_out:
-        summary = aggregate_summary(analyses)
-        content = json.dumps(summary, indent=2, ensure_ascii=False)
+    if search_map:
+        maps = extract_batch(traces_dir)
+        if json_out:
+            summary = aggregate_search_maps(maps)
+            per_case = [m.to_dict() for m in maps]
+            summary["per_case"] = per_case
+            content = json.dumps(summary, indent=2, ensure_ascii=False)
+        else:
+            content = format_search_map_report(maps)
     else:
-        content = format_report(analyses)
+        analyses = analyze_batch(traces_dir)
+        if json_out:
+            summary = aggregate_summary(analyses)
+            content = json.dumps(summary, indent=2, ensure_ascii=False)
+        else:
+            content = format_report(analyses)
 
     if output:
         out_path = Path(output)

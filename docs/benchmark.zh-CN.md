@@ -57,7 +57,22 @@ uv run --extra benchmark python -m benchmark.cli.run \
 - Results: `benchmark/artifacts/results/<name>.jsonl`
 - Report: `benchmark/artifacts/reports/<name>.report.json`
 - Traces (启用 `--trace`): `benchmark/artifacts/traces/<run_id>/<case_id>.jsonl`
+- Trace metadata (启用 `--trace`): `benchmark/artifacts/traces/<run_id>/<case_id>.meta.json`
 - Events (启用 `--trace`): `benchmark/artifacts/events/<run_id>.jsonl`
+
+**Trace 工作流**:
+```bash
+# 采集 raw trace 与 indexed retrieval hint metadata
+uv run --extra benchmark python -m benchmark.cli.run \
+  --dataset artifacts/data/processed/curated_50.jsonl \
+  --limit 10 --trace --search-mode indexed
+
+# 导出派生后的 search map JSON
+uv run --extra benchmark python -m benchmark.cli.trace \
+  --latest --search-map --json-out -o search_map.json
+```
+
+`<case_id>.meta.json` 会保存该 case 的 retrieval metadata，包括外部索引 backend 返回的 `semantic_hints` 文件列表。
 
 **常用参数**:
 | 参数 | 默认值 | 说明 |

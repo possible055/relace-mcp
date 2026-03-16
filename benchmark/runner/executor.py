@@ -110,6 +110,35 @@ class BenchmarkRunner:
         except Exception:
             return None
 
+    def _build_trace_meta(self, case: DatasetCase, result: dict[str, Any]) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "case_id": case.id,
+            "repo": case.repo,
+            "search_mode": self.search_mode,
+            "retrieval_backend": result.get("retrieval_backend"),
+            "retrieval_latency_s": result.get("retrieval_latency_s"),
+            "hint_policy": result.get("hint_policy"),
+            "hints_index_freshness": result.get("hints_index_freshness"),
+            "background_refresh_scheduled": result.get("background_refresh_scheduled"),
+            "reindex_action": result.get("reindex_action"),
+            "semantic_hints_used": int(result.get("semantic_hints_used", 0) or 0),
+            "semantic_hints": result.get("semantic_hints")
+            if isinstance(result.get("semantic_hints"), list)
+            else [],
+        }
+        warnings = result.get("warnings")
+        if isinstance(warnings, list) and warnings:
+            payload["warnings"] = [w for w in warnings if isinstance(w, str)]
+        return payload
+
+    def _write_trace_meta(self, payload: dict[str, Any], meta_file: Path) -> None:
+        try:
+            with meta_file.open("w", encoding="utf-8") as mf:
+                json.dump(payload, mf, ensure_ascii=False, indent=2, default=str)
+                mf.write("\n")
+        except Exception:
+            return
+
     def _emit_event(self, event: dict[str, Any]) -> None:
         if self._events_file is None:
             return
@@ -432,11 +461,13 @@ class BenchmarkRunner:
         turns_log: list[dict[str, Any]] | None = None
         if self.trace and self._traces_dir:
             trace_file = self._traces_dir / f"{case.id}.jsonl"
+            meta_file = self._traces_dir / f"{case.id}.meta.json"
             raw_turns_log = result.get("turns_log")
             if isinstance(raw_turns_log, list):
                 turns_log = raw_turns_log
             if turns_log:
                 trace_path_str = self._write_turns_log(turns_log, trace_file)
+            self._write_trace_meta(self._build_trace_meta(case, result), meta_file)
 
         returned_files_raw = result.get("files", {})
         if not isinstance(returned_files_raw, dict):
@@ -580,6 +611,12 @@ class BenchmarkRunner:
                     "turns_used": benchmark_result.turns_used,
                     "partial": benchmark_result.partial,
                     "files_found": benchmark_result.returned_files_count,
+                    "retrieval_backend": benchmark_result.retrieval_backend,
+                    "semantic_hints_used": benchmark_result.hints_used,
+                    "hint_policy": result.get("hint_policy"),
+                    "hints_index_freshness": result.get("hints_index_freshness"),
+                    "background_refresh_scheduled": result.get("background_refresh_scheduled"),
+                    "reindex_action": benchmark_result.reindex_action,
                 }
             )
             if benchmark_result.error:
