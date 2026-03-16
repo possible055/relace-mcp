@@ -2,6 +2,13 @@
 
 This document provides detailed information about all available MCP tools.
 
+## Search Behavior
+
+The live local exploration used by `agentic_search` and `agentic_retrieval` has a few user-visible guarantees:
+
+- `.gitignore` filtering stays in effect during text search, so ignored trees do not reappear when the planner broadens file scope.
+- Exact-text probes automatically use fixed-string matching when regex features are unnecessary, improving common search latency without changing results.
+
 ## `fast_apply`
 
 Apply edits to a file (or create a new file). Use truncation placeholders like `// ... existing code ...` or `# ... existing code ...`.

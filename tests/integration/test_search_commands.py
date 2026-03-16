@@ -1,4 +1,5 @@
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -70,6 +71,53 @@ class TestGrepSearchIntegration:
         )
         result = grep_search_handler(params)
         assert result == "No matches found."
+
+    @pytest.mark.skipif(
+        shutil.which("rg") is None or shutil.which("git") is None,
+        reason="rg and git are required for ripgrep integration coverage",
+    )
+    def test_wildcard_include_keeps_gitignore_filtering(self, tmp_path: Path) -> None:
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        (tmp_path / ".gitignore").write_text("ignored_dir/\n")
+        ignored_dir = tmp_path / "ignored_dir"
+        visible_dir = tmp_path / "visible_dir"
+        ignored_dir.mkdir()
+        visible_dir.mkdir()
+        (ignored_dir / "secret.txt").write_text("needle\n")
+        (visible_dir / "seen.txt").write_text("needle\n")
+
+        params = GrepSearchParams(
+            query="needle",
+            case_sensitive=True,
+            include_pattern="*",
+            exclude_pattern=None,
+            base_dir=str(tmp_path),
+        )
+
+        result = grep_search_handler(params)
+
+        assert "visible_dir/seen.txt" in result
+        assert "ignored_dir/secret.txt" not in result
+
+    @pytest.mark.skipif(
+        shutil.which("rg") is None, reason="rg is required for ripgrep integration coverage"
+    )
+    def test_star_dot_star_remains_a_real_filter(self, tmp_path: Path) -> None:
+        (tmp_path / "with_ext.txt").write_text("needle\n")
+        (tmp_path / "noext").write_text("needle\n")
+
+        params = GrepSearchParams(
+            query="needle",
+            case_sensitive=True,
+            include_pattern="*.*",
+            exclude_pattern=None,
+            base_dir=str(tmp_path),
+        )
+
+        result = grep_search_handler(params)
+
+        assert "with_ext.txt" in result
+        assert "noext" not in result
 
 
 class TestGlobIntegration:

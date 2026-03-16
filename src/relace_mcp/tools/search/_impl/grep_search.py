@@ -9,6 +9,7 @@ import time
 import types
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
+from dataclasses import replace
 from pathlib import Path
 
 from ....encoding import get_project_encoding, read_text_best_effort
@@ -17,6 +18,8 @@ from .constants import COMMON_IGNORED_DIRS, GREP_TIMEOUT_SECONDS, MAX_GREP_DEPTH
 from .gitignore import collect_gitignore_specs, is_ignored
 
 logger = logging.getLogger(__name__)
+# Include "\" so escape-based regexes like `\bword\b` stay on the regex path.
+_REGEX_SPECIAL_CHARS = frozenset(r"\.^$*+?{}[]|()")
 
 
 def _timeout_context(seconds: int) -> "AbstractContextManager[None]":
@@ -112,6 +115,39 @@ def _compile_search_pattern(query: str, case_sensitive: bool) -> re.Pattern[str]
         return re.compile(query, flags)
     except re.error as exc:
         return f"Invalid regex pattern: {exc}"
+
+
+def _normalize_glob_pattern(pattern: str | None) -> str | None:
+    """Normalize optional glob input from tool arguments."""
+    if pattern is None:
+        return None
+    normalized = pattern.strip()
+    return normalized or None
+
+
+def _normalize_include_pattern(pattern: str | None) -> str | None:
+    """Collapse sentinel "match everything" include globs to None.
+
+    Passing `-g '*'` changes ripgrep's default filtering semantics and can force
+    large ignored trees back into scope. Treat it as "no include filter" instead.
+    Keep patterns like `*.*` intact because they are real filters, not no-op
+    sentinels.
+
+    The sentinel set below covers the most common "match-everything" patterns.
+    Semantically equivalent variants (e.g. `**/**, */**/*`) are intentionally
+    excluded: they are rare in practice and adding them all would create an
+    unbounded list. Callers that pass unusual no-op globs will simply get
+    ripgrep's normal -g behaviour, which is safe (just not .gitignore-aware).
+    """
+    normalized = _normalize_glob_pattern(pattern)
+    if normalized in {"*", "**", "**/*", "./*", "./**", "./**/*"}:
+        return None
+    return normalized
+
+
+def _is_literal_query(query: str) -> bool:
+    """Return True when the query can safely use ripgrep fixed-string mode."""
+    return not any(ch in _REGEX_SPECIAL_CHARS for ch in query)
 
 
 def _filter_visible_dirs(dirs: list[str]) -> list[str]:
@@ -245,14 +281,25 @@ def _build_ripgrep_command(params: GrepSearchParams) -> list[str]:
     """Build ripgrep command list.
 
     Args:
-        params: grep search parameters.
+        params: grep search parameters with normalized include/exclude patterns.
 
     Returns:
         ripgrep command list.
     """
     # Use NUL as field separator (via escape sequence) to handle filenames containing colons
     # ripgrep interprets \x00 as a literal NUL byte
-    cmd = ["rg", "--line-number", "--no-heading", "--color=never", r"--field-match-separator=\x00"]
+    # Use `--no-config` for deterministic behavior (ignore user/global ripgreprc).
+    cmd = [
+        "rg",
+        "--no-config",
+        "--line-number",
+        "--no-heading",
+        "--color=never",
+        r"--field-match-separator=\x00",
+    ]
+
+    if _is_literal_query(params.query):
+        cmd.append("-F")
 
     if not params.case_sensitive:
         cmd.append("-i")
@@ -350,6 +397,11 @@ def _try_ripgrep(params: GrepSearchParams) -> str:
 
 def grep_search_handler(params: GrepSearchParams) -> str:
     """grep_search tool implementation (uses ripgrep or fallback to Python re)."""
+    params = replace(
+        params,
+        exclude_pattern=_normalize_glob_pattern(params.exclude_pattern),
+        include_pattern=_normalize_include_pattern(params.include_pattern),
+    )
     try:
         # Non-ASCII patterns cannot be reliably matched across unknown legacy encodings via rg.
         # Fall back to per-file decoding to support GBK/Big5 mixed repos.
@@ -367,7 +419,12 @@ def grep_search_handler(params: GrepSearchParams) -> str:
 
 def _grep_search_python_fallback(params: GrepSearchParams) -> str:
     """Pure Python grep implementation (when ripgrep not available)."""
-    # Compile pattern
+    # Always compile as a regex, even when _is_literal_query(query) is True.
+    # Unlike the ripgrep path (which adds -F for literal queries), re.compile
+    # of a no-special-char string is semantically identical to a fixed-string
+    # match, so the two paths agree on results today.  If _REGEX_SPECIAL_CHARS
+    # is ever changed so that some special chars are excluded (allowing `-F`
+    # for more queries), this fallback must be revisited to stay in sync.
     pattern = _compile_search_pattern(params.query, params.case_sensitive)
     if isinstance(pattern, str):
         # Compilation failed, return error message

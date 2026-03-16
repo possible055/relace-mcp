@@ -2,6 +2,13 @@
 
 本文档提供所有可用 MCP 工具的详细信息。
 
+## 搜索行为
+
+`agentic_search` 与 `agentic_retrieval` 背后的 live local exploration 有几个对用户可感知的保证：
+
+- 文本搜索期间会持续应用 `.gitignore` 过滤，所以即使 planner 临时放宽 file scope，被 ignored 的目录也不会重新进入搜索范围。
+- 当查询不需要 regex 特性时，exact-text probes 会自动使用 fixed-string matching，在不改变结果的前提下改善常见搜索延迟。
+
 ## `fast_apply`
 
 对文件应用编辑（或创建新文件）。使用 `// ... existing code ...` 或 `# ... existing code ...` 等截断占位符。
