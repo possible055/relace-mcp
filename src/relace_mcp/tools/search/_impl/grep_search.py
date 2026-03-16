@@ -132,6 +132,12 @@ def _normalize_include_pattern(pattern: str | None) -> str | None:
     large ignored trees back into scope. Treat it as "no include filter" instead.
     Keep patterns like `*.*` intact because they are real filters, not no-op
     sentinels.
+
+    The sentinel set below covers the most common "match-everything" patterns.
+    Semantically equivalent variants (e.g. `**/**, */**/*`) are intentionally
+    excluded: they are rare in practice and adding them all would create an
+    unbounded list. Callers that pass unusual no-op globs will simply get
+    ripgrep's normal -g behaviour, which is safe (just not .gitignore-aware).
     """
     normalized = _normalize_glob_pattern(pattern)
     if normalized in {"*", "**", "**/*", "./*", "./**", "./**/*"}:
@@ -413,7 +419,12 @@ def grep_search_handler(params: GrepSearchParams) -> str:
 
 def _grep_search_python_fallback(params: GrepSearchParams) -> str:
     """Pure Python grep implementation (when ripgrep not available)."""
-    # Compile pattern
+    # Always compile as a regex, even when _is_literal_query(query) is True.
+    # Unlike the ripgrep path (which adds -F for literal queries), re.compile
+    # of a no-special-char string is semantically identical to a fixed-string
+    # match, so the two paths agree on results today.  If _REGEX_SPECIAL_CHARS
+    # is ever changed so that some special chars are excluded (allowing `-F`
+    # for more queries), this fallback must be revisited to stay in sync.
     pattern = _compile_search_pattern(params.query, params.case_sensitive)
     if isinstance(pattern, str):
         # Compilation failed, return error message

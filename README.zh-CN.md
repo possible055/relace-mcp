@@ -158,6 +158,8 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 
 `agentic_retrieval` 可以先使用 stale semantic hints，再回到 live code 做确认；它不会隐式执行 `cloud_sync`。如果你要主动刷新 cloud index，请显式调用 `cloud_sync`。
 
+本地 live exploration 会持续保留 `.gitignore` 过滤；当查询不需要 regex 特性时，exact-text probes 会自动走更快的 literal search path。
+
 详细参数请参见 [docs/tools.zh-CN.md](docs/tools.zh-CN.md)。
 
 ## 语言支持
