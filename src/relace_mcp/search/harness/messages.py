@@ -4,7 +4,6 @@ from typing import Any
 
 from .._impl import (
     MAX_BASH_CHARS,
-    MAX_GLOB_CHARS,
     MAX_GREP_SEARCH_CHARS,
     MAX_VIEW_DIRECTORY_CHARS,
     MAX_VIEW_FILE_CHARS,
@@ -155,10 +154,6 @@ class MessageHistoryMixin:
             "grep_search": (
                 MAX_GREP_SEARCH_CHARS,
                 "For more matches, use more specific query or include_pattern.",
-            ),
-            "glob": (
-                MAX_GLOB_CHARS,
-                "To limit output, narrow the pattern, provide a narrower path, or reduce max_results.",
             ),
             "bash": (
                 MAX_BASH_CHARS,

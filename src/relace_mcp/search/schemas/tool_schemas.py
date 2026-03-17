@@ -105,51 +105,53 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "glob",
-            "strict": True,
-            "description": (
-                "Find files by glob pattern.\n\n"
-                "Examples: '**/*.py' (all Python), 'src/**/*.ts' (TS under src).\n"
-                "Returns empty list if no matches."
-            ),
-            "parameters": {
-                "type": "object",
-                "required": ["pattern"],
-                "properties": {
-                    "pattern": {
-                        "type": "string",
-                        "description": "Glob pattern (no leading '/'). Use '**' to match across directories.",
-                    },
-                    "path": {
-                        "type": "string",
-                        "default": "/repo",
-                        "description": (
-                            "Base directory for search. '/repo' is substituted with actual repo root at runtime. "
-                            "Use absolute paths like '/repo/src' to scope search."
-                        ),
-                    },
-                    "include_hidden": {
-                        "type": "boolean",
-                        "default": False,
-                        "description": (
-                            "Include dot-prefixed files/directories (default: false). "
-                            "Performance prune directories (for example node_modules/dist/target) "
-                            "may still be skipped."
-                        ),
-                    },
-                    "max_results": {
-                        "type": "integer",
-                        "default": 200,
-                        "description": "Max matches to return (default: 200).",
-                    },
-                },
-                "additionalProperties": False,
-            },
-        },
-    },
+    # --- Disabled glob tool (pending removal) ---
+    # {
+    #     "type": "function",
+    #     "function": {
+    #         "name": "glob",
+    #         "strict": True,
+    #         "description": (
+    #             "Find files by glob pattern.\n\n"
+    #             "Examples: '**/*.py' (all Python), 'src/**/*.ts' (TS under src).\n"
+    #             "Returns empty list if no matches."
+    #         ),
+    #         "parameters": {
+    #             "type": "object",
+    #             "required": ["pattern"],
+    #             "properties": {
+    #                 "pattern": {
+    #                     "type": "string",
+    #                     "description": "Glob pattern (no leading '/'). Use '**' to match across directories.",
+    #                 },
+    #                 "path": {
+    #                     "type": "string",
+    #                     "default": "/repo",
+    #                     "description": (
+    #                         "Base directory for search. '/repo' is substituted with actual repo root at runtime. "
+    #                         "Use absolute paths like '/repo/src' to scope search."
+    #                     ),
+    #                 },
+    #                 "include_hidden": {
+    #                     "type": "boolean",
+    #                     "default": False,
+    #                     "description": (
+    #                         "Include dot-prefixed files/directories (default: false). "
+    #                         "Performance prune directories (for example node_modules/dist/target) "
+    #                         "may still be skipped."
+    #                     ),
+    #                 },
+    #                 "max_results": {
+    #                     "type": "integer",
+    #                     "default": 200,
+    #                     "description": "Max matches to return (default: 200).",
+    #                 },
+    #             },
+    #             "additionalProperties": False,
+    #         },
+    #     },
+    # },
+    # --- End disabled glob tool ---
     {
         "type": "function",
         "function": {
@@ -201,8 +203,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "strict": True,
             "description": (
                 "Execute read-only bash command.\n\n"
-                "Allowed: find, ls, head, tail, wc, file, git log.\n"
-                "Forbidden: rm, mv, cp, curl, wget, sudo, pipes (|), redirects (>)."
+                "Allowed commands: cat, diff, echo, file, find, git (blame/diff/grep/log/ls-files/show/status), grep, head, jq, ls, rg, tail, true, wc.\n"
+                "Pipes are allowed. Redirects, command substitution, destructive/network/privileged commands, and paths outside /repo are blocked."
             ),
             "parameters": {
                 "type": "object",
@@ -413,7 +415,6 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
         "view_file",
         "view_directory",
         "grep_search",
-        "glob",
         "report_back",
     }
 
@@ -444,7 +445,6 @@ _DEFAULT_TOOL_NAMES = {
     "view_file",
     "view_directory",
     "grep_search",
-    "glob",
     "report_back",
 }
 

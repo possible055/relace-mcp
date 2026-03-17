@@ -391,6 +391,11 @@ export SEARCH_PARALLEL_TOOL_CALLS=1
 }
 ```
 
+启用后，`bash` 仍遵循当前的最小安全原则：
+- 允许的命令：`cat`、`diff`、`echo`、`file`、`find`、`git`（`blame`、`diff`、`grep`、`log`、`ls-files`、`show`、`status`）、`grep`、`head`、`jq`、`ls`、`rg`、`tail`、`true`、`wc`
+- 允许使用 pipe
+- 禁止 redirects、command substitution、destructive/network/privileged commands，以及 `/repo` 之外的路径
+
 ---
 
 ## 远程部署 (Streamable HTTP)

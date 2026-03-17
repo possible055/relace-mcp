@@ -391,6 +391,11 @@ The `bash` tool is disabled by default. To enable on Unix:
 }
 ```
 
+When enabled, `bash` stays on the current minimum-security model:
+- Allowed commands: `cat`, `diff`, `echo`, `file`, `find`, `git` (`blame`, `diff`, `grep`, `log`, `ls-files`, `show`, `status`), `grep`, `head`, `jq`, `ls`, `rg`, `tail`, `true`, `wc`
+- Pipes are allowed
+- Redirects, command substitution, destructive/network/privileged commands, and paths outside `/repo` are blocked
+
 ---
 
 ## Remote Deployment (Streamable HTTP)

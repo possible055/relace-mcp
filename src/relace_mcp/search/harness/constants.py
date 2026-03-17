@@ -8,7 +8,6 @@ PARALLEL_SAFE_TOOLS = frozenset(
         "view_file",
         "view_directory",
         "grep_search",
-        "glob",
         "find_symbol",
         "search_symbol",
     }

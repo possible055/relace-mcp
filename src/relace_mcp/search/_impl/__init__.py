@@ -24,7 +24,8 @@ from .constants import (
     MAX_VIEW_FILE_CHARS,
 )
 from .context import estimate_context_size, truncate_for_context
-from .glob import glob_handler
+
+# from .glob import glob_handler  # Disabled glob tool (pending removal)
 from .grep_search import grep_search_handler
 from .lsp import (
     # --- Disabled LSP tools (kept for future re-enablement) ---
@@ -74,7 +75,7 @@ __all__ = [
     "is_blocked_command",
     "bash_handler",
     "estimate_context_size",
-    "glob_handler",
+    # "glob_handler",  # Disabled glob tool (pending removal)
     "grep_search_handler",
     # "get_type_handler",
     # "list_symbols_handler",

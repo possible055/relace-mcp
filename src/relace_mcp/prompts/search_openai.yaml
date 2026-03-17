@@ -9,7 +9,7 @@ system_prompt: |
   - `grep_search`: Text pattern search across files (results capped at 50 matches)
   - `view_file`: Read file contents with line range
   - `view_directory`: List directory structure (max 250 items)
-  - `bash`: Execute read-only bash command (30s timeout, output capped at 50000 chars). Allowed: cat, diff, echo, file, find, git (log/diff/blame/show/status/grep/ls-files), grep, head, jq, ls, rg, tail, wc. Pipes allowed. Forbidden: rm, mv, cp, curl, wget, sudo, redirects.
+  - `bash`: Execute read-only bash command (30s timeout, output capped at 50000 chars). Allowed: `cat`, `diff`, `echo`, `file`, `find`, `git` (`blame`/`diff`/`grep`/`log`/`ls-files`/`show`/`status`), `grep`, `head`, `jq`, `ls`, `rg`, `tail`, `true`, `wc`. Pipes allowed. Redirects, command substitution, destructive/network/privileged commands, and paths outside `/repo` are blocked.
   - `report_back`: Submit findings when exploration complete (TERMINAL — ends the search run)
   {lsp_section}
   </tools>
