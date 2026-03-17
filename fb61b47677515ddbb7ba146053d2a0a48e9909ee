@@ -1,0 +1,57 @@
+benchmark/datasets/loader.py
+  f65ae51e76a4e291 6-7
+benchmark/cli/run.py
+  f65ae51e76a4e291 11,16,18
+benchmark/cli/build_locbench.py
+  f65ae51e76a4e291 10-11
+benchmark/__init__.py
+  f65ae51e76a4e291 8,12
+benchmark/cli/curate.py
+  f65ae51e76a4e291 8
+benchmark/cli/grid.py
+  f65ae51e76a4e291 13-14
+benchmark/cli/trace.py
+  f65ae51e76a4e291 18
+benchmark/cli/validate.py
+  f65ae51e76a4e291 9
+benchmark/runner/experiment_paths.py
+  f65ae51e76a4e291 1-131
+benchmark/runner/executor.py
+  f65ae51e76a4e291 16
+benchmark/tests/test_grid_cli.py
+  f65ae51e76a4e291 9
+benchmark/cli/report.py
+  f65ae51e76a4e291 7
+benchmark/runner/trace_recorder.py
+  f65ae51e76a4e291 13
+docs/benchmark.md
+  f65ae51e76a4e291 223-224,229-231,244
+benchmark/cli/analyze.py
+  f65ae51e76a4e291 6
+benchmark/runner/__init__.py
+  f65ae51e76a4e291 5
+benchmark/tests/test_experiment_paths.py
+  f65ae51e76a4e291 4
+docs/benchmark.zh-CN.md
+  f65ae51e76a4e291 223-224,229-231,244
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.12",
+  "base_commit_sha": "fb61b47677515ddbb7ba146053d2a0a48e9909ee",
+  "prompts": {
+    "f65ae51e76a4e291": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019cfa6a-f875-71c1-b651-54c11c1298f1",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 165,
+      "total_deletions": 236,
+      "accepted_lines": 164,
+      "overriden_lines": 0
+    }
+  }
+}
