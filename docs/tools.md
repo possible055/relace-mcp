@@ -87,8 +87,7 @@ Search the codebase and return relevant files and line ranges. Uses an agentic l
 
 ## `index_status`
 
-Inspect cloud/local indexing readiness. Automatically schedules a background reindex
-for local backends (Codanna/ChunkHound) when their index is stale or missing.
+Inspect cloud/local indexing readiness. Automatically schedules a background reindex for local backends (Codanna/ChunkHound) when their index is stale or missing.
 
 This tool takes no parameters.
 

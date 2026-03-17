@@ -34,7 +34,7 @@
 
 > **注意：** 仅当**同时满足**以下条件时可省略 `RELACE_API_KEY`：(1) `APPLY_PROVIDER` 和 `SEARCH_PROVIDER` 均使用非 Relace 提供商，且 (2) `RELACE_CLOUD_TOOLS=false`。否则必须设置。
 
-> **警告：** `MCP_LOGGING=full` 會將**所有**內容以明文寫入磁碟，包括原始碼片段、LLM 指令、工具引數、搜尋查詢、命令輸出及含堆疊追蹤的錯誤訊息。請僅在可信環境除錯時使用 `full` 模式。`safe` 模式會將敏感欄位值替換為 `[REDACTED len=<N> sha256=<HEX12>]` 佔位符——sha256 前綴可在不暴露內容的情況下跨事件關聯被遮蔽的值。
+> **警告：** `MCP_LOGGING=full` 会将**所有**内容以明文写入磁盘，包括源码片段、LLM 指令、工具参数、搜索查询、命令输出及含堆栈追踪的错误信息。请仅在可信环境调试时使用 `full` 模式。`safe` 模式会将敏感字段值替换为 `[REDACTED len=<N> sha256=<HEX12>]` 占位符——sha256 前缀可在不暴露内容的情况下跨事件关联被遮蔽的值。
 
 ### Fast Apply
 

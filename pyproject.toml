@@ -114,6 +114,13 @@ disable_error_code = ["misc"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+addopts = "--strict-markers --import-mode=importlib"
+markers = [
+  "unit: unit-level product tests",
+  "integration: integration-level product tests",
+  "contract: contract-level product tests",
+  "smoke: smoke-level product tests",
+]
 
 
 [tool.interrogate]
