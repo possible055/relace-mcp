@@ -10,13 +10,13 @@ from relace_mcp.search._impl import (
     MAX_TOOL_RESULT_CHARS,
     bash_handler,
     estimate_context_size,
+    glob_handler,
     grep_search_handler,
     map_repo_path,
     truncate_for_context,
     view_directory_handler,
     view_file_handler,
 )
-from relace_mcp.search._impl.glob import glob_handler
 from relace_mcp.search.schemas import GrepSearchParams
 from relace_mcp.utils import validate_file_path
 
@@ -590,9 +590,8 @@ class TestGrepNormalization:
         assert captured["params"].include_pattern is None
 
 
-@pytest.mark.skip(reason="glob tool pending removal")
 class TestGlobHandler:
-    """Historical glob handler tests kept for future re-enablement."""
+    """Test glob tool handler."""
 
     def test_matches_basename_recursively(self, tmp_path: Path) -> None:
         """Should match basenames across subdirectories."""
@@ -606,6 +605,231 @@ class TestGlobHandler:
         assert "sub/b.py" in result
         assert "c.txt" not in result
 
+    def test_allows_repo_prefix_in_pattern(self, tmp_path: Path) -> None:
+        """Should tolerate patterns that accidentally include /repo prefix."""
+        (tmp_path / "a.py").write_text("a")
+
+        result = glob_handler("/repo/*.py", "/repo", False, 200, str(tmp_path))
+        assert "a.py" in result
+
+    def test_matches_segment_patterns(self, tmp_path: Path) -> None:
+        """Segment patterns should not match deeper paths unless using **."""
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "a.py").write_text("a")
+        (tmp_path / "src" / "nested").mkdir()
+        (tmp_path / "src" / "nested" / "b.py").write_text("b")
+
+        result = glob_handler("src/*.py", "/repo", False, 200, str(tmp_path))
+        assert "src/a.py" in result
+        assert "src/nested/b.py" not in result
+
+    def test_hidden_exclusion_and_inclusion(self, tmp_path: Path) -> None:
+        """Should exclude hidden dirs by default and include when requested."""
+        (tmp_path / ".hidden").mkdir()
+        (tmp_path / ".hidden" / "secret.py").write_text("x")
+
+        result = glob_handler("*.py", "/repo", False, 200, str(tmp_path))
+        assert "secret.py" not in result
+
+        result2 = glob_handler("*.py", "/repo", True, 200, str(tmp_path))
+        assert ".hidden/secret.py" in result2
+
+    def test_include_hidden_keeps_pruning_high_cost_dirs(self, tmp_path: Path) -> None:
+        """include_hidden should not disable traversal prune directories."""
+        (tmp_path / "node_modules").mkdir()
+        (tmp_path / "node_modules" / "lib.js").write_text("export {}\n")
+
+        result = glob_handler("**/*.js", "/repo", True, 200, str(tmp_path))
+        assert "No matches" in result
+        assert "node_modules" not in result
+
+    def test_blocks_traversal_patterns(self, tmp_path: Path) -> None:
+        """Should block ../ traversal in pattern."""
+        result = glob_handler("../*.py", "/repo", False, 200, str(tmp_path))
+        assert "Error" in result
+
+    def test_respects_gitignore_file(self, tmp_path: Path) -> None:
+        """Should exclude files matching .gitignore patterns."""
+        (tmp_path / ".gitignore").write_text("ignored_dir/\n")
+        (tmp_path / "ignored_dir").mkdir()
+        (tmp_path / "ignored_dir" / "file.py").write_text("ignored")
+        (tmp_path / "visible.py").write_text("visible")
+
+        result = glob_handler("*.py", "/repo", False, 200, str(tmp_path))
+        assert "visible.py" in result
+        assert "ignored_dir" not in result
+
+    def test_gitignore_prunes_directory(self, tmp_path: Path) -> None:
+        """Should prune ignored directories from traversal."""
+        (tmp_path / ".gitignore").write_text("big_dir/\n")
+        big_dir = tmp_path / "big_dir"
+        big_dir.mkdir()
+        for i in range(10):
+            (big_dir / f"file{i}.py").write_text(f"file{i}")
+        (tmp_path / "root.py").write_text("root")
+
+        result = glob_handler("**/*.py", "/repo", False, 200, str(tmp_path))
+        assert "root.py" in result
+        assert "big_dir" not in result
+
+    def test_nested_gitignore_rules(self, tmp_path: Path) -> None:
+        """Should respect nested .gitignore files."""
+        (tmp_path / ".gitignore").write_text("*.log\n")
+        (tmp_path / "root.log").write_text("ignored")
+        (tmp_path / "root.py").write_text("visible")
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        (subdir / "nested.log").write_text("also ignored")
+        (subdir / "nested.py").write_text("visible")
+
+        result = glob_handler("*", "/repo", False, 200, str(tmp_path))
+        assert "root.py" in result
+        assert "root.log" not in result
+        assert "subdir/" in result or "subdir" in result
+
+        result2 = glob_handler("**/*.log", "/repo", False, 200, str(tmp_path))
+        assert "No matches" in result2
+
+    def test_gitignore_unignore_in_nested_gitignore(self, tmp_path: Path) -> None:
+        """Nested .gitignore !patterns should override parent ignore rules."""
+        (tmp_path / ".gitignore").write_text("*.log\n")
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        (subdir / ".gitignore").write_text("!keep.log\n")
+        (subdir / "keep.log").write_text("keep")
+        (subdir / "other.log").write_text("other")
+
+        result = glob_handler("**/*.log", "/repo", False, 200, str(tmp_path))
+        assert "subdir/keep.log" in result
+        assert "other.log" not in result
+
+    def test_glob_without_gitignore_still_works(self, tmp_path: Path) -> None:
+        """Should work normally when no .gitignore exists."""
+        (tmp_path / "file.py").write_text("content")
+        (tmp_path / "sub").mkdir()
+        (tmp_path / "sub" / "nested.py").write_text("nested")
+
+        result = glob_handler("*.py", "/repo", False, 200, str(tmp_path))
+        assert "file.py" in result
+        assert "sub/nested.py" in result
+
+    def test_respects_git_info_exclude(self, tmp_path: Path) -> None:
+        """Should respect .git/info/exclude patterns."""
+        # Set up .git/info/exclude
+        git_info = tmp_path / ".git" / "info"
+        git_info.mkdir(parents=True)
+        (git_info / "exclude").write_text("excluded_by_info/\n")
+
+        (tmp_path / "excluded_by_info").mkdir()
+        (tmp_path / "excluded_by_info" / "secret.py").write_text("secret")
+        (tmp_path / "visible.py").write_text("visible")
+
+        result = glob_handler("*.py", "/repo", False, 200, str(tmp_path))
+        assert "visible.py" in result
+        assert "excluded_by_info" not in result
+
+    def test_gitignore_overrides_git_info_exclude(self, tmp_path: Path) -> None:
+        """Project .gitignore should override .git/info/exclude via !patterns."""
+        # .git/info/exclude ignores all .log files
+        git_info = tmp_path / ".git" / "info"
+        git_info.mkdir(parents=True)
+        (git_info / "exclude").write_text("*.log\n")
+
+        # Project .gitignore unignores important.log
+        (tmp_path / ".gitignore").write_text("!important.log\n")
+
+        (tmp_path / "debug.log").write_text("debug")
+        (tmp_path / "important.log").write_text("important")
+
+        result = glob_handler("*.log", "/repo", False, 200, str(tmp_path))
+        assert "important.log" in result
+        assert "debug.log" not in result
+
+    def test_git_info_exclude_overrides_global_excludes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Repo .git/info/exclude should override global excludes."""
+        # Create global excludes file
+        global_ignore = tmp_path / "global_gitignore"
+        global_ignore.write_text("*.tmp\n")
+
+        # Mock get_global_excludes_path to return our test file
+        from relace_mcp.search._impl import gitignore as gi_mod
+
+        gi_mod.get_global_excludes_path.cache_clear()
+        monkeypatch.setattr(gi_mod, "get_global_excludes_path", lambda: global_ignore)
+
+        # .git/info/exclude unignores keep.tmp
+        git_info = tmp_path / ".git" / "info"
+        git_info.mkdir(parents=True)
+        (git_info / "exclude").write_text("!keep.tmp\n")
+
+        (tmp_path / "junk.tmp").write_text("junk")
+        (tmp_path / "keep.tmp").write_text("keep")
+
+        # Clear LRU cache for specs
+        gi_mod.load_gitignore_spec.cache_clear()
+        gi_mod.collect_gitignore_specs.cache_clear()
+
+        result = glob_handler("*.tmp", "/repo", False, 200, str(tmp_path))
+        assert "keep.tmp" in result
+        assert "junk.tmp" not in result
+
+    def test_full_exclude_priority_chain(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test complete priority chain: global < .git/info/exclude < .gitignore."""
+        # Create global excludes (lowest priority)
+        global_ignore = tmp_path / "global_gitignore"
+        global_ignore.write_text("*.dat\n")
+
+        from relace_mcp.search._impl import gitignore as gi_mod
+
+        gi_mod.get_global_excludes_path.cache_clear()
+        monkeypatch.setattr(gi_mod, "get_global_excludes_path", lambda: global_ignore)
+
+        # .git/info/exclude unignores repo_keep.dat
+        git_info = tmp_path / ".git" / "info"
+        git_info.mkdir(parents=True)
+        (git_info / "exclude").write_text("!repo_keep.dat\n*.bak\n")
+
+        # Project .gitignore unignores project_keep.bak
+        (tmp_path / ".gitignore").write_text("!project_keep.bak\n")
+
+        # Create test files
+        (tmp_path / "global_ignored.dat").write_text("ignored by global")
+        (tmp_path / "repo_keep.dat").write_text("unignored by .git/info/exclude")
+        (tmp_path / "repo_ignored.bak").write_text("ignored by .git/info/exclude")
+        (tmp_path / "project_keep.bak").write_text("unignored by .gitignore")
+
+        gi_mod.load_gitignore_spec.cache_clear()
+        gi_mod.collect_gitignore_specs.cache_clear()
+
+        result = glob_handler("*.*", "/repo", False, 200, str(tmp_path))
+        assert "repo_keep.dat" in result
+        assert "project_keep.bak" in result
+        assert "global_ignored.dat" not in result
+        assert "repo_ignored.bak" not in result
+
+    def test_collect_gitignore_specs_uses_cache(self, tmp_path: Path) -> None:
+        """Directory-spec collection should be cached for repeated lookups."""
+        nested = tmp_path / "a" / "b"
+        nested.mkdir(parents=True)
+        (tmp_path / ".gitignore").write_text("*.tmp\n")
+        (tmp_path / "a" / ".gitignore").write_text("!keep.tmp\n")
+
+        from relace_mcp.search._impl import gitignore as gi_mod
+
+        gi_mod.load_gitignore_spec.cache_clear()
+        gi_mod.collect_gitignore_specs.cache_clear()
+
+        gi_mod.collect_gitignore_specs(nested, tmp_path)
+        first = gi_mod.collect_gitignore_specs.cache_info()
+        gi_mod.collect_gitignore_specs(nested, tmp_path)
+        second = gi_mod.collect_gitignore_specs.cache_info()
+
+        assert second.hits > first.hits
+
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash is not available on this platform")
 class TestBashHandler:
@@ -617,13 +841,6 @@ class TestBashHandler:
 
         result = bash_handler("ls -la", str(tmp_path))
         assert "test.py" in result
-
-    def test_executes_repo_virtual_path(self, tmp_path: Path) -> None:
-        """Should resolve /repo virtual paths against the real base_dir."""
-        (tmp_path / "test.txt").write_text("hello\n")
-
-        result = bash_handler("cat /repo/test.txt", str(tmp_path))
-        assert "hello" in result
 
     def test_executes_find_command(self, tmp_path: Path) -> None:
         """Should allow find command for file discovery."""

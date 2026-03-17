@@ -1,3 +1,5 @@
+import os
+
 from ...config.fs_policy import SEARCH_TRAVERSAL_PRUNE_DIRS
 
 # Directory listing limit
