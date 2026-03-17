@@ -3,7 +3,8 @@ import random
 from collections import defaultdict
 from pathlib import Path
 
-from ..config import DEFAULT_LOCBENCH_PATH, EXCLUDED_REPOS, get_benchmark_dir
+from .._config.paths import DEFAULT_LOCBENCH_PATH, get_benchmark_dir
+from .._config.settings import EXCLUDED_REPOS
 from ..schemas import ContextEntry, DatasetCase, GroundTruthEntry, SolvabilityInfo
 
 

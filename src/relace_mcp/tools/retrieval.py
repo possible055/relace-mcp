@@ -81,11 +81,28 @@ def _schedule_local_refresh(base_dir: str, backend: str) -> bool:
     return False
 
 
+def _compact_semantic_hints(
+    semantic_results: list[dict[str, Any]], max_hints: int
+) -> list[dict[str, Any]]:
+    hints: list[dict[str, Any]] = []
+    for result in semantic_results[:max_hints]:
+        filename = result.get("filename") or result.get("file") or ""
+        if not isinstance(filename, str) or not filename.strip():
+            continue
+        raw_score = result.get("score", 0.0)
+        try:
+            score = float(raw_score)
+        except (TypeError, ValueError):
+            score = 0.0
+        hints.append({"filename": filename, "score": score})
+    return hints
+
+
 def build_semantic_hints_section(semantic_results: list[dict[str, Any]], max_hints: int = 8) -> str:
     if not semantic_results:
         return ""
 
-    hints = semantic_results[:max_hints]
+    hints = _compact_semantic_hints(semantic_results, max_hints)
     lines = [
         "<semantic_hints>",
         "Files identified by semantic retrieval (prioritize these):",
@@ -437,8 +454,11 @@ async def agentic_retrieval_logic(
         on_progress=on_progress,
     )
 
+    compact_semantic_hints = _compact_semantic_hints(semantic_results, max_hints)
+
     result["trace_id"] = trace_id
-    result["semantic_hints_used"] = len(semantic_results[:max_hints]) if semantic_results else 0
+    result["semantic_hints_used"] = len(compact_semantic_hints)
+    result["semantic_hints"] = compact_semantic_hints
     result["retrieval_backend"] = backend
     result["hint_policy"] = hint_policy
     result["hints_index_freshness"] = hints_index_freshness

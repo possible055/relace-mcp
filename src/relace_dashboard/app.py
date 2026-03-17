@@ -267,7 +267,16 @@ class LogViewerApp(App[None]):
             turns = event.get("turns_used", "?")
             files = event.get("files_found", 0)
             latency = event.get("total_latency_ms", 0)
+            hints = event.get("semantic_hints_used", 0)
+            retrieval_backend = event.get("retrieval_backend")
+            freshness = event.get("hints_index_freshness")
             line.append(f" turns:{turns} files:{files}", style="green")
+            if hints:
+                line.append(f" hints:{hints}", style="cyan")
+            if retrieval_backend:
+                line.append(f" backend:{retrieval_backend}", style="cyan")
+            if freshness:
+                line.append(f" fresh:{freshness}", style="dim cyan")
             line.append(f" ({latency / 1000.0:.3f}s)", style="dim")
         elif kind == "search_error":
             error = event.get("error", "")
