@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from relace_mcp.apply.core import _get_path_lock, _path_locks, apply_file_logic
 from relace_mcp.clients.apply import ApplyLLMClient, ApplyResponse
-from relace_mcp.tools.apply.core import _get_path_lock, _path_locks, apply_file_logic
 
 
 @pytest.fixture(autouse=True)
@@ -222,7 +222,7 @@ class TestSemanticCheckGate:
         backend = _make_mock_backend(merged)
         edit_snippet = "Header line that is unique\nFooter line that is also unique\nvalue = 2\n"
 
-        with patch("relace_mcp.tools.apply.core.APPLY_SEMANTIC_CHECK", True):
+        with patch("relace_mcp.apply.core.APPLY_SEMANTIC_CHECK", True):
             result = await apply_file_logic(backend, str(source), edit_snippet, None, str(tmp_path))
 
         assert result["status"] == "error"

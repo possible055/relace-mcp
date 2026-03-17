@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from relace_mcp.tools.search._impl import (
+from relace_mcp.search._impl import (
     bash_handler,
     glob_handler,
     grep_search_handler,
     view_file_handler,
 )
-from relace_mcp.tools.search.schemas.types import GrepSearchParams
+from relace_mcp.search.schemas.types import GrepSearchParams
 
 
 class TestGrepSearchIntegration:

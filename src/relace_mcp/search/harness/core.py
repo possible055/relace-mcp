@@ -8,10 +8,10 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ....clients.search import SearchLLMClient
+    from ...clients.search import SearchLLMClient
 
-from ....config import RelaceConfig, load_prompt_file
-from ....config.settings import RELACE_PROVIDER, SEARCH_MAX_TURNS, SEARCH_TIMEOUT_SECONDS
+from ...config import RelaceConfig, load_prompt_file
+from ...config.settings import RELACE_PROVIDER, SEARCH_MAX_TURNS, SEARCH_TIMEOUT_SECONDS
 from .._impl import estimate_context_size
 from ..logging import (
     log_search_complete,

@@ -35,12 +35,12 @@ async def test_encoding_detection_runs_after_resolve_base_dir(monkeypatch, tmp_p
     def _noop_bg_codanna_index(_file_path: str, _base_dir: str) -> None:
         return
 
-    monkeypatch.setattr("relace_mcp.tools.resolve_base_dir", fake_resolve_base_dir)
+    monkeypatch.setattr("relace_mcp.tools.mcp_apply.resolve_base_dir", fake_resolve_base_dir)
     monkeypatch.setattr(
-        "relace_mcp.tools.apply.encoding.detect_project_encoding",
+        "relace_mcp.encoding.detect_project_encoding",
         fake_detect_project_encoding,
     )
-    monkeypatch.setattr("relace_mcp.tools.apply.apply_file_logic", fake_apply_file_logic)
+    monkeypatch.setattr("relace_mcp.tools.mcp_apply.apply_file_logic", fake_apply_file_logic)
     monkeypatch.setattr(
         "relace_mcp.repo.backends.schedule_bg_chunkhound_index",
         _noop_bg_chunkhound_index,

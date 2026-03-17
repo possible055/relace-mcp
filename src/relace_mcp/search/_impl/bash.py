@@ -3,7 +3,7 @@ import re
 import shutil
 import subprocess  # nosec B404
 
-from ....utils import resolve_repo_path
+from ...utils import resolve_repo_path
 from .bash_security import is_blocked_command
 from .constants import BASH_MAX_OUTPUT_CHARS, BASH_TIMEOUT_SECONDS
 

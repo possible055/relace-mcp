@@ -349,8 +349,6 @@ class BenchmarkRunner:
         effective_config = replace(self.config, base_dir=str(repo_path))
         client = SearchLLMClient(effective_config)
 
-        if self.trace and self.trace_recorder is None:
-            raise RuntimeError("Trace recorder not initialized")
         if self.trace_recorder is not None:
             self.trace_recorder.write_search_start(
                 case_id=case.id,
@@ -364,9 +362,10 @@ class BenchmarkRunner:
         if self.search_mode == "indexed":
             import asyncio
 
+            from relace_mcp.tools.retrieval import agentic_retrieval_logic
+
             from relace_mcp.clients import RelaceRepoClient
             from relace_mcp.config.settings import RETRIEVAL_BACKEND
-            from relace_mcp.tools.retrieval import agentic_retrieval_logic
 
             from .preflight import check_retrieval_backend
 

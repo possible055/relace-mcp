@@ -1,9 +1,9 @@
 from collections.abc import Sequence
 from pathlib import Path
 
-from ....config.settings import MAX_FILE_SIZE_BYTES
-from ....encoding import read_text_best_effort
-from ....utils import validate_file_path
+from ...config.settings import MAX_FILE_SIZE_BYTES
+from ...encoding import read_text_best_effort
+from ...utils import validate_file_path
 from .paths import map_repo_path
 
 

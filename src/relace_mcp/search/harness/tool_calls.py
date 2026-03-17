@@ -4,8 +4,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any
 
-from ....config import settings
-from ....observability import log_trace_event
+from ...config import settings
+from ...observability import log_trace_event
 from .._impl import (
     # --- Disabled LSP tools (kept for future re-enablement) ---
     # CallGraphParams,
@@ -32,7 +32,7 @@ from .constants import MAX_PARALLEL_WORKERS, PARALLEL_SAFE_TOOLS
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from ....config import RelaceConfig
+    from ...config import RelaceConfig
 
 
 class ToolCallsMixin:

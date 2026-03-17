@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from relace_mcp.tools.search.harness.observed import ObservedFilesMixin
+from relace_mcp.search.harness.observed import ObservedFilesMixin
 
 
 @dataclass

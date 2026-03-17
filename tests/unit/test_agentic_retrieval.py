@@ -6,7 +6,7 @@ import pytest
 from relace_mcp.clients import RelaceRepoClient, SearchLLMClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.repo.freshness import FreshnessStatus
-from relace_mcp.tools.retrieval import agentic_retrieval_logic, build_semantic_hints_section
+from relace_mcp.search.retrieval import agentic_retrieval_logic, build_semantic_hints_section
 
 
 class TestBuildSemanticHintsSection:
@@ -75,11 +75,11 @@ class TestAgenticRetrievalLogic:
     ) -> None:
         with (
             patch(
-                "relace_mcp.tools.retrieval.classify_cloud_index_freshness",
+                "relace_mcp.search.retrieval.classify_cloud_index_freshness",
                 return_value=FreshnessStatus("fresh", True, False, "up_to_date"),
             ),
-            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.search.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.search.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.return_value = {"error": "Network error", "results": []}
             mock_harness_cls.return_value = mock_harness
@@ -108,11 +108,11 @@ class TestAgenticRetrievalLogic:
     ) -> None:
         with (
             patch(
-                "relace_mcp.tools.retrieval.classify_cloud_index_freshness",
+                "relace_mcp.search.retrieval.classify_cloud_index_freshness",
                 return_value=FreshnessStatus("fresh", True, False, "up_to_date"),
             ),
-            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.search.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.search.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.return_value = {
                 "results": [
@@ -158,11 +158,11 @@ class TestAgenticRetrievalLogic:
     ) -> None:
         with (
             patch(
-                "relace_mcp.tools.retrieval.classify_cloud_index_freshness",
+                "relace_mcp.search.retrieval.classify_cloud_index_freshness",
                 return_value=FreshnessStatus("fresh", True, False, "up_to_date"),
             ),
-            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.search.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.search.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.return_value = {"results": [{"filename": "src/core.py", "score": 0.9}]}
             mock_harness = MagicMock()
@@ -200,11 +200,11 @@ class TestAgenticRetrievalLogic:
     ) -> None:
         with (
             patch(
-                "relace_mcp.tools.retrieval.classify_cloud_index_freshness",
+                "relace_mcp.search.retrieval.classify_cloud_index_freshness",
                 return_value=FreshnessStatus("stale", True, True, "git_head_changed"),
             ),
-            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.search.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.search.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_cloud.return_value = {"results": [{"filename": "src/core.py", "score": 0.9}]}
             mock_harness_cls.return_value = mock_harness
@@ -236,11 +236,11 @@ class TestAgenticRetrievalLogic:
         with (
             patch("relace_mcp.config.settings.RETRIEVAL_HINT_POLICY", "strict"),
             patch(
-                "relace_mcp.tools.retrieval.classify_cloud_index_freshness",
+                "relace_mcp.search.retrieval.classify_cloud_index_freshness",
                 return_value=FreshnessStatus("stale", True, True, "git_head_changed"),
             ),
-            patch("relace_mcp.tools.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.search.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.search.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_harness_cls.return_value = mock_harness
 
@@ -270,14 +270,14 @@ class TestAgenticRetrievalLogic:
         with (
             patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "chunkhound"),
             patch(
-                "relace_mcp.tools.retrieval.classify_local_index_freshness",
+                "relace_mcp.search.retrieval.classify_local_index_freshness",
                 return_value=FreshnessStatus("stale", True, True, "git_head_changed"),
             ),
-            patch("relace_mcp.tools.retrieval.chunkhound_search", return_value=[]),
-            patch("relace_mcp.tools.retrieval.schedule_bg_chunkhound_index") as mock_schedule,
-            patch("relace_mcp.tools.retrieval.shutil.which", return_value="/usr/bin/chunkhound"),
-            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.search.retrieval.chunkhound_search", return_value=[]),
+            patch("relace_mcp.search.retrieval.schedule_bg_chunkhound_index") as mock_schedule,
+            patch("relace_mcp.search.retrieval.shutil.which", return_value="/usr/bin/chunkhound"),
+            patch("relace_mcp.search.retrieval.is_backend_disabled", return_value=False),
+            patch("relace_mcp.search.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_harness_cls.return_value = mock_harness
 
@@ -303,14 +303,14 @@ class TestAgenticRetrievalLogic:
             patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "codanna"),
             patch("relace_mcp.config.settings.RETRIEVAL_HINT_POLICY", "strict"),
             patch(
-                "relace_mcp.tools.retrieval.classify_local_index_freshness",
+                "relace_mcp.search.retrieval.classify_local_index_freshness",
                 return_value=FreshnessStatus("missing", False, True, "index_dir_missing"),
             ),
-            patch("relace_mcp.tools.retrieval.schedule_bg_codanna_full_index") as mock_schedule,
-            patch("relace_mcp.tools.retrieval.codanna_search") as mock_search,
-            patch("relace_mcp.tools.retrieval.shutil.which", return_value="/usr/bin/codanna"),
-            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
-            patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.search.retrieval.schedule_bg_codanna_full_index") as mock_schedule,
+            patch("relace_mcp.search.retrieval.codanna_search") as mock_search,
+            patch("relace_mcp.search.retrieval.shutil.which", return_value="/usr/bin/codanna"),
+            patch("relace_mcp.search.retrieval.is_backend_disabled", return_value=False),
+            patch("relace_mcp.search.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
         ):
             mock_harness_cls.return_value = mock_harness
 
@@ -331,7 +331,7 @@ class TestAgenticRetrievalLogic:
         mock_harness: MagicMock,
         tmp_path: Path,
     ) -> None:
-        with patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls:
+        with patch("relace_mcp.search.retrieval.FastAgenticSearchHarness") as mock_harness_cls:
             mock_harness_cls.return_value = mock_harness
 
             result = await agentic_retrieval_logic(
@@ -347,12 +347,12 @@ class TestResolveAutoBackendNoHealthProbe:
     """_resolve_auto_backend must not block via health probes."""
 
     def test_no_check_backend_health_called(self, tmp_path: Path) -> None:
-        from relace_mcp.tools.retrieval import _auto_backend_cache, _resolve_auto_backend
+        from relace_mcp.search.retrieval import _auto_backend_cache, _resolve_auto_backend
 
         _auto_backend_cache.clear()
         with (
-            patch("relace_mcp.tools.retrieval.shutil.which", return_value=None),
-            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
+            patch("relace_mcp.search.retrieval.shutil.which", return_value=None),
+            patch("relace_mcp.search.retrieval.is_backend_disabled", return_value=False),
             patch("relace_mcp.repo.backends.check_backend_health") as mock_health,
         ):
             result = _resolve_auto_backend(str(tmp_path))
@@ -360,15 +360,15 @@ class TestResolveAutoBackendNoHealthProbe:
         mock_health.assert_not_called()
 
     def test_returns_first_available_cli(self, tmp_path: Path) -> None:
-        from relace_mcp.tools.retrieval import _auto_backend_cache, _resolve_auto_backend
+        from relace_mcp.search.retrieval import _auto_backend_cache, _resolve_auto_backend
 
         _auto_backend_cache.clear()
         with (
             patch(
-                "relace_mcp.tools.retrieval.shutil.which",
+                "relace_mcp.search.retrieval.shutil.which",
                 side_effect=lambda name: "/usr/bin/" + name if name == "chunkhound" else None,
             ),
-            patch("relace_mcp.tools.retrieval.is_backend_disabled", return_value=False),
+            patch("relace_mcp.search.retrieval.is_backend_disabled", return_value=False),
         ):
             result = _resolve_auto_backend(str(tmp_path))
         assert result == "chunkhound"

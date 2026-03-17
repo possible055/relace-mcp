@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-import relace_mcp.tools.search._impl.grep_search as grep_mod
+import relace_mcp.search._impl.grep_search as grep_mod
 from relace_mcp.encoding import set_project_encoding
-from relace_mcp.tools.search._impl import (
+from relace_mcp.search._impl import (
     MAX_TOOL_RESULT_CHARS,
     bash_handler,
     estimate_context_size,
@@ -17,7 +17,7 @@ from relace_mcp.tools.search._impl import (
     view_directory_handler,
     view_file_handler,
 )
-from relace_mcp.tools.search.schemas import GrepSearchParams
+from relace_mcp.search.schemas import GrepSearchParams
 from relace_mcp.utils import validate_file_path
 
 
@@ -335,7 +335,7 @@ class TestGrepSearchHandler:
             set_project_encoding("big5")
 
             # Force ripgrep path to fail so handler uses Python fallback deterministically.
-            import relace_mcp.tools.search._impl.grep_search as grep_mod
+            import relace_mcp.search._impl.grep_search as grep_mod
 
             def _raise(*_args: object, **_kwargs: object) -> object:
                 raise FileNotFoundError("rg unavailable")
@@ -366,7 +366,7 @@ class TestGrepSearchHandler:
         try:
             set_project_encoding("gbk")
 
-            import relace_mcp.tools.search._impl.grep_search as grep_mod
+            import relace_mcp.search._impl.grep_search as grep_mod
 
             def _raise(*_args: object, **_kwargs: object) -> object:
                 raise FileNotFoundError("rg unavailable")
@@ -398,7 +398,7 @@ class TestGrepSearchHandler:
             pytest.skip(f"symlink is not supported in this environment: {e!r}")
 
         # Force ripgrep path to fail so handler uses Python fallback deterministically.
-        import relace_mcp.tools.search._impl.grep_search as grep_mod
+        import relace_mcp.search._impl.grep_search as grep_mod
 
         def _raise(*_args: object, **_kwargs: object) -> object:
             raise FileNotFoundError("rg unavailable")
@@ -426,7 +426,7 @@ class TestGrepSearchHandler:
         (tmp_path / "visible.py").write_text("VISIBLE_PATTERN\n")
 
         # Force ripgrep path to fail so handler uses Python fallback.
-        import relace_mcp.tools.search._impl.grep_search as grep_mod
+        import relace_mcp.search._impl.grep_search as grep_mod
 
         def _raise(*_args: object, **_kwargs: object) -> object:
             raise FileNotFoundError("rg unavailable")
@@ -754,7 +754,7 @@ class TestGlobHandler:
         global_ignore.write_text("*.tmp\n")
 
         # Mock get_global_excludes_path to return our test file
-        from relace_mcp.tools.search._impl import gitignore as gi_mod
+        from relace_mcp.search._impl import gitignore as gi_mod
 
         gi_mod.get_global_excludes_path.cache_clear()
         monkeypatch.setattr(gi_mod, "get_global_excludes_path", lambda: global_ignore)
@@ -783,7 +783,7 @@ class TestGlobHandler:
         global_ignore = tmp_path / "global_gitignore"
         global_ignore.write_text("*.dat\n")
 
-        from relace_mcp.tools.search._impl import gitignore as gi_mod
+        from relace_mcp.search._impl import gitignore as gi_mod
 
         gi_mod.get_global_excludes_path.cache_clear()
         monkeypatch.setattr(gi_mod, "get_global_excludes_path", lambda: global_ignore)
@@ -818,7 +818,7 @@ class TestGlobHandler:
         (tmp_path / ".gitignore").write_text("*.tmp\n")
         (tmp_path / "a" / ".gitignore").write_text("!keep.tmp\n")
 
-        from relace_mcp.tools.search._impl import gitignore as gi_mod
+        from relace_mcp.search._impl import gitignore as gi_mod
 
         gi_mod.load_gitignore_spec.cache_clear()
         gi_mod.collect_gitignore_specs.cache_clear()

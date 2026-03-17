@@ -51,8 +51,7 @@ async def ensure_encoding_detected(
             return
 
         from ..config.settings import ENCODING_DETECTION_SAMPLE_LIMIT
-        from ..encoding import set_project_encoding
-        from .apply.encoding import detect_project_encoding
+        from ..encoding import detect_project_encoding, set_project_encoding
 
         if config.default_encoding:
             logger.debug("Using configured project encoding: %s", config.default_encoding)
@@ -86,8 +85,7 @@ async def ensure_encoding_detected(
         return
 
     from ..config.settings import ENCODING_DETECTION_SAMPLE_LIMIT
-    from ..encoding import set_project_encoding
-    from .apply.encoding import detect_project_encoding
+    from ..encoding import detect_project_encoding, set_project_encoding
 
     if config.default_encoding:
         logger.debug("Using configured project encoding: %s", config.default_encoding)

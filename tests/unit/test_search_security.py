@@ -1,4 +1,4 @@
-from relace_mcp.tools.search._impl import is_blocked_command as _is_blocked_command
+from relace_mcp.search._impl import is_blocked_command as _is_blocked_command
 
 DEFAULT_BASE_DIR = "/repo"
 
@@ -417,19 +417,19 @@ class TestRepoPathSubstringMatch:
     """The /repo path translation must not match partial prefixes like /repository."""
 
     def test_no_false_match_on_repository(self) -> None:
-        from relace_mcp.tools.search._impl.bash import _translate_repo_paths_in_command
+        from relace_mcp.search._impl.bash import _translate_repo_paths_in_command
 
         result = _translate_repo_paths_in_command("ls /repository/foo", "/tmp/base")
         assert "/repository/foo" in result
 
     def test_translates_repo_standalone(self) -> None:
-        from relace_mcp.tools.search._impl.bash import _translate_repo_paths_in_command
+        from relace_mcp.search._impl.bash import _translate_repo_paths_in_command
 
         result = _translate_repo_paths_in_command("ls /repo", "/tmp/base")
         assert "/tmp/base" in result
 
     def test_translates_repo_with_path(self) -> None:
-        from relace_mcp.tools.search._impl.bash import _translate_repo_paths_in_command
+        from relace_mcp.search._impl.bash import _translate_repo_paths_in_command
 
         result = _translate_repo_paths_in_command("ls /repo/src/file.py", "/tmp/base")
         assert "/tmp/base" in result

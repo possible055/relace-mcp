@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from functools import lru_cache
 from pathlib import Path
 
-from ....utils import validate_file_path
+from ...utils import validate_file_path
 from .constants import COMMON_IGNORED_DIRS, MAX_GLOB_DEPTH, MAX_GLOB_MATCHES
 from .gitignore import collect_gitignore_specs, is_ignored
 from .paths import map_repo_path

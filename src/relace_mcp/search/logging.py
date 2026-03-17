@@ -1,6 +1,6 @@
 from typing import Any
 
-from ...observability import log_event
+from ..observability import log_event
 
 # ============ Public API ============
 

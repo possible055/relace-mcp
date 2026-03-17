@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 import warnings
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -236,7 +236,7 @@ def main(
             dataset_id,
             search_mode,
             provider,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(UTC),
         )
         experiment_root = experiments_dir / experiment_name
 

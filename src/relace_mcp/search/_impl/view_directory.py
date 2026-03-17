@@ -2,7 +2,7 @@ from collections import deque
 from collections.abc import Sequence
 from pathlib import Path
 
-from ....utils import validate_file_path
+from ...utils import validate_file_path
 from .constants import COMMON_IGNORED_DIRS, MAX_DIR_ITEMS
 from .gitignore import GitIgnoreSpecs, collect_gitignore_specs, is_ignored
 from .paths import map_repo_path

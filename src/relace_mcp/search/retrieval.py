@@ -21,7 +21,7 @@ from ..repo.backends import (
 )
 from ..repo.cloud.search import cloud_search_logic
 from ..repo.freshness import classify_cloud_index_freshness, classify_local_index_freshness
-from .search import FastAgenticSearchHarness
+from .harness import FastAgenticSearchHarness
 
 if TYPE_CHECKING:
     from ..clients.repo import RelaceRepoClient

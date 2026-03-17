@@ -5,9 +5,9 @@ import pytest
 from relace_mcp.clients import RelaceRepoClient, SearchLLMClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.repo.freshness import FreshnessStatus
-from relace_mcp.tools.retrieval import agentic_retrieval_logic
+from relace_mcp.search.retrieval import agentic_retrieval_logic
 
-_RETRIEVAL_MOD = "relace_mcp.tools.retrieval"
+_RETRIEVAL_MOD = "relace_mcp.search.retrieval"
 _SETTINGS_MOD = "relace_mcp.config.settings"
 
 HARNESS_RESULT = {

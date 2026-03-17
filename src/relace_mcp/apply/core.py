@@ -13,13 +13,13 @@ from typing import Any
 
 import openai
 
-from ...clients.apply import ApplyLLMClient, ApplyRequest, ApplyResponse
-from ...config.settings import APPLY_SEMANTIC_CHECK, MAX_FILE_SIZE_BYTES
-from ...encoding import atomic_write, get_project_encoding, read_text_with_fallback
-from ...encoding.exceptions import EncodingDetectionError as BaseEncodingDetectionError
-from ...observability import get_trace_id
-from ...observability import tool_name as tool_name_ctx
-from ...utils import validate_file_path
+from ..clients.apply import ApplyLLMClient, ApplyRequest, ApplyResponse
+from ..config.settings import APPLY_SEMANTIC_CHECK, MAX_FILE_SIZE_BYTES
+from ..encoding import atomic_write, get_project_encoding, read_text_with_fallback
+from ..encoding.exceptions import EncodingDetectionError as BaseEncodingDetectionError
+from ..observability import get_trace_id
+from ..observability import tool_name as tool_name_ctx
+from ..utils import validate_file_path
 from . import errors, snippet
 from . import logging as apply_logging
 from .exceptions import (

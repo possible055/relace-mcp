@@ -1,6 +1,6 @@
 from typing import Any
 
-from relace_mcp.tools.search.harness.messages import MessageHistoryMixin
+from relace_mcp.search.harness.messages import MessageHistoryMixin
 
 
 class ConcreteMessageHistory(MessageHistoryMixin):

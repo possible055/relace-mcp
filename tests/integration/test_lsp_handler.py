@@ -2,7 +2,7 @@ import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from relace_mcp.tools.search._impl.lsp import (
+from relace_mcp.search._impl.lsp import (
     LSPQueryParams,
     _format_lsp_results,
     find_symbol_handler,

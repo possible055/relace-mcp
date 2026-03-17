@@ -1,6 +1,6 @@
 import pytest
 
-from relace_mcp.tools.apply.snippet import (
+from relace_mcp.apply.snippet import (
     anchor_precheck,
     check_symbol_preservation,
     concrete_lines,

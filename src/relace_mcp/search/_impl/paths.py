@@ -1,4 +1,4 @@
-from ....utils import resolve_repo_path
+from ...utils import resolve_repo_path
 
 
 def map_repo_path(path: str, base_dir: str) -> str:

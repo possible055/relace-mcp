@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from relace_mcp.config import RelaceConfig
-from relace_mcp.tools.retrieval import agentic_retrieval_logic
+from relace_mcp.search.retrieval import agentic_retrieval_logic
 
 
 @pytest.mark.asyncio
@@ -25,9 +25,9 @@ async def test_agentic_retrieval_cloud_search_does_not_block_event_loop(tmp_path
 
     with (
         patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "relace"),
-        patch("relace_mcp.tools.retrieval.cloud_search_logic", blocking_cloud_search_logic),
+        patch("relace_mcp.search.retrieval.cloud_search_logic", blocking_cloud_search_logic),
         patch("relace_mcp.lsp.languages.get_lsp_languages", return_value=[]),
-        patch("relace_mcp.tools.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+        patch("relace_mcp.search.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
     ):
         mock_harness_cls.return_value = harness
 

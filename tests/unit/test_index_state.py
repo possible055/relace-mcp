@@ -116,30 +116,30 @@ class TestReadTextSafe:
     """Tests for _read_text_safe used by index_status."""
 
     def test_returns_content_for_regular_file(self, tmp_path: Path) -> None:
-        from relace_mcp.tools import _read_text_safe
+        from relace_mcp.tools._registry import read_text_safe
 
         f = tmp_path / "test.txt"
         f.write_text("hello")
-        assert _read_text_safe(f) == "hello"
+        assert read_text_safe(f) == "hello"
 
     def test_returns_none_for_missing_file(self, tmp_path: Path) -> None:
-        from relace_mcp.tools import _read_text_safe
+        from relace_mcp.tools._registry import read_text_safe
 
-        assert _read_text_safe(tmp_path / "missing.txt") is None
+        assert read_text_safe(tmp_path / "missing.txt") is None
 
     def test_returns_none_for_empty_file(self, tmp_path: Path) -> None:
-        from relace_mcp.tools import _read_text_safe
+        from relace_mcp.tools._registry import read_text_safe
 
         f = tmp_path / "empty.txt"
         f.write_text("")
-        assert _read_text_safe(f) is None
+        assert read_text_safe(f) is None
 
     @pytest.mark.skipif(sys.platform == "win32", reason="symlinks may require privileges")
     def test_returns_none_for_symlink(self, tmp_path: Path) -> None:
-        from relace_mcp.tools import _read_text_safe
+        from relace_mcp.tools._registry import read_text_safe
 
         target = tmp_path / "target.txt"
         target.write_text("secret")
         link = tmp_path / "link.txt"
         link.symlink_to(target)
-        assert _read_text_safe(link) is None
+        assert read_text_safe(link) is None

@@ -1,7 +1,7 @@
 import pytest
 
 from relace_mcp.config import load_prompt_file
-from relace_mcp.tools.search.schemas import build_system_prompt
+from relace_mcp.search.schemas import build_system_prompt
 
 # --- Helper: load all 4 prompt variants ---
 

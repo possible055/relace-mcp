@@ -6,8 +6,8 @@ import pytest
 
 from relace_mcp.clients import SearchLLMClient
 from relace_mcp.config import RelaceConfig
-from relace_mcp.tools.search import FastAgenticSearchHarness
-from relace_mcp.tools.search.schemas import TOOL_SCHEMAS
+from relace_mcp.search import FastAgenticSearchHarness
+from relace_mcp.search.schemas import TOOL_SCHEMAS
 
 
 def _make_view_file_call(call_id: str, path: str) -> dict:
@@ -175,7 +175,7 @@ class TestFastAgenticSearchHarness:
         monkeypatch.delenv("SEARCH_LSP_TOOLS", raising=False)
 
         # If bash ever executes here, the handler would be called.
-        from relace_mcp.tools.search.harness import tool_calls as tc_mod
+        from relace_mcp.search.harness import tool_calls as tc_mod
 
         bash_spy = MagicMock(return_value="should-not-run")
         monkeypatch.setattr(tc_mod, "bash_handler", bash_spy)
@@ -336,7 +336,7 @@ class TestFastAgenticSearchHarness:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Partial results should never contain invalid ranges like end=-1."""
-        import relace_mcp.tools.search.harness.core as harness_core
+        import relace_mcp.search.harness.core as harness_core
 
         monkeypatch.setattr(harness_core, "SEARCH_MAX_TURNS", 2)
         (tmp_path / "test.py").write_text("line1\nline2\nline3\n")
@@ -529,7 +529,7 @@ class TestToolSchemas:
         """bash should be available when explicitly enabled."""
         import shutil
 
-        import relace_mcp.tools.search.schemas.tool_schemas as tool_schemas
+        import relace_mcp.search.schemas.tool_schemas as tool_schemas
 
         monkeypatch.setenv("SEARCH_BASH_TOOLS", "1")
         monkeypatch.setenv("SEARCH_LSP_TOOLS", "0")
@@ -547,7 +547,7 @@ class TestToolSchemas:
 
     def test_legacy_allowlist_no_longer_enables_bash(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """SEARCH_ENABLED_TOOLS should not control tool exposure anymore."""
-        import relace_mcp.tools.search.schemas.tool_schemas as tool_schemas
+        import relace_mcp.search.schemas.tool_schemas as tool_schemas
 
         monkeypatch.setenv(
             "SEARCH_ENABLED_TOOLS",
@@ -576,7 +576,7 @@ class TestToolSchemas:
 
     def test_lsp_tools_opt_in(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """SEARCH_LSP_TOOLS=1 should enable LSP tools."""
-        import relace_mcp.tools.search.schemas.tool_schemas as tool_schemas
+        import relace_mcp.search.schemas.tool_schemas as tool_schemas
 
         monkeypatch.setenv("SEARCH_LSP_TOOLS", "1")
         monkeypatch.setenv("SEARCH_BASH_TOOLS", "0")
@@ -589,7 +589,7 @@ class TestToolSchemas:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Even with SEARCH_LSP_TOOLS=1, empty project languages should hide LSP tools."""
-        import relace_mcp.tools.search.schemas.tool_schemas as tool_schemas
+        import relace_mcp.search.schemas.tool_schemas as tool_schemas
 
         monkeypatch.setenv("SEARCH_LSP_TOOLS", "1")
         monkeypatch.setenv("SEARCH_BASH_TOOLS", "0")

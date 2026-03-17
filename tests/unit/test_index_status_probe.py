@@ -11,8 +11,7 @@ import pytest
 from relace_mcp.config import RelaceConfig
 from relace_mcp.server import build_server
 
-_TOOLS_MOD = "relace_mcp.tools.__init__"
-_BACKENDS_PKG = "relace_mcp.repo.backends"
+_TOOLS_MOD = "relace_mcp.tools.mcp_search"
 
 
 def _make_config(tmp_path) -> RelaceConfig:
@@ -43,8 +42,8 @@ async def test_refresh_scheduled_when_stale_on_any_retrieval_backend(
     with (
         patch(f"{_TOOLS_MOD}._settings") as mock_settings,
         patch(f"{_TOOLS_MOD}.shutil.which", return_value="/usr/local/bin/fake"),
-        patch(f"{_BACKENDS_PKG}.schedule_bg_codanna_full_index") as mock_codanna_refresh,
-        patch(f"{_BACKENDS_PKG}.schedule_bg_chunkhound_index") as mock_chunkhound_refresh,
+        patch(f"{_TOOLS_MOD}.schedule_bg_codanna_full_index") as mock_codanna_refresh,
+        patch(f"{_TOOLS_MOD}.schedule_bg_chunkhound_index") as mock_chunkhound_refresh,
     ):
         mock_settings.RETRIEVAL_BACKEND = retrieval_backend
         mock_settings.RELACE_CLOUD_TOOLS = False

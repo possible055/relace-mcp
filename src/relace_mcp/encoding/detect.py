@@ -5,61 +5,59 @@ from pathlib import Path
 
 from charset_normalizer import from_bytes
 
-from ...config.fs_policy import ENCODING_DETECTION_IGNORED_DIRS
+from ..config.fs_policy import ENCODING_DETECTION_IGNORED_DIRS
 
 logger = logging.getLogger(__name__)
 
-# File extensions to sample for encoding detection
 TEXT_FILE_EXTENSIONS = frozenset(
     {
         ".py",
-        ".pyi",  # Python
+        ".pyi",
         ".js",
         ".jsx",
         ".ts",
         ".tsx",
         ".mjs",
-        ".cjs",  # JavaScript/TypeScript
+        ".cjs",
         ".java",
         ".kt",
-        ".kts",  # JVM
+        ".kts",
         ".c",
         ".cpp",
         ".cc",
         ".cxx",
         ".h",
-        ".hpp",  # C/C++
-        ".go",  # Go
-        ".rs",  # Rust
-        ".rb",  # Ruby
-        ".php",  # PHP
-        ".cs",  # C#
-        ".swift",  # Swift
-        ".scala",  # Scala
-        ".lua",  # Lua
+        ".hpp",
+        ".go",
+        ".rs",
+        ".rb",
+        ".php",
+        ".cs",
+        ".swift",
+        ".scala",
+        ".lua",
         ".sh",
         ".bash",
-        ".zsh",  # Shell
-        ".sql",  # SQL
+        ".zsh",
+        ".sql",
         ".html",
         ".htm",
         ".xml",
-        ".xhtml",  # Markup
+        ".xhtml",
         ".css",
         ".scss",
         ".sass",
-        ".less",  # Styles
+        ".less",
         ".json",
         ".yaml",
         ".yml",
-        ".toml",  # Config
+        ".toml",
         ".md",
         ".txt",
-        ".rst",  # Text
+        ".rst",
     }
 )
 
-# Encodings that are essentially compatible with UTF-8 (ASCII subset)
 UTF8_COMPATIBLE = frozenset({"utf-8", "ascii", "us-ascii"})
 
 
@@ -67,27 +65,11 @@ def detect_project_encoding(
     base_dir: Path,
     sample_limit: int = 30,
 ) -> str | None:
-    """Detect the dominant non-UTF-8 encoding in a project.
-
-    Scans a sample of text files in the project directory to determine
-    if a regional encoding (e.g., GBK, Big5, Shift_JIS) is predominantly used.
-
-    Uses os.walk with topdown=True to prune ignored directories early,
-    avoiding full traversal of .git, node_modules, etc.
-
-    Args:
-        base_dir: Project root directory to scan.
-        sample_limit: Maximum number of files to sample.
-
-    Returns:
-        The detected encoding name (lowercase) if a non-UTF-8 encoding
-        is dominant, or None if the project appears to use UTF-8.
-    """
+    """Detect the dominant non-UTF-8 encoding in a project."""
     encoding_counts: Counter[str] = Counter()
     files_sampled = 0
 
     for dirpath, dirnames, filenames in os.walk(base_dir, topdown=True):
-        # Prune hidden and ignored dirs in-place so os.walk never descends
         dirnames[:] = sorted(
             d
             for d in dirnames
@@ -98,23 +80,15 @@ def detect_project_encoding(
             if files_sampled >= sample_limit:
                 break
 
-            # Only sample known text file extensions
             ext = os.path.splitext(fname)[1].lower()
             if ext not in TEXT_FILE_EXTENSIONS:
                 continue
 
             file_path = Path(dirpath, fname)
-
-            # Skip symlinks to prevent path traversal attacks and infinite loops
-            if file_path.is_symlink():
-                continue
-
-            # Skip non-regular files (FIFOs, devices, sockets, etc.)
-            if not file_path.is_file():
+            if file_path.is_symlink() or not file_path.is_file():
                 continue
 
             try:
-                # Read first 8KB for detection (enough for charset detection)
                 raw = file_path.read_bytes()[:8192]
                 if not raw:
                     continue
@@ -142,10 +116,8 @@ def detect_project_encoding(
         dict(encoding_counts.most_common(5)),
     )
 
-    # Find the most common non-UTF-8 encoding
     for enc, count in encoding_counts.most_common():
         if enc not in UTF8_COMPATIBLE:
-            # If non-UTF-8 encoding appears in at least 30% of sampled files
             ratio = count / files_sampled
             if ratio >= 0.3:
                 logger.debug(

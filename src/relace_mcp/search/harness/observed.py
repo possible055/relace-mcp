@@ -2,12 +2,12 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
-from ....utils import resolve_repo_path
+from ...utils import resolve_repo_path
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from ....config import RelaceConfig
+    from ...config import RelaceConfig
 
 
 class ObservedFilesMixin:

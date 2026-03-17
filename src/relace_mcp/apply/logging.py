@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ...observability import log_event, redact_value
+from ..observability import log_event, redact_value
 
 logger = logging.getLogger(__name__)
 

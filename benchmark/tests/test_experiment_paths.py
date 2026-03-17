@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from benchmark.runner.experiment_paths import (
     experiment_report_path,
     experiment_results_path,
     experiment_traces_dir,
+    find_latest_traces_dir,
     grid_runs_dir,
     infer_experiment_root_from_traces,
 )
@@ -62,3 +64,15 @@ def test_collect_trace_dirs_finds_nested_grid_runs(tmp_path: Path) -> None:
 
     assert trace_dirs == [traces_b, traces_a]
     assert infer_experiment_root_from_traces(traces_b) == traces_b.parent
+
+
+def test_find_latest_traces_dir_uses_mtime_not_lexicographic_name(tmp_path: Path) -> None:
+    older = tmp_path / "experiments" / "z-run--older" / "traces"
+    newer = tmp_path / "experiments" / "a-run--newer" / "traces"
+    older.mkdir(parents=True)
+    newer.mkdir(parents=True)
+
+    os.utime(older, ns=(1_700_000_000_000_000_000, 1_700_000_000_000_000_000))
+    os.utime(newer, ns=(1_800_000_000_000_000_000, 1_800_000_000_000_000_000))
+
+    assert find_latest_traces_dir(tmp_path / "experiments") == newer
