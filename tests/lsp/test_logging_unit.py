@@ -147,12 +147,15 @@ class TestLSPLoggingFilteredWhenDisabled:
 class TestEvictionNotLoggedOnStartupRollback:
     """Verify no lsp_client_evicted event when new client startup fails and evicted clients are restored."""
 
-    def test_no_eviction_event_on_startup_failure(self, mock_log_path: Path) -> None:
+    def test_no_eviction_event_on_startup_failure(
+        self, mock_log_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from relace_mcp.config import settings as _settings
         from relace_mcp.lsp.languages.base import LanguageServerConfig
         from relace_mcp.lsp.manager import LSPClientManager
 
         manager = LSPClientManager()
-        manager._max_clients = 1
+        monkeypatch.setattr(_settings, "SEARCH_LSP_MAX_CLIENTS", 1)
 
         # Pre-fill pool with a fake client so eviction is triggered.
         fake_existing = MagicMock()

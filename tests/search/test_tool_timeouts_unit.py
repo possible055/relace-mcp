@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 import pytest
 
 from relace_mcp.config import RelaceConfig
@@ -30,16 +28,20 @@ async def test_tool_timeouts(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_agentic_retrieval_timeout(tmp_path) -> None:
-    with (
-        patch("relace_mcp.config.settings.AGENTIC_RETRIEVAL_ENABLED", True),
-        patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "relace"),
-    ):
+@pytest.mark.usefixtures("clean_env")
+async def test_agentic_retrieval_timeout(tmp_path, monkeypatch) -> None:
+    from relace_mcp.config.settings import reload_settings_from_env
+
+    with monkeypatch.context() as m:
+        m.setenv("MCP_SEARCH_RETRIEVAL", "1")
+        m.setenv("MCP_RETRIEVAL_BACKEND", "relace")
         server = build_server(
             config=RelaceConfig(api_key="test-api-key", base_dir=str(tmp_path)),
             run_health_check=False,
         )
 
-    tool = await server.local_provider.get_tool("agentic_retrieval")
-    assert tool is not None
-    assert tool.timeout == 900.0
+        tool = await server.local_provider.get_tool("agentic_retrieval")
+        assert tool is not None
+        assert tool.timeout == 900.0
+
+    reload_settings_from_env()

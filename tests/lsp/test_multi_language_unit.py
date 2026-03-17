@@ -29,10 +29,12 @@ class TestGetConfigForFile:
 
 class TestLSPClientManagerMultiLanguage:
     def test_separates_clients_by_language(self, monkeypatch) -> None:
+        from relace_mcp.config import settings as _settings
+
         monkeypatch.setattr(LSPClient, "start", lambda self: None)
 
         manager = LSPClientManager()
-        manager._max_clients = 0
+        monkeypatch.setattr(_settings, "SEARCH_LSP_MAX_CLIENTS", 0)
         workspace = "/tmp/relace-lsp-test"
 
         py_client = manager.get_client(PYTHON_CONFIG, workspace)
