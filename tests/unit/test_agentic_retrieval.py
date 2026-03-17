@@ -95,6 +95,7 @@ class TestAgenticRetrievalLogic:
             assert "warnings" in result
             assert any("Cloud search failed" in warning for warning in result["warnings"])
             assert result["semantic_hints_used"] == 0
+            assert result["semantic_hints"] == []
 
     @pytest.mark.asyncio
     async def test_hints_injected_in_prompt(
@@ -142,6 +143,10 @@ class TestAgenticRetrievalLogic:
             assert result["semantic_hints_used"] == 2
             assert result["hint_policy"] == "prefer-stale"
             assert result["hints_index_freshness"] == "fresh"
+            assert result["semantic_hints"] == [
+                {"filename": "src/auth.py", "score": 0.85},
+                {"filename": "src/login.py", "score": 0.72},
+            ]
 
     @pytest.mark.asyncio
     async def test_happy_path(

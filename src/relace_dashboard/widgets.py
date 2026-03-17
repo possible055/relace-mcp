@@ -242,14 +242,28 @@ class SearchTree(Tree[dict[str, Any]]):
 
                 files = event.get("files_found", 0)
                 turns = event.get("turns_used", "?")
+                hints = event.get("semantic_hints_used", 0)
+                retrieval_backend = event.get("retrieval_backend")
+                freshness = event.get("hints_index_freshness")
 
                 # Format total latency
                 total_ms = event.get("total_latency_ms", 0)
                 time_str = f"{total_ms / 1000.0:.1f}s" if total_ms else ""
 
                 # Final label: [12:34:56] (Turns: Y, Tools: Z, Tok: 12k, Files: X, Time: 3.5s)
+                retrieval_parts: list[str] = []
+                if hints:
+                    retrieval_parts.append(f"Hints: {hints}")
+                if retrieval_backend:
+                    retrieval_parts.append(f"Backend: {retrieval_backend}")
+                if freshness:
+                    retrieval_parts.append(f"Fresh: {freshness}")
+                retrieval_info = f", {', '.join(retrieval_parts)}" if retrieval_parts else ""
                 time_part = f", Time: {time_str}" if time_str else ""
-                self._current_session.label = f"[{s_ts}] [green](Turns: {turns}, Tools: {self._session_total_tools}, Tok: {tok_str}, Files: {files}{time_part})[/]"
+                self._current_session.label = (
+                    f"[{s_ts}] [green](Turns: {turns}, Tools: {self._session_total_tools}, "
+                    f"Tok: {tok_str}, Files: {files}{retrieval_info}{time_part})[/]"
+                )
 
         elif kind == "search_error":
             # If a session ends in error, we might want to hide it completely from the Search view

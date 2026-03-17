@@ -68,6 +68,7 @@ def build_run_metadata(
     started_at: datetime,
     completed_at: datetime,
     duration_s: float,
+    artifact_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build reproducibility metadata for this benchmark run (no secrets)."""
     config_meta: dict[str, Any] = {
@@ -110,6 +111,8 @@ def build_run_metadata(
         relace_mcp_version = None
 
     run_meta = dict(run_config) if isinstance(run_config, dict) else {}
+    experiment_type = str(run_meta.pop("experiment_type", "run") or "run")
+    parent_experiment_root = run_meta.pop("parent_experiment_root", None)
     run_meta.setdefault("cases_loaded", len(cases))
 
     dataset_info: dict[str, Any] = {
@@ -126,12 +129,26 @@ def build_run_metadata(
         except Exception:
             pass
 
+    artifacts_meta = dict(artifact_metadata) if isinstance(artifact_metadata, dict) else {}
+    experiment_root = artifacts_meta.get("experiment_root")
+    experiment_name = None
+    if isinstance(experiment_root, str) and experiment_root:
+        experiment_name = Path(experiment_root).name
+
     return {
         "run": {
             **run_meta,
             "started_at_utc": started_at.isoformat(),
             "completed_at_utc": completed_at.isoformat(),
             "duration_s": round(duration_s, 1),
+        },
+        "experiment": {
+            "type": experiment_type,
+            "name": experiment_name,
+            "root": experiment_root,
+            "parent_root": parent_experiment_root
+            if isinstance(parent_experiment_root, str)
+            else None,
         },
         "config": config_meta,
         "dataset": dataset_info,
@@ -153,4 +170,5 @@ def build_run_metadata(
             "relace_mcp_version": relace_mcp_version,
             "relace_mcp_git_commit": relace_mcp_commit,
         },
+        "artifacts": artifacts_meta,
     }

@@ -54,16 +54,43 @@ uv run --extra benchmark python -m benchmark.cli.run \
 ```
 
 **输出**:
-- Results: `benchmark/artifacts/results/<name>.jsonl`
-- Report: `benchmark/artifacts/reports/<name>.report.json`
-- Traces (启用 `--trace`): `benchmark/artifacts/traces/<run_id>/<case_id>.jsonl`
-- Events (启用 `--trace`): `benchmark/artifacts/events/<run_id>.jsonl`
+- Experiment root: `benchmark/artifacts/experiments/<experiment_name>/`
+- Results: `benchmark/artifacts/experiments/<experiment_name>/results/results.jsonl`
+- Report: `benchmark/artifacts/experiments/<experiment_name>/reports/summary.report.json`
+- Traces (启用 `--trace`): `benchmark/artifacts/experiments/<experiment_name>/traces/<case_id>.jsonl`
+- Trace metadata (启用 `--trace`): `benchmark/artifacts/experiments/<experiment_name>/traces/<case_id>.meta.json`
+- Events (启用 `--trace`): `benchmark/artifacts/experiments/<experiment_name>/events/events.jsonl`
+
+Run report 的 `metadata.artifacts` 也会写入 trace `schema_version`、`experiment_root`、`traces_dir` 与 `events_path`，方便机器消费这些 artifact。
+
+默认 experiment 命名模板如下:
+- `run--<dataset>--<search-mode>--<provider>--<timestamp>`
+- `grid--<dataset>--<search-mode>--<provider>--avg-file-recall--<timestamp>`
+- `trial--turns-<n>--temp-<value>`
+
+**Trace 工作流**:
+```bash
+# 采集 raw trace 与 indexed retrieval hint metadata
+uv run --extra benchmark python -m benchmark.cli.run \
+  --dataset artifacts/data/processed/curated_50.jsonl \
+  --limit 10 --trace --search-mode indexed
+
+# 导出派生后的 search map JSON
+uv run --extra benchmark python -m benchmark.cli.trace \
+  --latest --search-map --json-out -o search_map.json
+
+# 校验最新一轮 run 的 trace/meta/events 一致性
+uv run --extra benchmark python -m benchmark.cli.trace \
+  --latest --validate
+```
+
+现在单次 run 的所有输出都会归档在同一个 experiment 目录下。`<case_id>.meta.json` 会保存该 case 的 retrieval metadata，包括外部索引 backend 返回的 `semantic_hints` 文件列表。Trace metadata 与 run-level events 都会带上 `schema_version` 字段，方便 consumer 做兼容性检查。
 
 **常用参数**:
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `--dataset` | locbench_v1.jsonl | 数据集路径 |
-| `-o, --output` | 自动 | 输出文件前缀 |
+| `-o, --output` | 自动 | Experiment 目录名/路径 |
 | `--limit` | 全部 | Case 数量 |
 | `--seed` | `0` | 随机种子 |
 | `--shuffle` | 关闭 | 随机选择 |
@@ -100,10 +127,10 @@ uv run --extra benchmark python -m benchmark.cli.grid \
 | `--max-turns` | ✓ | `SEARCH_MAX_TURNS` 网格值 (可重复) |
 | `--temperatures` | ✓ | `SEARCH_TEMPERATURE` 网格值 (可重复) |
 | `--prompt-file` | | 覆盖所有 run 的 `SEARCH_PROMPT_FILE` |
-| `--output` | | 输出目录前缀 |
+| `--output` | | Grid experiment 目录 |
 | `--dry-run` | | 仅打印计划的 run，不执行 |
 
-**输出**: 网格摘要保存至 `artifacts/reports/<grid_name>.grid.json`
+**输出**: Grid parent 摘要保存至 `artifacts/experiments/<grid_name>/reports/summary.report.json`
 
 ## 4. 数据集验证
 
@@ -139,24 +166,29 @@ uv run --extra benchmark python -m benchmark.cli.validate --output validation.js
 
 ```bash
 # 分析单次运行 (详细 stdout)
-uv run --extra benchmark python -m benchmark.cli.analyze path/to/run.report.json
+uv run --extra benchmark python -m benchmark.cli.analyze \
+  path/to/experiment/reports/summary.report.json
 
 # 比较多个 report 文件 (Markdown 输出)
-uv run --extra benchmark python -m benchmark.cli.report run1.report.json run2.report.json
+uv run --extra benchmark python -m benchmark.cli.report \
+  path/to/run-a/reports/summary.report.json \
+  path/to/run-b/reports/summary.report.json
 
-# 从网格搜索找最佳配置
-uv run --extra benchmark python -m benchmark.cli.report --best grid_curated_30.grid.json
+# 从 grid parent summary 找最佳配置
+uv run --extra benchmark python -m benchmark.cli.report --best \
+  path/to/grid-experiment/reports/summary.report.json
 
 # 分析 result 文件中的失败 / 未完成 case
-uv run --extra benchmark python -m benchmark.cli.report --failures path/to/run.jsonl
+uv run --extra benchmark python -m benchmark.cli.report --failures \
+  path/to/experiment/results/results.jsonl
 
 # 输出比较报告到文件
 uv run --extra benchmark python -m benchmark.cli.report -o comparison.md *.report.json
 ```
 
 **各模式接受的输入**:
-- Comparison mode: 一个或多个 `*.report.json`
-- `--best`: 恰好一个 `*.grid.json`
+- Comparison mode: 一个或多个非 grid 的 `*.report.json`
+- `--best`: 恰好一个 grid `summary.report.json`
 - `--failures`: 恰好一个 `*.jsonl`
 
 ## 6. 指标说明
@@ -169,7 +201,7 @@ uv run --extra benchmark python -m benchmark.cli.report -o comparison.md *.repor
 | Line Prec(M) | 仅统计匹配文件：正确行 / 返回行总数 |
 | Function Hit Rate | 有重叠的函数 / 函数总数 |
 
-每个 `*.report.json` 包含 metadata 追踪: `temperature`、`max_turns`、`prompt_file` 以确保可复现性。
+每个 `summary.report.json` 都包含可复现所需的 metadata。Grid parent report 另外会带 `metadata.experiment.type = "grid"`，以及包含 `search_space`、`trials`、`best_trial` 的 `grid` 区块。
 
 ## 7. 故障排除
 
@@ -188,10 +220,15 @@ uv run --extra benchmark python -m benchmark.cli.report -o comparison.md *.repor
 uv run --extra dev --extra benchmark pytest benchmark/tests -v
 ```
 
+这组测试只覆盖 benchmark 子系统，不包含在仓库默认 `pytest` testpaths 里。
+
 ## 目录结构
 
 ```
 benchmark/
+├── _config/             # benchmark 内部配置
+│   ├── paths.py         # 目录/路径 helper 与默认数据集路径
+│   └── settings.py      # benchmark 内部设置（如 EXCLUDED_REPOS）
 ├── cli/
 │   ├── run.py           # 单次运行 CLI
 │   ├── grid.py          # 网格搜索 CLI
@@ -204,14 +241,17 @@ benchmark/
 ├── datasets/            # 数据集加载器
 ├── metrics/             # 指标实现
 ├── runner/              # 执行流程
+│   └── experiment_paths.py  # experiment 命名与产物布局 helper
 ├── tests/               # 单元测试
-├── config.py            # 配置常量
 ├── schemas.py           # 数据结构定义
 └── artifacts/           # (运行时生成，不在版控中)
     ├── data/            # 数据集文件
-    ├── events/          # Run 级别 events (.jsonl)
+    ├── experiments/     # 按 experiment 归档的输出
+    │   └── <experiment_name>/
+    │       ├── events/  # Run 级别 events (.jsonl)
+    │       ├── reports/ # 汇总报告 (summary.report.json)
+    │       ├── results/ # 运行输出 (.jsonl)
+    │       ├── runs/    # 仅 grid child trial 使用
+    │       └── traces/  # 逐 case traces (.jsonl + .meta.json)
     ├── repos/           # 缓存仓库
-    ├── results/         # 运行输出 (.jsonl)
-    ├── reports/         # 汇总报告 (.report.json, .grid.json)
-    └── traces/          # 逐 case traces (.jsonl)
 ```

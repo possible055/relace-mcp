@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from ..config import get_results_dir
+from .._config.paths import get_experiments_dir
 
 
 def load_results(path: str) -> dict[str, Any]:
@@ -131,7 +131,11 @@ def print_summary_stats(results: list[dict[str, Any]], key: str, label: str) -> 
 
 def main() -> None:
     # Default path
-    default_path = get_results_dir() / "benchmark_results.json"
+    experiments_dir = get_experiments_dir()
+    result_candidates = (
+        sorted(experiments_dir.rglob("results.jsonl")) if experiments_dir.exists() else []
+    )
+    default_path = result_candidates[-1] if result_candidates else experiments_dir / "results.jsonl"
     path = sys.argv[1] if len(sys.argv) > 1 else str(default_path)
 
     if not Path(path).exists():

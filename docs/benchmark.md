@@ -54,16 +54,43 @@ uv run --extra benchmark python -m benchmark.cli.run \
 ```
 
 **Outputs**:
-- Results: `benchmark/artifacts/results/<name>.jsonl`
-- Report: `benchmark/artifacts/reports/<name>.report.json`
-- Traces (when `--trace`): `benchmark/artifacts/traces/<run_id>/<case_id>.jsonl`
-- Events (when `--trace`): `benchmark/artifacts/events/<run_id>.jsonl`
+- Experiment root: `benchmark/artifacts/experiments/<experiment_name>/`
+- Results: `benchmark/artifacts/experiments/<experiment_name>/results/results.jsonl`
+- Report: `benchmark/artifacts/experiments/<experiment_name>/reports/summary.report.json`
+- Traces (when `--trace`): `benchmark/artifacts/experiments/<experiment_name>/traces/<case_id>.jsonl`
+- Trace metadata (when `--trace`): `benchmark/artifacts/experiments/<experiment_name>/traces/<case_id>.meta.json`
+- Events (when `--trace`): `benchmark/artifacts/experiments/<experiment_name>/events/events.jsonl`
+
+Run reports also include `metadata.artifacts` with the trace `schema_version`, `experiment_root`, `traces_dir`, and `events_path`.
+
+Default experiment names use these templates:
+- `run--<dataset>--<search-mode>--<provider>--<timestamp>`
+- `grid--<dataset>--<search-mode>--<provider>--avg-file-recall--<timestamp>`
+- `trial--turns-<n>--temp-<value>`
+
+**Trace workflow**:
+```bash
+# Collect raw traces plus indexed retrieval hint metadata
+uv run --extra benchmark python -m benchmark.cli.run \
+  --dataset artifacts/data/processed/curated_50.jsonl \
+  --limit 10 --trace --search-mode indexed
+
+# Export the derived search map as JSON
+uv run --extra benchmark python -m benchmark.cli.trace \
+  --latest --search-map --json-out -o search_map.json
+
+# Validate trace/meta/events consistency for the latest run
+uv run --extra benchmark python -m benchmark.cli.trace \
+  --latest --validate
+```
+
+Each run now archives all outputs under one experiment directory. `<case_id>.meta.json` stores retrieval-side metadata for the case, including `semantic_hints` file lists from external index backends. Both trace metadata and run-level events include a `schema_version` field so consumers can validate artifact compatibility.
 
 **Key options**:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--dataset` | locbench_v1.jsonl | Dataset path |
-| `-o, --output` | auto | Output file prefix |
+| `-o, --output` | auto | Experiment directory name/path |
 | `--limit` | all | Number of cases |
 | `--seed` | `0` | Random seed |
 | `--shuffle` | off | Randomize selection |
@@ -100,10 +127,10 @@ uv run --extra benchmark python -m benchmark.cli.grid \
 | `--max-turns` | ✓ | Grid values for `SEARCH_MAX_TURNS` (repeatable) |
 | `--temperatures` | ✓ | Grid values for `SEARCH_TEMPERATURE` (repeatable) |
 | `--prompt-file` | | Override `SEARCH_PROMPT_FILE` for all runs |
-| `--output` | | Output directory prefix |
+| `--output` | | Grid experiment directory |
 | `--dry-run` | | Print planned runs without executing |
 
-**Output**: Grid summary saved to `artifacts/reports/<grid_name>.grid.json`
+**Output**: Grid parent summary saved to `artifacts/experiments/<grid_name>/reports/summary.report.json`
 
 ## 4. Dataset Validation
 
@@ -139,24 +166,29 @@ uv run --extra benchmark python -m benchmark.cli.validate --output validation.js
 
 ```bash
 # Analyze single run (detailed stdout)
-uv run --extra benchmark python -m benchmark.cli.analyze path/to/run.report.json
+uv run --extra benchmark python -m benchmark.cli.analyze \
+  path/to/experiment/reports/summary.report.json
 
 # Compare multiple runs from report files (Markdown output)
-uv run --extra benchmark python -m benchmark.cli.report run1.report.json run2.report.json
+uv run --extra benchmark python -m benchmark.cli.report \
+  path/to/run-a/reports/summary.report.json \
+  path/to/run-b/reports/summary.report.json
 
-# Find best config from grid search
-uv run --extra benchmark python -m benchmark.cli.report --best grid_curated_30.grid.json
+# Find best config from a grid parent summary
+uv run --extra benchmark python -m benchmark.cli.report --best \
+  path/to/grid-experiment/reports/summary.report.json
 
 # Analyze incomplete / failed cases from a result file
-uv run --extra benchmark python -m benchmark.cli.report --failures path/to/run.jsonl
+uv run --extra benchmark python -m benchmark.cli.report --failures \
+  path/to/experiment/results/results.jsonl
 
 # Output comparison to file
 uv run --extra benchmark python -m benchmark.cli.report -o comparison.md *.report.json
 ```
 
 **Accepted inputs by mode**:
-- Comparison mode: one or more `*.report.json`
-- `--best`: exactly one `*.grid.json`
+- Comparison mode: one or more non-grid `*.report.json`
+- `--best`: exactly one grid `summary.report.json`
 - `--failures`: exactly one `*.jsonl`
 
 ## 6. Interpret Metrics
@@ -169,7 +201,7 @@ uv run --extra benchmark python -m benchmark.cli.report -o comparison.md *.repor
 | Line Prec (Matched) | Correct lines / Returned lines (matched files only) |
 | Function Hit Rate | Functions with overlap / Total functions |
 
-Each `*.report.json` includes metadata tracking: `temperature`, `max_turns`, `prompt_file` for reproducibility.
+Each `summary.report.json` includes metadata tracking for reproducibility. Grid parent reports also include `metadata.experiment.type = "grid"` plus a `grid` section with `search_space`, `trials`, and `best_trial`.
 
 ## 7. Troubleshooting
 
@@ -188,10 +220,15 @@ Each `*.report.json` includes metadata tracking: `temperature`, `max_turns`, `pr
 uv run --extra dev --extra benchmark pytest benchmark/tests -v
 ```
 
+These tests are benchmark-specific and are not included in the repository's default `pytest` testpaths.
+
 ## Directory Structure
 
 ```
 benchmark/
+├── _config/             # Internal benchmark configuration
+│   ├── paths.py         # Directory/path helpers and dataset defaults
+│   └── settings.py      # Internal benchmark settings (e.g. EXCLUDED_REPOS)
 ├── cli/
 │   ├── run.py           # Single run CLI
 │   ├── grid.py          # Grid search CLI
@@ -204,14 +241,17 @@ benchmark/
 ├── datasets/            # Dataset loaders
 ├── metrics/             # Metrics implementation
 ├── runner/              # Execution pipeline
+│   └── experiment_paths.py  # Experiment naming and artifact layout helpers
 ├── tests/               # Unit tests
-├── config.py            # Configuration constants
 ├── schemas.py           # Data structure definitions
 └── artifacts/           # (runtime generated, not in version control)
     ├── data/            # Dataset files
-    ├── events/          # Run-level events (.jsonl)
+    ├── experiments/     # Per-experiment archives
+    │   └── <experiment_name>/
+    │       ├── events/  # Run-level events (.jsonl)
+    │       ├── reports/ # Summary reports (summary.report.json)
+    │       ├── results/ # Run outputs (.jsonl)
+    │       ├── runs/    # Grid child trials only
+    │       └── traces/  # Per-case traces (.jsonl + .meta.json)
     ├── repos/           # Cached repositories
-    ├── results/         # Run outputs (.jsonl)
-    ├── reports/         # Summary reports (.report.json, .grid.json)
-    └── traces/          # Per-case traces (.jsonl)
 ```

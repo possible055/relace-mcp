@@ -4,7 +4,7 @@ from pathlib import Path
 
 import click
 
-from ..config import get_reports_dir, get_results_dir
+from .._config.paths import get_experiments_dir
 
 
 def _load_report(path: Path) -> dict:
@@ -22,21 +22,43 @@ def _load_jsonl_results(path: Path) -> list[dict]:
     return results
 
 
-def _load_grid_report(path: Path) -> list[dict]:
-    data = _load_report(path)
-    return data.get("runs", [])
-
-
 def _is_report_file(path: Path) -> bool:
     return path.name.endswith(".report.json")
 
 
-def _is_grid_file(path: Path) -> bool:
-    return path.name.endswith(".grid.json")
-
-
 def _is_results_jsonl(path: Path) -> bool:
     return path.suffix == ".jsonl"
+
+
+def _experiment_type(report: dict) -> str | None:
+    metadata = report.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    experiment = metadata.get("experiment")
+    if not isinstance(experiment, dict):
+        return None
+    value = experiment.get("type")
+    return value if isinstance(value, str) else None
+
+
+def _experiment_name(report: dict) -> str | None:
+    metadata = report.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    experiment = metadata.get("experiment")
+    if not isinstance(experiment, dict):
+        return None
+    value = experiment.get("name")
+    return value if isinstance(value, str) else None
+
+
+def _report_label(path: Path, report: dict) -> str:
+    name = _experiment_name(report)
+    if name:
+        return name
+    if path.name == "summary.report.json":
+        return path.parent.parent.name
+    return path.stem
 
 
 def _validate_mode_inputs(
@@ -54,9 +76,11 @@ def _validate_mode_inputs(
 
     if best:
         if len(input_paths) != 1:
-            raise click.ClickException("--best requires exactly one .grid.json file.")
-        if not _is_grid_file(input_paths[0]):
-            raise click.ClickException("--best only accepts a single .grid.json file.")
+            raise click.ClickException("--best requires exactly one grid summary.report.json file.")
+        if not _is_report_file(input_paths[0]):
+            raise click.ClickException(
+                "--best only accepts a single grid summary.report.json file."
+            )
         return
 
     invalid_paths = [str(path) for path in input_paths if not _is_report_file(path)]
@@ -64,13 +88,13 @@ def _validate_mode_inputs(
         invalid_display = ", ".join(invalid_paths)
         raise click.ClickException(
             "Comparison mode only accepts .report.json inputs. "
-            "Use --best for .grid.json or --failures for .jsonl. "
+            "Use --best for grid summary.report.json or --failures for .jsonl. "
             f"Invalid inputs: {invalid_display}"
         )
 
 
 def _extract_metrics(report: dict) -> dict:
-    if "runs" in report:
+    if _experiment_type(report) == "grid":
         return {}
     return {
         "completion_rate": report.get("completion_rate", 0),
@@ -87,7 +111,7 @@ def _extract_metrics(report: dict) -> dict:
 def _find_best_from_grid(runs: list[dict], metric: str = "avg_file_recall") -> dict | None:
     if not runs:
         return None
-    best = max(runs, key=lambda r: r.get("metrics", {}).get(metric, 0))
+    best = max(runs, key=lambda r: r.get("metrics", {}).get(metric, 0) or 0)
     return best
 
 
@@ -120,7 +144,17 @@ def _generate_markdown_comparison(reports: list[tuple[str, dict]]) -> str:
 
 
 def _generate_markdown_grid_best(grid_path: Path, metric: str) -> str:
-    runs = _load_grid_report(grid_path)
+    report = _load_report(grid_path)
+    if _experiment_type(report) != "grid":
+        raise click.ClickException("--best only accepts a single grid summary.report.json file.")
+
+    grid_payload = report.get("grid")
+    if not isinstance(grid_payload, dict):
+        return f"No grid payload found in {grid_path}"
+
+    runs = grid_payload.get("trials", [])
+    if not isinstance(runs, list):
+        return f"No grid trials found in {grid_path}"
     best = _find_best_from_grid(runs, metric)
 
     if not best:
@@ -129,8 +163,9 @@ def _generate_markdown_grid_best(grid_path: Path, metric: str) -> str:
     config = best.get("config", {})
     metrics = best.get("metrics", {})
 
+    title_name = _report_label(grid_path, report)
     lines = [
-        f"# Best Configuration from {grid_path.name}",
+        f"# Best Configuration from {title_name}",
         "",
         f"**Optimized for**: `{metric}`",
         "",
@@ -146,6 +181,7 @@ def _generate_markdown_grid_best(grid_path: Path, metric: str) -> str:
         f"- Line Prec (Matched): {_format_pct(metrics.get('avg_line_precision_matched', 0))}",
         f"- Avg Turns: {metrics.get('avg_turns', 0):.1f}",
         f"- Avg Latency: {metrics.get('avg_latency_s', 0):.1f}s",
+        f"- Experiment Root: {best.get('paths', {}).get('experiment_root')}",
     ]
 
     return "\n".join(lines)
@@ -219,7 +255,7 @@ def _generate_failures_report(results_path: Path) -> str:
 @click.option(
     "--best",
     is_flag=True,
-    help="Find best configuration from grid report (input must be .grid.json)",
+    help="Find best configuration from a grid summary.report.json file",
 )
 @click.option(
     "--failures",
@@ -245,7 +281,7 @@ def main(
       python -m benchmark.cli.report run1.report.json run2.report.json
 
       # Find best config from grid search
-      python -m benchmark.cli.report --best grid_*.grid.json
+      python -m benchmark.cli.report --best path/to/grid/reports/summary.report.json
 
       # Analyze failures from result file
       python -m benchmark.cli.report --failures run.jsonl
@@ -253,20 +289,17 @@ def main(
       # Output to file
       python -m benchmark.cli.report -o comparison.md *.report.json
     """
-    reports_dir = get_reports_dir()
-    results_dir = get_results_dir()
+    experiments_dir = get_experiments_dir()
     input_paths = []
 
     for inp in inputs:
         p = Path(inp)
         if not p.is_absolute():
-            # Try reports dir first, then results dir
-            if (reports_dir / inp).exists():
-                p = reports_dir / inp
-            elif (results_dir / inp).exists():
-                p = results_dir / inp
+            if (experiments_dir / inp).exists():
+                p = experiments_dir / inp
             else:
-                p = Path(inp)
+                matches = sorted(experiments_dir.rglob(inp)) if experiments_dir.exists() else []
+                p = matches[0] if len(matches) == 1 else Path(inp)
         if not p.exists():
             click.echo(f"Warning: File not found: {p}", err=True)
             continue
@@ -287,7 +320,13 @@ def main(
         for p in input_paths:
             try:
                 data = _load_report(p)
-                reports.append((p.stem, data))
+                if _experiment_type(data) == "grid":
+                    raise click.ClickException(
+                        "Comparison mode does not accept grid parent reports. Use --best instead."
+                    )
+                reports.append((_report_label(p, data), data))
+            except click.ClickException:
+                raise
             except Exception as e:
                 click.echo(f"Warning: Failed to load {p}: {e}", err=True)
 
@@ -300,7 +339,7 @@ def main(
     if output:
         out_path = Path(output)
         if not out_path.is_absolute():
-            out_path = reports_dir / output
+            out_path = experiments_dir / output
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(content + "\n", encoding="utf-8")
         click.echo(f"Report saved to: {out_path}")

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import click
 
-from ..config import get_benchmark_dir, get_processed_data_dir, get_raw_data_dir
+from .._config.paths import get_benchmark_dir, get_processed_data_dir, get_raw_data_dir
 
 CATEGORY_WEIGHTS = {
     "Bug Report": 0.40,

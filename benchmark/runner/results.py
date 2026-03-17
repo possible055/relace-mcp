@@ -3,6 +3,14 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ..analysis.trace_artifacts import ArtifactStatus
+
+
+def write_report_json(payload: dict[str, Any], output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+
 
 @dataclass
 class BenchmarkResult:
@@ -25,8 +33,9 @@ class BenchmarkResult:
     partial: bool = False
     error: str | None = None
     returned_files: dict[str, list[list[int]]] = field(default_factory=dict)
-    raw_result: dict[str, Any] = field(default_factory=dict)
     trace_path: str | None = None
+    trace_meta_path: str | None = None
+    artifact_status: ArtifactStatus = field(default_factory=dict)
     hints_used: int = 0
     search_mode: str = "agentic"
     retrieval_backend: str | None = None
@@ -66,6 +75,4 @@ class BenchmarkSummary:
         del summary_dict["results"]
 
         resolved_report_path = report_path or jsonl_path.with_suffix(".report.json")
-        resolved_report_path.parent.mkdir(parents=True, exist_ok=True)
-        with resolved_report_path.open("w", encoding="utf-8") as f:
-            json.dump(summary_dict, f, indent=2, ensure_ascii=False)
+        write_report_json(summary_dict, resolved_report_path)
