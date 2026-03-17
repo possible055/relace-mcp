@@ -57,7 +57,7 @@ def test_execute_search_writes_trace_meta_without_turns_log(tmp_path: Path) -> N
             patch("benchmark.runner.preflight.check_retrieval_backend", return_value={"ok": True}),
             patch("relace_mcp.clients.RelaceRepoClient", return_value=MagicMock()),
             patch(
-                "relace_mcp.tools.retrieval.agentic_retrieval_logic",
+                "relace_mcp.search.agentic_retrieval_logic",
                 new=fake_agentic_retrieval_logic,
             ),
         ):
@@ -138,7 +138,7 @@ def test_execute_search_emits_search_complete_with_retrieval_fields(tmp_path: Pa
             patch("benchmark.runner.preflight.check_retrieval_backend", return_value={"ok": True}),
             patch("relace_mcp.clients.RelaceRepoClient", return_value=MagicMock()),
             patch(
-                "relace_mcp.tools.retrieval.agentic_retrieval_logic",
+                "relace_mcp.search.agentic_retrieval_logic",
                 new=fake_agentic_retrieval_logic,
             ),
         ):

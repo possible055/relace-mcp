@@ -11,7 +11,7 @@ from typing import Any
 from relace_mcp.clients import SearchLLMClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.lsp.languages import get_lsp_languages
-from relace_mcp.tools.search import FastAgenticSearchHarness
+from relace_mcp.search import FastAgenticSearchHarness
 
 from .._config.paths import get_repos_dir
 from ..analysis.trace_artifacts import ArtifactStatus
@@ -362,10 +362,9 @@ class BenchmarkRunner:
         if self.search_mode == "indexed":
             import asyncio
 
-            from relace_mcp.tools.retrieval import agentic_retrieval_logic
-
             from relace_mcp.clients import RelaceRepoClient
             from relace_mcp.config.settings import RETRIEVAL_BACKEND
+            from relace_mcp.search import agentic_retrieval_logic
 
             from .preflight import check_retrieval_backend
 

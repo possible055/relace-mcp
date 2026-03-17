@@ -231,8 +231,9 @@ uv run python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.json
 ```bash
 git clone https://github.com/possible055/relace-mcp.git
 cd relace-mcp
-uv sync --extra dev
+uv sync --extra dev --extra benchmark
 uv run pytest
+uv run --extra dev --extra benchmark pytest benchmark/tests -q
 ```
 
 ## 许可证

@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -10,6 +12,23 @@ if TYPE_CHECKING:
     from ..config import RelaceConfig
 
 logger = logging.getLogger(__name__)
+
+
+async def _run_encoding_detection(
+    base_dir: Path,
+    *,
+    sample_limit: int,
+) -> str | None:
+    from ..encoding import detect_project_encoding
+
+    loop = asyncio.get_running_loop()
+    detect_call = partial(
+        detect_project_encoding,
+        base_dir,
+        sample_limit=sample_limit,
+    )
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="relace-encoding") as executor:
+        return await loop.run_in_executor(executor, detect_call)
 
 
 class EncodingState:
@@ -51,7 +70,7 @@ async def ensure_encoding_detected(
             return
 
         from ..config.settings import ENCODING_DETECTION_SAMPLE_LIMIT
-        from ..encoding import detect_project_encoding, set_project_encoding
+        from ..encoding import set_project_encoding
 
         if config.default_encoding:
             logger.debug("Using configured project encoding: %s", config.default_encoding)
@@ -59,8 +78,7 @@ async def ensure_encoding_detected(
             state.mark_done()
             return
 
-        detected = await asyncio.to_thread(
-            detect_project_encoding,
+        detected = await _run_encoding_detection(
             Path(base),
             sample_limit=ENCODING_DETECTION_SAMPLE_LIMIT,
         )
@@ -85,14 +103,13 @@ async def ensure_encoding_detected(
         return
 
     from ..config.settings import ENCODING_DETECTION_SAMPLE_LIMIT
-    from ..encoding import detect_project_encoding, set_project_encoding
+    from ..encoding import set_project_encoding
 
     if config.default_encoding:
         logger.debug("Using configured project encoding: %s", config.default_encoding)
         set_project_encoding(config.default_encoding)
     else:
-        detected = await asyncio.to_thread(
-            detect_project_encoding,
+        detected = await _run_encoding_detection(
             Path(resolved_base_dir),
             sample_limit=ENCODING_DETECTION_SAMPLE_LIMIT,
         )

@@ -217,10 +217,10 @@ Each `summary.report.json` includes metadata tracking for reproducibility. Grid 
 ## 8. Running Unit Tests
 
 ```bash
-uv run --extra dev --extra benchmark pytest benchmark/tests -v
+uv run --extra dev --extra benchmark pytest benchmark/tests -q
 ```
 
-These tests are benchmark-specific and are not included in the repository's default `pytest` testpaths.
+These tests are benchmark-specific and are not included in the repository's default `pytest` testpaths. CI runs them in a dedicated Ubuntu / Python 3.13 benchmark job.
 
 ## Directory Structure
 
@@ -242,7 +242,12 @@ benchmark/
 ├── metrics/             # Metrics implementation
 ├── runner/              # Execution pipeline
 │   └── experiment_paths.py  # Experiment naming and artifact layout helpers
-├── tests/               # Unit tests
+├── tests/
+│   ├── analysis/
+│   ├── cli/
+│   ├── datasets/
+│   ├── docs/
+│   └── runner/
 ├── schemas.py           # Data structure definitions
 └── artifacts/           # (runtime generated, not in version control)
     ├── data/            # Dataset files

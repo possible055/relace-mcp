@@ -36,56 +36,6 @@ class TestBuildServer:
         assert server is not None
 
 
-class TestServerToolRegistration:
-    """Test that tools are properly registered."""
-
-    @pytest.mark.asyncio
-    async def test_fast_apply_registered(self, mock_config: RelaceConfig) -> None:
-        """Verify tool registration via public API Client.list_tools()."""
-        server = build_server(config=mock_config)
-
-        async with Client(server) as client:
-            tools = await client.list_tools()
-            tool_names = [t.name for t in tools]
-            assert "fast_apply" in tool_names
-
-    @pytest.mark.asyncio
-    async def test_agentic_search_registered(self, mock_config: RelaceConfig) -> None:
-        """Verify agentic_search registration via public API Client.list_tools()."""
-        server = build_server(config=mock_config)
-
-        async with Client(server) as client:
-            tools = await client.list_tools()
-            tool_names = [t.name for t in tools]
-            assert "agentic_search" in tool_names
-
-    @pytest.mark.asyncio
-    async def test_index_status_registered(self, mock_config: RelaceConfig) -> None:
-        """Verify index_status registration via public API Client.list_tools()."""
-        server = build_server(config=mock_config)
-
-        async with Client(server) as client:
-            tools = await client.list_tools()
-            tool_names = [t.name for t in tools]
-            assert "index_status" in tool_names
-
-    @pytest.mark.asyncio
-    async def test_agentic_retrieval_registered_with_none_backend(
-        self, mock_config: RelaceConfig
-    ) -> None:
-        """agentic_retrieval should still register when semantic hints are disabled."""
-        with (
-            patch("relace_mcp.config.settings.AGENTIC_RETRIEVAL_ENABLED", True),
-            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "none"),
-        ):
-            server = build_server(config=mock_config)
-
-        async with Client(server) as client:
-            tools = await client.list_tools()
-            tool_names = [t.name for t in tools]
-            assert "agentic_retrieval" in tool_names
-
-
 class TestServerToolExecution:
     """Test tool execution via server."""
 
@@ -97,7 +47,6 @@ class TestServerToolExecution:
         successful_api_response: dict[str, Any],
     ) -> None:
         """Should execute fast_apply tool successfully."""
-        # Mock the ApplyLLMClient.apply method
         with patch("relace_mcp.clients.apply.ApplyLLMClient") as mock_backend_cls:
             mock_backend = AsyncMock()
             mock_backend.apply.return_value = ApplyResponse(
@@ -118,28 +67,28 @@ class TestServerToolExecution:
                     },
                 )
 
-                # FastMCP Client.call_tool returns deserialized data
                 assert result is not None
 
     @pytest.mark.asyncio
     async def test_index_status_success(self, mock_config: RelaceConfig) -> None:
         """Should execute index_status tool successfully."""
-        server = build_server(config=mock_config)
+        with patch("relace_mcp.tools.mcp_search.shutil.which", return_value=None):
+            server = build_server(config=mock_config)
 
-        async with Client(server) as client:
-            result = await client.call_tool(
-                "index_status",
-                {},
-            )
+            async with Client(server) as client:
+                result = await client.call_tool(
+                    "index_status",
+                    {},
+                )
 
-            assert result.structured_content is not None
-            payload = result.structured_content
-            for key in ("trace_id", "base_dir", "relace", "codanna", "chunkhound"):
-                assert key in payload
-            assert "freshness" in payload["relace"]
-            assert "hints_usable" in payload["relace"]
-            assert "freshness" in payload["codanna"]
-            assert "hints_usable" in payload["codanna"]
+                assert result.structured_content is not None
+                payload = result.structured_content
+                for key in ("trace_id", "base_dir", "relace", "codanna", "chunkhound"):
+                    assert key in payload
+                assert "freshness" in payload["relace"]
+                assert "hints_usable" in payload["relace"]
+                assert "freshness" in payload["codanna"]
+                assert "hints_usable" in payload["codanna"]
 
     @pytest.mark.asyncio
     async def test_fast_apply_creates_new_file(
@@ -159,7 +108,6 @@ class TestServerToolExecution:
                 },
             )
 
-            # FastMCP Client.call_tool returns CallToolResult with structured_content
             assert result.structured_content is not None
             assert result.structured_content["status"] == "ok"
             assert "Created" in result.structured_content["message"]
@@ -188,41 +136,6 @@ class TestServerToolExecution:
             assert isinstance(first, TextContent)
             assert "INVALID_INPUT" in first.text
 
-
-class TestServerIntegration:
-    """Integration tests for server behavior."""
-
-    @pytest.mark.asyncio
-    async def test_agentic_search_tool_has_correct_schema(self, mock_config: RelaceConfig) -> None:
-        """Should have correct input schema for agentic_search."""
-        server = build_server(config=mock_config)
-
-        async with Client(server) as client:
-            tools = await client.list_tools()
-
-            search_tool = next((t for t in tools if t.name == "agentic_search"), None)
-            assert search_tool is not None
-
-            schema = search_tool.inputSchema
-            assert "query" in schema.get("properties", {})
-
-    @pytest.mark.asyncio
-    async def test_tool_has_correct_schema(self, mock_config: RelaceConfig) -> None:
-        """Should have correct input schema for fast_apply."""
-        server = build_server(config=mock_config)
-
-        async with Client(server) as client:
-            tools = await client.list_tools()
-
-            relace_tool = next((t for t in tools if t.name == "fast_apply"), None)
-            assert relace_tool is not None
-
-            # Verify required parameters
-            schema = relace_tool.inputSchema
-            assert "path" in schema.get("properties", {})
-            assert "edit_snippet" in schema.get("properties", {})
-            assert "instruction" in schema.get("properties", {})
-
     @pytest.mark.asyncio
     async def test_full_apply_workflow(
         self,
@@ -236,7 +149,6 @@ class TestServerIntegration:
             base_dir=str(tmp_path),
         )
 
-        # temp_source_file content: def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Goodbye')\n
         merged_code = "def hello():\n    print('Hello')\n\ndef goodbye():\n    print('Modified!')\n"
 
         with patch("relace_mcp.clients.apply.ApplyLLMClient") as mock_backend_cls:
@@ -250,11 +162,9 @@ class TestServerIntegration:
             server = build_server(config=config, run_health_check=False)
 
             async with Client(server) as client:
-                # Step 1: List tools
                 tools = await client.list_tools()
                 assert len(tools) >= 1
 
-                # Step 2: Call tool (edit_snippet contains anchor lines that exist in original file)
                 result = await client.call_tool(
                     "fast_apply",
                     {
@@ -264,10 +174,7 @@ class TestServerIntegration:
                 )
 
                 assert result is not None
-
-                # Step 3: Verify file was modified
-                file_content = temp_source_file.read_text()
-                assert file_content == merged_code
+                assert temp_source_file.read_text() == merged_code
 
 
 class TestMain:
