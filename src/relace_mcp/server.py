@@ -158,9 +158,12 @@ def build_server(
 
     from fastmcp import FastMCP
 
+    from .config.bootstrap import initialize_runtime_from_env
+
+    initialize_runtime_from_env()
+
     from .config import RelaceConfig
     from .config import settings as _settings
-    from .config.bootstrap import initialize_runtime_from_env
     from .middleware import (
         CloudVisibilityMiddleware,
         ProgressHeartbeatMiddleware,
@@ -168,8 +171,6 @@ def build_server(
         ToolTracingMiddleware,
     )
     from .tools import register_tools
-
-    initialize_runtime_from_env()
 
     if config is None:
         config = RelaceConfig.from_env()

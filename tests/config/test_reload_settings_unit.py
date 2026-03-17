@@ -178,6 +178,12 @@ class TestReloadToolSettings:
 
         assert settings_mod.SEARCH_MAX_TURNS == 6
 
+    def test_search_lsp_timeout_invalid_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_LSP_TIMEOUT_SECONDS", "not-a-number")
+        reload_settings_from_env()
+
+        assert settings_mod.SEARCH_LSP_TIMEOUT_SECONDS == 15.0
+
     def test_module_attribute_access_sees_reloaded_values(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

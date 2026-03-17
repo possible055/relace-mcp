@@ -91,7 +91,10 @@ def _parse_positive_float_env(name: str, default: float) -> float:
     raw = os.getenv(name, "").strip()
     if not raw:
         return default
-    value = float(raw)
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
     if not (value > 0):
         return default
     return value
