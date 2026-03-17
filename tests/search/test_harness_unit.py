@@ -1,13 +1,29 @@
 import json
+from collections.abc import Generator
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
+import relace_mcp.config.settings as settings_mod
 from relace_mcp.clients import SearchLLMClient
 from relace_mcp.config import RelaceConfig
+from relace_mcp.config.settings import reload_tool_settings
 from relace_mcp.search import FastAgenticSearchHarness
 from relace_mcp.search.schemas import TOOL_SCHEMAS
+
+
+@pytest.fixture(autouse=True)
+def _restore_search_settings() -> Generator[None, None, None]:
+    snapshot = {
+        "SEARCH_BASH_TOOLS": settings_mod.SEARCH_BASH_TOOLS,
+        "SEARCH_LSP_TOOLS": settings_mod.SEARCH_LSP_TOOLS,
+        "SEARCH_TOOL_STRICT": settings_mod.SEARCH_TOOL_STRICT,
+        "SEARCH_MAX_TURNS": settings_mod.SEARCH_MAX_TURNS,
+    }
+    yield
+    for key, value in snapshot.items():
+        setattr(settings_mod, key, value)
 
 
 def _make_view_file_call(call_id: str, path: str) -> dict:
@@ -338,7 +354,7 @@ class TestFastAgenticSearchHarness:
         """Partial results should never contain invalid ranges like end=-1."""
         import relace_mcp.search.harness.core as harness_core
 
-        monkeypatch.setattr(harness_core, "SEARCH_MAX_TURNS", 2)
+        monkeypatch.setattr(harness_core._settings, "SEARCH_MAX_TURNS", 2)
         (tmp_path / "test.py").write_text("line1\nline2\nline3\n")
 
         view_to_eof_call = {
@@ -533,6 +549,7 @@ class TestToolSchemas:
 
         monkeypatch.setenv("SEARCH_BASH_TOOLS", "1")
         monkeypatch.setenv("SEARCH_LSP_TOOLS", "0")
+        reload_tool_settings()
 
         schemas = tool_schemas.get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
@@ -555,6 +572,7 @@ class TestToolSchemas:
         )
         monkeypatch.setenv("SEARCH_BASH_TOOLS", "0")
         monkeypatch.setenv("SEARCH_LSP_TOOLS", "0")
+        reload_tool_settings()
 
         schemas = tool_schemas.get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
@@ -580,6 +598,7 @@ class TestToolSchemas:
 
         monkeypatch.setenv("SEARCH_LSP_TOOLS", "1")
         monkeypatch.setenv("SEARCH_BASH_TOOLS", "0")
+        reload_tool_settings()
 
         schemas = tool_schemas.get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
@@ -593,6 +612,7 @@ class TestToolSchemas:
 
         monkeypatch.setenv("SEARCH_LSP_TOOLS", "1")
         monkeypatch.setenv("SEARCH_BASH_TOOLS", "0")
+        reload_tool_settings()
 
         schemas = tool_schemas.get_tool_schemas(frozenset())
         names = {t["function"]["name"] for t in schemas}

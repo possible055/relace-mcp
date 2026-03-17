@@ -1,5 +1,6 @@
 import pytest
 
+import relace_mcp.config.settings as settings_mod
 from relace_mcp.config import load_prompt_file
 from relace_mcp.search.schemas import build_system_prompt
 
@@ -27,7 +28,7 @@ def test_build_system_prompt_strips_triple_newlines(prompt_data: dict) -> None:
 def test_build_system_prompt_renders_max_turns(
     prompt_data: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("SEARCH_MAX_TURNS", "7")
+    monkeypatch.setattr(settings_mod, "SEARCH_MAX_TURNS", 7)
     enabled = {"view_file", "view_directory", "grep_search", "glob", "report_back"}
     prompt = build_system_prompt(prompt_data["system_prompt"], enabled_tools=enabled)
     assert "{max_turns}" not in prompt

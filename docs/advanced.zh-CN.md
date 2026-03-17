@@ -22,15 +22,16 @@
 
 | 变量 | 默认值 | 描述 |
 |------|--------|------|
-| `RELACE_API_KEY` | — | **必需。** 你的 Relace API key |
-| `MCP_BASE_DIR` | 当前目录 | 限制文件访问范围 |
+| `RELACE_API_KEY` | — | 在使用 Relace provider 或云端工具时必需 |
+| `MCP_BASE_DIR` | auto | 仅当你想覆盖自动解析结果时，用它限制文件访问范围 |
 | `MCP_EXTRA_PATHS` | — | 文件操作额外允许路径（逗号分隔，支持绝对路径与 `~`） |
 | `MCP_DOTENV_PATH` | — | 启动时加载的 `.env` 文件路径（集中配置） |
 | `RELACE_DEFAULT_ENCODING` | — | 强制项目文件编码（如 `gbk`、`big5`） |
 | `MCP_LOGGING` | `off` | 文件日志：`off`、`safe`（启用并遮蔽）、`full`（启用不遮蔽） |
 | `MCP_LOG_LEVEL` | `WARNING` | stderr 日志级别：`DEBUG`、`INFO`、`WARNING`、`ERROR` |
 | `RELACE_CLOUD_TOOLS` | `0` | 设为 `1` 启用云工具（cloud_sync、cloud_search 等） |
-| `MCP_SEARCH_RETRIEVAL` | `0` | 设为 `1` 启用 `agentic_retrieval` 工具 |
+| `MCP_SEARCH_RETRIEVAL` | `0` | 设为 `1` 注册 `agentic_retrieval` 工具 |
+| `MCP_RETRIEVAL_BACKEND` | `relace` | semantic retrieval backend：`relace`、`codanna`、`chunkhound`、`auto`、`none` |
 
 > **注意：** 仅当**同时满足**以下条件时可省略 `RELACE_API_KEY`：(1) `APPLY_PROVIDER` 和 `SEARCH_PROVIDER` 均使用非 Relace 提供商，且 (2) `RELACE_CLOUD_TOOLS=false`。否则必须设置。
 
@@ -214,7 +215,7 @@ Server 按优先级自动选择当前 session 可用的后端：`codanna` → `c
 | macOS | `~/Library/Application Support/relace/relace.log` |
 | Windows | `%LOCALAPPDATA%\relace\relace.log` |
 
-> 可以使用 `MCP_LOG_DIR` / `MCP_LOG_PATH` 覆盖位置。
+这些路径会根据平台 state directory 自动推导，目前不支持通过环境变量覆盖日志位置。
 
 ### Trace 位置 (MCP_LOGGING=full)
 
@@ -227,13 +228,7 @@ Server 按优先级自动选择当前 session 可用的后端：`codanna` → `c
 | macOS | `~/Library/Application Support/relace/traces/relace.trace.jsonl` |
 | Windows | `%LOCALAPPDATA%\relace\traces\relace.trace.jsonl` |
 
-> 可以使用 `MCP_TRACE_DIR` / `MCP_TRACE_PATH` 覆盖位置。使用 `MCP_TRACE=0` 禁用 trace 写入。
-
-### 过滤
-
-- **最低事件/trace 级别：** `MCP_LOG_FILE_LEVEL=INFO`（或 `WARNING`、`ERROR`）。
-- **事件 kind 白名单/黑名单：** `MCP_LOG_INCLUDE_KINDS=search_turn,tool_call` 和/或 `MCP_LOG_EXCLUDE_KINDS=tool_start`。
-- **Trace kind 白名单/黑名单：** `MCP_TRACE_INCLUDE_KINDS=llm_request,llm_response`（或使用 `MCP_TRACE_EXCLUDE_KINDS` 排除）。
+Trace 文件沿用同一套自动 state-directory 布局，并且只会在 `MCP_LOGGING=full` 时写入。
 
 ### 日志格式
 

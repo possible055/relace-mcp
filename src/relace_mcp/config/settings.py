@@ -25,6 +25,18 @@ APPLY_TIMEOUT_SECONDS = float(os.getenv("APPLY_TIMEOUT_SECONDS", "") or "60.0")
 MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0
 
+
+def _parse_positive_int_env(name: str, default: int) -> int:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
 # Temperature settings for each tool
 SEARCH_TEMPERATURE = float(os.getenv("SEARCH_TEMPERATURE", "1.0"))
 APPLY_TEMPERATURE = float(os.getenv("APPLY_TEMPERATURE", "0.0"))
@@ -36,7 +48,7 @@ RELACE_PROVIDER = "relace"
 SEARCH_DEFAULT_ENDPOINT = "https://search.endpoint.relace.run/v1/search"
 SEARCH_DEFAULT_MODEL = "relace-search"
 SEARCH_TIMEOUT_SECONDS = float(os.getenv("SEARCH_TIMEOUT_SECONDS", "") or "120.0")
-SEARCH_MAX_TURNS = int(os.getenv("SEARCH_MAX_TURNS", "") or "6")
+SEARCH_MAX_TURNS = _parse_positive_int_env("SEARCH_MAX_TURNS", 6)
 # Search parallel tool calls (default: true)
 SEARCH_PARALLEL_TOOL_CALLS = env_bool("SEARCH_PARALLEL_TOOL_CALLS", default=True)
 # Search top_p (optional, only set if explicitly configured)
@@ -119,6 +131,9 @@ RETRIEVAL_HINT_POLICY = _parse_retrieval_hint_policy()
 # Enable agentic_retrieval tool (semantic hints are optional; backend may be "none")
 AGENTIC_RETRIEVAL_ENABLED = env_bool("MCP_SEARCH_RETRIEVAL", default=False)
 
+# Search tool schema compatibility
+SEARCH_TOOL_STRICT = env_bool("SEARCH_TOOL_STRICT", default=True)
+
 # Search tool toggles (both disabled by default)
 SEARCH_BASH_TOOLS = env_bool("SEARCH_BASH_TOOLS", default=False)
 SEARCH_LSP_TOOLS = env_bool("SEARCH_LSP_TOOLS", default=False)
@@ -162,20 +177,23 @@ def reload_logging_settings() -> None:
 def reload_tool_settings() -> None:
     """Re-read tool-registration environment variables after dotenv loading.
 
-    Module-level constants (``RELACE_CLOUD_TOOLS``, ``RETRIEVAL_BACKEND``,
-    ``RETRIEVAL_HINT_POLICY``, ``AGENTIC_RETRIEVAL_ENABLED``) are bound at
-    import time. If ``settings`` is imported before ``load_dotenv()`` populates
-    ``os.environ``, these constants will hold stale defaults.
+    Module-level constants bound at import time can become stale if ``settings``
+    is imported before ``load_dotenv()`` populates ``os.environ``.
 
     Call this once after ``_load_dotenv_from_path()`` to ensure ``.env``
     values take effect.
     """
     global RELACE_CLOUD_TOOLS, RETRIEVAL_BACKEND, RETRIEVAL_HINT_POLICY, AGENTIC_RETRIEVAL_ENABLED
+    global SEARCH_BASH_TOOLS, SEARCH_LSP_TOOLS, SEARCH_TOOL_STRICT, SEARCH_MAX_TURNS
 
     RELACE_CLOUD_TOOLS = env_bool("RELACE_CLOUD_TOOLS", default=False)
     RETRIEVAL_BACKEND = _parse_retrieval_backend()
     RETRIEVAL_HINT_POLICY = _parse_retrieval_hint_policy()
     AGENTIC_RETRIEVAL_ENABLED = env_bool("MCP_SEARCH_RETRIEVAL", default=False)
+    SEARCH_BASH_TOOLS = env_bool("SEARCH_BASH_TOOLS", default=False)
+    SEARCH_LSP_TOOLS = env_bool("SEARCH_LSP_TOOLS", default=False)
+    SEARCH_TOOL_STRICT = env_bool("SEARCH_TOOL_STRICT", default=True)
+    SEARCH_MAX_TURNS = _parse_positive_int_env("SEARCH_MAX_TURNS", 6)
 
 
 # File size limit (10MB) to prevent memory exhaustion on file read/write operations

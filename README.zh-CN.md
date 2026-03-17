@@ -27,7 +27,7 @@
 
 - **快速应用** — 通过 Relace API 以 10,000+ tokens/秒的速度应用代码编辑
 - **智能搜索** — 使用自然语言查询进行智能代码库探索
-- **智能检索** — 结合语义 hints 与 live code exploration 的混合检索，支持 stale hints，并将 cloud maintenance 保持为显式操作（需设置 `MCP_SEARCH_RETRIEVAL=1`）
+- **智能检索** — 结合语义 hints 与 live code exploration 的混合检索，支持 stale hints，并将 cloud maintenance 保持为显式操作（使用 `MCP_SEARCH_RETRIEVAL=1` 启用，backend 由 `MCP_RETRIEVAL_BACKEND` 选择）
 - **云端搜索** — 对云端同步的仓库进行语义代码搜索
 
 ## 快速开始
@@ -138,13 +138,14 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 
 | 变量 | 必需 | 说明 |
 |------|------|------|
-| `RELACE_API_KEY` | ✅* | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥 |
+| `RELACE_API_KEY` | ✅* | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥；在使用 Relace provider 或云端工具时必需 |
 | `RELACE_CLOUD_TOOLS` | ❌ | 设为 `1` 启用云端工具 |
-| `MCP_SEARCH_RETRIEVAL` | ❌ | 设为 `1` 启用 `agentic_retrieval` 工具 |
+| `MCP_SEARCH_RETRIEVAL` | ❌ | 设为 `1` 注册 `agentic_retrieval` 工具 |
+| `MCP_RETRIEVAL_BACKEND` | ❌ | semantic retrieval backend：`relace`（默认）、`codanna`、`chunkhound`、`auto` 或 `none` |
 | `MCP_RETRIEVAL_HINT_POLICY` | ❌ | retrieval hint policy：`prefer-stale`（默认）或 `strict` |
 | `SEARCH_BASH_TOOLS` | ❌ | Bash 工具开关：`1`（开）、`0`（关，默认） |
 | `SEARCH_LSP_TOOLS` | ❌ | LSP 工具开关：`1`（开）、`0`（关，默认） |
-| `MCP_BASE_DIR` | ❌ | 项目根目录（自动检测：MCP Roots → Git → CWD） |
+| `MCP_BASE_DIR` | ❌ | 项目根目录覆盖值（自动检测顺序：MCP Roots → Git → workspace storage → CWD） |
 | `MCP_LOGGING` | ❌ | 文件日志：`off`（默认）、`safe`、`full` |
 | `MCP_DOTENV_PATH` | ❌ | `.env` 文件路径，用于集中配置 |
 
@@ -154,7 +155,7 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 
 ## 工具
 
-始终可用的工具有：`fast_apply`、`agentic_search`、`index_status`。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`agentic_retrieval` 需设置 `MCP_SEARCH_RETRIEVAL=1`。
+始终可用的工具有：`fast_apply`、`agentic_search`、`index_status`。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`agentic_retrieval` 需设置 `MCP_SEARCH_RETRIEVAL=1`，其 semantic backend 由 `MCP_RETRIEVAL_BACKEND` 选择。
 
 `agentic_retrieval` 可以先使用 stale semantic hints，再回到 live code 做确认；它不会隐式执行 `cloud_sync`。如果你要主动刷新 cloud index，请显式调用 `cloud_sync`。
 

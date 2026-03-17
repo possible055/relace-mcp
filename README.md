@@ -27,7 +27,7 @@ MCP server providing AI-powered code editing and intelligent codebase exploratio
 
 - **Fast Apply** — Apply code edits at 10,000+ tokens/sec via Relace API
 - **Agentic Search** — Agentic codebase exploration with natural language queries
-- **Agentic Retrieval** — Hybrid semantic hints + live code exploration, with stale-hint support and explicit cloud maintenance (requires `MCP_SEARCH_RETRIEVAL=1`)
+- **Agentic Retrieval** — Hybrid semantic hints + live code exploration, with stale-hint support and explicit cloud maintenance (enable with `MCP_SEARCH_RETRIEVAL=1`; choose the backend with `MCP_RETRIEVAL_BACKEND`)
 - **Cloud Search** — Semantic code search over cloud-synced repositories
 
 ## Quick Start
@@ -138,13 +138,14 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `RELACE_API_KEY` | ✅* | API key from [Relace Dashboard](https://app.relace.ai/settings/billing) |
+| `RELACE_API_KEY` | ✅* | API key from [Relace Dashboard](https://app.relace.ai/settings/billing); required for Relace providers and cloud tools |
 | `RELACE_CLOUD_TOOLS` | ❌ | Set to `1` to enable cloud tools |
-| `MCP_SEARCH_RETRIEVAL` | ❌ | Set to `1` to enable `agentic_retrieval` tool |
+| `MCP_SEARCH_RETRIEVAL` | ❌ | Set to `1` to register the `agentic_retrieval` tool |
+| `MCP_RETRIEVAL_BACKEND` | ❌ | Semantic retrieval backend: `relace` (default), `codanna`, `chunkhound`, `auto`, or `none` |
 | `MCP_RETRIEVAL_HINT_POLICY` | ❌ | Retrieval hint policy: `prefer-stale` (default) or `strict` |
 | `SEARCH_BASH_TOOLS` | ❌ | Bash tool toggle: `1` (on), `0` (off, default) |
 | `SEARCH_LSP_TOOLS` | ❌ | LSP tools toggle: `1` (on), `0` (off, default) |
-| `MCP_BASE_DIR` | ❌ | Project root (auto-detected via MCP Roots → Git → CWD) |
+| `MCP_BASE_DIR` | ❌ | Project root override (auto-detected via MCP Roots → Git → workspace storage → CWD) |
 | `MCP_LOGGING` | ❌ | File logging: `off` (default), `safe`, `full` |
 | `MCP_DOTENV_PATH` | ❌ | Path to `.env` file for centralized config |
 
@@ -154,7 +155,7 @@ For `.env` usage, encoding settings, custom LLM providers, and more, see [docs/a
 
 ## Tools
 
-Always-available tools: `fast_apply`, `agentic_search`, `index_status`. Cloud tools require `RELACE_CLOUD_TOOLS=1`. `agentic_retrieval` requires `MCP_SEARCH_RETRIEVAL=1`.
+Always-available tools: `fast_apply`, `agentic_search`, `index_status`. Cloud tools require `RELACE_CLOUD_TOOLS=1`. `agentic_retrieval` requires `MCP_SEARCH_RETRIEVAL=1`, and its semantic backend is selected via `MCP_RETRIEVAL_BACKEND`.
 
 `agentic_retrieval` can use stale semantic hints and then verify them against live code. It does not run `cloud_sync` implicitly; use `cloud_sync` as the explicit maintenance tool when you want to refresh the cloud index ahead of retrieval.
 

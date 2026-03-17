@@ -1,21 +1,7 @@
-import os
 import shutil
 from typing import Any
 
-_TRUTHY = {"1", "true", "yes", "y", "on"}
-_FALSY = {"0", "false", "no", "n", "off"}
-
-
-def _env_toggle(name: str) -> bool:
-    raw = os.getenv(name, "").strip().lower()
-    if not raw:
-        return False
-    if raw in _TRUTHY:
-        return True
-    if raw in _FALSY:
-        return False
-    return False
-
+from ...config import settings as _settings
 
 _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
@@ -387,12 +373,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
 
 
 def _include_tool_strict() -> bool:
-    raw = os.getenv("SEARCH_TOOL_STRICT", "1").strip().lower()
-    if raw in _TRUTHY:
-        return True
-    if raw in _FALSY:
-        return False
-    return True
+    return _settings.SEARCH_TOOL_STRICT
 
 
 def normalize_tool_schemas(
@@ -436,10 +417,10 @@ def get_tool_schemas(lsp_languages: frozenset[str] | None = None) -> list[dict[s
         "report_back",
     }
 
-    if _env_toggle("SEARCH_BASH_TOOLS"):
+    if _settings.SEARCH_BASH_TOOLS:
         enabled.add("bash")
 
-    if _env_toggle("SEARCH_LSP_TOOLS"):
+    if _settings.SEARCH_LSP_TOOLS:
         enabled.update(lsp_tool_names)
 
     # Always keep report_back so the harness can terminate deterministically.

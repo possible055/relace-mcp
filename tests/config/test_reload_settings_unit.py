@@ -17,6 +17,10 @@ _TOOL_RELOAD_KEYS = (
     "RETRIEVAL_BACKEND",
     "RETRIEVAL_HINT_POLICY",
     "AGENTIC_RETRIEVAL_ENABLED",
+    "SEARCH_BASH_TOOLS",
+    "SEARCH_LSP_TOOLS",
+    "SEARCH_TOOL_STRICT",
+    "SEARCH_MAX_TURNS",
 )
 
 
@@ -116,15 +120,51 @@ class TestReloadToolSettings:
 
         assert settings_mod.RETRIEVAL_HINT_POLICY == "strict"
 
+    def test_search_bash_tools_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_BASH_TOOLS", "true")
+        reload_tool_settings()
+
+        assert settings_mod.SEARCH_BASH_TOOLS is True
+
+    def test_search_lsp_tools_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_LSP_TOOLS", "true")
+        reload_tool_settings()
+
+        assert settings_mod.SEARCH_LSP_TOOLS is True
+
+    def test_search_tool_strict_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_TOOL_STRICT", "false")
+        reload_tool_settings()
+
+        assert settings_mod.SEARCH_TOOL_STRICT is False
+
+    def test_search_max_turns_reloaded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_MAX_TURNS", "7")
+        reload_tool_settings()
+
+        assert settings_mod.SEARCH_MAX_TURNS == 7
+
+    def test_search_max_turns_invalid_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_MAX_TURNS", "0")
+        reload_tool_settings()
+
+        assert settings_mod.SEARCH_MAX_TURNS == 6
+
     def test_module_attribute_access_sees_reloaded_values(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Accessing settings via module reference must see reloaded values."""
         monkeypatch.setenv("RELACE_CLOUD_TOOLS", "true")
         monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "chunkhound")
+        monkeypatch.setenv("SEARCH_BASH_TOOLS", "true")
+        monkeypatch.setenv("SEARCH_TOOL_STRICT", "false")
+        monkeypatch.setenv("SEARCH_MAX_TURNS", "8")
         reload_tool_settings()
 
         from relace_mcp.config import settings as _settings
 
         assert _settings.RELACE_CLOUD_TOOLS is True
         assert _settings.RETRIEVAL_BACKEND == "chunkhound"
+        assert _settings.SEARCH_BASH_TOOLS is True
+        assert _settings.SEARCH_TOOL_STRICT is False
+        assert _settings.SEARCH_MAX_TURNS == 8

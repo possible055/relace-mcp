@@ -22,15 +22,16 @@ All environment variables can be set in your shell or in the `env` section of yo
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RELACE_API_KEY` | — | **Required.** Your Relace API key |
-| `MCP_BASE_DIR` | cwd | Restrict file access to this directory |
+| `RELACE_API_KEY` | — | Required when using Relace providers or cloud tools |
+| `MCP_BASE_DIR` | auto | Restrict file access to this directory when you want to override auto-resolution |
 | `MCP_EXTRA_PATHS` | — | Additional allowed paths (comma-separated absolute/`~` paths) for file operations |
 | `MCP_DOTENV_PATH` | — | Path to a `.env` file to load at startup |
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
 | `MCP_LOGGING` | `off` | File logging: `off`, `safe` (with redaction), `full` (no redaction) |
 | `MCP_LOG_LEVEL` | `WARNING` | Stderr log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `RELACE_CLOUD_TOOLS` | `0` | Set to `1` to enable cloud tools (cloud_sync, cloud_search, etc.) |
-| `MCP_SEARCH_RETRIEVAL` | `0` | Set to `1` to enable `agentic_retrieval` tool |
+| `MCP_SEARCH_RETRIEVAL` | `0` | Set to `1` to register the `agentic_retrieval` tool |
+| `MCP_RETRIEVAL_BACKEND` | `relace` | Semantic retrieval backend: `relace`, `codanna`, `chunkhound`, `auto`, `none` |
 
 > **Note:** `RELACE_API_KEY` can be omitted if **both**: (1) using non-Relace providers for `APPLY_PROVIDER` and `SEARCH_PROVIDER`, and (2) `RELACE_CLOUD_TOOLS=false`. Otherwise it is required.
 
@@ -214,7 +215,7 @@ File logging is opt-in. Set `MCP_LOGGING=safe` (with redaction) or `MCP_LOGGING=
 | macOS | `~/Library/Application Support/relace/relace.log` |
 | Windows | `%LOCALAPPDATA%\relace\relace.log` |
 
-> You can override the location with `MCP_LOG_DIR` / `MCP_LOG_PATH`.
+Paths are derived automatically from the platform state directory. Log location overrides are not currently configurable via environment variables.
 
 ### Trace Location (MCP_LOGGING=full)
 
@@ -227,13 +228,7 @@ When `MCP_LOGGING=full`, the server also writes a heavy trace log with full tool
 | macOS | `~/Library/Application Support/relace/traces/relace.trace.jsonl` |
 | Windows | `%LOCALAPPDATA%\relace\traces\relace.trace.jsonl` |
 
-> You can override the location with `MCP_TRACE_DIR` / `MCP_TRACE_PATH`. Use `MCP_TRACE=0` to disable trace writing.
-
-### Filtering
-
-- **Minimum event/trace level:** `MCP_LOG_FILE_LEVEL=INFO` (or `WARNING`, `ERROR`).
-- **Event kind allow/deny:** `MCP_LOG_INCLUDE_KINDS=search_turn,tool_call` and/or `MCP_LOG_EXCLUDE_KINDS=tool_start`.
-- **Trace kind allow/deny:** `MCP_TRACE_INCLUDE_KINDS=llm_request,llm_response` (or exclude with `MCP_TRACE_EXCLUDE_KINDS`).
+Trace files follow the same automatic state-directory layout and are only written when `MCP_LOGGING=full`.
 
 ### Log Format
 

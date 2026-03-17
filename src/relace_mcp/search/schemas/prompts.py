@@ -1,20 +1,12 @@
 import logging
-import os
+
+from ...config import settings as _settings
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MAX_TURNS = 6
-
 
 def _resolve_max_turns() -> int:
-    raw = os.getenv("SEARCH_MAX_TURNS", "").strip()
-    if not raw:
-        return _DEFAULT_MAX_TURNS
-    try:
-        value = int(raw)
-    except ValueError:
-        return _DEFAULT_MAX_TURNS
-    return value if value > 0 else _DEFAULT_MAX_TURNS
+    return _settings.SEARCH_MAX_TURNS
 
 
 def build_system_prompt(
