@@ -175,7 +175,7 @@ MCP_SEARCH_RETRIEVAL=1
 MCP_RETRIEVAL_BACKEND=codanna
 ```
 
-首次使用时，如果 index 缺失，server 可能会先在没有 hints 的情况下继续查询，同时排程 background refresh。每次 `fast_apply` 编辑后会在后台对变动文件增量重新索引。retrieval 过程中，当 `MCP_RETRIEVAL_HINT_POLICY=prefer-stale` 时可以继续使用 stale Codanna hints；`strict` 会跳过它们。更多配置请参阅 [Codanna 项目](https://pypi.org/project/codanna/)。
+首次使用时，如果 index 缺失，server 可能会先在没有 hints 的情况下继续查询，同时排程 background refresh。`index_status` 也可以在本地 index 处于 stale 或 missing 状态时排程 refresh。当前实现不会在每次 `fast_apply` 编辑后自动触发 Codanna reindex。retrieval 过程中，当 `MCP_RETRIEVAL_HINT_POLICY=prefer-stale` 时可以继续使用 stale Codanna hints；`strict` 会跳过它们。更多配置请参阅 [Codanna 项目](https://pypi.org/project/codanna/)。
 
 ### ChunkHound
 
@@ -190,7 +190,7 @@ MCP_SEARCH_RETRIEVAL=1
 MCP_RETRIEVAL_BACKEND=chunkhound
 ```
 
-首次使用时，如果 index 缺失，server 可能会先在没有 hints 的情况下继续查询，同时排程 background refresh。每次 `fast_apply` 编辑后触发后台扫描，仅重新处理有变更的文件（xxHash3-64 校验）。retrieval 过程中，当 `MCP_RETRIEVAL_HINT_POLICY=prefer-stale` 时可以继续使用 stale ChunkHound hints；`strict` 会跳过它们。更多配置请参阅 [ChunkHound 项目](https://pypi.org/project/chunkhound/)。
+首次使用时，如果 index 缺失，server 可能会先在没有 hints 的情况下继续查询，同时排程 background refresh。`index_status` 也可以在本地 index 处于 stale 或 missing 状态时排程 refresh。当前实现不会在每次 `fast_apply` 编辑后自动触发 ChunkHound scan。retrieval 过程中，当 `MCP_RETRIEVAL_HINT_POLICY=prefer-stale` 时可以继续使用 stale ChunkHound hints；`strict` 会跳过它们。更多配置请参阅 [ChunkHound 项目](https://pypi.org/project/chunkhound/)。
 
 ### 自动模式
 
@@ -357,20 +357,22 @@ export SEARCH_MODEL=gpt-4o
 
 ### LSP 工具
 
-LSP 工具（`find_symbol`、`search_symbol`、`get_type`、`list_symbols`、`call_graph`）默认禁用。
+LSP 工具（`find_symbol`、`search_symbol`）默认禁用。
 
 - **启用 LSP 工具：** `SEARCH_LSP_TOOLS=1`
 - **禁用 LSP 工具：** `SEARCH_LSP_TOOLS=0`（默认）
 
-`find_symbol` 工具使用 Language Server Protocol 进行 Python 语义查询：
-- `definition`：跳转到符号定义
-- `references`：查找符号的所有引用
+当前可用工具：
+- `find_symbol`：根据文件、行列位置跳转到定义，或列出该符号的引用
+- `search_symbol`：按符号名称或前缀搜索 workspace symbols
 
-> **注意：** 使用 `basedpyright`（随包安装）。首次调用会有 2-5 秒启动延迟。
+> **注意：** 只有在 `SEARCH_LSP_TOOLS=1` 且当前项目存在受支持语言时，LSP 工具才会暴露。Python 使用内置的 `basedpyright`；其他语言使用 README 中列出的系统 language server。
 
 ### OpenAI Structured Outputs
 
-使用 OpenAI 提供商且 `SEARCH_TOOL_STRICT=1`（默认）时，并行工具调用会自动禁用。要启用并行调用：
+部分 OpenAI 兼容 provider 会拒绝包含 `strict` tool fields 或 `parallel_tool_calls` 的请求。遇到这种情况时，client 会自动重试一个 compatibility payload，并在后续请求中沿用该 fallback。
+
+如果你的 provider 从一开始就更适合不带这个非标准 `strict` 字段：
 
 ```bash
 export SEARCH_TOOL_STRICT=0

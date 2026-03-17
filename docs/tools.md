@@ -1,6 +1,6 @@
 # Tools Reference
 
-This document provides detailed information about all available MCP tools.
+This document covers the public top-level MCP tools plus the search-only internal subtools that can be enabled inside `agentic_search` / `agentic_retrieval`.
 
 ## Search Behavior
 
@@ -8,6 +8,20 @@ The live local exploration used by `agentic_search` and `agentic_retrieval` has 
 
 - `.gitignore` filtering stays in effect during text search, so ignored trees do not reappear when the planner broadens file scope.
 - Exact-text probes automatically use fixed-string matching when regex features are unnecessary, improving common search latency without changing results.
+
+## Search-Only Subtools
+
+`agentic_search` and `agentic_retrieval` use internal exploration tools while they work. These do not appear as standalone top-level MCP tools in `list_tools()`.
+
+Always enabled inside search runs:
+- `view_file`
+- `view_directory`
+- `grep_search`
+- `report_back`
+
+Optional internal subtools:
+- `bash`: enable with `SEARCH_BASH_TOOLS=1`; exposed only when a `bash` executable is available on the host.
+- `find_symbol`, `search_symbol`: enable with `SEARCH_LSP_TOOLS=1`; exposed only when the current project has a supported LSP language.
 
 ## `fast_apply`
 
@@ -26,7 +40,7 @@ Notes:
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `path` | ✅ | Path within `MCP_BASE_DIR` (absolute or relative) |
+| `path` | ✅ | Absolute path, or a path relative to `MCP_BASE_DIR`. If `MCP_BASE_DIR` is unset, relative paths resolve against the active MCP root. |
 | `edit_snippet` | ✅ | Code with abbreviation placeholders |
 | `instruction` | ❌ | Hint for disambiguation |
 
@@ -42,7 +56,10 @@ Notes:
 
 ### Returns
 
-UDiff of changes, or confirmation for new files.
+Returns a structured object.
+
+- Success fields: `status`, `message`, `path`, `trace_id`, `timing_ms`, and `diff` (`null` for new files or no-op).
+- Error fields: the same envelope plus `code` and optional detail fields.
 
 ### Common Errors
 
@@ -103,6 +120,8 @@ This tool takes no parameters.
 
 ## `cloud_sync`
 
+Available only when `RELACE_CLOUD_TOOLS=1`.
+
 > **Note:** All `cloud_*` tools include a `trace_id` field in responses. On failures, responses may also include `status_code`, `error_code`, `retryable`, and `recommended_action`.
 
 Synchronize local codebase to Relace Cloud for semantic search. Uploads source files from `MCP_BASE_DIR` to Relace Repos.
@@ -127,6 +146,8 @@ Synchronize local codebase to Relace Cloud for semantic search. Uploads source f
 
 ## `cloud_search`
 
+Available only when `RELACE_CLOUD_TOOLS=1`.
+
 Semantic code search over the cloud-synced repository. Requires running `cloud_sync` first.
 
 ### Parameters
@@ -142,14 +163,19 @@ Semantic code search over the cloud-synced repository. Requires running `cloud_s
 
 ## `cloud_list`
 
+Available only when `RELACE_CLOUD_TOOLS=1`.
+
 List all repositories in your Relace Cloud account.
 
-This tool takes no parameters. Returns repository IDs, names, and indexing status.
+This tool takes no parameters. Returns `trace_id`, `count`, `repos`, and `has_more`.
+Each repo summary includes `repo_id`, `name`, `auto_index`, `created_at`, and `updated_at`.
 Use to find `repo_id` for `cloud_clear`; not needed for normal search/sync workflow.
 
 ---
 
 ## `cloud_clear`
+
+Available only when `RELACE_CLOUD_TOOLS=1`.
 
 Delete the cloud repository and local sync state. Use when switching projects or resetting after major restructuring.
 
@@ -178,6 +204,8 @@ If `confirm=false`, returns `status="cancelled"` and does nothing.
 ---
 
 ## `agentic_retrieval`
+
+Available only when `MCP_SEARCH_RETRIEVAL=1`.
 
 Hybrid semantic-hint + agentic code retrieval. It uses semantic hints to narrow the search space, then verifies those hints against live code exploration.
 

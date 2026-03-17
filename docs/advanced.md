@@ -175,7 +175,7 @@ MCP_SEARCH_RETRIEVAL=1
 MCP_RETRIEVAL_BACKEND=codanna
 ```
 
-On first use the server may proceed without hints if the index is missing, while scheduling a background refresh. After each `fast_apply` edit it incrementally reindexes the changed file in the background. During retrieval, stale Codanna hints can still be used when `MCP_RETRIEVAL_HINT_POLICY=prefer-stale`; `strict` skips them. Refer to the [Codanna project](https://pypi.org/project/codanna/) for configuration and model setup.
+On first use the server may proceed without hints if the index is missing, while scheduling a background refresh. `index_status` can also schedule a refresh when the local index is stale or missing. The current implementation does not trigger Codanna reindexing after every `fast_apply` edit. During retrieval, stale Codanna hints can still be used when `MCP_RETRIEVAL_HINT_POLICY=prefer-stale`; `strict` skips them. Refer to the [Codanna project](https://pypi.org/project/codanna/) for configuration and model setup.
 
 ### ChunkHound
 
@@ -190,7 +190,7 @@ MCP_SEARCH_RETRIEVAL=1
 MCP_RETRIEVAL_BACKEND=chunkhound
 ```
 
-On first use the server may proceed without hints if the index is missing, while scheduling a background refresh. After each `fast_apply` edit it triggers a background scan; only files that changed are re-processed (xxHash3-64 checksums). During retrieval, stale ChunkHound hints can still be used when `MCP_RETRIEVAL_HINT_POLICY=prefer-stale`; `strict` skips them. Refer to the [ChunkHound project](https://pypi.org/project/chunkhound/) for configuration and embedding model setup.
+On first use the server may proceed without hints if the index is missing, while scheduling a background refresh. `index_status` can also schedule a refresh when the local index is stale or missing. The current implementation does not trigger ChunkHound scans after every `fast_apply` edit. During retrieval, stale ChunkHound hints can still be used when `MCP_RETRIEVAL_HINT_POLICY=prefer-stale`; `strict` skips them. Refer to the [ChunkHound project](https://pypi.org/project/chunkhound/) for configuration and embedding model setup.
 
 ### Auto Mode
 
@@ -357,20 +357,22 @@ export SEARCH_MODEL=gpt-4o
 
 ### LSP Tool
 
-LSP tools (`find_symbol`, `search_symbol`, `get_type`, `list_symbols`, `call_graph`) are disabled by default.
+LSP tools (`find_symbol`, `search_symbol`) are disabled by default.
 
 - **Enable LSP tools:** `SEARCH_LSP_TOOLS=1`
 - **Disable LSP tools:** `SEARCH_LSP_TOOLS=0` (default)
 
-The `find_symbol` tool uses Language Server Protocol for Python semantic queries:
-- `definition`: Jump to symbol definition
-- `references`: Find all symbol references
+Available tools:
+- `find_symbol`: jump to a definition or list references for a symbol at a file/line/column
+- `search_symbol`: search workspace symbols by name or prefix
 
-> **Note:** Uses `basedpyright` (bundled). First call incurs 2-5s startup latency.
+> **Note:** LSP tools are exposed only when `SEARCH_LSP_TOOLS=1` and the current project has a supported language. Python uses bundled `basedpyright`; other languages use the system language servers described in the README.
 
 ### OpenAI Structured Outputs
 
-When using OpenAI providers with `SEARCH_TOOL_STRICT=1` (default), parallel tool calls are automatically disabled. To enable parallel calls:
+Some OpenAI-compatible providers reject requests that include `strict` tool fields or `parallel_tool_calls`. When that happens, the client retries with a compatibility payload that removes those fields and remembers that fallback for later requests.
+
+If your provider works better without the non-standard `strict` field from the start:
 
 ```bash
 export SEARCH_TOOL_STRICT=0

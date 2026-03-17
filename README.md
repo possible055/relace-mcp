@@ -143,8 +143,8 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 | `MCP_SEARCH_RETRIEVAL` | ❌ | Set to `1` to register the `agentic_retrieval` tool |
 | `MCP_RETRIEVAL_BACKEND` | ❌ | Semantic retrieval backend: `relace` (default), `codanna`, `chunkhound`, `auto`, or `none` |
 | `MCP_RETRIEVAL_HINT_POLICY` | ❌ | Retrieval hint policy: `prefer-stale` (default) or `strict` |
-| `SEARCH_BASH_TOOLS` | ❌ | Bash tool toggle: `1` (on), `0` (off, default) |
-| `SEARCH_LSP_TOOLS` | ❌ | LSP tools toggle: `1` (on), `0` (off, default) |
+| `SEARCH_BASH_TOOLS` | ❌ | Enable the internal `bash` subtool used inside `agentic_search` / `agentic_retrieval`: `1` (on), `0` (off, default) |
+| `SEARCH_LSP_TOOLS` | ❌ | Enable the internal `find_symbol` / `search_symbol` subtools used inside `agentic_search` / `agentic_retrieval`: `1` (on), `0` (off, default) |
 | `MCP_BASE_DIR` | ❌ | Project root override (auto-detected via MCP Roots → Git → workspace storage → CWD) |
 | `MCP_LOGGING` | ❌ | File logging: `off` (default), `safe`, `full` |
 | `MCP_DOTENV_PATH` | ❌ | Path to `.env` file for centralized config |
@@ -155,7 +155,9 @@ For `.env` usage, encoding settings, custom LLM providers, and more, see [docs/a
 
 ## Tools
 
-Always-available tools: `fast_apply`, `agentic_search`, `index_status`. Cloud tools require `RELACE_CLOUD_TOOLS=1`. `agentic_retrieval` requires `MCP_SEARCH_RETRIEVAL=1`, and its semantic backend is selected via `MCP_RETRIEVAL_BACKEND`.
+Always-available top-level tools: `fast_apply`, `agentic_search`, `index_status`. Cloud tools require `RELACE_CLOUD_TOOLS=1`. `agentic_retrieval` requires `MCP_SEARCH_RETRIEVAL=1`, and its semantic backend is selected via `MCP_RETRIEVAL_BACKEND`.
+
+`SEARCH_BASH_TOOLS` and `SEARCH_LSP_TOOLS` do not add new top-level entries to `list_tools()`. They only expand the internal toolset used while `agentic_search` / `agentic_retrieval` explore the codebase.
 
 `agentic_retrieval` can use stale semantic hints and then verify them against live code. It does not run `cloud_sync` implicitly; use `cloud_sync` as the explicit maintenance tool when you want to refresh the cloud index ahead of retrieval.
 
@@ -190,15 +192,18 @@ For detailed usage, see [docs/dashboard.md](docs/dashboard.md).
 Evaluate `agentic_search` performance using the [Loc-Bench](https://huggingface.co/datasets/IvanaXu/LocAgent) code localization dataset.
 
 ```bash
-# Install benchmark dependencies
-pip install relace-mcp[benchmark]
+git clone https://github.com/possible055/relace-mcp.git
+cd relace-mcp
+uv sync --extra benchmark
 
 # Build dataset from Hugging Face
-uv run python -m benchmark.cli.build_locbench --output artifacts/data/raw/locbench_v1.jsonl
+uv run --extra benchmark python -m benchmark.cli.build_locbench --output artifacts/data/raw/locbench_v1.jsonl
 
 # Run evaluation
-uv run python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.jsonl --limit 20
+uv run --extra benchmark python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.jsonl --limit 20
 ```
+
+All benchmark artifacts are written under `benchmark/artifacts/`.
 
 For grid search, analysis tools, and metrics interpretation, see [docs/benchmark.md](docs/benchmark.md).
 
@@ -212,20 +217,20 @@ For grid search, analysis tools, and metrics interpretation, see [docs/benchmark
 
 ## Troubleshooting
 
-| Error | Solution |
-|-------|----------|
-| `RELACE_API_KEY is not set` | Set the key in your environment or MCP config |
-| `NEEDS_MORE_CONTEXT` | Include 1–3 anchor lines before/after target block |
-| `FILE_TOO_LARGE` | File exceeds 10MB; split file |
-| `ENCODING_ERROR` | Set `RELACE_DEFAULT_ENCODING` explicitly |
-| `AUTH_ERROR` | Verify API key is valid and not expired |
-| `RATE_LIMIT` | Too many requests; wait and retry |
-| `CONNECTION_TIMEOUT` | Check network connection or increase timeout setting |
-| `INVALID_PATH` | File path doesn't exist or no permission; verify path and access rights |
-| `SYNTAX_ERROR` | Invalid edit_snippet format; ensure placeholder syntax is correct |
-| `NO_MATCH_FOUND` | No search results; try broader query or run `cloud_sync` first |
-| `CLOUD_NOT_SYNCED` | Repository not synced to Relace Cloud; run `cloud_sync` first |
-| `CONFLICT_DETECTED` | Edit conflict; file was modified, re-read before editing |
+| Error or message | Solution |
+|------------------|----------|
+| `RELACE_API_KEY is required ...` | Set `RELACE_API_KEY` when using Relace providers or cloud tools |
+| `NEEDS_MORE_CONTEXT` | Include 1-3 unique anchor lines near the target block |
+| `INVALID_PATH` | Verify the path exists and is inside `MCP_BASE_DIR` or an allowed extra path |
+| `FILE_TOO_LARGE` | File exceeds 10MB; split the change into smaller files or edits |
+| `ENCODING_ERROR` | Set `RELACE_DEFAULT_ENCODING` explicitly for non-UTF-8 projects |
+| `AUTH_ERROR` | Verify the API key and provider configuration |
+| `RATE_LIMIT` | Retry later or reduce request volume |
+| `NETWORK_ERROR` / `TIMEOUT_ERROR` | Check network access and retry |
+| `APPLY_NOOP` | Add more specific anchors or concrete new lines so the merge can produce a diff |
+| `MARKER_LEAKAGE` | Ensure placeholder markers are used only as placeholders, not expected literal output |
+| `TRUNCATION_DETECTED` | Split large deletion-heavy edits or use explicit remove directives |
+| `BLAST_RADIUS_EXCEEDED` | Break the change into smaller, more local edits |
 
 ## Development
 

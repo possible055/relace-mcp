@@ -1,6 +1,6 @@
 # 工具参考
 
-本文档提供所有可用 MCP 工具的详细信息。
+本文档说明对外可见的 top-level MCP tools，以及 `agentic_search` / `agentic_retrieval` 内部可启用的 search-only subtools。
 
 ## 搜索行为
 
@@ -8,6 +8,20 @@
 
 - 文本搜索期间会持续应用 `.gitignore` 过滤，所以即使 planner 临时放宽 file scope，被 ignored 的目录也不会重新进入搜索范围。
 - 当查询不需要 regex 特性时，exact-text probes 会自动使用 fixed-string matching，在不改变结果的前提下改善常见搜索延迟。
+
+## Search-Only Subtools
+
+`agentic_search` 与 `agentic_retrieval` 在工作过程中会使用内部探索工具。它们不会作为独立的 top-level MCP tools 出现在 `list_tools()` 里。
+
+在 search run 内始终可用：
+- `view_file`
+- `view_directory`
+- `grep_search`
+- `report_back`
+
+可选的内部 subtools：
+- `bash`：用 `SEARCH_BASH_TOOLS=1` 启用；只有宿主机上存在 `bash` 可执行文件时才会暴露。
+- `find_symbol`、`search_symbol`：用 `SEARCH_LSP_TOOLS=1` 启用；只有当前项目存在受支持的 LSP 语言时才会暴露。
 
 ## `fast_apply`
 
@@ -26,7 +40,7 @@
 
 | 参数 | 必需 | 描述 |
 |------|------|------|
-| `path` | ✅ | `MCP_BASE_DIR` 内的路径（绝对或相对） |
+| `path` | ✅ | 绝对路径，或相对于 `MCP_BASE_DIR` 的路径。若未设置 `MCP_BASE_DIR`，相对路径会按当前 MCP root 解析。 |
 | `edit_snippet` | ✅ | 带有缩写占位符的代码 |
 | `instruction` | ❌ | 消歧提示 |
 
@@ -42,7 +56,10 @@
 
 ### 返回
 
-更改的 UDiff，或新文件的确认信息。
+返回结构化对象。
+
+- 成功时包含：`status`、`message`、`path`、`trace_id`、`timing_ms` 与 `diff`（新文件或 no-op 时为 `null`）。
+- 失败时包含：同样的外层字段，以及 `code` 和可选的 detail 字段。
 
 ### 常见错误
 
@@ -103,6 +120,8 @@
 
 ## `cloud_sync`
 
+仅在 `RELACE_CLOUD_TOOLS=1` 时可用。
+
 > **注意：** 所有 `cloud_*` 工具的响应都会包含 `trace_id`。失败时响应还可能包含 `status_code`、`error_code`、`retryable`、`recommended_action`。
 
 将本地代码库同步到 Relace Cloud 以进行语义搜索。将 `MCP_BASE_DIR` 中的源文件上传到 Relace Repos。
@@ -127,6 +146,8 @@
 
 ## `cloud_search`
 
+仅在 `RELACE_CLOUD_TOOLS=1` 时可用。
+
 对云端同步的仓库进行语义代码搜索。需要先运行 `cloud_sync`。
 
 ### 参数
@@ -142,14 +163,19 @@
 
 ## `cloud_list`
 
+仅在 `RELACE_CLOUD_TOOLS=1` 时可用。
+
 列出 Relace Cloud 账户中的所有仓库。
 
-此工具无参数。返回仓库 ID、名称和索引状态。
+此工具无参数。返回 `trace_id`、`count`、`repos` 与 `has_more`。
+每个 repo summary 包含 `repo_id`、`name`、`auto_index`、`created_at` 与 `updated_at`。
 用于获取 `cloud_clear` 所需的 `repo_id`；正常搜索/同步流程不需要调用。
 
 ---
 
 ## `cloud_clear`
+
+仅在 `RELACE_CLOUD_TOOLS=1` 时可用。
 
 删除云端仓库和本地同步状态。在切换项目或重大重构后重置时使用。
 
@@ -178,6 +204,8 @@
 ---
 
 ## `agentic_retrieval`
+
+仅在 `MCP_SEARCH_RETRIEVAL=1` 时可用。
 
 结合 semantic hints 与 agentic code retrieval 的混合检索。它会先用语义 hints 缩小范围，再回到 live code exploration 做确认。
 

@@ -24,12 +24,6 @@ uv add relace-mcp --extra tools
 relogs
 ```
 
-或通过 Python 模块：
-
-```bash
-python -m relace_mcp.dashboard
-```
-
 ## 功能特性
 
 ### 1. 多视图标签页
@@ -215,7 +209,7 @@ Cloud 操作会记录结构化事件：
 ### Dashboard 无法启动
 
 ```
-Error: textual is not installed.
+relace-dashboard requires optional dependencies.
 Install with: pip install relace-mcp[tools]
 ```
 

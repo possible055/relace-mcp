@@ -26,7 +26,7 @@ def _load_benchmark_config():
     """Load config for running search benchmarks.
 
     Note: RELACE_API_KEY is only required when SEARCH_PROVIDER=relace. For other
-    providers, SearchLLMClient will use SEARCH_API_KEY / OPENAI_API_KEY / etc.
+    providers, SearchLLMClient will use SEARCH_API_KEY.
     """
     from relace_mcp.config import RelaceConfig
     from relace_mcp.config import settings as _settings
@@ -194,8 +194,8 @@ def main(
         click.echo(f"Error loading config: {e}", err=True)
         click.echo(
             "For Relace search: set RELACE_API_KEY.\n"
-            "For non-Relace search: set SEARCH_PROVIDER and its API key "
-            "(e.g. SEARCH_API_KEY / OPENAI_API_KEY / OPENROUTER_API_KEY)."
+            "For non-Relace search: set SEARCH_PROVIDER, SEARCH_ENDPOINT, "
+            "SEARCH_MODEL, and SEARCH_API_KEY."
         )
         sys.exit(1)
 
