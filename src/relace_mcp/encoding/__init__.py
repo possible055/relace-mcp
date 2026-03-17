@@ -7,6 +7,7 @@ from .codec import (
     read_text_with_fallback,
     set_project_encoding,
 )
+from .detect import detect_project_encoding
 from .exceptions import EncodingDetectionError
 
 __all__ = [
@@ -14,6 +15,7 @@ __all__ = [
     "atomic_write",
     "decode_text_best_effort",
     "decode_text_with_fallback",
+    "detect_project_encoding",
     "get_project_encoding",
     "read_text_best_effort",
     "read_text_with_fallback",

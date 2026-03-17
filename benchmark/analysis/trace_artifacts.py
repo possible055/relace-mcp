@@ -307,7 +307,7 @@ def build_search_complete_event(
     turns_used: int,
     partial: bool,
     files_found: int,
-    total_latency_ms: float,
+    total_latency_ms: float | None,
     retrieval_backend: str | None,
     semantic_hints_used: int,
     hint_policy: str | None,
@@ -315,6 +315,7 @@ def build_search_complete_event(
     background_refresh_scheduled: bool | None,
     reindex_action: str | None,
 ) -> SearchCompleteEventPayload:
+    latency_ms = _safe_float(total_latency_ms)
     return {
         "kind": "search_complete",
         "case_id": case_id,
@@ -323,7 +324,7 @@ def build_search_complete_event(
         "turns_used": int(turns_used),
         "partial": partial,
         "files_found": int(files_found),
-        "total_latency_ms": _safe_float(total_latency_ms) or 0.0,
+        "total_latency_ms": latency_ms if latency_ms is not None else 0.0,
         "retrieval_backend": retrieval_backend,
         "semantic_hints_used": int(semantic_hints_used),
         "hint_policy": hint_policy,

@@ -8,6 +8,8 @@ import pytest
 from relace_mcp.clients import ApplyLLMClient
 from relace_mcp.config import RelaceConfig
 
+_LEVEL_SUFFIXES = ("unit", "integration", "contract", "smoke")
+
 
 @pytest.fixture
 def mock_config(tmp_path: Path) -> RelaceConfig:
@@ -151,3 +153,13 @@ def mock_log_path(tmp_path: Path) -> Generator[Path, None, None]:
         patch("relace_mcp.config.settings.LOG_PATH", log_file),
     ):
         yield log_file
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    for item in items:
+        path = Path(str(getattr(item, "path", item.fspath)))
+        stem = path.stem
+        for level in _LEVEL_SUFFIXES:
+            if stem.endswith(f"_{level}"):
+                item.add_marker(getattr(pytest.mark, level))
+                break

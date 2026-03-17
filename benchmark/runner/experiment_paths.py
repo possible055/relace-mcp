@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .._config.paths import get_experiments_dir
@@ -27,7 +27,7 @@ def slugify_experiment_segment(value: str) -> str:
 
 
 def format_experiment_timestamp(timestamp: datetime | None = None) -> str:
-    ts = timestamp or datetime.now()
+    ts = timestamp or datetime.now(UTC)
     return ts.strftime("%Y%m%d-%H%M%S")
 
 
@@ -122,7 +122,7 @@ def find_latest_traces_dir(experiments_dir: Path | None = None) -> Path | None:
     trace_dirs = collect_trace_dirs(experiments_dir)
     if not trace_dirs:
         return None
-    return max(trace_dirs, key=lambda path: str(path))
+    return max(trace_dirs, key=lambda path: (path.stat().st_mtime_ns, str(path)))
 
 
 def infer_experiment_root_from_traces(traces_dir: Path) -> Path | None:

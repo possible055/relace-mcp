@@ -93,11 +93,10 @@ When using alternative providers, you **must** set `APPLY_API_KEY` or `SEARCH_AP
 
 ## Using a .env File
 
-If you prefer to keep configuration in one place, point the server to a centralized `.env` file.
-
-Example `.env`:
+Use a centralized `.env` file instead of setting multiple environment variables in your MCP config:
 
 ```bash
+# ~/.config/relace/.env
 RELACE_API_KEY=rlc-your-api-key
 
 # Optional provider overrides
@@ -106,11 +105,12 @@ SEARCH_ENDPOINT=https://api.openai.com/v1
 SEARCH_MODEL=gpt-4o
 SEARCH_API_KEY=sk-xxx
 
-# Logging
+# Other settings
 MCP_LOGGING=safe
+SEARCH_MAX_TURNS=6
 ```
 
-Then set `MCP_DOTENV_PATH` in your MCP client configuration:
+Then point `MCP_DOTENV_PATH` to the file in your MCP client config:
 
 ```json
 {
@@ -126,7 +126,7 @@ Then set `MCP_DOTENV_PATH` in your MCP client configuration:
 }
 ```
 
-Environment variables set directly in your MCP client config take precedence over values in the `.env` file.
+> **Note:** Variables set directly in `env` take precedence over values in the `.env` file.
 
 ---
 

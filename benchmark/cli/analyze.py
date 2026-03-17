@@ -133,9 +133,13 @@ def main() -> None:
     # Default path
     experiments_dir = get_experiments_dir()
     result_candidates = (
-        sorted(experiments_dir.rglob("results.jsonl")) if experiments_dir.exists() else []
+        list(experiments_dir.rglob("results.jsonl")) if experiments_dir.exists() else []
     )
-    default_path = result_candidates[-1] if result_candidates else experiments_dir / "results.jsonl"
+    default_path = (
+        max(result_candidates, key=lambda path: (path.stat().st_mtime_ns, str(path)))
+        if result_candidates
+        else experiments_dir / "results.jsonl"
+    )
     path = sys.argv[1] if len(sys.argv) > 1 else str(default_path)
 
     if not Path(path).exists():

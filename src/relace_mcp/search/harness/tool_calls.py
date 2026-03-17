@@ -1,0 +1,486 @@
+import json
+import logging
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import TYPE_CHECKING, Any
+
+from ...config import settings
+from ...observability import log_trace_event
+from .._impl import (
+    # --- Disabled LSP tools (kept for future re-enablement) ---
+    # CallGraphParams,
+    # GetTypeParams,
+    # ListSymbolsParams,
+    LSPQueryParams,
+    SearchSymbolParams,
+    bash_handler,
+    # call_graph_handler,
+    find_symbol_handler,
+    # get_type_handler,
+    glob_handler,
+    grep_search_handler,
+    # list_symbols_handler,
+    report_back_handler,
+    search_symbol_handler,
+    view_directory_handler,
+    view_file_handler,
+)
+from ..logging import log_tool_call
+from ..schemas import GrepSearchParams, get_tool_schemas
+from .constants import MAX_PARALLEL_WORKERS, PARALLEL_SAFE_TOOLS
+
+logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from ...config import RelaceConfig
+
+
+class ToolCallsMixin:
+    _config: "RelaceConfig"
+    _lsp_languages: frozenset[str]
+
+    if TYPE_CHECKING:
+
+        def _maybe_record_observed(
+            self,
+            _name: str,
+            _args: dict[str, Any],
+            _result: str | dict[str, Any],
+        ) -> None: ...
+
+    def _enabled_tool_names(self) -> set[str]:
+        """Return the enabled tool names for this run (defense-in-depth).
+
+        The LLM is prompted with a tool schema allowlist, but some providers or
+        prompt-injection scenarios may still return tool calls for tools that were
+        not advertised. Enforce the allowlist at execution time to ensure tools
+        like `bash` remain opt-in and `find_symbol` is hidden when no LSP languages
+        are available.
+        """
+        enabled: set[str] = set()
+        # Use same lsp_languages as the harness to ensure consistency
+        for schema in get_tool_schemas(self._lsp_languages):
+            func = schema.get("function")
+            if not isinstance(func, dict):
+                continue
+            name = func.get("name")
+            if isinstance(name, str) and name:
+                enabled.add(name)
+        # Always allow report_back so the harness can terminate deterministically.
+        enabled.add("report_back")
+        return enabled
+
+    def _parse_and_classify_tool_calls(
+        self, tool_calls: list[dict[str, Any]], trace_id: str
+    ) -> tuple[
+        list[tuple[str, str, str, dict[str, Any] | None]],
+        list[tuple[str, str, str, dict[str, Any] | None]],
+    ]:
+        """Parse and classify tool calls for parallel or sequential execution.
+
+        Args:
+            tool_calls: Tool calls list returned by API.
+            trace_id: Trace ID.
+
+        Returns:
+            (parallel_calls, sequential_calls) tuple.
+        """
+        parsed_calls: list[tuple[str, str, str, dict[str, Any] | None]] = []
+        for tc in tool_calls:
+            tc_id = tc.get("id", "")
+            function = tc.get("function", {})
+            func_name = function.get("name", "")
+            func_args_str = function.get("arguments", "{}")
+
+            try:
+                func_args = json.loads(func_args_str)
+            except json.JSONDecodeError as exc:
+                logger.error("[%s] Invalid JSON in tool call %s: %s", trace_id, func_name, exc)
+                parsed_calls.append(
+                    (tc_id, func_name, f"Error: Invalid JSON arguments: {exc}", None)
+                )
+                continue
+
+            parsed_calls.append((tc_id, func_name, "", func_args))
+
+        # Classify: parallelizable vs sequential execution
+        parallel_calls = []
+        sequential_calls = []
+        for item in parsed_calls:
+            tc_id, func_name, error, func_args = item
+            if error:  # JSON parse failure
+                sequential_calls.append(item)
+            elif func_name in PARALLEL_SAFE_TOOLS:
+                parallel_calls.append(item)
+            else:
+                sequential_calls.append(item)
+
+        return parallel_calls, sequential_calls
+
+    def _execute_tools_parallel(
+        self, tool_calls: list[dict[str, Any]], trace_id: str, turn: int | None = None
+    ) -> tuple[
+        list[tuple[str, str, str | dict[str, Any]]],
+        list[dict[str, Any]],
+        dict[str, Any] | None,
+    ]:
+        """Execute read-only tools in parallel, other tools sequentially.
+
+        Args:
+            tool_calls: Tool calls list returned by API.
+            trace_id: Trace ID.
+            turn: Current turn number (1-indexed) for logging.
+
+        Returns:
+            (tool_results, tool_traces, report_back_result) tuple.
+        """
+        parallel_calls, sequential_calls = self._parse_and_classify_tool_calls(tool_calls, trace_id)
+
+        tool_traces = self._execute_parallel_batch(parallel_calls, trace_id, turn)
+        seq_traces, report_back_result = self._execute_sequential_batch(
+            sequential_calls, trace_id, turn
+        )
+        tool_traces.extend(seq_traces)
+
+        # Sort by original order (maintain API protocol consistency)
+        original_order = {tc.get("id", ""): i for i, tc in enumerate(tool_calls)}
+        tool_traces.sort(key=lambda x: original_order.get(str(x.get("id", "")), 999))
+
+        tool_results: list[tuple[str, str, str | dict[str, Any]]] = [
+            (str(item.get("id", "")), str(item.get("name", "")), item.get("result", ""))
+            for item in tool_traces
+        ]
+
+        return tool_results, tool_traces, report_back_result
+
+    @staticmethod
+    def _strip_mixed_report_back(
+        tool_calls: list[dict[str, Any]],
+        message: dict[str, Any],
+        trace_id: str,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any], list[str]]:
+        """Strip report_back from tool_calls when mixed with other tools.
+
+        Returns:
+            (filtered_tool_calls, updated_message, stripped_report_back_ids).
+            stripped_report_back_ids is empty when no stripping occurred.
+        """
+        if len(tool_calls) <= 1:
+            return tool_calls, message, []
+
+        rb_ids: list[str] = []
+        other: list[dict[str, Any]] = []
+        for tc in tool_calls:
+            if tc.get("function", {}).get("name") == "report_back":
+                rb_ids.append(tc.get("id", ""))
+            else:
+                other.append(tc)
+
+        if not rb_ids or not other:
+            return tool_calls, message, []
+
+        logger.warning(
+            "[%s] Guardrail: report_back mixed with %d other tools — stripping report_back",
+            trace_id,
+            len(other),
+        )
+
+        # Also strip from the message's tool_calls so the assistant message stays consistent
+        msg_tool_calls = message.get("tool_calls") or []
+        message = dict(message)
+        message["tool_calls"] = [
+            tc for tc in msg_tool_calls if tc.get("function", {}).get("name") != "report_back"
+        ]
+
+        return other, message, rb_ids
+
+    def _execute_parallel_batch(
+        self,
+        parallel_calls: list[tuple[str, str, str, dict[str, Any] | None]],
+        trace_id: str,
+        turn: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Execute read-only tools in parallel.
+
+        Args:
+            parallel_calls: Tool calls safe for parallel execution.
+            trace_id: Trace ID.
+            turn: Current turn number (1-indexed) for logging.
+
+        Returns:
+            Tool trace list (includes latency + success).
+        """
+        tool_traces: list[dict[str, Any]] = []
+
+        if parallel_calls:
+            logger.debug("[%s] Executing %d tools in parallel", trace_id, len(parallel_calls))
+            with ThreadPoolExecutor(max_workers=MAX_PARALLEL_WORKERS) as executor:
+                futures = {}
+                for tc_id, func_name, _, func_args in parallel_calls:
+                    # Defense: if func_args is not dict (shouldn't happen as errors go to sequential)
+                    if func_args is None:
+                        tool_traces.append(
+                            self._build_tool_trace(
+                                tc_id,
+                                func_name,
+                                "Error: Missing arguments",
+                                latency_ms=0.0,
+                                success=False,
+                            )
+                        )
+                        continue
+                    logger.debug("[%s] Tool call (parallel): %s", trace_id, func_name)
+                    future = executor.submit(
+                        self._dispatch_tool_timed, func_name, func_args, trace_id, turn
+                    )
+                    futures[future] = (tc_id, func_name, func_args)
+
+                for future in as_completed(futures):
+                    tc_id, func_name, func_args = futures[future]
+                    try:
+                        result, latency_ms, success = future.result()
+                    except Exception as exc:
+                        logger.error("[%s] Tool %s raised exception: %s", trace_id, func_name, exc)
+                        result, latency_ms, success = (f"Error: {exc}", 0.0, False)
+                    self._maybe_record_observed(func_name, func_args, result)
+                    tool_traces.append(
+                        self._build_tool_trace(
+                            tc_id,
+                            func_name,
+                            result,
+                            latency_ms=latency_ms,
+                            success=success,
+                        )
+                    )
+
+        return tool_traces
+
+    def _execute_sequential_batch(
+        self,
+        sequential_calls: list[tuple[str, str, str, dict[str, Any] | None]],
+        trace_id: str,
+        turn: int | None = None,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+        """Execute tool calls sequentially and detect report_back.
+
+        Args:
+            sequential_calls: Tool calls requiring sequential execution.
+            trace_id: Trace ID.
+            turn: Current turn number (1-indexed) for logging.
+
+        Returns:
+            (tool_traces, report_back_result) tuple.
+        """
+        tool_traces: list[dict[str, Any]] = []
+        report_back_result: dict[str, Any] | None = None
+
+        for tc_id, func_name, error, func_args in sequential_calls:
+            if error:
+                tool_traces.append(
+                    self._build_tool_trace(
+                        tc_id,
+                        func_name,
+                        error,
+                        latency_ms=0.0,
+                        success=False,
+                    )
+                )
+                continue
+
+            if func_args is None:
+                tool_traces.append(
+                    self._build_tool_trace(
+                        tc_id,
+                        func_name,
+                        "Error: Missing arguments",
+                        latency_ms=0.0,
+                        success=False,
+                    )
+                )
+                continue
+
+            logger.debug("[%s] Tool call (sequential): %s", trace_id, func_name)
+            result, latency_ms, success = self._dispatch_tool_timed(
+                func_name, func_args, trace_id, turn
+            )
+
+            self._maybe_record_observed(func_name, func_args, result)
+
+            if func_name == "report_back" and isinstance(result, dict):
+                report_back_result = result
+
+            tool_traces.append(
+                self._build_tool_trace(
+                    tc_id,
+                    func_name,
+                    result,
+                    latency_ms=latency_ms,
+                    success=success,
+                )
+            )
+
+        return tool_traces, report_back_result
+
+    @staticmethod
+    def _build_tool_trace(
+        tool_call_id: str,
+        tool_name: str,
+        result: str | dict[str, Any],
+        *,
+        latency_ms: float,
+        success: bool,
+    ) -> dict[str, Any]:
+        return {
+            "id": tool_call_id,
+            "name": tool_name,
+            "result": result,
+            "latency_ms": round(float(latency_ms), 1),
+            "success": bool(success),
+        }
+
+    def _dispatch_tool_timed(
+        self, name: str, args: dict[str, Any], trace_id: str, turn: int | None = None
+    ) -> tuple[str | dict[str, Any], float, bool]:
+        """Dispatch tool call with timing (always) and optional logging."""
+        start = time.perf_counter()
+        try:
+            result = self._dispatch_tool(name, args)
+        except Exception as exc:
+            logger.error("[%s] Tool %s raised exception: %s", trace_id, name, exc)
+            result = f"Error: {exc}"
+        latency_ms = (time.perf_counter() - start) * 1000
+        success = not (isinstance(result, str) and result.startswith("Error:"))
+
+        if settings.MCP_LOGGING:
+            try:
+                if isinstance(result, str):
+                    result_preview = result[:300]
+                else:
+                    result_preview = json.dumps(result, ensure_ascii=False, default=str)[:300]
+
+                log_tool_call(
+                    trace_id,
+                    name,
+                    args,
+                    result_preview,
+                    latency_ms,
+                    success,
+                    turn=turn,
+                )
+                log_trace_event(
+                    {
+                        "kind": "agent_tool_call",
+                        "trace_id": trace_id,
+                        "turn": turn,
+                        "tool_name": name,
+                        "args": args,
+                        "result": result,
+                        "latency_ms": round(latency_ms, 1),
+                        "success": success,
+                    }
+                )
+            except Exception:
+                # Logging failure should never break tool execution
+                logger.debug("Failed to log tool call for %s", name, exc_info=True)
+
+        return result, latency_ms, success
+
+    def _dispatch_tool(self, name: str, args: dict[str, Any]) -> str | dict[str, Any]:
+        """Dispatch tool call to corresponding handler and accumulate observed_files."""
+        # Defense: if args is not dict (e.g., model returns "arguments": "\"oops\"")
+        if not isinstance(args, dict):
+            return f"Error: Invalid arguments type, expected dict but got {type(args).__name__}"
+
+        # Defense-in-depth: enforce enabled tool allowlist at execution time.
+        enabled = self._enabled_tool_names()
+        if name not in enabled:
+            return (
+                f"Error: Tool '{name}' is disabled. "
+                "Enable SEARCH_BASH_TOOLS or SEARCH_LSP_TOOLS as needed."
+            )
+
+        # report_back does not depend on base_dir.
+        if name == "report_back":
+            return report_back_handler(
+                explanation=args.get("explanation", ""),
+                files=args.get("files", {}),
+            )
+
+        base_dir = self._config.base_dir
+        if base_dir is None:
+            return "Error: base_dir is not configured. Set MCP_BASE_DIR or ensure MCP Roots are available."
+
+        extra_paths = self._config.extra_paths
+
+        if name == "view_file":
+            path = args.get("path", "")
+            view_range = args.get("view_range", [1, 100])
+            return view_file_handler(
+                path=path,
+                view_range=view_range,
+                base_dir=base_dir,
+                extra_paths=extra_paths,
+            )
+        elif name == "view_directory":
+            return view_directory_handler(
+                path=args.get("path", ""),
+                include_hidden=args.get("include_hidden", False),
+                base_dir=base_dir,
+                extra_paths=extra_paths,
+            )
+        elif name == "grep_search":
+            params = GrepSearchParams(
+                query=args.get("query", ""),
+                case_sensitive=args.get("case_sensitive", True),
+                exclude_pattern=args.get("exclude_pattern"),
+                include_pattern=args.get("include_pattern"),
+                base_dir=base_dir,
+            )
+            return grep_search_handler(params)
+        elif name == "glob":
+            return glob_handler(
+                pattern=args.get("pattern", ""),
+                path=args.get("path", "/repo"),
+                include_hidden=args.get("include_hidden", False),
+                max_results=args.get("max_results", 200),
+                base_dir=base_dir,
+                extra_paths=extra_paths,
+            )
+        elif name == "bash":
+            return bash_handler(
+                command=args.get("command", ""),
+                base_dir=base_dir,
+            )
+        elif name == "find_symbol":
+            lsp_params = LSPQueryParams(
+                action=args.get("action", ""),
+                file=args.get("file", ""),
+                line=args.get("line", 0),
+                column=args.get("column", 0),
+            )
+            return find_symbol_handler(lsp_params, base_dir)
+        elif name == "search_symbol":
+            search_params = SearchSymbolParams(query=args.get("query", ""))
+            return search_symbol_handler(search_params, base_dir)
+        # --- Disabled LSP tools (kept for future re-enablement) ---
+        # elif name == "list_symbols":
+        #     list_params = ListSymbolsParams(file=args.get("file", ""))
+        #     return list_symbols_handler(list_params, base_dir)
+        # elif name == "get_type":
+        #     type_params = GetTypeParams(
+        #         file=args.get("file", ""),
+        #         line=args.get("line", 0),
+        #         column=args.get("column", 0),
+        #     )
+        #     return get_type_handler(type_params, base_dir)
+        # elif name == "call_graph":
+        #     graph_params = CallGraphParams(
+        #         file=args.get("file", ""),
+        #         line=args.get("line", 0),
+        #         column=args.get("column", 0),
+        #         direction=args.get("direction", "incoming"),
+        #     )
+        #     return call_graph_handler(graph_params, base_dir)
+        # --- End disabled LSP tools ---
+        else:
+            return f"Error: Unknown tool '{name}'"

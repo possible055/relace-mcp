@@ -217,10 +217,10 @@ uv run --extra benchmark python -m benchmark.cli.report -o comparison.md *.repor
 ## 8. 运行单元测试
 
 ```bash
-uv run --extra dev --extra benchmark pytest benchmark/tests -v
+uv run --extra dev --extra benchmark pytest benchmark/tests -q
 ```
 
-这组测试只覆盖 benchmark 子系统，不包含在仓库默认 `pytest` testpaths 里。
+这组测试只覆盖 benchmark 子系统，不包含在仓库默认 `pytest` testpaths 里。CI 会用单独的 Ubuntu / Python 3.13 benchmark job 持续执行它们。
 
 ## 目录结构
 
@@ -242,7 +242,12 @@ benchmark/
 ├── metrics/             # 指标实现
 ├── runner/              # 执行流程
 │   └── experiment_paths.py  # experiment 命名与产物布局 helper
-├── tests/               # 单元测试
+├── tests/
+│   ├── analysis/
+│   ├── cli/
+│   ├── datasets/
+│   ├── docs/
+│   └── runner/
 ├── schemas.py           # 数据结构定义
 └── artifacts/           # (运行时生成，不在版控中)
     ├── data/            # 数据集文件

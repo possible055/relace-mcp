@@ -17,7 +17,7 @@ from .experiment_paths import experiment_events_path, experiment_traces_dir
 class ArtifactWriteResult:
     path: str | None
     state: ArtifactState
-    warnings: list[str] = field(default_factory=list)
+    warnings: tuple[str, ...] = field(default_factory=tuple)
 
 
 class BenchmarkTraceRecorder:
@@ -108,7 +108,7 @@ class BenchmarkTraceRecorder:
             return ArtifactWriteResult(
                 path=None,
                 state="write_error",
-                warnings=[f"trace_jsonl_write_error: {exc}"],
+                warnings=(f"trace_jsonl_write_error: {exc}",),
             )
         return ArtifactWriteResult(path=str(trace_path), state="written")
 
@@ -147,7 +147,7 @@ class BenchmarkTraceRecorder:
             return ArtifactWriteResult(
                 path=None,
                 state="write_error",
-                warnings=[f"trace_meta_write_error: {exc}"],
+                warnings=(f"trace_meta_write_error: {exc}",),
             )
         return ArtifactWriteResult(path=str(meta_path), state="written")
 
