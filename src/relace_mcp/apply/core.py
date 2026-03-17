@@ -20,7 +20,7 @@ from ..encoding.exceptions import EncodingDetectionError as BaseEncodingDetectio
 from ..observability import get_trace_id
 from ..observability import tool_name as tool_name_ctx
 from ..utils import validate_file_path
-from . import errors, snippet
+from . import error_responses, snippet
 from . import logging as apply_logging
 from .exceptions import (
     ApiInvalidResponseError,
@@ -103,7 +103,7 @@ def _resolve_path(
     # When base_dir is None, require absolute paths (no boundary restriction)
     if base_dir is None:
         if not os.path.isabs(file_path):
-            return errors.recoverable_error(
+            return error_responses.recoverable_error(
                 "INVALID_PATH",
                 "Relative paths require MCP_BASE_DIR to be set. Use absolute path or set MCP_BASE_DIR.",
                 file_path,
@@ -114,20 +114,20 @@ def _resolve_path(
         try:
             resolved_path = Path(file_path).resolve()
         except (OSError, ValueError, RuntimeError) as e:
-            return errors.recoverable_error(
+            return error_responses.recoverable_error(
                 "INVALID_PATH", str(e), file_path, ctx.instruction, ctx.trace_id, ctx.elapsed_ms()
             )
     else:
         try:
             resolved_path = validate_file_path(file_path, base_dir, extra_paths=extra_paths)
         except RuntimeError as e:
-            return errors.recoverable_error(
+            return error_responses.recoverable_error(
                 "INVALID_PATH", str(e), file_path, ctx.instruction, ctx.trace_id, ctx.elapsed_ms()
             )
 
     file_exists = resolved_path.exists()
     if file_exists and not resolved_path.is_file():
-        return errors.recoverable_error(
+        return error_responses.recoverable_error(
             "INVALID_PATH",
             f"Path exists but is not a file: {resolved_path}",
             file_path,
@@ -143,7 +143,7 @@ async def _create_new_file(
     ctx: ApplyContext, resolved_path: Path, edit_snippet: str
 ) -> dict[str, Any]:
     if snippet.contains_truncation_markers(edit_snippet):
-        return errors.recoverable_error(
+        return error_responses.recoverable_error(
             "INVALID_INPUT",
             "New file creation does not support truncation markers. "
             "Provide the complete file content without '// ... existing code ...' or '# ... existing code ...'.",
@@ -155,7 +155,7 @@ async def _create_new_file(
 
     async with _get_path_lock(str(resolved_path)):
         if resolved_path.exists():
-            return errors.recoverable_error(
+            return error_responses.recoverable_error(
                 "FILE_EXISTS",
                 f"File already exists (created by concurrent operation): {ctx.file_path}",
                 ctx.file_path,
@@ -200,7 +200,7 @@ async def _apply_to_existing_file(
                 hint = f" The file defines: {', '.join(sym_preview)}."
         except Exception:
             hint = ""
-        return errors.recoverable_error(
+        return error_responses.recoverable_error(
             "NEEDS_MORE_CONTEXT",
             f"edit_snippet contains only placeholders, no concrete code found.{hint}"
             " Include 1-3 lines of existing code as anchors for positioning.",
@@ -235,7 +235,7 @@ async def _apply_to_existing_file(
                     f" The file defines: {', '.join(sym_preview)}."
                     " Include 1-2 lines near your target as anchors."
                 )
-            return errors.recoverable_error(
+            return error_responses.recoverable_error(
                 "NEEDS_MORE_CONTEXT",
                 f"Anchor lines in edit_snippet cannot be located in the file ({file_lines} lines).{hint}",
                 ctx.file_path,
@@ -291,7 +291,7 @@ async def _apply_to_existing_file(
             merged_has_markers = snippet.contains_truncation_markers(merged_code)
             if merged_has_markers and not initial_had_markers:
                 file_lines = initial_code.count("\n") + 1
-                return errors.recoverable_error(
+                return error_responses.recoverable_error(
                     "MARKER_LEAKAGE",
                     "Detected truncation marker text in merged output. "
                     "This usually means the merge model treated markers as literal text instead of expanding them. "
@@ -314,7 +314,7 @@ async def _apply_to_existing_file(
                         resolved_path,
                     )
                 else:
-                    return errors.recoverable_error(
+                    return error_responses.recoverable_error(
                         "TRUNCATION_DETECTED",
                         f"Catastrophic truncation detected (charLoss={int(char_loss * 100)}%, "
                         f"lineLoss={int(line_loss * 100)}%).",
@@ -333,7 +333,7 @@ async def _apply_to_existing_file(
                     resolved_path,
                 )
                 file_lines = initial_code.count("\n") + 1
-                return errors.recoverable_error(
+                return error_responses.recoverable_error(
                     "APPLY_NOOP",
                     f"Merged result is identical to original file ({file_lines} lines). "
                     "The edit may lack sufficient context for the merge model to locate the target. "
@@ -366,7 +366,7 @@ async def _apply_to_existing_file(
                 syntax_reason,
             )
             file_lines = initial_code.count("\n") + 1
-            return errors.recoverable_error(
+            return error_responses.recoverable_error(
                 "SYNTAX_CHECK_FAILED",
                 f"Merged code has syntax error: {syntax_reason}",
                 ctx.file_path,
@@ -394,7 +394,7 @@ async def _apply_to_existing_file(
                     file_lines,
                     blast_radius_limit,
                 )
-                return errors.recoverable_error(
+                return error_responses.recoverable_error(
                     "BLAST_RADIUS_EXCEEDED",
                     f"Diff touches {lines_touched} lines but file only has {file_lines} lines "
                     f"(limit={blast_radius_limit}, 80% of file). "
@@ -422,7 +422,7 @@ async def _apply_to_existing_file(
                 sym_reason,
             )
             file_lines = initial_code.count("\n") + 1
-            return errors.recoverable_error(
+            return error_responses.recoverable_error(
                 "SYMBOL_LOST",
                 f"Merge would remove symbols not targeted by edit: {sym_reason}",
                 ctx.file_path,
@@ -444,7 +444,7 @@ async def _apply_to_existing_file(
                     resolved_path,
                     post_check_reason,
                 )
-                return errors.recoverable_error(
+                return error_responses.recoverable_error(
                     "SEMANTIC_CHECK_FAILED",
                     f"Merged code does not match expected changes: {post_check_reason}",
                     ctx.file_path,
@@ -462,7 +462,7 @@ async def _apply_to_existing_file(
                 resolved_path,
             )
             file_lines = initial_code.count("\n") + 1
-            return errors.recoverable_error(
+            return error_responses.recoverable_error(
                 "CONTENT_CONFLICT",
                 "File was modified by another process during apply. Please retry.",
                 ctx.file_path,
@@ -533,7 +533,7 @@ async def apply_file_logic(
     edit_snippet = snippet.normalize_edit_snippet(edit_snippet, file_path)
 
     if not edit_snippet or not edit_snippet.strip():
-        empty_result = errors.recoverable_error(
+        empty_result = error_responses.recoverable_error(
             "INVALID_INPUT",
             "edit_snippet cannot be empty",
             file_path,
@@ -586,7 +586,7 @@ async def apply_file_logic(
                 file_path,
                 exc,
             )
-            return errors.openai_error_to_recoverable(
+            return error_responses.openai_error_to_recoverable(
                 exc, file_path, instruction, ctx.trace_id, ctx.elapsed_ms()
             )
 
@@ -597,7 +597,7 @@ async def apply_file_logic(
                 file_path,
                 exc,
             )
-            return errors.recoverable_error(
+            return error_responses.recoverable_error(
                 "API_INVALID_RESPONSE",
                 str(exc),
                 file_path,
@@ -616,13 +616,13 @@ async def apply_file_logic(
                 file_path,
                 message,
             )
-            return errors.recoverable_error(
+            return error_responses.recoverable_error(
                 error_code, message, file_path, instruction, ctx.trace_id, ctx.elapsed_ms()
             )
 
         if isinstance(exc, PermissionError):
             logger.warning("[%s] Permission error for %s: %s", ctx.trace_id, file_path, exc)
-            return errors.recoverable_error(
+            return error_responses.recoverable_error(
                 "PERMISSION_ERROR",
                 f"Permission denied: {exc}",
                 file_path,
@@ -635,7 +635,7 @@ async def apply_file_logic(
             errno_info = f"errno={exc.errno}" if exc.errno else ""
             strerror = exc.strerror or str(exc)
             logger.warning("[%s] Filesystem error for %s: %s", ctx.trace_id, file_path, exc)
-            return errors.recoverable_error(
+            return error_responses.recoverable_error(
                 "FS_ERROR",
                 f"Filesystem error ({type(exc).__name__}, {errno_info}): {strerror}",
                 file_path,
@@ -645,7 +645,7 @@ async def apply_file_logic(
             )
 
         logger.error("[%s] Apply failed for %s: %s", ctx.trace_id, file_path, exc)
-        result = errors.recoverable_error(
+        result = error_responses.recoverable_error(
             "INTERNAL_ERROR",
             f"Unexpected error ({type(exc).__name__}): {exc}",
             file_path,

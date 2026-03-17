@@ -1,3 +1,4 @@
+# pyright: reportUnusedFunction=false
 import json
 
 from fastmcp import FastMCP

@@ -1,3 +1,4 @@
+# pyright: reportUnusedFunction=false
 from typing import Annotated, Any
 
 from fastmcp import FastMCP

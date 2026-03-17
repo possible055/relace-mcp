@@ -11,7 +11,7 @@ import pytest
 from relace_mcp.config import RelaceConfig
 from relace_mcp.server import build_server
 
-_TOOLS_MOD = "relace_mcp.tools.mcp_search"
+_TOOLS_MOD = "relace_mcp.tools.mcp_status"
 
 
 def _make_config(tmp_path) -> RelaceConfig:

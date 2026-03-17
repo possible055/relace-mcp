@@ -4,6 +4,7 @@ import shutil
 import time
 import uuid
 from collections.abc import Awaitable, Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
 from ..config import RelaceConfig
@@ -30,6 +31,26 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _auto_backend_cache: dict[str, str] = {}
+
+
+async def _run_blocking_retrieval_call(
+    func: Callable[..., Any],
+    /,
+    *args: Any,
+    **kwargs: Any,
+) -> Any:
+    """Run a blocking retrieval helper in a short-lived worker thread.
+
+    Using an explicit executor avoids leaving the event loop's default executor
+    alive across tests and short-lived CLI invocations.
+    """
+    loop = asyncio.get_running_loop()
+
+    def _call() -> Any:
+        return func(*args, **kwargs)
+
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="relace-retrieval") as executor:
+        return await loop.run_in_executor(executor, _call)
 
 
 def _resolve_auto_backend(base_dir: str) -> str:
@@ -254,7 +275,7 @@ async def agentic_retrieval_logic(
 
                 search_fn = chunkhound_search if backend == "chunkhound" else codanna_search
                 try:
-                    semantic_results = await asyncio.to_thread(
+                    semantic_results = await _run_blocking_retrieval_call(
                         search_fn,
                         query,
                         base_dir=base_dir,
@@ -374,7 +395,7 @@ async def agentic_retrieval_logic(
                     )
 
                 try:
-                    cloud_result = await asyncio.to_thread(
+                    cloud_result = await _run_blocking_retrieval_call(
                         cloud_search_logic,
                         repo_client,
                         base_dir,

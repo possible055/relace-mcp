@@ -525,7 +525,7 @@ class TestScheduleBgCodannaQueue:
                 await unblock.wait()
 
         with patch(
-            "relace_mcp.repo.backends.codanna._async_run_codanna_index",
+            "relace_mcp.repo.backends.codanna_indexing._async_run_codanna_index",
             side_effect=_fake_index,
         ):
             try:

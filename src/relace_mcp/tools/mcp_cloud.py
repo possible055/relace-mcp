@@ -1,3 +1,4 @@
+# pyright: reportUnusedFunction=false
 import asyncio
 from typing import Annotated, Any
 
