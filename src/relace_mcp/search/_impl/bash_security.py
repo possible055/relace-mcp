@@ -2,6 +2,8 @@ import os
 import re
 import shlex
 
+from ...utils import resolve_repo_path
+
 BASH_ALLOWED_COMMANDS = frozenset(
     {
         "cat",
@@ -325,10 +327,14 @@ def _extract_pipe_commands(command: str) -> list[str]:
     return parts
 
 
+def _is_repo_virtual_path(token: str) -> bool:
+    return token == "/repo" or token.startswith("/repo/")  # nosec B105
+
+
 def _check_absolute_paths(tokens: list[str]) -> tuple[bool, str]:
     for token in tokens:
         if token.startswith("/"):
-            if token == "/repo" or token.startswith("/repo/"):  # nosec B105
+            if _is_repo_virtual_path(token):
                 continue
             if token in ("/dev/null",):
                 continue
@@ -406,7 +412,19 @@ def _check_path_containment(tokens: list[str], base_dir: str) -> tuple[bool, str
             continue
         if not token or token == ".":  # nosec B105 - "." is a path token, not a password
             continue
-        candidate = token if os.path.isabs(token) else os.path.join(base_dir, token)
+        try:
+            if _is_repo_virtual_path(token):
+                candidate = resolve_repo_path(
+                    token,
+                    base_dir,
+                    allow_relative=False,
+                    allow_absolute=False,
+                )
+            else:
+                candidate = token if os.path.isabs(token) else os.path.join(base_dir, token)
+        except ValueError:
+            return True, f"Path escapes sandbox: {token}"
+
         resolved = os.path.realpath(candidate)
         if resolved != real_base and not resolved.startswith(real_base + os.sep):
             return True, f"Path escapes sandbox: {token}"

@@ -618,6 +618,13 @@ class TestBashHandler:
         result = bash_handler("ls -la", str(tmp_path))
         assert "test.py" in result
 
+    def test_executes_repo_virtual_path(self, tmp_path: Path) -> None:
+        """Should resolve /repo virtual paths against the real base_dir."""
+        (tmp_path / "test.txt").write_text("hello\n")
+
+        result = bash_handler("cat /repo/test.txt", str(tmp_path))
+        assert "hello" in result
+
     def test_executes_find_command(self, tmp_path: Path) -> None:
         """Should allow find command for file discovery."""
         (tmp_path / "src").mkdir()
