@@ -3,9 +3,14 @@ from collections.abc import Generator
 import pytest
 
 import relace_mcp.config.settings as settings_mod
-from relace_mcp.config.settings import reload_logging_settings, reload_tool_settings
+from relace_mcp.config.settings import (
+    reload_logging_settings,
+    reload_settings_from_env,
+    reload_tool_settings,
+)
 
 _RELOAD_KEYS = (
+    "MCP_LOG_LEVEL",
     "MCP_LOGGING_MODE",
     "MCP_LOGGING",
     "MCP_LOG_REDACT",
@@ -13,14 +18,37 @@ _RELOAD_KEYS = (
 )
 
 _TOOL_RELOAD_KEYS = (
+    "APPLY_PROVIDER",
+    "APPLY_API_KEY",
+    "APPLY_ENDPOINT",
+    "APPLY_MODEL",
+    "APPLY_PROMPT_FILE",
+    "APPLY_TIMEOUT_SECONDS",
+    "APPLY_TEMPERATURE",
     "RELACE_CLOUD_TOOLS",
     "RETRIEVAL_BACKEND",
     "RETRIEVAL_HINT_POLICY",
     "AGENTIC_RETRIEVAL_ENABLED",
+    "SEARCH_PROVIDER",
+    "SEARCH_API_KEY",
+    "SEARCH_ENDPOINT",
+    "SEARCH_MODEL",
+    "SEARCH_PROMPT_FILE",
+    "RETRIEVAL_PROMPT_FILE",
+    "SEARCH_TIMEOUT_SECONDS",
+    "SEARCH_TEMPERATURE",
     "SEARCH_BASH_TOOLS",
     "SEARCH_LSP_TOOLS",
     "SEARCH_TOOL_STRICT",
     "SEARCH_MAX_TURNS",
+    "SEARCH_PARALLEL_TOOL_CALLS",
+    "SEARCH_TOP_P",
+    "SEARCH_LSP_TIMEOUT_SECONDS",
+    "SEARCH_LSP_MAX_CLIENTS",
+    "RELACE_UPLOAD_MAX_WORKERS",
+    "RELACE_API_KEY",
+    "MCP_BASE_DIR",
+    "MCP_EXTRA_PATHS",
 )
 
 
@@ -168,3 +196,35 @@ class TestReloadToolSettings:
         assert _settings.SEARCH_BASH_TOOLS is True
         assert _settings.SEARCH_TOOL_STRICT is False
         assert _settings.SEARCH_MAX_TURNS == 8
+
+    def test_reload_settings_updates_provider_inputs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_PROVIDER", "openai")
+        monkeypatch.setenv("SEARCH_ENDPOINT", "https://api.openai.com/v1")
+        monkeypatch.setenv("SEARCH_MODEL", "gpt-4o")
+        monkeypatch.setenv("SEARCH_API_KEY", "sk-test")
+        monkeypatch.setenv("APPLY_PROVIDER", "openrouter")
+        monkeypatch.setenv("APPLY_ENDPOINT", "https://openrouter.ai/api/v1")
+        monkeypatch.setenv("APPLY_MODEL", "openai/gpt-4o-mini")
+        monkeypatch.setenv("APPLY_API_KEY", "sk-apply")
+        reload_settings_from_env()
+
+        assert settings_mod.SEARCH_PROVIDER == "openai"
+        assert settings_mod.SEARCH_ENDPOINT == "https://api.openai.com/v1"
+        assert settings_mod.SEARCH_MODEL == "gpt-4o"
+        assert settings_mod.SEARCH_API_KEY == "sk-test"
+        assert settings_mod.APPLY_PROVIDER == "openrouter"
+        assert settings_mod.APPLY_ENDPOINT == "https://openrouter.ai/api/v1"
+        assert settings_mod.APPLY_MODEL == "openai/gpt-4o-mini"
+        assert settings_mod.APPLY_API_KEY == "sk-apply"
+
+    def test_reload_settings_updates_lsp_and_upload_limits(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SEARCH_LSP_TIMEOUT_SECONDS", "22")
+        monkeypatch.setenv("SEARCH_LSP_MAX_CLIENTS", "5")
+        monkeypatch.setenv("RELACE_UPLOAD_MAX_WORKERS", "11")
+        reload_settings_from_env()
+
+        assert settings_mod.SEARCH_LSP_TIMEOUT_SECONDS == 22.0
+        assert settings_mod.SEARCH_LSP_MAX_CLIENTS == 5
+        assert settings_mod.RELACE_UPLOAD_MAX_WORKERS == 11

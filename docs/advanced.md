@@ -129,6 +129,8 @@ Then point `MCP_DOTENV_PATH` to the file in your MCP client config:
 
 > **Note:** Variables set directly in `env` take precedence over values in the `.env` file.
 
+The shared runtime bootstrap now applies the same dotenv flow everywhere: the `relace-mcp` CLI, programmatic `build_server()`, `benchmark.cli.run`, and `benchmark.cli.grid` all load `MCP_DOTENV_PATH` first, then re-resolve centralized settings from the current process environment.
+
 ---
 
 ## Sync Modes

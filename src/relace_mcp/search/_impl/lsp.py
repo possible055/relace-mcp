@@ -5,9 +5,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from relace_mcp.config import settings as _settings
 from relace_mcp.utils import map_path_no_resolve
 
-from .constants import LSP_TIMEOUT_SECONDS, MAX_LSP_RESULTS
+from .constants import MAX_LSP_RESULTS
 
 if TYPE_CHECKING:
     from relace_mcp.lsp import LanguageServerConfig, Location, LSPClient
@@ -140,7 +141,7 @@ def _get_lsp_client(
     session = manager.session(
         config,
         resolved_base_dir,
-        timeout_seconds=LSP_TIMEOUT_SECONDS,
+        timeout_seconds=_settings.SEARCH_LSP_TIMEOUT_SECONDS,
     )
     return (session, resolved_base_dir, LSPError)
 
@@ -377,7 +378,9 @@ def search_symbol_handler(params: SearchSymbolParams, base_dir: str) -> str:
             continue
         try:
             with manager.session(
-                config, resolved_base_dir, timeout_seconds=LSP_TIMEOUT_SECONDS
+                config,
+                resolved_base_dir,
+                timeout_seconds=_settings.SEARCH_LSP_TIMEOUT_SECONDS,
             ) as client:
                 results = client.workspace_symbols(query)
             any_success = True

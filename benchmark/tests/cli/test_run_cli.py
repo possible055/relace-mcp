@@ -1,11 +1,14 @@
 import sys
 import types
+from collections.abc import Generator
 from datetime import UTC
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from benchmark.cli.run import main as run_main
+from relace_mcp.config import settings as _settings
 
 
 class _FakeSummary:
@@ -44,6 +47,17 @@ class _FakeRunner:
         return _FakeSummary()
 
 
+@pytest.fixture(autouse=True)
+def _restore_settings() -> Generator[None, None, None]:
+    snapshot = {
+        "SEARCH_MAX_TURNS": _settings.SEARCH_MAX_TURNS,
+        "SEARCH_TEMPERATURE": _settings.SEARCH_TEMPERATURE,
+    }
+    yield
+    for key, value in snapshot.items():
+        setattr(_settings, key, value)
+
+
 def test_run_uses_utc_timestamp_for_default_experiment_name(tmp_path: Path, monkeypatch) -> None:
     experiments_dir = tmp_path / "experiments"
     captured: dict[str, object] = {}
@@ -52,7 +66,8 @@ def test_run_uses_utc_timestamp_for_default_experiment_name(tmp_path: Path, monk
         captured["timestamp"] = kwargs["timestamp"]
         return "run--captured"
 
-    monkeypatch.setattr("benchmark.cli.run._load_dotenv_from_env_path", lambda: None)
+    monkeypatch.setattr("benchmark.cli.run.initialize_runtime_from_env", lambda: None)
+    monkeypatch.setattr("benchmark.cli.run.reload_runtime_from_env", lambda: None)
     monkeypatch.setattr("benchmark.cli.run.load_dataset", lambda **_kwargs: [])
     monkeypatch.setattr("benchmark.cli.run._load_benchmark_config", lambda: object())
     monkeypatch.setattr("benchmark.cli.run.get_benchmark_dir", lambda: tmp_path)
@@ -68,3 +83,27 @@ def test_run_uses_utc_timestamp_for_default_experiment_name(tmp_path: Path, monk
     assert result.exit_code == 0
     timestamp = captured["timestamp"]
     assert getattr(timestamp, "tzinfo", None) is UTC
+
+
+def test_run_cli_reloads_settings_after_cli_overrides(tmp_path: Path, monkeypatch) -> None:
+    experiments_dir = tmp_path / "experiments"
+
+    def fake_initialize() -> None:
+        monkeypatch.setenv("SEARCH_MAX_TURNS", "5")
+        monkeypatch.setenv("SEARCH_TEMPERATURE", "0.9")
+
+    monkeypatch.setattr("benchmark.cli.run.initialize_runtime_from_env", fake_initialize)
+    monkeypatch.setattr("benchmark.cli.run.load_dataset", lambda **_kwargs: [])
+    monkeypatch.setattr("benchmark.cli.run._load_benchmark_config", lambda: object())
+    monkeypatch.setattr("benchmark.cli.run.get_benchmark_dir", lambda: tmp_path)
+    monkeypatch.setattr("benchmark.cli.run.get_experiments_dir", lambda: experiments_dir)
+    fake_executor = types.ModuleType("benchmark.runner.executor")
+    fake_executor.BenchmarkRunner = _FakeRunner
+    monkeypatch.setitem(sys.modules, "benchmark.runner.executor", fake_executor)
+
+    runner = CliRunner()
+    result = runner.invoke(run_main, ["--max-turns", "8", "--temperature", "0.2"])
+
+    assert result.exit_code == 0
+    assert _settings.SEARCH_MAX_TURNS == 8
+    assert _settings.SEARCH_TEMPERATURE == 0.2

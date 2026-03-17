@@ -55,8 +55,6 @@ from fastmcp import Client
 
 import relace_mcp.server as server
 
-server._load_dotenv_from_path()
-
 mcp = server.build_server(run_health_check=False)
 
 

@@ -1,17 +1,10 @@
 import logging
-import os
 from dataclasses import dataclass, field
 from typing import Any
 
 from ..backend import OpenAIChatClient
-from ..config import APPLY_SYSTEM_PROMPT, RelaceConfig, create_provider_config
-from ..config.settings import (
-    APPLY_DEFAULT_ENDPOINT,
-    APPLY_DEFAULT_MODEL,
-    APPLY_TEMPERATURE,
-    APPLY_TIMEOUT_SECONDS,
-    RELACE_PROVIDER,
-)
+from ..config import RelaceConfig, create_provider_config, load_apply_system_prompt
+from ..config import settings as _settings
 
 logger = logging.getLogger(__name__)
 
@@ -44,18 +37,20 @@ class ApplyLLMClient:
     """
 
     def __init__(self, config: RelaceConfig) -> None:
+        _settings.reload_settings_from_env()
         self._provider_config = create_provider_config(
             label="APPLY",
-            raw_provider=os.getenv("APPLY_PROVIDER", ""),
-            raw_api_key=os.getenv("APPLY_API_KEY", ""),
-            raw_endpoint=os.getenv("APPLY_ENDPOINT", ""),
-            raw_model=os.getenv("APPLY_MODEL", ""),
-            default_endpoint=APPLY_DEFAULT_ENDPOINT,
-            default_model=APPLY_DEFAULT_MODEL,
-            timeout=APPLY_TIMEOUT_SECONDS,
+            raw_provider=_settings.APPLY_PROVIDER,
+            raw_api_key=_settings.APPLY_API_KEY,
+            raw_endpoint=_settings.APPLY_ENDPOINT,
+            raw_model=_settings.APPLY_MODEL,
+            default_endpoint=_settings.APPLY_DEFAULT_ENDPOINT,
+            default_model=_settings.APPLY_DEFAULT_MODEL,
+            timeout=_settings.APPLY_TIMEOUT_SECONDS,
             relace_api_key=config.api_key,
         )
         self._chat_client = OpenAIChatClient(self._provider_config)
+        self._temperature = _settings.APPLY_TEMPERATURE
 
     async def apply(self, request: ApplyRequest) -> ApplyResponse:
         """Call Relace Instant Apply API to merge edit_snippet into initial_code.
@@ -75,7 +70,7 @@ class ApplyLLMClient:
 
         data, latency_ms = await self._chat_client.chat_completions_async(
             messages=messages,
-            temperature=APPLY_TEMPERATURE,
+            temperature=self._temperature,
             trace_id=trace_id,
         )
 
@@ -100,8 +95,8 @@ class ApplyLLMClient:
         messages: list[dict[str, Any]] = []
         # Only inject system prompt for OpenAI-compatible endpoints
         # Relace native API has built-in system prompt, no need to inject
-        if self._provider_config.api_compat != RELACE_PROVIDER:
-            messages.append({"role": "system", "content": APPLY_SYSTEM_PROMPT})
+        if self._provider_config.api_compat != _settings.RELACE_PROVIDER:
+            messages.append({"role": "system", "content": load_apply_system_prompt()})
         messages.append({"role": "user", "content": user_message})
         return messages
 

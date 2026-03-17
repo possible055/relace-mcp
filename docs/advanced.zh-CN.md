@@ -129,6 +129,8 @@ SEARCH_MAX_TURNS=6
 
 > **注意：** 直接在 `env` 中设置的变量优先于 `.env` 文件中的变量。
 
+现在所有入口都复用同一套 runtime bootstrap：`relace-mcp` CLI、程序化 `build_server()`、`benchmark.cli.run` 和 `benchmark.cli.grid` 都会先加载 `MCP_DOTENV_PATH`，再根据当前进程环境统一刷新集中式 settings。
+
 ---
 
 ## 同步模式

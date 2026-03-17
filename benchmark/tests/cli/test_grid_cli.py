@@ -63,7 +63,10 @@ def test_grid_writes_parent_summary_report_with_child_trials(tmp_path: Path) -> 
         return SimpleNamespace(returncode=0)
 
     runner = CliRunner()
-    with patch("benchmark.cli.grid.subprocess.run", side_effect=fake_subprocess_run):
+    with (
+        patch("benchmark.cli.grid.initialize_runtime_from_env", lambda: None),
+        patch("benchmark.cli.grid.subprocess.run", side_effect=fake_subprocess_run),
+    ):
         result = runner.invoke(
             grid_main,
             [

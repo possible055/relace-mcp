@@ -10,6 +10,8 @@ from typing import Any
 
 import click
 
+from relace_mcp.config.bootstrap import initialize_runtime_from_env
+
 from .._config.paths import DEFAULT_LOCBENCH_PATH, get_benchmark_dir, get_experiments_dir
 from ..runner.experiment_paths import (
     build_experiment_name,
@@ -93,12 +95,16 @@ def main(
     lsp_tools: str | None,
     bash_tools: str | None,
 ) -> None:
+    from relace_mcp.config import settings as _settings
+
+    initialize_runtime_from_env()
+
     benchmark_dir = get_benchmark_dir()
     resolved_dataset_path = (
         Path(dataset_path) if Path(dataset_path).is_absolute() else (benchmark_dir / dataset_path)
     )
     dataset_id = resolved_dataset_path.stem
-    provider = os.getenv("SEARCH_PROVIDER", "relace").strip().lower() or "relace"
+    provider = (_settings.SEARCH_PROVIDER or _settings.RELACE_PROVIDER).lower()
     grid_started_at = datetime.now(UTC)
 
     experiments_dir = get_experiments_dir()

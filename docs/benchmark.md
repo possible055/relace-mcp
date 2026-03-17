@@ -16,6 +16,8 @@ SEARCH_PROVIDER=relace          # or: openai, openrouter
 RELACE_API_KEY=your-key-here    # or: OPENAI_API_KEY, OPENROUTER_API_KEY
 ```
 
+`benchmark.cli.run` and `benchmark.cli.grid` now share the same runtime bootstrap as the MCP server. They load `MCP_DOTENV_PATH` when set, otherwise fall back to the default dotenv search, then apply CLI overrides and refresh centralized settings. Effective precedence is: CLI flags > process env > dotenv values.
+
 **Dataset**:
 
 Build the Loc-Bench dataset from Hugging Face via datasets-server (no LocAgent required):

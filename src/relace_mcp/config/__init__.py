@@ -1,22 +1,18 @@
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from . import settings as _settings
 from .base_dir import invalidate_roots_cache, resolve_base_dir
 from .provider import ProviderConfig, create_provider_config
-
-# Public API: RelaceConfig is the main configuration class
 from .settings import RelaceConfig
 
 logger = logging.getLogger(__name__)
 
-# LLM prompts directory (relocated to prompts/)
 _LLM_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
-# Env var mapping: yaml file stem -> file-level override env var
 _PROMPT_ENV_VARS: dict[str, str] = {
     "search_relace": "SEARCH_PROMPT_FILE",
     "search_openai": "SEARCH_PROMPT_FILE",
@@ -26,8 +22,8 @@ _PROMPT_ENV_VARS: dict[str, str] = {
 
 
 def _load_prompt_file(default_path: Path, env_var: str) -> dict[str, Any]:
-    """Load prompt file from custom path (env var) or default path."""
-    custom_path = os.getenv(env_var, "").strip()
+    """Load prompt file from centralized settings override or default path."""
+    custom_path = getattr(_settings, env_var, None) or ""
     if custom_path:
         custom_path_obj = Path(custom_path).expanduser()
         if custom_path_obj.exists():
@@ -43,8 +39,8 @@ def _load_prompt_file(default_path: Path, env_var: str) -> dict[str, Any]:
                     f"Prompt file must be a YAML mapping (dict), got {type(result).__name__}: {custom_path_obj}"
                 )
             return result
-        else:
-            logger.warning("%s=%s does not exist, falling back to default", env_var, custom_path)
+
+        logger.warning("%s=%s does not exist, falling back to default", env_var, custom_path)
 
     with default_path.open(encoding="utf-8") as f:
         result = yaml.safe_load(f)
@@ -58,17 +54,7 @@ def _load_prompt_file(default_path: Path, env_var: str) -> dict[str, Any]:
 
 
 def load_prompt_file(name: str) -> dict[str, Any]:
-    """Load a named prompt YAML file with env var overrides.
-
-    Args:
-        name: Prompt file stem, one of:
-            'search_relace', 'search_openai',
-            'retrieval_relace', 'retrieval_openai'.
-
-    Returns:
-        Dict with keys: system_prompt, user_prompt_template,
-        turn_hint_template, turn_instructions, lsp_section.
-    """
+    """Load a named prompt YAML file with env var overrides."""
     file_env = _PROMPT_ENV_VARS.get(name)
     if file_env is None:
         raise ValueError(
@@ -79,24 +65,21 @@ def load_prompt_file(name: str) -> dict[str, Any]:
     return _load_prompt_file(path, file_env)
 
 
-# Load apply_openai.yaml (Fast Apply for OpenAI-compatible endpoints)
-# Override with APPLY_PROMPT_FILE if set
-_APPLY_PROMPTS_PATH = _LLM_PROMPTS_DIR / "apply_openai.yaml"
-_APPLY_PROMPTS = _load_prompt_file(_APPLY_PROMPTS_PATH, "APPLY_PROMPT_FILE")
+def load_apply_system_prompt() -> str:
+    """Load the apply system prompt, honoring APPLY_PROMPT_FILE overrides at runtime."""
+    prompts = _load_prompt_file(_LLM_PROMPTS_DIR / "apply_openai.yaml", "APPLY_PROMPT_FILE")
+    prompt = prompts.get("apply_system_prompt")
+    if not isinstance(prompt, str):
+        raise TypeError("apply_system_prompt must be a string")
+    return prompt.strip()
 
-# Apply prompt constant (only injected for non-Relace endpoints)
-APPLY_SYSTEM_PROMPT: str = _APPLY_PROMPTS["apply_system_prompt"].strip()
 
-# Public API exports only
 __all__ = [
-    # Public API
     "RelaceConfig",
     "ProviderConfig",
     "create_provider_config",
     "resolve_base_dir",
     "invalidate_roots_cache",
-    # Prompt loading
     "load_prompt_file",
-    # Apply prompt
-    "APPLY_SYSTEM_PROMPT",
+    "load_apply_system_prompt",
 ]

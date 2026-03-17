@@ -4,7 +4,7 @@ import pytest
 
 from relace_mcp.clients import ApplyLLMClient
 from relace_mcp.clients.apply import ApplyRequest
-from relace_mcp.config import APPLY_SYSTEM_PROMPT, RelaceConfig
+from relace_mcp.config import RelaceConfig, load_apply_system_prompt
 
 
 class TestApplyClientSystemPrompt:
@@ -40,7 +40,7 @@ class TestApplyClientSystemPrompt:
             # Should have 2 messages: system + user
             assert len(messages) == 2
             assert messages[0]["role"] == "system"
-            assert messages[0]["content"] == APPLY_SYSTEM_PROMPT
+            assert messages[0]["content"] == load_apply_system_prompt()
             assert messages[1]["role"] == "user"
             assert "<code>" in messages[1]["content"]
             assert "<update>" in messages[1]["content"]
