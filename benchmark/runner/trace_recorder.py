@@ -10,7 +10,7 @@ from ..analysis.trace_artifacts import (
     build_search_complete_event,
     build_trace_meta_payload,
 )
-from ..experiment_paths import experiment_events_path, experiment_traces_dir
+from .experiment_paths import experiment_events_path, experiment_traces_dir
 
 
 @dataclass(frozen=True)

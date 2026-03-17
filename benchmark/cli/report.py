@@ -4,7 +4,7 @@ from pathlib import Path
 
 import click
 
-from ..config import get_experiments_dir
+from .._config.paths import get_experiments_dir
 
 
 def _load_report(path: Path) -> dict:

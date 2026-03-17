@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
-from benchmark.experiment_paths import (
+from benchmark.runner.experiment_paths import (
     build_experiment_name,
     build_trial_name,
     collect_trace_dirs,

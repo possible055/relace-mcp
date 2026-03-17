@@ -220,10 +220,15 @@ uv run --extra benchmark python -m benchmark.cli.report -o comparison.md *.repor
 uv run --extra dev --extra benchmark pytest benchmark/tests -v
 ```
 
+这组测试只覆盖 benchmark 子系统，不包含在仓库默认 `pytest` testpaths 里。
+
 ## 目录结构
 
 ```
 benchmark/
+├── _config/             # benchmark 内部配置
+│   ├── paths.py         # 目录/路径 helper 与默认数据集路径
+│   └── settings.py      # benchmark 内部设置（如 EXCLUDED_REPOS）
 ├── cli/
 │   ├── run.py           # 单次运行 CLI
 │   ├── grid.py          # 网格搜索 CLI
@@ -236,8 +241,8 @@ benchmark/
 ├── datasets/            # 数据集加载器
 ├── metrics/             # 指标实现
 ├── runner/              # 执行流程
+│   └── experiment_paths.py  # experiment 命名与产物布局 helper
 ├── tests/               # 单元测试
-├── config.py            # 配置常量
 ├── schemas.py           # 数据结构定义
 └── artifacts/           # (运行时生成，不在版控中)
     ├── data/            # 数据集文件

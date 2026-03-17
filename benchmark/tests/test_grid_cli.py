@@ -6,7 +6,7 @@ from unittest.mock import patch
 from click.testing import CliRunner
 
 from benchmark.cli.grid import main as grid_main
-from benchmark.experiment_paths import experiment_report_path, experiment_results_path
+from benchmark.runner.experiment_paths import experiment_report_path, experiment_results_path
 
 
 def test_grid_writes_parent_summary_report_with_child_trials(tmp_path: Path) -> None:

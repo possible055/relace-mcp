@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from ..config import get_experiments_dir
+from .._config.paths import get_experiments_dir
 
 
 def load_results(path: str) -> dict[str, Any]:

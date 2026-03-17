@@ -220,10 +220,15 @@ Each `summary.report.json` includes metadata tracking for reproducibility. Grid 
 uv run --extra dev --extra benchmark pytest benchmark/tests -v
 ```
 
+These tests are benchmark-specific and are not included in the repository's default `pytest` testpaths.
+
 ## Directory Structure
 
 ```
 benchmark/
+├── _config/             # Internal benchmark configuration
+│   ├── paths.py         # Directory/path helpers and dataset defaults
+│   └── settings.py      # Internal benchmark settings (e.g. EXCLUDED_REPOS)
 ├── cli/
 │   ├── run.py           # Single run CLI
 │   ├── grid.py          # Grid search CLI
@@ -236,8 +241,8 @@ benchmark/
 ├── datasets/            # Dataset loaders
 ├── metrics/             # Metrics implementation
 ├── runner/              # Execution pipeline
+│   └── experiment_paths.py  # Experiment naming and artifact layout helpers
 ├── tests/               # Unit tests
-├── config.py            # Configuration constants
 ├── schemas.py           # Data structure definitions
 └── artifacts/           # (runtime generated, not in version control)
     ├── data/            # Dataset files

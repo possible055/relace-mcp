@@ -10,8 +10,8 @@ from typing import Any
 
 import click
 
-from ..config import DEFAULT_LOCBENCH_PATH, get_benchmark_dir, get_experiments_dir
-from ..experiment_paths import (
+from .._config.paths import DEFAULT_LOCBENCH_PATH, get_benchmark_dir, get_experiments_dir
+from ..runner.experiment_paths import (
     build_experiment_name,
     build_trial_name,
     experiment_report_path,
