@@ -1,0 +1,51 @@
+benchmark/cli/run.py
+  f8f84b25a6654638 5,19,84,121-131,151-152,233-241,278-279
+benchmark/cli/grid.py
+  c61ea450997742d1 221-224,292
+  f8f84b25a6654638 7,9,15-16,22,36,101-102,105-108,110-114,128,159-160,187-190,215-217,227-228,240-242,251-261,263-274,276-291,293-300
+benchmark/cli/report.py
+  c61ea450997742d1 55-63,166,327
+  f8f84b25a6654638 33-52,79-80,82,91,97,114,147-157,168,184,258,284,323-326,328-329
+benchmark/runner/metadata.py
+  f8f84b25a6654638 114-115,132-137,145-151,173
+benchmark/experiment_paths.py
+  f8f84b25a6654638 1-2,17-69
+benchmark/tests/test_experiment_paths.py
+  c61ea450997742d1 1
+  f8f84b25a6654638 5-6,30-52
+benchmark/runner/results.py
+  f8f84b25a6654638 9-14,78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.12",
+  "base_commit_sha": "c6d5fe663eb6d73107a4dd0b1fa0a39f0f49a9b2",
+  "prompts": {
+    "c61ea450997742d1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019cf802-4d45-7920-a15d-e0b5007b29df",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 17,
+      "total_deletions": 5,
+      "accepted_lines": 17,
+      "overriden_lines": 0
+    },
+    "f8f84b25a6654638": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019cf833-b8e7-7b20-8fce-f2193594b3f1",
+        "model": "gpt-5.2"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 262,
+      "total_deletions": 66,
+      "accepted_lines": 262,
+      "overriden_lines": 0
+    }
+  }
+}
