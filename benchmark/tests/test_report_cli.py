@@ -63,13 +63,80 @@ def test_report_failures_accepts_jsonl(tmp_path: Path) -> None:
 
 def test_report_best_rejects_non_grid_json(tmp_path: Path) -> None:
     report_path = tmp_path / "sample.report.json"
-    report_path.write_text("{}", encoding="utf-8")
+    report_path.write_text('{"metadata": {"experiment": {"type": "run"}}}', encoding="utf-8")
 
     runner = CliRunner()
     result = runner.invoke(report_main, ["--best", str(report_path)])
 
     assert result.exit_code != 0
-    assert "--best only accepts a single .grid.json file." in result.output
+    assert "--best only accepts a single grid summary.report.json file." in result.output
+
+
+def test_report_best_accepts_grid_summary_report(tmp_path: Path) -> None:
+    report_path = tmp_path / "summary.report.json"
+    report_path.write_text(
+        """
+{
+  "metadata": {
+    "experiment": {
+      "type": "grid",
+      "name": "grid--curated-50--indexed--openai--avg-file-recall--20260317-154200"
+    }
+  },
+  "grid": {
+    "trials": [
+      {
+        "config": {
+          "search_max_turns": 6,
+          "search_temperature": 0.2
+        },
+        "paths": {
+          "experiment_root": "/tmp/grid/runs/trial--turns-6--temp-0p2"
+        },
+        "metrics": {
+          "avg_file_recall": 0.6,
+          "avg_quality_score": 0.5,
+          "avg_file_precision": 0.4,
+          "avg_line_precision_matched": 0.45,
+          "avg_turns": 4.0,
+          "avg_latency_s": 3.5,
+          "completion_rate": 0.8
+        }
+      }
+    ]
+  }
+}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(report_main, ["--best", str(report_path)])
+
+    assert result.exit_code == 0
+    assert (
+        "Best Configuration from grid--curated-50--indexed--openai--avg-file-recall--20260317-154200"
+        in result.output
+    )
+    assert "search_max_turns" in result.output
+    assert "/tmp/grid/runs/trial--turns-6--temp-0p2" in result.output
+
+
+def test_report_comparison_rejects_grid_parent_report(tmp_path: Path) -> None:
+    report_path = tmp_path / "summary.report.json"
+    report_path.write_text(
+        '{"metadata": {"experiment": {"type": "grid", "name": "grid-a"}}, "grid": {"trials": []}}\n',
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(report_main, [str(report_path)])
+
+    assert result.exit_code != 0
+    assert (
+        "Comparison mode does not accept grid parent reports. Use --best instead." in result.output
+    )
 
 
 def test_grid_help_uses_current_option_names() -> None:

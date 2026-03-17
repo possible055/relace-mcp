@@ -6,6 +6,12 @@ from typing import Any
 from ..analysis.trace_artifacts import ArtifactStatus
 
 
+def write_report_json(payload: dict[str, Any], output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+
+
 @dataclass
 class BenchmarkResult:
     case_id: str
@@ -69,6 +75,4 @@ class BenchmarkSummary:
         del summary_dict["results"]
 
         resolved_report_path = report_path or jsonl_path.with_suffix(".report.json")
-        resolved_report_path.parent.mkdir(parents=True, exist_ok=True)
-        with resolved_report_path.open("w", encoding="utf-8") as f:
-            json.dump(summary_dict, f, indent=2, ensure_ascii=False)
+        write_report_json(summary_dict, resolved_report_path)

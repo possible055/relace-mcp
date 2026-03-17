@@ -1,3 +1,5 @@
+import re
+from datetime import datetime
 from pathlib import Path
 
 from .config import get_experiments_dir
@@ -10,8 +12,61 @@ RUNS_DIRNAME = "runs"
 
 RESULTS_FILENAME = "results.jsonl"
 REPORT_FILENAME = "summary.report.json"
-GRID_REPORT_FILENAME = "grid.report.json"
 EVENTS_FILENAME = "events.jsonl"
+
+_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+_DASH_RE = re.compile(r"-+")
+
+
+def slugify_experiment_segment(value: str) -> str:
+    lowered = value.strip().lower()
+    ascii_only = lowered.encode("ascii", errors="ignore").decode("ascii")
+    normalized = _NON_ALNUM_RE.sub("-", ascii_only)
+    collapsed = _DASH_RE.sub("-", normalized).strip("-")
+    return collapsed or "unknown"
+
+
+def format_experiment_timestamp(timestamp: datetime | None = None) -> str:
+    ts = timestamp or datetime.now()
+    return ts.strftime("%Y%m%d-%H%M%S")
+
+
+def format_temperature_segment(value: float) -> str:
+    text = f"{value:.3f}".rstrip("0").rstrip(".")
+    if text == "-0":
+        text = "0"
+    return text.replace(".", "p")
+
+
+def build_experiment_name(
+    experiment_type: str,
+    dataset_id: str,
+    search_mode: str,
+    provider: str,
+    *,
+    objective: str | None = None,
+    timestamp: datetime | None = None,
+) -> str:
+    parts = [
+        slugify_experiment_segment(experiment_type),
+        slugify_experiment_segment(dataset_id),
+        slugify_experiment_segment(search_mode),
+        slugify_experiment_segment(provider),
+    ]
+    if objective:
+        parts.append(slugify_experiment_segment(objective))
+    parts.append(format_experiment_timestamp(timestamp))
+    return "--".join(parts)
+
+
+def build_trial_name(max_turns: int, temperature: float) -> str:
+    return "--".join(
+        [
+            "trial",
+            slugify_experiment_segment(f"turns-{max_turns}"),
+            slugify_experiment_segment(f"temp-{format_temperature_segment(temperature)}"),
+        ]
+    )
 
 
 def resolve_experiment_root(path: str | Path) -> Path:
@@ -43,10 +98,6 @@ def experiment_results_path(experiment_root: Path) -> Path:
 
 def experiment_report_path(experiment_root: Path) -> Path:
     return experiment_reports_dir(experiment_root) / REPORT_FILENAME
-
-
-def experiment_grid_report_path(experiment_root: Path) -> Path:
-    return experiment_reports_dir(experiment_root) / GRID_REPORT_FILENAME
 
 
 def experiment_events_path(experiment_root: Path) -> Path:

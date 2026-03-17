@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 import warnings
+from datetime import datetime
 from pathlib import Path
 
 import click
@@ -15,11 +16,11 @@ from ..config import (
 )
 from ..datasets import load_dataset
 from ..experiment_paths import (
+    build_experiment_name,
     experiment_report_path,
     experiment_results_path,
     resolve_experiment_root,
 )
-from ..schemas import generate_output_path
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ def _load_benchmark_config():
     "-o",
     "--output",
     default=None,
-    help="Experiment directory name/path (default: run_<dataset>_<timestamp>/)",
+    help="Experiment directory name/path (default uses the standard experiment template)",
 )
 @click.option("--limit", default=None, type=int, help="Maximum cases to run (default: all)")
 @click.option("--seed", default=0, type=int, help="Random seed for shuffling")
@@ -117,6 +118,17 @@ def _load_benchmark_config():
     default=None,
     help="Bash tool toggle: true (enabled), false (disabled)",
 )
+@click.option(
+    "--experiment-type",
+    type=click.Choice(["run", "trial"]),
+    default="run",
+    hidden=True,
+)
+@click.option(
+    "--parent-experiment-root",
+    default=None,
+    hidden=True,
+)
 def main(
     dataset_path: str,
     output: str | None,
@@ -136,6 +148,8 @@ def main(
     search_mode: str,
     lsp_tools: str | None,
     bash_tools: str | None,
+    experiment_type: str,
+    parent_experiment_root: str | None,
 ) -> None:
     """Run benchmark on agentic_search or agentic_retrieval.
 
@@ -216,7 +230,15 @@ def main(
     if output:
         experiment_root = resolve_experiment_root(output)
     else:
-        experiment_root = generate_output_path(experiments_dir, "run", dataset_id)
+        provider = os.getenv("SEARCH_PROVIDER", "relace").strip().lower() or "relace"
+        experiment_name = build_experiment_name(
+            experiment_type,
+            dataset_id,
+            search_mode,
+            provider,
+            timestamp=datetime.now(),
+        )
+        experiment_root = experiments_dir / experiment_name
 
     experiment_root.mkdir(parents=True, exist_ok=True)
     results_path = experiment_results_path(experiment_root)
@@ -253,6 +275,8 @@ def main(
             "search_mode": search_mode,
             "lsp_tools": lsp_tools,
             "bash_tools": bash_tools,
+            "experiment_type": experiment_type,
+            "parent_experiment_root": parent_experiment_root,
         },
     )
 

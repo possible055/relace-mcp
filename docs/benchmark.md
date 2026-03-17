@@ -63,6 +63,11 @@ uv run --extra benchmark python -m benchmark.cli.run \
 
 Run reports also include `metadata.artifacts` with the trace `schema_version`, `experiment_root`, `traces_dir`, and `events_path`.
 
+Default experiment names use these templates:
+- `run--<dataset>--<search-mode>--<provider>--<timestamp>`
+- `grid--<dataset>--<search-mode>--<provider>--avg-file-recall--<timestamp>`
+- `trial--turns-<n>--temp-<value>`
+
 **Trace workflow**:
 ```bash
 # Collect raw traces plus indexed retrieval hint metadata
@@ -125,7 +130,7 @@ uv run --extra benchmark python -m benchmark.cli.grid \
 | `--output` | | Grid experiment directory |
 | `--dry-run` | | Print planned runs without executing |
 
-**Output**: Grid summary saved to `artifacts/experiments/<grid_name>/reports/grid.report.json`
+**Output**: Grid parent summary saved to `artifacts/experiments/<grid_name>/reports/summary.report.json`
 
 ## 4. Dataset Validation
 
@@ -161,24 +166,29 @@ uv run --extra benchmark python -m benchmark.cli.validate --output validation.js
 
 ```bash
 # Analyze single run (detailed stdout)
-uv run --extra benchmark python -m benchmark.cli.analyze path/to/run.report.json
+uv run --extra benchmark python -m benchmark.cli.analyze \
+  path/to/experiment/reports/summary.report.json
 
 # Compare multiple runs from report files (Markdown output)
-uv run --extra benchmark python -m benchmark.cli.report run1.report.json run2.report.json
+uv run --extra benchmark python -m benchmark.cli.report \
+  path/to/run-a/reports/summary.report.json \
+  path/to/run-b/reports/summary.report.json
 
-# Find best config from grid search
-uv run --extra benchmark python -m benchmark.cli.report --best grid_curated_30.grid.json
+# Find best config from a grid parent summary
+uv run --extra benchmark python -m benchmark.cli.report --best \
+  path/to/grid-experiment/reports/summary.report.json
 
 # Analyze incomplete / failed cases from a result file
-uv run --extra benchmark python -m benchmark.cli.report --failures path/to/run.jsonl
+uv run --extra benchmark python -m benchmark.cli.report --failures \
+  path/to/experiment/results/results.jsonl
 
 # Output comparison to file
 uv run --extra benchmark python -m benchmark.cli.report -o comparison.md *.report.json
 ```
 
 **Accepted inputs by mode**:
-- Comparison mode: one or more `*.report.json`
-- `--best`: exactly one `*.grid.json`
+- Comparison mode: one or more non-grid `*.report.json`
+- `--best`: exactly one grid `summary.report.json`
 - `--failures`: exactly one `*.jsonl`
 
 ## 6. Interpret Metrics
@@ -191,7 +201,7 @@ uv run --extra benchmark python -m benchmark.cli.report -o comparison.md *.repor
 | Line Prec (Matched) | Correct lines / Returned lines (matched files only) |
 | Function Hit Rate | Functions with overlap / Total functions |
 
-Each `*.report.json` includes metadata tracking: `temperature`, `max_turns`, `prompt_file` for reproducibility.
+Each `summary.report.json` includes metadata tracking for reproducibility. Grid parent reports also include `metadata.experiment.type = "grid"` plus a `grid` section with `search_space`, `trials`, and `best_trial`.
 
 ## 7. Troubleshooting
 
@@ -234,8 +244,9 @@ benchmark/
     ├── experiments/     # Per-experiment archives
     │   └── <experiment_name>/
     │       ├── events/  # Run-level events (.jsonl)
-    │       ├── reports/ # Summary reports (.report.json, .grid.json)
+    │       ├── reports/ # Summary reports (summary.report.json)
     │       ├── results/ # Run outputs (.jsonl)
+    │       ├── runs/    # Grid child trials only
     │       └── traces/  # Per-case traces (.jsonl + .meta.json)
     ├── repos/           # Cached repositories
 ```

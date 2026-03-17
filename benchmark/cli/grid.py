@@ -4,26 +4,22 @@ import os
 import subprocess  # nosec B404
 import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import click
 
 from ..config import DEFAULT_LOCBENCH_PATH, get_benchmark_dir, get_experiments_dir
 from ..experiment_paths import (
-    experiment_grid_report_path,
+    build_experiment_name,
+    build_trial_name,
     experiment_report_path,
     experiment_results_path,
     grid_runs_dir,
     resolve_experiment_root,
 )
-from ..schemas import generate_output_path
-
-
-def _format_float_for_filename(value: float) -> str:
-    text = f"{value:.3f}".rstrip("0").rstrip(".")
-    if text == "-0":
-        text = "0"
-    return text.replace(".", "p")
+from ..runner.results import write_report_json
 
 
 @click.command()
@@ -37,7 +33,7 @@ def _format_float_for_filename(value: float) -> str:
     "-o",
     "--output",
     default=None,
-    help="Output directory prefix (default: grid_<dataset>_<timestamp>/)",
+    help="Grid experiment directory name/path (default uses the standard experiment template)",
 )
 @click.option("--limit", default=None, type=int, help="Maximum cases to run (default: all)")
 @click.option("--seed", default=0, type=int, help="Random seed for shuffling")
@@ -102,10 +98,21 @@ def main(
         Path(dataset_path) if Path(dataset_path).is_absolute() else (benchmark_dir / dataset_path)
     )
     dataset_id = resolved_dataset_path.stem
+    provider = os.getenv("SEARCH_PROVIDER", "relace").strip().lower() or "relace"
+    grid_started_at = datetime.now(UTC)
 
     experiments_dir = get_experiments_dir()
-    default_grid_root = generate_output_path(experiments_dir, "grid", dataset_id)
-    grid_root = resolve_experiment_root(output) if output else default_grid_root
+    if output:
+        grid_root = resolve_experiment_root(output)
+    else:
+        grid_root = experiments_dir / build_experiment_name(
+            "grid",
+            dataset_id,
+            search_mode,
+            provider,
+            objective="avg-file-recall",
+            timestamp=grid_started_at,
+        )
     grid_dir = grid_root
     grid_dir.mkdir(parents=True, exist_ok=True)
     runs_dir = grid_runs_dir(grid_dir)
@@ -118,11 +125,7 @@ def main(
         search_max_turns_values,
         search_temperature_values,
     ):
-        name_parts = [
-            f"t{turns}",
-            f"temp{_format_float_for_filename(temp)}",
-        ]
-        run_name = "__".join(name_parts)
+        run_name = build_trial_name(turns, temp)
         experiment_root = runs_dir / run_name
         planned.append(
             {
@@ -153,7 +156,8 @@ def main(
             click.echo(f"... ({len(planned) - 20} more)")
         return
 
-    summaries: list[dict[str, object]] = []
+    summaries: list[dict[str, Any]] = []
+    first_metadata: dict[str, Any] | None = None
     total_runs = len(planned)
     wall_start = time.perf_counter()
 
@@ -180,6 +184,10 @@ def main(
             str(item["experiment_root"]),
             "--search-mode",
             search_mode,
+            "--experiment-type",
+            "trial",
+            "--parent-experiment-root",
+            str(grid_dir),
         ]
         if lsp_tools is not None:
             cmd.extend(["--lsp-tools", lsp_tools])
@@ -204,14 +212,20 @@ def main(
         jsonl_path = experiment_results_path(experiment_root)
         report_path = experiment_report_path(experiment_root)
         report = json.loads(report_path.read_text(encoding="utf-8"))
+        report_metadata = report.get("metadata") if isinstance(report.get("metadata"), dict) else {}
+        if first_metadata is None and isinstance(report_metadata, dict):
+            first_metadata = report_metadata
 
         summaries.append(
             {
-                "config": item,
+                "config": {
+                    "search_max_turns": item["search_max_turns"],
+                    "search_temperature": item["search_temperature"],
+                },
                 "paths": {
                     "experiment_root": str(experiment_root),
-                    "jsonl": str(jsonl_path),
-                    "report": str(report_path),
+                    "results_path": str(jsonl_path),
+                    "report_path": str(report_path),
                 },
                 "metrics": {
                     "completion_rate": report.get("completion_rate"),
@@ -223,7 +237,9 @@ def main(
                     "avg_turns": report.get("avg_turns"),
                     "avg_latency_s": report.get("avg_latency_s"),
                 },
-                "search": (report.get("metadata") or {}).get("search"),
+                "search": report_metadata.get("search")
+                if isinstance(report_metadata, dict)
+                else None,
             }
         )
 
@@ -232,21 +248,56 @@ def main(
     mins, secs = divmod(int(elapsed), 60)
     click.echo(f"\nGrid completed: {total_runs} runs in {mins:02d}:{secs:02d}")
 
-    report_out = experiment_grid_report_path(grid_dir)
-    report_out.parent.mkdir(parents=True, exist_ok=True)
-    report_out.write_text(
-        json.dumps(
-            {
-                "dataset_path": str(resolved_dataset_path),
-                "grid_dir": str(grid_dir),
-                "runs": summaries,
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
+    best_trial = max(
+        summaries,
+        key=lambda item: item.get("metrics", {}).get("avg_file_recall", 0) or 0,
     )
+    grid_completed_at = datetime.now(UTC)
+    child_run = first_metadata.get("run") if isinstance(first_metadata, dict) else {}
+    grid_report = {
+        "metadata": {
+            **(first_metadata or {}),
+            "run": {
+                "dataset": dataset_id,
+                "dataset_path": str(resolved_dataset_path),
+                "limit": limit,
+                "shuffle": shuffle,
+                "seed": seed,
+                "search_mode": search_mode,
+                "lsp_tools": lsp_tools,
+                "bash_tools": bash_tools,
+                "cases_loaded": child_run.get("cases_loaded")
+                if isinstance(child_run, dict)
+                else None,
+                "started_at_utc": grid_started_at.isoformat(),
+                "completed_at_utc": grid_completed_at.isoformat(),
+                "duration_s": round(elapsed, 1),
+            },
+            "experiment": {
+                "type": "grid",
+                "name": grid_dir.name,
+                "root": str(grid_dir),
+                "parent_root": None,
+            },
+            "artifacts": {
+                "experiment_root": str(grid_dir),
+                "reports_dir": str(grid_dir / "reports"),
+                "runs_dir": str(runs_dir),
+            },
+        },
+        "grid": {
+            "objective": "avg_file_recall",
+            "search_space": {
+                "search_max_turns": sorted(set(search_max_turns_values)),
+                "search_temperature": sorted(set(search_temperature_values)),
+            },
+            "trial_count": len(summaries),
+            "trials": summaries,
+            "best_trial": best_trial,
+        },
+    }
+    report_out = experiment_report_path(grid_dir)
+    write_report_json(grid_report, report_out)
 
     click.echo(f"\nGrid summary saved to: {report_out}")
 

@@ -104,6 +104,7 @@ def test_run_benchmark_metadata_includes_trace_artifacts(tmp_path: Path) -> None
     summary = runner.run_benchmark([])
 
     artifacts = summary.metadata["artifacts"]
+    experiment = summary.metadata["experiment"]
     assert artifacts["trace_enabled"] is True
     assert artifacts["schema_version"] == TRACE_ARTIFACT_SCHEMA_VERSION
     assert artifacts["run_id"]
@@ -112,3 +113,30 @@ def test_run_benchmark_metadata_includes_trace_artifacts(tmp_path: Path) -> None
     assert artifacts["events_path"].endswith(
         f"/experiments/{artifacts['run_id']}/events/events.jsonl"
     )
+    assert experiment["type"] == "run"
+    assert experiment["root"] == artifacts["experiment_root"]
+    assert experiment["name"] == artifacts["experiment_root"].split("/")[-1]
+    assert experiment["parent_root"] is None
+
+
+def test_run_benchmark_metadata_supports_trial_experiment_type(tmp_path: Path) -> None:
+    config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
+    runner = BenchmarkRunner(
+        config, progress=False, trace=False, artifact_root=tmp_path / "trial-exp"
+    )
+    runner.repos_dir = tmp_path / "repos"
+    runner.repos_dir.mkdir()
+
+    summary = runner.run_benchmark(
+        [],
+        run_config={
+            "experiment_type": "trial",
+            "parent_experiment_root": str(tmp_path / "grid-exp"),
+        },
+    )
+
+    experiment = summary.metadata["experiment"]
+    assert experiment["type"] == "trial"
+    assert experiment["root"] == str(tmp_path / "trial-exp")
+    assert experiment["name"] == "trial-exp"
+    assert experiment["parent_root"] == str(tmp_path / "grid-exp")
