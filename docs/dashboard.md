@@ -24,12 +24,6 @@ Launch the dashboard from your terminal:
 relogs
 ```
 
-Or via Python module:
-
-```bash
-python -m relace_mcp.dashboard
-```
-
 ## Features
 
 ### 1. Multi-View Tabs
@@ -215,7 +209,7 @@ Cloud operations emit structured events:
 ### Dashboard Won't Start
 
 ```
-Error: textual is not installed.
+relace-dashboard requires optional dependencies.
 Install with: pip install relace-mcp[tools]
 ```
 

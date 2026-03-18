@@ -217,8 +217,7 @@ def test_schema_error_retry_disables_parallel_and_strips_strict(tmp_path, monkey
         mock_openai.return_value = mock_client
 
         with patch("relace_mcp.backend.openai_backend.AsyncOpenAI"):
-            # Patch constant to disable parallel_tool_calls for this test
-            with patch("relace_mcp.clients.search.SEARCH_PARALLEL_TOOL_CALLS", False):
+            with patch("relace_mcp.config.settings.SEARCH_PARALLEL_TOOL_CALLS", False):
                 config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
                 client = SearchLLMClient(config)
 

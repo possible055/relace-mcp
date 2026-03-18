@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from fastmcp import Client
@@ -35,31 +34,39 @@ class TestMCPToolExistence:
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("clean_env")
-    async def test_cloud_tools_conditional_on_flag(self, mock_config: RelaceConfig) -> None:
+    async def test_cloud_tools_conditional_on_flag(
+        self,
+        mock_config: RelaceConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """Cloud tools must be visible when RELACE_CLOUD_TOOLS=true."""
-        with patch("relace_mcp.config.settings.RELACE_CLOUD_TOOLS", True):
-            server = build_server(config=mock_config, run_health_check=False)
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "1")
+        server = build_server(config=mock_config, run_health_check=False)
 
-            async with Client(server) as client:
-                tools = await client.list_tools()
-                tool_names = {t.name for t in tools}
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            tool_names = {t.name for t in tools}
 
-                for tool in CLOUD_TOOLS:
-                    assert tool in tool_names, f"Cloud tool '{tool}' not registered"
+            for tool in CLOUD_TOOLS:
+                assert tool in tool_names, f"Cloud tool '{tool}' not registered"
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("clean_env")
-    async def test_cloud_tools_absent_when_disabled(self, mock_config: RelaceConfig) -> None:
+    async def test_cloud_tools_absent_when_disabled(
+        self,
+        mock_config: RelaceConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """Cloud tools must be hidden when RELACE_CLOUD_TOOLS=false."""
-        with patch("relace_mcp.config.settings.RELACE_CLOUD_TOOLS", False):
-            server = build_server(config=mock_config, run_health_check=False)
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "0")
+        server = build_server(config=mock_config, run_health_check=False)
 
-            async with Client(server) as client:
-                tools = await client.list_tools()
-                tool_names = {t.name for t in tools}
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            tool_names = {t.name for t in tools}
 
-                for tool in CLOUD_TOOLS:
-                    assert tool not in tool_names, f"Cloud tool '{tool}' should NOT be registered"
+            for tool in CLOUD_TOOLS:
+                assert tool not in tool_names, f"Cloud tool '{tool}' should NOT be registered"
 
 
 class TestMCPToolSchemas:
@@ -115,14 +122,16 @@ class TestMCPToolSchemas:
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("clean_env")
-    async def test_all_tool_params_have_descriptions(self, mock_config: RelaceConfig) -> None:
+    async def test_all_tool_params_have_descriptions(
+        self,
+        mock_config: RelaceConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """All tool parameters must have non-empty descriptions in inputSchema."""
-        with (
-            patch("relace_mcp.config.settings.RELACE_CLOUD_TOOLS", True),
-            patch("relace_mcp.config.settings.AGENTIC_RETRIEVAL_ENABLED", True),
-            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "relace"),
-        ):
-            server = build_server(config=mock_config, run_health_check=False)
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "1")
+        monkeypatch.setenv("MCP_SEARCH_RETRIEVAL", "1")
+        monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "relace")
+        server = build_server(config=mock_config, run_health_check=False)
 
         async with Client(server) as client:
             tools = await client.list_tools()
@@ -172,13 +181,15 @@ class TestMCPToolAnnotations:
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("clean_env")
-    async def test_agentic_retrieval_is_not_readonly(self, mock_config: RelaceConfig) -> None:
+    async def test_agentic_retrieval_is_not_readonly(
+        self,
+        mock_config: RelaceConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """agentic_retrieval may schedule background refreshes, so it is not read-only."""
-        with (
-            patch("relace_mcp.config.settings.AGENTIC_RETRIEVAL_ENABLED", True),
-            patch("relace_mcp.config.settings.RETRIEVAL_BACKEND", "relace"),
-        ):
-            server = build_server(config=mock_config, run_health_check=False)
+        monkeypatch.setenv("MCP_SEARCH_RETRIEVAL", "1")
+        monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "relace")
+        server = build_server(config=mock_config, run_health_check=False)
 
         async with Client(server) as client:
             tools = await client.list_tools()
@@ -252,30 +263,36 @@ class TestMCPResourceExistence:
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("clean_env")
     async def test_cloud_status_resource_visible_when_enabled(
-        self, mock_config: RelaceConfig
+        self,
+        mock_config: RelaceConfig,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        with patch("relace_mcp.config.settings.RELACE_CLOUD_TOOLS", True):
-            server = build_server(config=mock_config, run_health_check=False)
+        """Cloud tools must be visible when RELACE_CLOUD_TOOLS=true."""
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "1")
+        server = build_server(config=mock_config, run_health_check=False)
 
-            async with Client(server) as client:
-                resources = await client.list_resources()
-                resource_uris = [str(r.uri) for r in resources]
+        async with Client(server) as client:
+            resources = await client.list_resources()
+            resource_uris = [str(r.uri) for r in resources]
 
-                assert "relace://cloud/status" in resource_uris
+            assert "relace://cloud/status" in resource_uris
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("clean_env")
     async def test_cloud_status_resource_hidden_when_disabled(
-        self, mock_config: RelaceConfig
+        self,
+        mock_config: RelaceConfig,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        with patch("relace_mcp.config.settings.RELACE_CLOUD_TOOLS", False):
-            server = build_server(config=mock_config, run_health_check=False)
+        """Cloud tools must be hidden when RELACE_CLOUD_TOOLS=false."""
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "0")
+        server = build_server(config=mock_config, run_health_check=False)
 
-            async with Client(server) as client:
-                resources = await client.list_resources()
-                resource_uris = [str(r.uri) for r in resources]
+        async with Client(server) as client:
+            resources = await client.list_resources()
+            resource_uris = [str(r.uri) for r in resources]
 
-                assert "relace://cloud/status" not in resource_uris
+            assert "relace://cloud/status" not in resource_uris
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("clean_env")

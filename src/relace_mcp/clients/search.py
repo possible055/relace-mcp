@@ -1,20 +1,11 @@
 import logging
-import os
 from typing import Any
 
 import openai
 
 from ..backend import OpenAIChatClient
 from ..config import RelaceConfig, create_provider_config
-from ..config.settings import (
-    RELACE_PROVIDER,
-    SEARCH_DEFAULT_ENDPOINT,
-    SEARCH_DEFAULT_MODEL,
-    SEARCH_PARALLEL_TOOL_CALLS,
-    SEARCH_TEMPERATURE,
-    SEARCH_TIMEOUT_SECONDS,
-    SEARCH_TOP_P,
-)
+from ..config import settings as _settings
 
 logger = logging.getLogger(__name__)
 
@@ -47,22 +38,26 @@ class SearchLLMClient:
     """
 
     def __init__(self, config: RelaceConfig) -> None:
+        _settings.reload_settings_from_env()
         self._provider_config = create_provider_config(
             label="SEARCH",
-            raw_provider=os.getenv("SEARCH_PROVIDER", ""),
-            raw_api_key=os.getenv("SEARCH_API_KEY", ""),
-            raw_endpoint=os.getenv("SEARCH_ENDPOINT", ""),
-            raw_model=os.getenv("SEARCH_MODEL", ""),
-            default_endpoint=SEARCH_DEFAULT_ENDPOINT,
-            default_model=SEARCH_DEFAULT_MODEL,
-            timeout=SEARCH_TIMEOUT_SECONDS,
+            raw_provider=_settings.SEARCH_PROVIDER,
+            raw_api_key=_settings.SEARCH_API_KEY,
+            raw_endpoint=_settings.SEARCH_ENDPOINT,
+            raw_model=_settings.SEARCH_MODEL,
+            default_endpoint=_settings.SEARCH_DEFAULT_ENDPOINT,
+            default_model=_settings.SEARCH_DEFAULT_MODEL,
+            timeout=_settings.SEARCH_TIMEOUT_SECONDS,
             relace_api_key=config.api_key,
         )
         self._chat_client = OpenAIChatClient(self._provider_config)
         self._disable_relace_sampling = False
         self._disable_parallel_tool_calls = False
         self._strip_tool_strict = False
-        self._parallel_tool_calls_enabled = SEARCH_PARALLEL_TOOL_CALLS
+        self._parallel_tool_calls_enabled = _settings.SEARCH_PARALLEL_TOOL_CALLS
+        self._temperature = _settings.SEARCH_TEMPERATURE
+        self._top_p = _settings.SEARCH_TOP_P
+        self._request_timeout_seconds = _settings.SEARCH_TIMEOUT_SECONDS
 
     @property
     def api_compat(self) -> str:
@@ -80,14 +75,14 @@ class SearchLLMClient:
             tools = _strip_tool_strict(tools)
 
         include_relace_sampling = (
-            self._provider_config.api_compat == RELACE_PROVIDER
+            self._provider_config.api_compat == _settings.RELACE_PROVIDER
             and not self._disable_relace_sampling
         )
         include_parallel_tool_calls = (
             self._parallel_tool_calls_enabled and not self._disable_parallel_tool_calls
         )
 
-        temp = temperature if temperature is not None else SEARCH_TEMPERATURE
+        temp = temperature if temperature is not None else self._temperature
 
         extra_body: dict[str, Any] = {
             "tools": tools,
@@ -95,8 +90,8 @@ class SearchLLMClient:
         }
 
         # Only include top_p when explicitly configured
-        if SEARCH_TOP_P is not None:
-            extra_body["top_p"] = SEARCH_TOP_P
+        if self._top_p is not None:
+            extra_body["top_p"] = self._top_p
 
         if include_relace_sampling:
             extra_body["top_k"] = 100
@@ -152,7 +147,7 @@ class SearchLLMClient:
         except openai.APITimeoutError as exc:
             raise RuntimeError(
                 f"{self._provider_config.display_name} Search API request timed out "
-                f"after {SEARCH_TIMEOUT_SECONDS}s."
+                f"after {self._request_timeout_seconds}s."
             ) from exc
         except openai.APIConnectionError as exc:
             raise RuntimeError(
@@ -181,14 +176,14 @@ class SearchLLMClient:
             tools = _strip_tool_strict(tools)
 
         include_relace_sampling = (
-            self._provider_config.api_compat == RELACE_PROVIDER
+            self._provider_config.api_compat == _settings.RELACE_PROVIDER
             and not self._disable_relace_sampling
         )
         include_parallel_tool_calls = (
             self._parallel_tool_calls_enabled and not self._disable_parallel_tool_calls
         )
 
-        temp = temperature if temperature is not None else SEARCH_TEMPERATURE
+        temp = temperature if temperature is not None else self._temperature
 
         extra_body: dict[str, Any] = {
             "tools": tools,
@@ -196,8 +191,8 @@ class SearchLLMClient:
         }
 
         # Only include top_p when explicitly configured
-        if SEARCH_TOP_P is not None:
-            extra_body["top_p"] = SEARCH_TOP_P
+        if self._top_p is not None:
+            extra_body["top_p"] = self._top_p
 
         if include_relace_sampling:
             extra_body["top_k"] = 100
@@ -246,7 +241,7 @@ class SearchLLMClient:
         except openai.APITimeoutError as exc:
             raise RuntimeError(
                 f"{self._provider_config.display_name} Search API request timed out "
-                f"after {SEARCH_TIMEOUT_SECONDS}s."
+                f"after {self._request_timeout_seconds}s."
             ) from exc
         except openai.APIConnectionError as exc:
             raise RuntimeError(
@@ -289,8 +284,8 @@ class SearchLLMClient:
             "tools": stripped_tools,
             "tool_choice": "auto",
         }
-        if SEARCH_TOP_P is not None:
-            compat_body["top_p"] = SEARCH_TOP_P
+        if self._top_p is not None:
+            compat_body["top_p"] = self._top_p
 
         logger.warning(
             "[%s] Request rejected (status=%s, provider=%s, api_compat=%s). Retrying with "
@@ -341,8 +336,8 @@ class SearchLLMClient:
             "tools": stripped_tools,
             "tool_choice": "auto",
         }
-        if SEARCH_TOP_P is not None:
-            compat_body["top_p"] = SEARCH_TOP_P
+        if self._top_p is not None:
+            compat_body["top_p"] = self._top_p
 
         logger.warning(
             "[%s] Request rejected (status=%s, provider=%s, api_compat=%s). Retrying with "

@@ -12,9 +12,22 @@
 
 **环境配置**（在项目根目录创建 `.env`）:
 ```bash
-SEARCH_PROVIDER=relace          # 或: openai, openrouter
-RELACE_API_KEY=your-key-here    # 或: OPENAI_API_KEY, OPENROUTER_API_KEY
+# Relace（默认）
+SEARCH_PROVIDER=relace
+RELACE_API_KEY=your-key-here
+
+# OpenAI-compatible provider 示例
+SEARCH_PROVIDER=openai
+SEARCH_ENDPOINT=https://api.openai.com/v1
+SEARCH_MODEL=gpt-4.1-mini
+SEARCH_API_KEY=your-provider-key
 ```
+
+对于非 Relace 提供商，benchmark 命令读取的是 `SEARCH_API_KEY`。`OPENAI_API_KEY`、`OPENROUTER_API_KEY` 这类提供商专用变量不会被自动加载。
+
+`benchmark.cli.run` 和 `benchmark.cli.grid` 现在与 MCP server 共用同一套 runtime bootstrap。若设置了 `MCP_DOTENV_PATH`，会优先加载该文件；否则回退到默认的 dotenv 搜索路径。之后再应用 CLI 覆盖并刷新集中式 settings。实际优先级固定为：CLI flags > process env > dotenv values。
+
+当 benchmark CLI 的路径参数不是绝对路径时，会按 `benchmark/` 作为基准目录解析。下面示例中的 `artifacts/...`，在磁盘上的实际位置就是 `benchmark/artifacts/...`。
 
 **数据集**:
 
@@ -130,7 +143,7 @@ uv run --extra benchmark python -m benchmark.cli.grid \
 | `--output` | | Grid experiment 目录 |
 | `--dry-run` | | 仅打印计划的 run，不执行 |
 
-**输出**: Grid parent 摘要保存至 `artifacts/experiments/<grid_name>/reports/summary.report.json`
+**输出**: Grid parent 摘要保存至 `benchmark/artifacts/experiments/<grid_name>/reports/summary.report.json`
 
 ## 4. 数据集验证
 
@@ -208,7 +221,7 @@ uv run --extra benchmark python -m benchmark.cli.report -o comparison.md *.repor
 | 问题 | 解决方案 |
 |------|----------|
 | 缺少 benchmark 依赖 | 使用 `uv run --extra benchmark ...` 运行命令 |
-| 缺少 API key | 设置 `RELACE_API_KEY` 或对应 provider 的 key |
+| 缺少 API key | Relace 模式设置 `RELACE_API_KEY`；非 Relace 模式设置 `SEARCH_PROVIDER`、`SEARCH_ENDPOINT`、`SEARCH_MODEL` 与 `SEARCH_API_KEY` |
 | 克隆失败 | 检查网络，确保 `git` 已安装 |
 | `indexed` preflight 失败 | 确认 retrieval backend 可用，且 index / cloud sync state 是最新的 |
 | 找不到数据集 | 将数据集放入 `benchmark/artifacts/data/` |

@@ -11,6 +11,16 @@ from relace_mcp.config import RelaceConfig
 from relace_mcp.server import build_server
 
 
+@pytest.fixture(autouse=True)
+def _neutralize_repo_dotenv(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RELACE_API_KEY", "")
+    monkeypatch.setenv("MCP_BASE_DIR", "")
+    monkeypatch.setenv("MCP_LOGGING", "off")
+    monkeypatch.setenv("RELACE_CLOUD_TOOLS", "0")
+    monkeypatch.setenv("MCP_SEARCH_RETRIEVAL", "0")
+    monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "relace")
+
+
 class TestBuildServer:
     """Test build_server function."""
 
@@ -25,13 +35,18 @@ class TestBuildServer:
         """Should build server from environment variables."""
         monkeypatch.setenv("RELACE_API_KEY", "test-key")
         monkeypatch.setenv("MCP_BASE_DIR", str(tmp_path))
+        monkeypatch.setenv("MCP_LOGGING", "off")
 
         server = build_server()
         assert server is not None
 
     @pytest.mark.usefixtures("clean_env")
-    def test_build_succeeds_without_api_key(self) -> None:
+    def test_build_succeeds_without_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Server builds without RELACE_API_KEY; error deferred to first tool call."""
+        monkeypatch.setenv("RELACE_API_KEY", "")
+        monkeypatch.setenv("MCP_BASE_DIR", "")
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "0")
+        monkeypatch.setenv("MCP_LOGGING", "off")
         server = build_server()
         assert server is not None
 
@@ -197,6 +212,8 @@ class TestMain:
 
             main()
 
+            mock_build.assert_called_once()
+            assert mock_build.call_args.kwargs["initialize_runtime"] is False
             mock_server.run.assert_called_once_with(show_banner=False)
 
     @pytest.mark.usefixtures("clean_env")

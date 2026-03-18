@@ -3,8 +3,8 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
+from ...config import settings as _settings
 from ..core import compute_file_hash
-from ._sync_constants import MAX_UPLOAD_WORKERS
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def _compute_file_hashes(
         file_hash = compute_file_hash(file_path)
         return (rel_path, file_hash)
 
-    with ThreadPoolExecutor(max_workers=MAX_UPLOAD_WORKERS) as executor:
+    with ThreadPoolExecutor(max_workers=_settings.RELACE_UPLOAD_MAX_WORKERS) as executor:
         futures = [executor.submit(hash_file, f) for f in files]
         for future in as_completed(futures):
             rel_path, file_hash = future.result()

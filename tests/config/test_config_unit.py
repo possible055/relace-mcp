@@ -1,5 +1,4 @@
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -14,11 +13,11 @@ class TestRelaceConfigFromEnv:
         assert config.api_key is None
 
     @pytest.mark.usefixtures("clean_env")
-    def test_missing_api_key_raises_with_cloud_tools(self) -> None:
+    def test_missing_api_key_raises_with_cloud_tools(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When RELACE_CLOUD_TOOLS is on, API key is required."""
-        with patch("relace_mcp.config.settings.RELACE_CLOUD_TOOLS", True):
-            with pytest.raises(RuntimeError, match="RELACE_API_KEY is required"):
-                RelaceConfig.from_env()
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "1")
+        with pytest.raises(RuntimeError, match="RELACE_API_KEY is required"):
+            RelaceConfig.from_env()
 
     @pytest.mark.usefixtures("clean_env")
     def test_loads_api_key(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

@@ -8,8 +8,6 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from dotenv import load_dotenv
-
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
@@ -36,6 +34,8 @@ def _configure_logging_for_stdio() -> None:
     - WARNING: Only warnings and errors (default)
     - ERROR: Only errors
     """
+    from .config import settings as _settings
+
     # Redirect all warnings to stderr (not stdout)
     warnings.filterwarnings("default")
 
@@ -52,30 +52,15 @@ def _configure_logging_for_stdio() -> None:
     )
     root.addHandler(stderr_handler)
 
-    # Allow user to override log level via environment variable
-    level_str = os.getenv("MCP_LOG_LEVEL", "WARNING").upper()
-    level = getattr(logging, level_str, logging.WARNING)
+    level = getattr(logging, _settings.MCP_LOG_LEVEL, logging.WARNING)
     root.setLevel(level)
 
 
 def _load_dotenv_from_path() -> None:
-    """Load .env file from MCP_DOTENV_PATH or default locations.
+    """Compatibility wrapper for shared runtime bootstrap dotenv loading."""
+    from .config.bootstrap import load_dotenv_from_path
 
-    Priority:
-    1. MCP_DOTENV_PATH environment variable (explicit path)
-    2. Default dotenv search (current directory and parents)
-    """
-    dotenv_path = os.getenv("MCP_DOTENV_PATH", "").strip()
-    if dotenv_path:
-        path = Path(dotenv_path).expanduser()
-        if path.exists():
-            load_dotenv(path)
-            logger.debug("Loaded .env from MCP_DOTENV_PATH: %s", path)
-        else:
-            logger.warning("MCP_DOTENV_PATH does not exist: %s", dotenv_path)
-            load_dotenv()  # Fallback to default
-    else:
-        load_dotenv()
+    load_dotenv_from_path()
 
 
 def check_health(config: "RelaceConfig") -> dict[str, str]:
@@ -168,10 +153,17 @@ def check_health(config: "RelaceConfig") -> dict[str, str]:
 def build_server(
     config: "RelaceConfig | None" = None,
     run_health_check: bool = True,
+    *,
+    initialize_runtime: bool = True,
 ) -> "FastMCP":
     _ensure_fastmcp_log_level()
 
     from fastmcp import FastMCP
+
+    from .config.bootstrap import initialize_runtime_from_env
+
+    if initialize_runtime:
+        initialize_runtime_from_env()
 
     from .config import RelaceConfig
     from .config import settings as _settings
@@ -237,19 +229,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # Load dotenv first so settings constants reflect .env values.
-    # IMPORTANT: _load_dotenv_from_path() MUST run before any import of
-    # relace_mcp.config.settings — the module-level os.getenv() calls in
-    # settings.py bind constants at import time.
-    _load_dotenv_from_path()
-
     from .config import RelaceConfig
     from .config import settings as _settings
-    from .config.settings import reload_logging_settings, reload_tool_settings
+    from .config.bootstrap import initialize_runtime_from_env
     from .observability import log_event
 
-    reload_logging_settings()
-    reload_tool_settings()
+    initialize_runtime_from_env()
     _ensure_fastmcp_log_level()
 
     # stdio-only fixes: must be applied before any output
@@ -276,14 +261,14 @@ def main() -> None:
             "kind": "server_start",
             "level": "info",
             "transport": args.transport,
-            "mcp_log_level": os.getenv("MCP_LOG_LEVEL", "WARNING").upper(),
+            "mcp_log_level": _settings.MCP_LOG_LEVEL,
             "mcp_logging_mode": _settings.MCP_LOGGING_MODE,
             "mcp_trace_enabled": _settings.MCP_TRACE_LOGGING,
             "log_path": str(_settings.LOG_PATH),
             "trace_path": str(_settings.TRACE_PATH),
-            "relace_cloud_tools": os.getenv("RELACE_CLOUD_TOOLS", "0"),
-            "mcp_search_retrieval": os.getenv("MCP_SEARCH_RETRIEVAL", "0"),
-            "mcp_retrieval_backend": os.getenv("MCP_RETRIEVAL_BACKEND", "relace"),
+            "relace_cloud_tools": _settings.RELACE_CLOUD_TOOLS,
+            "mcp_search_retrieval": _settings.AGENTIC_RETRIEVAL_ENABLED,
+            "mcp_retrieval_backend": _settings.RETRIEVAL_BACKEND,
             "codanna_cli_found": bool(shutil.which("codanna")),
             "chunkhound_cli_found": bool(shutil.which("chunkhound")),
             "base_dir": config.base_dir,
@@ -293,7 +278,7 @@ def main() -> None:
     except Exception:
         # Startup logging must never break MCP stdio transport.
         logger.debug("Failed to write server_start event", exc_info=True)
-    server = build_server(config)
+    server = build_server(config, initialize_runtime=False)
 
     if args.transport in ("http", "streamable-http"):
         logger.debug(

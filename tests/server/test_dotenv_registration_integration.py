@@ -55,8 +55,6 @@ from fastmcp import Client
 
 import relace_mcp.server as server
 
-server._load_dotenv_from_path()
-
 mcp = server.build_server(run_health_check=False)
 
 
@@ -81,6 +79,50 @@ async def _run() -> None:
 
 
 asyncio.run(_run())
+"""
+
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert proc.returncode == 0, (
+        f"subprocess failed\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}\n"
+    )
+
+
+@pytest.mark.usefixtures("clean_env")
+def test_build_server_loads_dotenv_before_tool_imports(tmp_path: Path) -> None:
+    env_file = tmp_path / ".test.env"
+    env_file.write_text("APPLY_SEMANTIC_CHECK=1\n", encoding="utf-8")
+
+    repo_root = Path(__file__).resolve().parents[2]
+
+    env = _clean_prefixed_env(
+        os.environ,
+        prefixes=("RELACE_", "SEARCH_", "APPLY_", "MCP_"),
+    )
+    env["MCP_DOTENV_PATH"] = str(env_file)
+
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = (
+        str(repo_root)
+        if not existing_pythonpath
+        else f"{repo_root}{os.pathsep}{existing_pythonpath}"
+    )
+
+    code = r"""
+import relace_mcp.server as server
+
+mcp = server.build_server(run_health_check=False)
+
+import relace_mcp.apply.core as apply_core
+
+assert mcp is not None
+assert apply_core.APPLY_SEMANTIC_CHECK is True, apply_core.APPLY_SEMANTIC_CHECK
 """
 
     proc = subprocess.run(

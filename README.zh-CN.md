@@ -27,7 +27,7 @@
 
 - **快速应用** — 通过 Relace API 以 10,000+ tokens/秒的速度应用代码编辑
 - **智能搜索** — 使用自然语言查询进行智能代码库探索
-- **智能检索** — 结合语义 hints 与 live code exploration 的混合检索，支持 stale hints，并将 cloud maintenance 保持为显式操作（需设置 `MCP_SEARCH_RETRIEVAL=1`）
+- **智能检索** — 结合语义 hints 与 live code exploration 的混合检索，支持 stale hints，并将 cloud maintenance 保持为显式操作（使用 `MCP_SEARCH_RETRIEVAL=1` 启用，backend 由 `MCP_RETRIEVAL_BACKEND` 选择）
 - **云端搜索** — 对云端同步的仓库进行语义代码搜索
 
 ## 快速开始
@@ -138,13 +138,14 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 
 | 变量 | 必需 | 说明 |
 |------|------|------|
-| `RELACE_API_KEY` | ✅* | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥 |
+| `RELACE_API_KEY` | ✅* | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥；在使用 Relace provider 或云端工具时必需 |
 | `RELACE_CLOUD_TOOLS` | ❌ | 设为 `1` 启用云端工具 |
-| `MCP_SEARCH_RETRIEVAL` | ❌ | 设为 `1` 启用 `agentic_retrieval` 工具 |
+| `MCP_SEARCH_RETRIEVAL` | ❌ | 设为 `1` 注册 `agentic_retrieval` 工具 |
+| `MCP_RETRIEVAL_BACKEND` | ❌ | semantic retrieval backend：`relace`（默认）、`codanna`、`chunkhound`、`auto` 或 `none` |
 | `MCP_RETRIEVAL_HINT_POLICY` | ❌ | retrieval hint policy：`prefer-stale`（默认）或 `strict` |
-| `SEARCH_BASH_TOOLS` | ❌ | Bash 工具开关：`1`（开）、`0`（关，默认） |
-| `SEARCH_LSP_TOOLS` | ❌ | LSP 工具开关：`1`（开）、`0`（关，默认） |
-| `MCP_BASE_DIR` | ❌ | 项目根目录（自动检测：MCP Roots → Git → CWD） |
+| `SEARCH_BASH_TOOLS` | ❌ | 启用 `agentic_search` / `agentic_retrieval` 内部使用的 `bash` subtool：`1`（开）、`0`（关，默认） |
+| `SEARCH_LSP_TOOLS` | ❌ | 启用 `agentic_search` / `agentic_retrieval` 内部使用的 `find_symbol` / `search_symbol` subtools：`1`（开）、`0`（关，默认） |
+| `MCP_BASE_DIR` | ❌ | 项目根目录覆盖值（自动检测顺序：MCP Roots → Git → workspace storage → CWD） |
 | `MCP_LOGGING` | ❌ | 文件日志：`off`（默认）、`safe`、`full` |
 | `MCP_DOTENV_PATH` | ❌ | `.env` 文件路径，用于集中配置 |
 
@@ -154,7 +155,9 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 
 ## 工具
 
-始终可用的工具有：`fast_apply`、`agentic_search`、`index_status`。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`agentic_retrieval` 需设置 `MCP_SEARCH_RETRIEVAL=1`。
+始终可用的 top-level tools 有：`fast_apply`、`agentic_search`、`index_status`。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`agentic_retrieval` 需设置 `MCP_SEARCH_RETRIEVAL=1`，其 semantic backend 由 `MCP_RETRIEVAL_BACKEND` 选择。
+
+`SEARCH_BASH_TOOLS` 与 `SEARCH_LSP_TOOLS` 不会给 `list_tools()` 新增 top-level 条目。它们只会扩展 `agentic_search` / `agentic_retrieval` 在探索代码库时可使用的内部工具集。
 
 `agentic_retrieval` 可以先使用 stale semantic hints，再回到 live code 做确认；它不会隐式执行 `cloud_sync`。如果你要主动刷新 cloud index，请显式调用 `cloud_sync`。
 
@@ -189,15 +192,18 @@ relogs
 使用 [Loc-Bench](https://huggingface.co/datasets/IvanaXu/LocAgent) 代码定位数据集评估 `agentic_search` 性能。
 
 ```bash
-# 安装 benchmark 依赖
-pip install relace-mcp[benchmark]
+git clone https://github.com/possible055/relace-mcp.git
+cd relace-mcp
+uv sync --extra benchmark
 
 # 从 Hugging Face 构建数据集
-uv run python -m benchmark.cli.build_locbench --output artifacts/data/raw/locbench_v1.jsonl
+uv run --extra benchmark python -m benchmark.cli.build_locbench --output artifacts/data/raw/locbench_v1.jsonl
 
 # 运行评估
-uv run python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.jsonl --limit 20
+uv run --extra benchmark python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.jsonl --limit 20
 ```
+
+所有 benchmark 产物都会写入 `benchmark/artifacts/`。
 
 网格搜索、分析工具及指标说明请参见 [docs/benchmark.zh-CN.md](docs/benchmark.zh-CN.md)。
 
@@ -211,20 +217,20 @@ uv run python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.json
 
 ## 故障排除
 
-| 错误 | 解决方案 |
-|------|----------|
-| `RELACE_API_KEY is not set` | 在环境变量或 MCP 配置中设置密钥 |
-| `NEEDS_MORE_CONTEXT` | 在目标块前后包含 1-3 行锚定行 |
-| `FILE_TOO_LARGE` | 文件超过 10MB；拆分文件 |
-| `ENCODING_ERROR` | 显式设置 `RELACE_DEFAULT_ENCODING` |
-| `AUTH_ERROR` | 验证 API 密钥是否有效且未过期 |
-| `RATE_LIMIT` | 请求过多；稍后重试 |
-| `CONNECTION_TIMEOUT` | 检查网络连接或增加超时设置 |
-| `INVALID_PATH` | 文件路径不存在或无权限；确认路径正确且有读写权限 |
-| `SYNTAX_ERROR` | edit_snippet 格式错误；确保占位符语法正确 |
-| `NO_MATCH_FOUND` | 搜索无结果；尝试更宽松的查询条件或先执行 `cloud_sync` |
-| `CLOUD_NOT_SYNCED` | 仓库尚未同步到 Relace Cloud；先执行 `cloud_sync` |
-| `CONFLICT_DETECTED` | 编辑冲突；文件已被修改，重新读取后再编辑 |
+| 错误或提示信息 | 解决方案 |
+|----------------|----------|
+| `RELACE_API_KEY is required ...` | 使用 Relace provider 或云端工具时设置 `RELACE_API_KEY` |
+| `NEEDS_MORE_CONTEXT` | 在目标代码块附近提供 1-3 行唯一锚点行 |
+| `INVALID_PATH` | 确认路径存在，且位于 `MCP_BASE_DIR` 或允许的额外路径内 |
+| `FILE_TOO_LARGE` | 文件超过 10MB；将改动拆成更小的文件或更局部的编辑 |
+| `ENCODING_ERROR` | 对非 UTF-8 项目显式设置 `RELACE_DEFAULT_ENCODING` |
+| `AUTH_ERROR` | 检查 API key 与 provider 配置 |
+| `RATE_LIMIT` | 稍后重试，或降低请求频率 |
+| `NETWORK_ERROR` / `TIMEOUT_ERROR` | 检查网络连通性后重试 |
+| `APPLY_NOOP` | 增加更具体的锚点或明确新增行，让 merge 能生成 diff |
+| `MARKER_LEAKAGE` | 确保占位 marker 仅作为占位符使用，而不是期望写入文件的字面文本 |
+| `TRUNCATION_DETECTED` | 将大规模删除拆小，或使用显式 remove directives |
+| `BLAST_RADIUS_EXCEEDED` | 将改动拆成更小、更局部的 edits |
 
 ## 开发
 

@@ -1,5 +1,4 @@
 import hashlib
-import os
 import platform
 import subprocess  # nosec B404
 import sys
@@ -8,6 +7,9 @@ from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit, urlunsplit
+
+from relace_mcp.config import create_provider_config
+from relace_mcp.config import settings as _settings
 
 if TYPE_CHECKING:
     from benchmark.schemas import DatasetCase
@@ -45,20 +47,6 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _safe_float(value: str | None, default: float) -> float:
-    try:
-        return float(value) if value is not None else default
-    except (ValueError, TypeError):
-        return default
-
-
-def _safe_int(value: str | None, default: int) -> int:
-    try:
-        return int(value) if value is not None else default
-    except (ValueError, TypeError):
-        return default
-
-
 def build_run_metadata(
     *,
     config: "RelaceConfig",
@@ -76,11 +64,30 @@ def build_run_metadata(
         "default_encoding": config.default_encoding,
     }
 
-    # Get provider info from environment/settings (avoid private attribute access)
-    provider = os.getenv("SEARCH_PROVIDER", "relace").strip().lower()
-    model = os.getenv("SEARCH_MODEL", "").strip()
-    base_url = os.getenv("SEARCH_ENDPOINT", "").strip()
-    prompt_file = os.getenv("SEARCH_PROMPT_FILE", "").strip() or None
+    try:
+        provider_config = create_provider_config(
+            label="SEARCH",
+            raw_provider=_settings.SEARCH_PROVIDER,
+            raw_api_key=_settings.SEARCH_API_KEY,
+            raw_endpoint=_settings.SEARCH_ENDPOINT,
+            raw_model=_settings.SEARCH_MODEL,
+            default_endpoint=_settings.SEARCH_DEFAULT_ENDPOINT,
+            default_model=_settings.SEARCH_DEFAULT_MODEL,
+            timeout=_settings.SEARCH_TIMEOUT_SECONDS,
+            relace_api_key=config.api_key,
+        )
+        provider = provider_config.provider
+        model = provider_config.model
+        base_url = provider_config.base_url
+    except RuntimeError:
+        provider = (_settings.SEARCH_PROVIDER or _settings.RELACE_PROVIDER).lower()
+        model = _settings.SEARCH_MODEL or (
+            _settings.SEARCH_DEFAULT_MODEL if provider == _settings.RELACE_PROVIDER else ""
+        )
+        base_url = _settings.SEARCH_ENDPOINT or (
+            _settings.SEARCH_DEFAULT_ENDPOINT if provider == _settings.RELACE_PROVIDER else ""
+        )
+    prompt_file = _settings.SEARCH_PROMPT_FILE
 
     case_list = [
         {
@@ -156,13 +163,13 @@ def build_run_metadata(
             "provider": provider,
             "model": model,
             "base_url": sanitize_endpoint_url(base_url) if base_url else None,
-            "timeout_seconds": _safe_float(os.getenv("SEARCH_TIMEOUT_SECONDS", ""), 120.0),
-            "max_turns": _safe_int(os.getenv("SEARCH_MAX_TURNS", ""), 6),
-            "temperature": _safe_float(os.getenv("SEARCH_TEMPERATURE", ""), 1.0),
+            "timeout_seconds": _settings.SEARCH_TIMEOUT_SECONDS,
+            "max_turns": _settings.SEARCH_MAX_TURNS,
+            "temperature": _settings.SEARCH_TEMPERATURE,
             "prompt_file": prompt_file,
         },
         "retrieval": {
-            "backend": os.getenv("MCP_RETRIEVAL_BACKEND", "auto"),
+            "backend": _settings.RETRIEVAL_BACKEND,
         },
         "environment": {
             "python": sys.version,

@@ -1,28 +1,15 @@
 import atexit
-import os
 import threading
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
+from relace_mcp.config import settings as _settings
 from relace_mcp.lsp.events import log_lsp_client_created, log_lsp_client_evicted
 from relace_mcp.lsp.languages.base import LanguageServerConfig
 
 if TYPE_CHECKING:
     from relace_mcp.lsp.client import LSPClient
-
-
-def _parse_nonnegative_int_env(name: str, default: int) -> int:
-    raw = os.getenv(name, "").strip()
-    if not raw:
-        return default
-    try:
-        value = int(raw)
-    except ValueError:
-        return default
-    if value < 0:
-        return default
-    return value
 
 
 class LSPClientManager:
@@ -38,7 +25,6 @@ class LSPClientManager:
         self._lock = threading.RLock()
         self._clients: dict[tuple[str, str], LSPClient] = {}
         self._lease_counts: dict[tuple[str, str], int] = {}
-        self._max_clients = _parse_nonnegative_int_env("SEARCH_LSP_MAX_CLIENTS", 2)
         atexit.register(self._cleanup_all)
 
     @classmethod
@@ -47,8 +33,13 @@ class LSPClientManager:
         if cls._instance is None:
             with cls._class_lock:
                 if cls._instance is None:
+                    _settings.reload_settings_from_env()
                     cls._instance = cls()
         return cls._instance
+
+    @property
+    def _max_clients(self) -> int:
+        return _settings.SEARCH_LSP_MAX_CLIENTS
 
     def _new_client(
         self,

@@ -22,15 +22,16 @@
 
 | 变量 | 默认值 | 描述 |
 |------|--------|------|
-| `RELACE_API_KEY` | — | **必需。** 你的 Relace API key |
-| `MCP_BASE_DIR` | 当前目录 | 限制文件访问范围 |
+| `RELACE_API_KEY` | — | 在使用 Relace provider 或云端工具时必需 |
+| `MCP_BASE_DIR` | auto | 仅当你想覆盖自动解析结果时，用它限制文件访问范围 |
 | `MCP_EXTRA_PATHS` | — | 文件操作额外允许路径（逗号分隔，支持绝对路径与 `~`） |
 | `MCP_DOTENV_PATH` | — | 启动时加载的 `.env` 文件路径（集中配置） |
 | `RELACE_DEFAULT_ENCODING` | — | 强制项目文件编码（如 `gbk`、`big5`） |
 | `MCP_LOGGING` | `off` | 文件日志：`off`、`safe`（启用并遮蔽）、`full`（启用不遮蔽） |
 | `MCP_LOG_LEVEL` | `WARNING` | stderr 日志级别：`DEBUG`、`INFO`、`WARNING`、`ERROR` |
 | `RELACE_CLOUD_TOOLS` | `0` | 设为 `1` 启用云工具（cloud_sync、cloud_search 等） |
-| `MCP_SEARCH_RETRIEVAL` | `0` | 设为 `1` 启用 `agentic_retrieval` 工具 |
+| `MCP_SEARCH_RETRIEVAL` | `0` | 设为 `1` 注册 `agentic_retrieval` 工具 |
+| `MCP_RETRIEVAL_BACKEND` | `relace` | semantic retrieval backend：`relace`、`codanna`、`chunkhound`、`auto`、`none` |
 
 > **注意：** 仅当**同时满足**以下条件时可省略 `RELACE_API_KEY`：(1) `APPLY_PROVIDER` 和 `SEARCH_PROVIDER` 均使用非 Relace 提供商，且 (2) `RELACE_CLOUD_TOOLS=false`。否则必须设置。
 
@@ -128,6 +129,8 @@ SEARCH_MAX_TURNS=6
 
 > **注意：** 直接在 `env` 中设置的变量优先于 `.env` 文件中的变量。
 
+现在所有入口都复用同一套 runtime bootstrap：`relace-mcp` CLI、程序化 `build_server()`、`benchmark.cli.run` 和 `benchmark.cli.grid` 都会先加载 `MCP_DOTENV_PATH`，再根据当前进程环境统一刷新集中式 settings。
+
 ---
 
 ## 同步模式
@@ -172,7 +175,7 @@ MCP_SEARCH_RETRIEVAL=1
 MCP_RETRIEVAL_BACKEND=codanna
 ```
 
-首次使用时，如果 index 缺失，server 可能会先在没有 hints 的情况下继续查询，同时排程 background refresh。每次 `fast_apply` 编辑后会在后台对变动文件增量重新索引。retrieval 过程中，当 `MCP_RETRIEVAL_HINT_POLICY=prefer-stale` 时可以继续使用 stale Codanna hints；`strict` 会跳过它们。更多配置请参阅 [Codanna 项目](https://pypi.org/project/codanna/)。
+首次使用时，如果 index 缺失，server 可能会先在没有 hints 的情况下继续查询，同时排程 background refresh。`index_status` 也可以在本地 index 处于 stale 或 missing 状态时排程 refresh。当前实现不会在每次 `fast_apply` 编辑后自动触发 Codanna reindex。retrieval 过程中，当 `MCP_RETRIEVAL_HINT_POLICY=prefer-stale` 时可以继续使用 stale Codanna hints；`strict` 会跳过它们。更多配置请参阅 [Codanna 项目](https://pypi.org/project/codanna/)。
 
 ### ChunkHound
 
@@ -187,7 +190,7 @@ MCP_SEARCH_RETRIEVAL=1
 MCP_RETRIEVAL_BACKEND=chunkhound
 ```
 
-首次使用时，如果 index 缺失，server 可能会先在没有 hints 的情况下继续查询，同时排程 background refresh。每次 `fast_apply` 编辑后触发后台扫描，仅重新处理有变更的文件（xxHash3-64 校验）。retrieval 过程中，当 `MCP_RETRIEVAL_HINT_POLICY=prefer-stale` 时可以继续使用 stale ChunkHound hints；`strict` 会跳过它们。更多配置请参阅 [ChunkHound 项目](https://pypi.org/project/chunkhound/)。
+首次使用时，如果 index 缺失，server 可能会先在没有 hints 的情况下继续查询，同时排程 background refresh。`index_status` 也可以在本地 index 处于 stale 或 missing 状态时排程 refresh。当前实现不会在每次 `fast_apply` 编辑后自动触发 ChunkHound scan。retrieval 过程中，当 `MCP_RETRIEVAL_HINT_POLICY=prefer-stale` 时可以继续使用 stale ChunkHound hints；`strict` 会跳过它们。更多配置请参阅 [ChunkHound 项目](https://pypi.org/project/chunkhound/)。
 
 ### 自动模式
 
@@ -214,7 +217,7 @@ Server 按优先级自动选择当前 session 可用的后端：`codanna` → `c
 | macOS | `~/Library/Application Support/relace/relace.log` |
 | Windows | `%LOCALAPPDATA%\relace\relace.log` |
 
-> 可以使用 `MCP_LOG_DIR` / `MCP_LOG_PATH` 覆盖位置。
+这些路径会根据平台 state directory 自动推导，目前不支持通过环境变量覆盖日志位置。
 
 ### Trace 位置 (MCP_LOGGING=full)
 
@@ -227,13 +230,7 @@ Server 按优先级自动选择当前 session 可用的后端：`codanna` → `c
 | macOS | `~/Library/Application Support/relace/traces/relace.trace.jsonl` |
 | Windows | `%LOCALAPPDATA%\relace\traces\relace.trace.jsonl` |
 
-> 可以使用 `MCP_TRACE_DIR` / `MCP_TRACE_PATH` 覆盖位置。使用 `MCP_TRACE=0` 禁用 trace 写入。
-
-### 过滤
-
-- **最低事件/trace 级别：** `MCP_LOG_FILE_LEVEL=INFO`（或 `WARNING`、`ERROR`）。
-- **事件 kind 白名单/黑名单：** `MCP_LOG_INCLUDE_KINDS=search_turn,tool_call` 和/或 `MCP_LOG_EXCLUDE_KINDS=tool_start`。
-- **Trace kind 白名单/黑名单：** `MCP_TRACE_INCLUDE_KINDS=llm_request,llm_response`（或使用 `MCP_TRACE_EXCLUDE_KINDS` 排除）。
+Trace 文件沿用同一套自动 state-directory 布局，并且只会在 `MCP_LOGGING=full` 时写入。
 
 ### 日志格式
 
@@ -360,20 +357,22 @@ export SEARCH_MODEL=gpt-4o
 
 ### LSP 工具
 
-LSP 工具（`find_symbol`、`search_symbol`、`get_type`、`list_symbols`、`call_graph`）默认禁用。
+LSP 工具（`find_symbol`、`search_symbol`）默认禁用。
 
 - **启用 LSP 工具：** `SEARCH_LSP_TOOLS=1`
 - **禁用 LSP 工具：** `SEARCH_LSP_TOOLS=0`（默认）
 
-`find_symbol` 工具使用 Language Server Protocol 进行 Python 语义查询：
-- `definition`：跳转到符号定义
-- `references`：查找符号的所有引用
+当前可用工具：
+- `find_symbol`：根据文件、行列位置跳转到定义，或列出该符号的引用
+- `search_symbol`：按符号名称或前缀搜索 workspace symbols
 
-> **注意：** 使用 `basedpyright`（随包安装）。首次调用会有 2-5 秒启动延迟。
+> **注意：** 只有在 `SEARCH_LSP_TOOLS=1` 且当前项目存在受支持语言时，LSP 工具才会暴露。Python 使用内置的 `basedpyright`；其他语言使用 README 中列出的系统 language server。
 
 ### OpenAI Structured Outputs
 
-使用 OpenAI 提供商且 `SEARCH_TOOL_STRICT=1`（默认）时，并行工具调用会自动禁用。要启用并行调用：
+部分 OpenAI 兼容 provider 会拒绝包含 `strict` tool fields 或 `parallel_tool_calls` 的请求。遇到这种情况时，client 会自动重试一个 compatibility payload，并在后续请求中沿用该 fallback。
+
+如果你的 provider 从一开始就更适合不带这个非标准 `strict` 字段：
 
 ```bash
 export SEARCH_TOOL_STRICT=0
@@ -395,6 +394,11 @@ export SEARCH_PARALLEL_TOOL_CALLS=1
   }
 }
 ```
+
+启用后，`bash` 仍遵循当前的最小安全原则：
+- 允许的命令：`cat`、`diff`、`echo`、`file`、`find`、`git`（`blame`、`diff`、`grep`、`log`、`ls-files`、`show`、`status`）、`grep`、`head`、`jq`、`ls`、`rg`、`tail`、`true`、`wc`
+- 允许使用 pipe
+- 禁止 redirects、command substitution、destructive/network/privileged commands，以及 `/repo` 之外的路径
 
 ---
 

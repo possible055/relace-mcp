@@ -1,5 +1,3 @@
-import os
-
 from ...config.fs_policy import SEARCH_TRAVERSAL_PRUNE_DIRS
 
 # Directory listing limit
@@ -36,23 +34,3 @@ BASH_MAX_OUTPUT_CHARS = 50000
 # === LSP Tool ===
 # Maximum number of results returned from LSP queries (definition/references)
 MAX_LSP_RESULTS = 50
-
-
-def _parse_positive_float_env(name: str, default: float) -> float:
-    """Parse positive float from env var."""
-    raw = os.getenv(name, "").strip()
-    if not raw:
-        return default
-    try:
-        value = float(raw)
-    except ValueError:
-        return default
-    # Use `not (value > 0)` to correctly reject NaN (comparisons with NaN always return False)
-    if not (value > 0):
-        return default
-    return value
-
-
-# Hard upper bound for LSP startup/shutdown/requests (seconds).
-# Use SEARCH_LSP_TIMEOUT_SECONDS to override.
-LSP_TIMEOUT_SECONDS = _parse_positive_float_env("SEARCH_LSP_TIMEOUT_SECONDS", 15.0)

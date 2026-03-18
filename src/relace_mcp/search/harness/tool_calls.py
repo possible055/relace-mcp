@@ -17,7 +17,7 @@ from .._impl import (
     # call_graph_handler,
     find_symbol_handler,
     # get_type_handler,
-    glob_handler,
+    # glob_handler,  # Disabled glob tool (pending removal)
     grep_search_handler,
     # list_symbols_handler,
     report_back_handler,
@@ -437,15 +437,17 @@ class ToolCallsMixin:
                 base_dir=base_dir,
             )
             return grep_search_handler(params)
-        elif name == "glob":
-            return glob_handler(
-                pattern=args.get("pattern", ""),
-                path=args.get("path", "/repo"),
-                include_hidden=args.get("include_hidden", False),
-                max_results=args.get("max_results", 200),
-                base_dir=base_dir,
-                extra_paths=extra_paths,
-            )
+        # --- Disabled glob tool (pending removal) ---
+        # elif name == "glob":
+        #     return glob_handler(
+        #         pattern=args.get("pattern", ""),
+        #         path=args.get("path", "/repo"),
+        #         include_hidden=args.get("include_hidden", False),
+        #         max_results=args.get("max_results", 200),
+        #         base_dir=base_dir,
+        #         extra_paths=extra_paths,
+        #     )
+        # --- End disabled glob tool ---
         elif name == "bash":
             return bash_handler(
                 command=args.get("command", ""),

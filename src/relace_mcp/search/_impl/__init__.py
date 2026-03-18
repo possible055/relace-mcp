@@ -9,7 +9,6 @@ from .constants import (
     BASH_MAX_OUTPUT_CHARS,
     BASH_TIMEOUT_SECONDS,
     GREP_TIMEOUT_SECONDS,
-    LSP_TIMEOUT_SECONDS,
     MAX_BASH_CHARS,
     MAX_DIR_ITEMS,
     MAX_GLOB_CHARS,
@@ -24,7 +23,8 @@ from .constants import (
     MAX_VIEW_FILE_CHARS,
 )
 from .context import estimate_context_size, truncate_for_context
-from .glob import glob_handler
+
+# from .glob import glob_handler  # Disabled glob tool (pending removal)
 from .grep_search import grep_search_handler
 from .lsp import (
     # --- Disabled LSP tools (kept for future re-enablement) ---
@@ -54,7 +54,6 @@ __all__ = [
     "GREP_TIMEOUT_SECONDS",
     # "GetTypeParams",
     "LSPQueryParams",
-    "LSP_TIMEOUT_SECONDS",
     # "ListSymbolsParams",
     "MAX_BASH_CHARS",
     "MAX_DIR_ITEMS",
@@ -74,7 +73,7 @@ __all__ = [
     "is_blocked_command",
     "bash_handler",
     "estimate_context_size",
-    "glob_handler",
+    # "glob_handler",  # Disabled glob tool (pending removal)
     "grep_search_handler",
     # "get_type_handler",
     # "list_symbols_handler",

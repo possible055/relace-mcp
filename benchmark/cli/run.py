@@ -1,12 +1,11 @@
-import logging
 import os
 import sys
-import warnings
 from datetime import UTC, datetime
 from pathlib import Path
 
 import click
-from dotenv import load_dotenv
+
+from relace_mcp.config.bootstrap import initialize_runtime_from_env, reload_runtime_from_env
 
 from .._config.paths import (
     DEFAULT_LOCBENCH_PATH,
@@ -22,51 +21,25 @@ from ..runner.experiment_paths import (
     resolve_experiment_root,
 )
 
-logger = logging.getLogger(__name__)
-
-
-def _load_dotenv_from_env_path() -> None:
-    """Load .env file from MCP_DOTENV_PATH or default locations.
-
-    Priority:
-    1. MCP_DOTENV_PATH environment variable (explicit path)
-    2. Default dotenv search (current directory and parents)
-    """
-    dotenv_path = os.getenv("MCP_DOTENV_PATH", "").strip()
-    if dotenv_path:
-        path = Path(dotenv_path).expanduser()
-        if path.exists():
-            load_dotenv(path)
-            logger.info("Loaded .env from MCP_DOTENV_PATH")
-        else:
-            logger.warning("MCP_DOTENV_PATH does not exist")
-            warnings.warn(
-                f"MCP_DOTENV_PATH does not exist: {dotenv_path}", RuntimeWarning, stacklevel=2
-            )
-            load_dotenv()  # Fallback to default
-    else:
-        load_dotenv()
-
 
 def _load_benchmark_config():
     """Load config for running search benchmarks.
 
     Note: RELACE_API_KEY is only required when SEARCH_PROVIDER=relace. For other
-    providers, SearchLLMClient will use SEARCH_API_KEY / OPENAI_API_KEY / etc.
+    providers, SearchLLMClient will use SEARCH_API_KEY.
     """
     from relace_mcp.config import RelaceConfig
-    from relace_mcp.config.settings import RELACE_DEFAULT_ENCODING
+    from relace_mcp.config import settings as _settings
 
-    search_provider = os.getenv("SEARCH_PROVIDER", "").strip()
-    search_provider = (search_provider or "relace").lower()
-
-    relace_api_key = os.getenv("RELACE_API_KEY", "").strip()
-    if search_provider == "relace":
+    search_provider = (_settings.SEARCH_PROVIDER or _settings.RELACE_PROVIDER).lower()
+    if search_provider == _settings.RELACE_PROVIDER:
         return RelaceConfig.from_env()
 
-    # Non-relace providers: allow running without RELACE_API_KEY.
     return RelaceConfig(
-        api_key=relace_api_key, base_dir=None, default_encoding=RELACE_DEFAULT_ENCODING
+        api_key=_settings.RELACE_API_KEY,
+        base_dir=None,
+        default_encoding=_settings.RELACE_DEFAULT_ENCODING,
+        extra_paths=_settings.MCP_EXTRA_PATHS,
     )
 
 
@@ -155,7 +128,9 @@ def main(
 
     Large repos are automatically excluded via EXCLUDED_REPOS in config.
     """
-    _load_dotenv_from_env_path()
+    from relace_mcp.config import settings as _settings
+
+    initialize_runtime_from_env()
 
     if prompt_file:
         os.environ["SEARCH_PROMPT_FILE"] = prompt_file
@@ -169,6 +144,7 @@ def main(
         os.environ["SEARCH_BASH_TOOLS"] = bash_tools
     if search_mode == "indexed":
         os.environ.setdefault("MCP_RETRIEVAL_BACKEND", "auto")
+    reload_runtime_from_env()
 
     from ..runner.executor import BenchmarkRunner
 
@@ -218,8 +194,8 @@ def main(
         click.echo(f"Error loading config: {e}", err=True)
         click.echo(
             "For Relace search: set RELACE_API_KEY.\n"
-            "For non-Relace search: set SEARCH_PROVIDER and its API key "
-            "(e.g. SEARCH_API_KEY / OPENAI_API_KEY / OPENROUTER_API_KEY)."
+            "For non-Relace search: set SEARCH_PROVIDER, SEARCH_ENDPOINT, "
+            "SEARCH_MODEL, and SEARCH_API_KEY."
         )
         sys.exit(1)
 
@@ -230,7 +206,7 @@ def main(
     if output:
         experiment_root = resolve_experiment_root(output)
     else:
-        provider = os.getenv("SEARCH_PROVIDER", "relace").strip().lower() or "relace"
+        provider = (_settings.SEARCH_PROVIDER or _settings.RELACE_PROVIDER).lower()
         experiment_name = build_experiment_name(
             experiment_type,
             dataset_id,

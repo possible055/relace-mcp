@@ -1,5 +1,6 @@
 import pytest
 
+import relace_mcp.config.settings as settings_mod
 from relace_mcp.config import load_prompt_file
 from relace_mcp.search.schemas import build_system_prompt
 
@@ -19,7 +20,7 @@ def prompt_data(request: pytest.FixtureRequest) -> dict:
 
 
 def test_build_system_prompt_strips_triple_newlines(prompt_data: dict) -> None:
-    enabled = {"view_file", "view_directory", "grep_search", "glob", "report_back"}
+    enabled = {"view_file", "view_directory", "grep_search", "report_back"}
     prompt = build_system_prompt(prompt_data["system_prompt"], enabled_tools=enabled)
     assert "\n\n\n" not in prompt
 
@@ -27,23 +28,25 @@ def test_build_system_prompt_strips_triple_newlines(prompt_data: dict) -> None:
 def test_build_system_prompt_renders_max_turns(
     prompt_data: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("SEARCH_MAX_TURNS", "7")
-    enabled = {"view_file", "view_directory", "grep_search", "glob", "report_back"}
+    monkeypatch.setattr(settings_mod, "SEARCH_MAX_TURNS", 7)
+    enabled = {"view_file", "view_directory", "grep_search", "report_back"}
     prompt = build_system_prompt(prompt_data["system_prompt"], enabled_tools=enabled)
     assert "{max_turns}" not in prompt
     assert "You have 7 exploration turns maximum." in prompt
 
 
 def test_build_system_prompt_hides_bash_when_disabled(prompt_data: dict) -> None:
-    enabled = {"view_file", "view_directory", "grep_search", "glob", "report_back"}
+    enabled = {"view_file", "view_directory", "grep_search", "report_back"}
     prompt = build_system_prompt(prompt_data["system_prompt"], enabled_tools=enabled)
     assert "`bash`" not in prompt
 
 
 def test_build_system_prompt_keeps_bash_when_enabled(prompt_data: dict) -> None:
-    enabled = {"view_file", "view_directory", "grep_search", "glob", "bash", "report_back"}
+    enabled = {"view_file", "view_directory", "grep_search", "bash", "report_back"}
     prompt = build_system_prompt(prompt_data["system_prompt"], enabled_tools=enabled)
     assert "`bash`" in prompt
+    assert "Pipes allowed" in prompt
+    assert "outside `/repo` are blocked" in prompt
 
 
 # --- LSP injection tests ---
@@ -110,3 +113,12 @@ def test_load_prompt_file_returns_all_keys() -> None:
 def test_load_prompt_file_unknown_name_raises() -> None:
     with pytest.raises(ValueError, match="Unknown prompt name"):
         load_prompt_file("nonexistent_prompt")
+
+
+def test_load_prompt_file_requires_prompt_setting_attribute(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delattr(settings_mod, "SEARCH_PROMPT_FILE")
+
+    with pytest.raises(RuntimeError, match="Prompt override setting 'SEARCH_PROMPT_FILE'"):
+        load_prompt_file("search_relace")

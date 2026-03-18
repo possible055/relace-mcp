@@ -10,11 +10,24 @@ Evaluates `agentic_search` performance using the Loc-Bench dataset (derived from
 
 **Execution model**: `benchmark/` is repo-local tooling. Run commands from the repository root with `uv run --extra benchmark ...`. For benchmark tests, also include `--extra dev`.
 
-**Environment** (create `.env` in project root):
+**Environment** (create `.env` in the project root):
 ```bash
-SEARCH_PROVIDER=relace          # or: openai, openrouter
-RELACE_API_KEY=your-key-here    # or: OPENAI_API_KEY, OPENROUTER_API_KEY
+# Relace (default)
+SEARCH_PROVIDER=relace
+RELACE_API_KEY=your-key-here
+
+# OpenAI-compatible provider example
+SEARCH_PROVIDER=openai
+SEARCH_ENDPOINT=https://api.openai.com/v1
+SEARCH_MODEL=gpt-4.1-mini
+SEARCH_API_KEY=your-provider-key
 ```
+
+For non-Relace providers, benchmark commands read `SEARCH_API_KEY`. Provider-specific variables such as `OPENAI_API_KEY` or `OPENROUTER_API_KEY` are not loaded automatically.
+
+`benchmark.cli.run` and `benchmark.cli.grid` now share the same runtime bootstrap as the MCP server. They load `MCP_DOTENV_PATH` when set, otherwise fall back to the default dotenv search, then apply CLI overrides and refresh centralized settings. Effective precedence is: CLI flags > process env > dotenv values.
+
+When a benchmark CLI path is not absolute, it is resolved relative to `benchmark/`. In the examples below, `artifacts/...` maps to `benchmark/artifacts/...` on disk.
 
 **Dataset**:
 
@@ -130,7 +143,7 @@ uv run --extra benchmark python -m benchmark.cli.grid \
 | `--output` | | Grid experiment directory |
 | `--dry-run` | | Print planned runs without executing |
 
-**Output**: Grid parent summary saved to `artifacts/experiments/<grid_name>/reports/summary.report.json`
+**Output**: Grid parent summary saved to `benchmark/artifacts/experiments/<grid_name>/reports/summary.report.json`
 
 ## 4. Dataset Validation
 
@@ -208,7 +221,7 @@ Each `summary.report.json` includes metadata tracking for reproducibility. Grid 
 | Problem | Solution |
 |---------|----------|
 | Missing benchmark deps | Run commands with `uv run --extra benchmark ...` |
-| Missing API key | Set `RELACE_API_KEY` or provider-specific key |
+| Missing API key | Set `RELACE_API_KEY` for Relace, or set `SEARCH_PROVIDER` plus `SEARCH_ENDPOINT`, `SEARCH_MODEL`, and `SEARCH_API_KEY` for a non-Relace provider |
 | Clone fails | Check network, ensure `git` installed |
 | `indexed` preflight fails | Ensure the retrieval backend is available and its index / cloud sync state is fresh |
 | Dataset not found | Place dataset in `benchmark/artifacts/data/` |

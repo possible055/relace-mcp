@@ -22,15 +22,16 @@ All environment variables can be set in your shell or in the `env` section of yo
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RELACE_API_KEY` | — | **Required.** Your Relace API key |
-| `MCP_BASE_DIR` | cwd | Restrict file access to this directory |
+| `RELACE_API_KEY` | — | Required when using Relace providers or cloud tools |
+| `MCP_BASE_DIR` | auto | Restrict file access to this directory when you want to override auto-resolution |
 | `MCP_EXTRA_PATHS` | — | Additional allowed paths (comma-separated absolute/`~` paths) for file operations |
 | `MCP_DOTENV_PATH` | — | Path to a `.env` file to load at startup |
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
 | `MCP_LOGGING` | `off` | File logging: `off`, `safe` (with redaction), `full` (no redaction) |
 | `MCP_LOG_LEVEL` | `WARNING` | Stderr log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `RELACE_CLOUD_TOOLS` | `0` | Set to `1` to enable cloud tools (cloud_sync, cloud_search, etc.) |
-| `MCP_SEARCH_RETRIEVAL` | `0` | Set to `1` to enable `agentic_retrieval` tool |
+| `MCP_SEARCH_RETRIEVAL` | `0` | Set to `1` to register the `agentic_retrieval` tool |
+| `MCP_RETRIEVAL_BACKEND` | `relace` | Semantic retrieval backend: `relace`, `codanna`, `chunkhound`, `auto`, `none` |
 
 > **Note:** `RELACE_API_KEY` can be omitted if **both**: (1) using non-Relace providers for `APPLY_PROVIDER` and `SEARCH_PROVIDER`, and (2) `RELACE_CLOUD_TOOLS=false`. Otherwise it is required.
 
@@ -128,6 +129,8 @@ Then point `MCP_DOTENV_PATH` to the file in your MCP client config:
 
 > **Note:** Variables set directly in `env` take precedence over values in the `.env` file.
 
+The shared runtime bootstrap now applies the same dotenv flow everywhere: the `relace-mcp` CLI, programmatic `build_server()`, `benchmark.cli.run`, and `benchmark.cli.grid` all load `MCP_DOTENV_PATH` first, then re-resolve centralized settings from the current process environment.
+
 ---
 
 ## Sync Modes
@@ -172,7 +175,7 @@ MCP_SEARCH_RETRIEVAL=1
 MCP_RETRIEVAL_BACKEND=codanna
 ```
 
-On first use the server may proceed without hints if the index is missing, while scheduling a background refresh. After each `fast_apply` edit it incrementally reindexes the changed file in the background. During retrieval, stale Codanna hints can still be used when `MCP_RETRIEVAL_HINT_POLICY=prefer-stale`; `strict` skips them. Refer to the [Codanna project](https://pypi.org/project/codanna/) for configuration and model setup.
+On first use the server may proceed without hints if the index is missing, while scheduling a background refresh. `index_status` can also schedule a refresh when the local index is stale or missing. The current implementation does not trigger Codanna reindexing after every `fast_apply` edit. During retrieval, stale Codanna hints can still be used when `MCP_RETRIEVAL_HINT_POLICY=prefer-stale`; `strict` skips them. Refer to the [Codanna project](https://pypi.org/project/codanna/) for configuration and model setup.
 
 ### ChunkHound
 
@@ -187,7 +190,7 @@ MCP_SEARCH_RETRIEVAL=1
 MCP_RETRIEVAL_BACKEND=chunkhound
 ```
 
-On first use the server may proceed without hints if the index is missing, while scheduling a background refresh. After each `fast_apply` edit it triggers a background scan; only files that changed are re-processed (xxHash3-64 checksums). During retrieval, stale ChunkHound hints can still be used when `MCP_RETRIEVAL_HINT_POLICY=prefer-stale`; `strict` skips them. Refer to the [ChunkHound project](https://pypi.org/project/chunkhound/) for configuration and embedding model setup.
+On first use the server may proceed without hints if the index is missing, while scheduling a background refresh. `index_status` can also schedule a refresh when the local index is stale or missing. The current implementation does not trigger ChunkHound scans after every `fast_apply` edit. During retrieval, stale ChunkHound hints can still be used when `MCP_RETRIEVAL_HINT_POLICY=prefer-stale`; `strict` skips them. Refer to the [ChunkHound project](https://pypi.org/project/chunkhound/) for configuration and embedding model setup.
 
 ### Auto Mode
 
@@ -214,7 +217,7 @@ File logging is opt-in. Set `MCP_LOGGING=safe` (with redaction) or `MCP_LOGGING=
 | macOS | `~/Library/Application Support/relace/relace.log` |
 | Windows | `%LOCALAPPDATA%\relace\relace.log` |
 
-> You can override the location with `MCP_LOG_DIR` / `MCP_LOG_PATH`.
+Paths are derived automatically from the platform state directory. Log location overrides are not currently configurable via environment variables.
 
 ### Trace Location (MCP_LOGGING=full)
 
@@ -227,13 +230,7 @@ When `MCP_LOGGING=full`, the server also writes a heavy trace log with full tool
 | macOS | `~/Library/Application Support/relace/traces/relace.trace.jsonl` |
 | Windows | `%LOCALAPPDATA%\relace\traces\relace.trace.jsonl` |
 
-> You can override the location with `MCP_TRACE_DIR` / `MCP_TRACE_PATH`. Use `MCP_TRACE=0` to disable trace writing.
-
-### Filtering
-
-- **Minimum event/trace level:** `MCP_LOG_FILE_LEVEL=INFO` (or `WARNING`, `ERROR`).
-- **Event kind allow/deny:** `MCP_LOG_INCLUDE_KINDS=search_turn,tool_call` and/or `MCP_LOG_EXCLUDE_KINDS=tool_start`.
-- **Trace kind allow/deny:** `MCP_TRACE_INCLUDE_KINDS=llm_request,llm_response` (or exclude with `MCP_TRACE_EXCLUDE_KINDS`).
+Trace files follow the same automatic state-directory layout and are only written when `MCP_LOGGING=full`.
 
 ### Log Format
 
@@ -360,20 +357,22 @@ export SEARCH_MODEL=gpt-4o
 
 ### LSP Tool
 
-LSP tools (`find_symbol`, `search_symbol`, `get_type`, `list_symbols`, `call_graph`) are disabled by default.
+LSP tools (`find_symbol`, `search_symbol`) are disabled by default.
 
 - **Enable LSP tools:** `SEARCH_LSP_TOOLS=1`
 - **Disable LSP tools:** `SEARCH_LSP_TOOLS=0` (default)
 
-The `find_symbol` tool uses Language Server Protocol for Python semantic queries:
-- `definition`: Jump to symbol definition
-- `references`: Find all symbol references
+Available tools:
+- `find_symbol`: jump to a definition or list references for a symbol at a file/line/column
+- `search_symbol`: search workspace symbols by name or prefix
 
-> **Note:** Uses `basedpyright` (bundled). First call incurs 2-5s startup latency.
+> **Note:** LSP tools are exposed only when `SEARCH_LSP_TOOLS=1` and the current project has a supported language. Python uses bundled `basedpyright`; other languages use the system language servers described in the README.
 
 ### OpenAI Structured Outputs
 
-When using OpenAI providers with `SEARCH_TOOL_STRICT=1` (default), parallel tool calls are automatically disabled. To enable parallel calls:
+Some OpenAI-compatible providers reject requests that include `strict` tool fields or `parallel_tool_calls`. When that happens, the client retries with a compatibility payload that removes those fields and remembers that fallback for later requests.
+
+If your provider works better without the non-standard `strict` field from the start:
 
 ```bash
 export SEARCH_TOOL_STRICT=0
@@ -395,6 +394,11 @@ The `bash` tool is disabled by default. To enable on Unix:
   }
 }
 ```
+
+When enabled, `bash` stays on the current minimum-security model:
+- Allowed commands: `cat`, `diff`, `echo`, `file`, `find`, `git` (`blame`, `diff`, `grep`, `log`, `ls-files`, `show`, `status`), `grep`, `head`, `jq`, `ls`, `rg`, `tail`, `true`, `wc`
+- Pipes are allowed
+- Redirects, command substitution, destructive/network/privileged commands, and paths outside `/repo` are blocked
 
 ---
 

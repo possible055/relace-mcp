@@ -318,6 +318,14 @@ class TestPathSandbox:
         blocked, _ = _is_blocked_command("cat /repo/file.txt", DEFAULT_BASE_DIR)
         assert not blocked
 
+    def test_allows_repo_path_with_real_base_dir(self, tmp_path) -> None:
+        blocked, _ = _is_blocked_command("cat /repo/file.txt", str(tmp_path))
+        assert not blocked
+
+    def test_blocks_absolute_path_outside_real_base_dir(self, tmp_path) -> None:
+        blocked, _ = _is_blocked_command("cat /repo/file.txt /etc/passwd", str(tmp_path))
+        assert blocked
+
     def test_allows_relative_path(self) -> None:
         blocked, _ = _is_blocked_command("cat ./file.txt", DEFAULT_BASE_DIR)
         assert not blocked
