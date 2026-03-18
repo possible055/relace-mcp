@@ -215,6 +215,36 @@ class TestReloadToolSettings:
         assert _settings.SEARCH_TOOL_STRICT is False
         assert _settings.SEARCH_MAX_TURNS == 8
 
+    def test_reload_settings_is_atomic_on_invalid_retrieval_backend(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(settings_mod, "SEARCH_MODEL", "baseline-model")
+        monkeypatch.setattr(settings_mod, "MCP_BASE_DIR", "/baseline")
+        monkeypatch.setenv("SEARCH_MODEL", "next-model")
+        monkeypatch.setenv("MCP_BASE_DIR", "/next")
+        monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "invalid")
+
+        with pytest.raises(RuntimeError, match="Invalid MCP_RETRIEVAL_BACKEND"):
+            reload_settings_from_env()
+
+        assert settings_mod.SEARCH_MODEL == "baseline-model"
+        assert settings_mod.MCP_BASE_DIR == "/baseline"
+
+    def test_reload_settings_is_atomic_on_invalid_retrieval_hint_policy(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(settings_mod, "SEARCH_MODEL", "baseline-model")
+        monkeypatch.setattr(settings_mod, "MCP_BASE_DIR", "/baseline")
+        monkeypatch.setenv("SEARCH_MODEL", "next-model")
+        monkeypatch.setenv("MCP_BASE_DIR", "/next")
+        monkeypatch.setenv("MCP_RETRIEVAL_HINT_POLICY", "invalid")
+
+        with pytest.raises(RuntimeError, match="Invalid MCP_RETRIEVAL_HINT_POLICY"):
+            reload_settings_from_env()
+
+        assert settings_mod.SEARCH_MODEL == "baseline-model"
+        assert settings_mod.MCP_BASE_DIR == "/baseline"
+
     def test_reload_settings_updates_provider_inputs(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("SEARCH_PROVIDER", "openai")
         monkeypatch.setenv("SEARCH_ENDPOINT", "https://api.openai.com/v1")

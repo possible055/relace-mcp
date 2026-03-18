@@ -113,3 +113,12 @@ def test_load_prompt_file_returns_all_keys() -> None:
 def test_load_prompt_file_unknown_name_raises() -> None:
     with pytest.raises(ValueError, match="Unknown prompt name"):
         load_prompt_file("nonexistent_prompt")
+
+
+def test_load_prompt_file_requires_prompt_setting_attribute(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delattr(settings_mod, "SEARCH_PROMPT_FILE")
+
+    with pytest.raises(RuntimeError, match="Prompt override setting 'SEARCH_PROMPT_FILE'"):
+        load_prompt_file("search_relace")

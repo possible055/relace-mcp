@@ -227,75 +227,65 @@ RELACE_API_KEY: str | None
 MCP_BASE_DIR: str | None
 MCP_EXTRA_PATHS: tuple[str, ...]
 
+RELACE_CLOUD_TOOLS = False
+RELACE_API_KEY = None
+MCP_BASE_DIR = None
+RELACE_DEFAULT_ENCODING = None
+MCP_EXTRA_PATHS = ()
+
 
 def reload_settings_from_env() -> None:
     """Re-read all env-backed runtime settings from ``os.environ``."""
-    global APPLY_TIMEOUT_SECONDS, APPLY_TEMPERATURE, APPLY_PROVIDER, APPLY_API_KEY
-    global APPLY_ENDPOINT, APPLY_MODEL, APPLY_PROMPT_FILE
-    global SEARCH_TEMPERATURE, SEARCH_TIMEOUT_SECONDS, SEARCH_MAX_TURNS
-    global SEARCH_PARALLEL_TOOL_CALLS, SEARCH_TOP_P, SEARCH_PROVIDER, SEARCH_API_KEY
-    global SEARCH_ENDPOINT, SEARCH_MODEL, SEARCH_PROMPT_FILE, RETRIEVAL_PROMPT_FILE
-    global RELACE_API_ENDPOINT, RELACE_REPO_ID, REPO_SYNC_TIMEOUT_SECONDS
-    global REPO_SYNC_MAX_FILES, REPO_LIST_MAX, RELACE_DEFAULT_ENCODING
-    global APPLY_SEMANTIC_CHECK, MCP_LOG_LEVEL, MCP_LOGGING_MODE, MCP_LOGGING
-    global MCP_LOG_REDACT, MCP_TRACE_LOGGING, RELACE_CLOUD_TOOLS, RETRIEVAL_BACKEND
-    global RETRIEVAL_HINT_POLICY, AGENTIC_RETRIEVAL_ENABLED, SEARCH_TOOL_STRICT
-    global SEARCH_BASH_TOOLS, SEARCH_LSP_TOOLS, SEARCH_LSP_TIMEOUT_SECONDS
-    global SEARCH_LSP_MAX_CLIENTS, RELACE_UPLOAD_MAX_WORKERS, RELACE_API_KEY
-    global MCP_BASE_DIR, MCP_EXTRA_PATHS
-
-    APPLY_TIMEOUT_SECONDS = _parse_positive_float_env("APPLY_TIMEOUT_SECONDS", 60.0)
-    APPLY_TEMPERATURE = _parse_float_env("APPLY_TEMPERATURE", 0.0)
-    APPLY_PROVIDER = os.getenv("APPLY_PROVIDER", "").strip()
-    APPLY_API_KEY = os.getenv("APPLY_API_KEY", "").strip()
-    APPLY_ENDPOINT = os.getenv("APPLY_ENDPOINT", "").strip()
-    APPLY_MODEL = os.getenv("APPLY_MODEL", "").strip()
-    APPLY_PROMPT_FILE = _parse_optional_stripped_env("APPLY_PROMPT_FILE")
-
-    SEARCH_TEMPERATURE = _parse_float_env("SEARCH_TEMPERATURE", 1.0)
-    SEARCH_TIMEOUT_SECONDS = _parse_positive_float_env("SEARCH_TIMEOUT_SECONDS", 120.0)
-    SEARCH_MAX_TURNS = _parse_positive_int_env("SEARCH_MAX_TURNS", 6)
-    SEARCH_PARALLEL_TOOL_CALLS = env_bool("SEARCH_PARALLEL_TOOL_CALLS", default=True)
-    SEARCH_TOP_P = _parse_optional_float_env("SEARCH_TOP_P")
-    SEARCH_PROVIDER = os.getenv("SEARCH_PROVIDER", "").strip()
-    SEARCH_API_KEY = os.getenv("SEARCH_API_KEY", "").strip()
-    SEARCH_ENDPOINT = os.getenv("SEARCH_ENDPOINT", "").strip()
-    SEARCH_MODEL = os.getenv("SEARCH_MODEL", "").strip()
-    SEARCH_PROMPT_FILE = _parse_optional_stripped_env("SEARCH_PROMPT_FILE")
-    RETRIEVAL_PROMPT_FILE = _parse_optional_stripped_env("RETRIEVAL_PROMPT_FILE")
-
-    RELACE_API_ENDPOINT = (
-        os.getenv("RELACE_API_ENDPOINT", "https://api.relace.run/v1").strip()
-        or "https://api.relace.run/v1"
-    )
-    RELACE_REPO_ID = _parse_optional_stripped_env("RELACE_REPO_ID")
-    REPO_SYNC_TIMEOUT_SECONDS = _parse_positive_float_env("RELACE_REPO_SYNC_TIMEOUT", 300.0)
-    REPO_SYNC_MAX_FILES = _parse_positive_int_env("RELACE_REPO_SYNC_MAX_FILES", 5000)
-    REPO_LIST_MAX = _parse_positive_int_env("RELACE_REPO_LIST_MAX", 10000)
-    RELACE_DEFAULT_ENCODING = _parse_optional_stripped_env("RELACE_DEFAULT_ENCODING")
-
-    APPLY_SEMANTIC_CHECK = env_bool("APPLY_SEMANTIC_CHECK", default=False)
-
-    MCP_LOG_LEVEL = _parse_log_level()
-    MCP_LOGGING_MODE = _parse_logging_mode()
-    MCP_LOGGING = MCP_LOGGING_MODE in ("safe", "full")
-    MCP_LOG_REDACT = MCP_LOGGING_MODE != "full"
-    MCP_TRACE_LOGGING = MCP_LOGGING_MODE == "full"
-
-    RELACE_CLOUD_TOOLS = env_bool("RELACE_CLOUD_TOOLS", default=False)
-    RETRIEVAL_BACKEND = _parse_retrieval_backend()
-    RETRIEVAL_HINT_POLICY = _parse_retrieval_hint_policy()
-    AGENTIC_RETRIEVAL_ENABLED = env_bool("MCP_SEARCH_RETRIEVAL", default=False)
-    SEARCH_TOOL_STRICT = env_bool("SEARCH_TOOL_STRICT", default=True)
-    SEARCH_BASH_TOOLS = env_bool("SEARCH_BASH_TOOLS", default=False)
-    SEARCH_LSP_TOOLS = env_bool("SEARCH_LSP_TOOLS", default=False)
-    SEARCH_LSP_TIMEOUT_SECONDS = _parse_positive_float_env("SEARCH_LSP_TIMEOUT_SECONDS", 15.0)
-    SEARCH_LSP_MAX_CLIENTS = _parse_nonnegative_int_env("SEARCH_LSP_MAX_CLIENTS", 2)
-
-    RELACE_UPLOAD_MAX_WORKERS = _parse_positive_int_env("RELACE_UPLOAD_MAX_WORKERS", 8)
-    RELACE_API_KEY = _parse_optional_stripped_env("RELACE_API_KEY")
-    MCP_BASE_DIR = _parse_optional_stripped_env("MCP_BASE_DIR")
-    MCP_EXTRA_PATHS = _parse_extra_paths()
+    updated_settings = {
+        "APPLY_TIMEOUT_SECONDS": _parse_positive_float_env("APPLY_TIMEOUT_SECONDS", 60.0),
+        "APPLY_TEMPERATURE": _parse_float_env("APPLY_TEMPERATURE", 0.0),
+        "APPLY_PROVIDER": os.getenv("APPLY_PROVIDER", "").strip(),
+        "APPLY_API_KEY": os.getenv("APPLY_API_KEY", "").strip(),
+        "APPLY_ENDPOINT": os.getenv("APPLY_ENDPOINT", "").strip(),
+        "APPLY_MODEL": os.getenv("APPLY_MODEL", "").strip(),
+        "APPLY_PROMPT_FILE": _parse_optional_stripped_env("APPLY_PROMPT_FILE"),
+        "SEARCH_TEMPERATURE": _parse_float_env("SEARCH_TEMPERATURE", 1.0),
+        "SEARCH_TIMEOUT_SECONDS": _parse_positive_float_env("SEARCH_TIMEOUT_SECONDS", 120.0),
+        "SEARCH_MAX_TURNS": _parse_positive_int_env("SEARCH_MAX_TURNS", 6),
+        "SEARCH_PARALLEL_TOOL_CALLS": env_bool("SEARCH_PARALLEL_TOOL_CALLS", default=True),
+        "SEARCH_TOP_P": _parse_optional_float_env("SEARCH_TOP_P"),
+        "SEARCH_PROVIDER": os.getenv("SEARCH_PROVIDER", "").strip(),
+        "SEARCH_API_KEY": os.getenv("SEARCH_API_KEY", "").strip(),
+        "SEARCH_ENDPOINT": os.getenv("SEARCH_ENDPOINT", "").strip(),
+        "SEARCH_MODEL": os.getenv("SEARCH_MODEL", "").strip(),
+        "SEARCH_PROMPT_FILE": _parse_optional_stripped_env("SEARCH_PROMPT_FILE"),
+        "RETRIEVAL_PROMPT_FILE": _parse_optional_stripped_env("RETRIEVAL_PROMPT_FILE"),
+        "RELACE_API_ENDPOINT": (
+            os.getenv("RELACE_API_ENDPOINT", "https://api.relace.run/v1").strip()
+            or "https://api.relace.run/v1"
+        ),
+        "RELACE_REPO_ID": _parse_optional_stripped_env("RELACE_REPO_ID"),
+        "REPO_SYNC_TIMEOUT_SECONDS": _parse_positive_float_env("RELACE_REPO_SYNC_TIMEOUT", 300.0),
+        "REPO_SYNC_MAX_FILES": _parse_positive_int_env("RELACE_REPO_SYNC_MAX_FILES", 5000),
+        "REPO_LIST_MAX": _parse_positive_int_env("RELACE_REPO_LIST_MAX", 10000),
+        "RELACE_DEFAULT_ENCODING": _parse_optional_stripped_env("RELACE_DEFAULT_ENCODING"),
+        "APPLY_SEMANTIC_CHECK": env_bool("APPLY_SEMANTIC_CHECK", default=False),
+        "MCP_LOG_LEVEL": _parse_log_level(),
+        "MCP_LOGGING_MODE": _parse_logging_mode(),
+        "RELACE_CLOUD_TOOLS": env_bool("RELACE_CLOUD_TOOLS", default=False),
+        "RETRIEVAL_BACKEND": _parse_retrieval_backend(),
+        "RETRIEVAL_HINT_POLICY": _parse_retrieval_hint_policy(),
+        "AGENTIC_RETRIEVAL_ENABLED": env_bool("MCP_SEARCH_RETRIEVAL", default=False),
+        "SEARCH_TOOL_STRICT": env_bool("SEARCH_TOOL_STRICT", default=True),
+        "SEARCH_BASH_TOOLS": env_bool("SEARCH_BASH_TOOLS", default=False),
+        "SEARCH_LSP_TOOLS": env_bool("SEARCH_LSP_TOOLS", default=False),
+        "SEARCH_LSP_TIMEOUT_SECONDS": _parse_positive_float_env("SEARCH_LSP_TIMEOUT_SECONDS", 15.0),
+        "SEARCH_LSP_MAX_CLIENTS": _parse_nonnegative_int_env("SEARCH_LSP_MAX_CLIENTS", 2),
+        "RELACE_UPLOAD_MAX_WORKERS": _parse_positive_int_env("RELACE_UPLOAD_MAX_WORKERS", 8),
+        "RELACE_API_KEY": _parse_optional_stripped_env("RELACE_API_KEY"),
+        "MCP_BASE_DIR": _parse_optional_stripped_env("MCP_BASE_DIR"),
+        "MCP_EXTRA_PATHS": _parse_extra_paths(),
+    }
+    logging_mode = updated_settings["MCP_LOGGING_MODE"]
+    updated_settings["MCP_LOGGING"] = logging_mode in ("safe", "full")
+    updated_settings["MCP_LOG_REDACT"] = logging_mode != "full"
+    updated_settings["MCP_TRACE_LOGGING"] = logging_mode == "full"
+    globals().update(updated_settings)
 
 
 # Wrapper for existing call sites.

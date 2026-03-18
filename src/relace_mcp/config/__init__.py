@@ -23,7 +23,12 @@ _PROMPT_ENV_VARS: dict[str, str] = {
 
 def _load_prompt_file(default_path: Path, env_var: str) -> dict[str, Any]:
     """Load prompt file from centralized settings override or default path."""
-    custom_path = getattr(_settings, env_var, None) or ""
+    if not hasattr(_settings, env_var):
+        raise RuntimeError(
+            f"Prompt override setting {env_var!r} is not defined in relace_mcp.config.settings"
+        )
+
+    custom_path = getattr(_settings, env_var) or ""
     if custom_path:
         custom_path_obj = Path(custom_path).expanduser()
         if custom_path_obj.exists():
