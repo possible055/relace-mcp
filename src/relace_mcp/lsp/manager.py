@@ -30,10 +30,10 @@ class LSPClientManager:
     @classmethod
     def get_instance(cls) -> "LSPClientManager":
         """Get or create the singleton instance."""
-        _settings.reload_settings_from_env()
         if cls._instance is None:
             with cls._class_lock:
                 if cls._instance is None:
+                    _settings.reload_settings_from_env()
                     cls._instance = cls()
         return cls._instance
 

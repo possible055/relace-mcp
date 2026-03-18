@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from relace_mcp.lsp import LSPClientManager
 from relace_mcp.lsp.client import LSPClient
 from relace_mcp.lsp.languages import get_config_for_file
@@ -28,6 +30,22 @@ class TestGetConfigForFile:
 
 
 class TestLSPClientManagerMultiLanguage:
+    def test_get_instance_reloads_settings_only_on_first_creation(self) -> None:
+        from relace_mcp.config import settings as _settings
+
+        LSPClientManager._instance = None
+        try:
+            with patch.object(_settings, "reload_settings_from_env") as mock_reload:
+                first = LSPClientManager.get_instance()
+                second = LSPClientManager.get_instance()
+
+            assert first is second
+            assert mock_reload.call_count == 1
+        finally:
+            if LSPClientManager._instance is not None:
+                LSPClientManager._instance._cleanup_all()
+            LSPClientManager._instance = None
+
     def test_separates_clients_by_language(self, monkeypatch) -> None:
         from relace_mcp.config import settings as _settings
 

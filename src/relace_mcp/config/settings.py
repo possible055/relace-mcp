@@ -104,14 +104,20 @@ def _parse_float_env(name: str, default: float) -> float:
     raw = os.getenv(name, "").strip()
     if not raw:
         return default
-    return float(raw)
+    try:
+        return float(raw)
+    except ValueError:
+        return default
 
 
 def _parse_optional_float_env(name: str) -> float | None:
     raw = os.getenv(name, "").strip()
     if not raw:
         return None
-    return float(raw)
+    try:
+        return float(raw)
+    except ValueError:
+        return None
 
 
 def _parse_optional_stripped_env(name: str) -> str | None:

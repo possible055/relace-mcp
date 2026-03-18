@@ -184,6 +184,18 @@ class TestReloadToolSettings:
 
         assert settings_mod.SEARCH_LSP_TIMEOUT_SECONDS == 15.0
 
+    def test_search_temperature_invalid_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_TEMPERATURE", "not-a-number")
+        reload_settings_from_env()
+
+        assert settings_mod.SEARCH_TEMPERATURE == 1.0
+
+    def test_search_top_p_invalid_falls_back_to_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_TOP_P", "bad")
+        reload_settings_from_env()
+
+        assert settings_mod.SEARCH_TOP_P is None
+
     def test_module_attribute_access_sees_reloaded_values(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

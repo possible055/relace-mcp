@@ -212,6 +212,8 @@ class TestMain:
 
             main()
 
+            mock_build.assert_called_once()
+            assert mock_build.call_args.kwargs["initialize_runtime"] is False
             mock_server.run.assert_called_once_with(show_banner=False)
 
     @pytest.mark.usefixtures("clean_env")

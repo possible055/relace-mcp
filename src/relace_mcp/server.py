@@ -153,6 +153,8 @@ def check_health(config: "RelaceConfig") -> dict[str, str]:
 def build_server(
     config: "RelaceConfig | None" = None,
     run_health_check: bool = True,
+    *,
+    initialize_runtime: bool = True,
 ) -> "FastMCP":
     _ensure_fastmcp_log_level()
 
@@ -160,7 +162,8 @@ def build_server(
 
     from .config.bootstrap import initialize_runtime_from_env
 
-    initialize_runtime_from_env()
+    if initialize_runtime:
+        initialize_runtime_from_env()
 
     from .config import RelaceConfig
     from .config import settings as _settings
@@ -275,7 +278,7 @@ def main() -> None:
     except Exception:
         # Startup logging must never break MCP stdio transport.
         logger.debug("Failed to write server_start event", exc_info=True)
-    server = build_server(config)
+    server = build_server(config, initialize_runtime=False)
 
     if args.transport in ("http", "streamable-http"):
         logger.debug(
