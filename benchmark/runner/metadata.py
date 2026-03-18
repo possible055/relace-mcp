@@ -59,8 +59,6 @@ def build_run_metadata(
     artifact_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build reproducibility metadata for this benchmark run (no secrets)."""
-    _settings.reload_settings_from_env()
-
     config_meta: dict[str, Any] = {
         "base_dir": config.base_dir,
         "default_encoding": config.default_encoding,
