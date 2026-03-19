@@ -1,0 +1,37 @@
+benchmark/analysis/case_map_compare.py
+  51a48565b9bcf869 82-85,299,302,308,324,329,375,380,415,418,451,454,458,517-518,520,539-544,559-563,572,579-580,585
+  33f1d528593d855c 346,348-349,351,354,356-357,364,368
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "cabf5c5cb4072a711618edcdd52aa4db36f75f6d",
+  "prompts": {
+    "33f1d528593d855c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d080a-5d58-7312-90cf-4fdce7d2f406",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 9,
+      "total_deletions": 9,
+      "accepted_lines": 9,
+      "overriden_lines": 0
+    },
+    "51a48565b9bcf869": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d07f9-8c1b-78f2-bcc9-92024688d272",
+        "model": "gpt-5.2"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 39,
+      "total_deletions": 18,
+      "accepted_lines": 35,
+      "overriden_lines": 0
+    }
+  }
+}
