@@ -1,16 +1,20 @@
 import json
 import re
+import shlex
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from .._config.paths import get_repos_dir
+from .function_scope import extract_function_scopes
 from .trace_artifacts import collect_trace_artifacts, load_trace_meta, load_trace_turns
 
 _GREP_LINE_RE = re.compile(r"^(?P<path>.+?):(?P<line>\d+):")
 _LSP_SYMBOL_RE = re.compile(
-    r"^\[(?P<kind>[^\]]+)\]\s+(?P<path>.+?):(?P<line>\d+):(?P<column>\d+)(?:\s|$)"
+    r"^\[(?P<kind>[^\]]+)\]\s+(?P<path>.+?):(?P<line>\d+):(?P<column>\d+)\s+(?P<name>.+?)\s*$"
 )
 _VIEW_LINE_RE = re.compile(r"^(?P<line>\d+)\s")
+_CONTROL_TOKENS = frozenset({"|", "||", "&&", ";"})
 
 
 @dataclass
@@ -22,6 +26,33 @@ class FileAccessEvent:
     lines: tuple[int, int] | None = None
     is_success: bool = True
     latency_ms: float = 0.0
+    tool_query: str | None = None
+    tool_command: str | None = None
+    symbol_name: str | None = None
+    symbol_kind: str | None = None
+    functions: list[dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "turn": self.turn,
+            "tool_name": self.tool_name,
+            "access_type": self.access_type,
+            "path": self.path,
+            "is_success": self.is_success,
+            "latency_ms": self.latency_ms,
+            "functions": self.functions,
+        }
+        if self.lines is not None:
+            payload["lines"] = [self.lines[0], self.lines[1]]
+        if self.tool_query is not None:
+            payload["tool_query"] = self.tool_query
+        if self.tool_command is not None:
+            payload["tool_command"] = self.tool_command
+        if self.symbol_name is not None:
+            payload["symbol_name"] = self.symbol_name
+        if self.symbol_kind is not None:
+            payload["symbol_kind"] = self.symbol_kind
+        return payload
 
 
 @dataclass
@@ -65,10 +96,54 @@ class SearchMap:
         return {e.path for e in self.events if _is_file_path(e.path)}
 
     @property
+    def unique_functions(self) -> list[dict[str, Any]]:
+        seen: set[tuple[str, str | None, str, tuple[int, int]]] = set()
+        functions: list[dict[str, Any]] = []
+        for event in self.events:
+            for function in event.functions:
+                key = _function_key(function)
+                if key in seen:
+                    continue
+                seen.add(key)
+                functions.append(dict(function))
+        return sorted(
+            functions,
+            key=lambda item: (
+                str(item.get("path", "")),
+                int((item.get("range") or [0, 0])[0]),
+                str(item.get("class") or ""),
+                str(item.get("function") or ""),
+            ),
+        )
+
+    @property
     def files_by_tool(self) -> dict[str, set[str]]:
         result: dict[str, set[str]] = {}
         for e in self.events:
             result.setdefault(e.tool_name, set()).add(e.path)
+        return result
+
+    @property
+    def functions_by_tool(self) -> dict[str, list[dict[str, Any]]]:
+        result: dict[str, list[dict[str, Any]]] = {}
+        seen: dict[str, set[tuple[str, str | None, str, tuple[int, int]]]] = {}
+        for event in self.events:
+            for function in event.functions:
+                key = _function_key(function)
+                if key in seen.setdefault(event.tool_name, set()):
+                    continue
+                seen[event.tool_name].add(key)
+                result.setdefault(event.tool_name, []).append(dict(function))
+        for tool_name, functions in result.items():
+            result[tool_name] = sorted(
+                functions,
+                key=lambda item: (
+                    str(item.get("path", "")),
+                    int((item.get("range") or [0, 0])[0]),
+                    str(item.get("class") or ""),
+                    str(item.get("function") or ""),
+                ),
+            )
         return result
 
     @property
@@ -134,10 +209,14 @@ class SearchMap:
             "case_id": self.case_id,
             "total_turns": self.total_turns,
             "unique_files_count": len(self.unique_files),
+            "unique_functions_count": len(self.unique_functions),
             "events_count": len(self.events),
+            "events": [event.to_dict() for event in self.events],
             "files_by_tool": {k: sorted(v) for k, v in self.files_by_tool.items()},
+            "functions_by_tool": self.functions_by_tool,
             "files_by_access_type": {k: sorted(v) for k, v in self.files_by_access_type.items()},
             "selected_files": sorted(self.selected_files),
+            "unique_functions": self.unique_functions,
             "wasted_reads": sorted(self.wasted_reads()),
             "files_per_turn": self.files_per_turn(),
             "semantic_hints_count": self.semantic_hints_count,
@@ -156,7 +235,7 @@ def _is_file_path(path: str) -> bool:
     return bool(path) and path != "." and not path.endswith("/")
 
 
-def _normalize_repo_path(path: Any) -> str:
+def _normalize_repo_path(path: Any, repo_root: Path | None = None) -> str:
     if not isinstance(path, str):
         return "."
 
@@ -165,6 +244,15 @@ def _normalize_repo_path(path: Any) -> str:
         return "."
 
     dir_suffix = normalized.endswith("/")
+
+    if repo_root is not None:
+        repo_root_norm = str(repo_root).replace("\\", "/").rstrip("/")
+        if repo_root_norm:
+            if normalized == repo_root_norm:
+                normalized = ""
+            elif normalized.startswith(repo_root_norm + "/"):
+                normalized = normalized[len(repo_root_norm) + 1 :]
+
     while normalized.startswith("./"):
         normalized = normalized[2:]
 
@@ -181,6 +269,9 @@ def _normalize_repo_path(path: Any) -> str:
     if not normalized:
         return "."
 
+    if normalized.startswith("/"):
+        return "."
+
     if not normalized.startswith("/"):
         normalized = normalized.strip("/")
     if not normalized:
@@ -190,13 +281,13 @@ def _normalize_repo_path(path: Any) -> str:
     return normalized
 
 
-def _join_repo_path(base_path: Any, child_path: Any) -> str:
+def _join_repo_path(base_path: Any, child_path: Any, repo_root: Path | None = None) -> str:
     child_raw = child_path if isinstance(child_path, str) else ""
     if child_raw.startswith("/repo"):
-        return _normalize_repo_path(child_raw)
+        return _normalize_repo_path(child_raw, repo_root)
 
-    base_norm = _normalize_repo_path(base_path)
-    child_norm = _normalize_repo_path(child_path)
+    base_norm = _normalize_repo_path(base_path, repo_root)
+    child_norm = _normalize_repo_path(child_path, repo_root)
     if child_norm == ".":
         return base_norm
     if base_norm == ".":
@@ -228,6 +319,13 @@ def _extract_view_file_lines(result: Any) -> tuple[int, int] | None:
     return (start, end)
 
 
+def _event_kwargs(kw: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "is_success": bool(kw.get("is_success", True)),
+        "latency_ms": float(kw.get("latency_ms", 0.0) or 0.0),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Per-tool parsers
 # ---------------------------------------------------------------------------
@@ -236,10 +334,11 @@ def _extract_view_file_lines(result: Any) -> tuple[int, int] | None:
 def _parse_view_file(
     turn: int, args: dict[str, Any], result: Any, **kw: Any
 ) -> list[FileAccessEvent]:
-    path = _normalize_repo_path(args.get("path", ""))
+    path = _normalize_repo_path(args.get("path", ""), kw.get("repo_root"))
     if path == ".":
         return []
     lines = _extract_view_file_lines(result)
+    event_kwargs = _event_kwargs(kw)
     return [
         FileAccessEvent(
             turn=turn,
@@ -247,7 +346,7 @@ def _parse_view_file(
             access_type="read",
             path=path,
             lines=lines,
-            **kw,
+            **event_kwargs,
         )
     ]
 
@@ -259,12 +358,14 @@ def _parse_view_directory(
         return []
 
     base_path = args.get("path", ".")
+    repo_root = kw.get("repo_root")
+    event_kwargs = _event_kwargs(kw)
     events: list[FileAccessEvent] = []
     for raw_line in result.splitlines():
         line = raw_line.strip()
         if not line or line.startswith("..."):
             continue
-        path = _join_repo_path(base_path, line)
+        path = _join_repo_path(base_path, line, repo_root)
         if path == ".":
             continue
         events.append(
@@ -273,7 +374,7 @@ def _parse_view_directory(
                 tool_name="view_directory",
                 access_type="discover",
                 path=path,
-                **kw,
+                **event_kwargs,
             )
         )
     return events
@@ -285,13 +386,17 @@ def _parse_grep_search(
     if not isinstance(result, str) or result.startswith("Error"):
         return []
 
+    repo_root = kw.get("repo_root")
+    query = args.get("query")
+    query_text = query if isinstance(query, str) and query else None
+    event_kwargs = _event_kwargs(kw)
     events: list[FileAccessEvent] = []
     seen: set[str] = set()
     for line in result.splitlines():
         match = _GREP_LINE_RE.match(line)
         if not match:
             continue
-        path = _normalize_repo_path(match.group("path"))
+        path = _normalize_repo_path(match.group("path"), repo_root)
         if path == "." or path in seen:
             continue
         seen.add(path)
@@ -303,7 +408,8 @@ def _parse_grep_search(
                 access_type="grep_hit",
                 path=path,
                 lines=(line_no, line_no),
-                **kw,
+                tool_query=query_text,
+                **event_kwargs,
             )
         )
     return events
@@ -314,12 +420,14 @@ def _parse_glob(turn: int, args: dict[str, Any], result: Any, **kw: Any) -> list
         return []
 
     base_path = args.get("path", ".")
+    repo_root = kw.get("repo_root")
+    event_kwargs = _event_kwargs(kw)
     events: list[FileAccessEvent] = []
     for raw_line in result.splitlines():
         line = raw_line.strip()
         if not line or line.startswith("..."):
             continue
-        path = _join_repo_path(base_path, line)
+        path = _join_repo_path(base_path, line, repo_root)
         if path == ".":
             continue
         events.append(
@@ -328,7 +436,7 @@ def _parse_glob(turn: int, args: dict[str, Any], result: Any, **kw: Any) -> list
                 tool_name="glob",
                 access_type="discover",
                 path=path,
-                **kw,
+                **event_kwargs,
             )
         )
     return events
@@ -341,9 +449,10 @@ def _parse_report_back(
     if not isinstance(files, dict):
         return []
 
+    event_kwargs = _event_kwargs(kw)
     events: list[FileAccessEvent] = []
     for raw_path, ranges in files.items():
-        path = _normalize_repo_path(raw_path)
+        path = _normalize_repo_path(raw_path, kw.get("repo_root"))
         if path == ".":
             continue
         lines: tuple[int, int] | None = None
@@ -363,7 +472,7 @@ def _parse_report_back(
                 access_type="select",
                 path=path,
                 lines=lines,
-                **kw,
+                **event_kwargs,
             )
         )
     return events
@@ -373,8 +482,10 @@ def _parse_find_symbol(
     turn: int, args: dict[str, Any], result: Any, **kw: Any
 ) -> list[FileAccessEvent]:
     events: list[FileAccessEvent] = []
+    repo_root = kw.get("repo_root")
+    event_kwargs = _event_kwargs(kw)
 
-    src_path = _normalize_repo_path(args.get("file", ""))
+    src_path = _normalize_repo_path(args.get("file", ""), repo_root)
     src_line = args.get("line")
     if src_path != ".":
         lines = (src_line, src_line) if isinstance(src_line, int) else None
@@ -385,7 +496,7 @@ def _parse_find_symbol(
                 access_type="lsp_nav",
                 path=src_path,
                 lines=lines,
-                **kw,
+                **event_kwargs,
             )
         )
 
@@ -397,7 +508,7 @@ def _parse_find_symbol(
         match = _GREP_LINE_RE.match(line)
         if not match:
             continue
-        path = _normalize_repo_path(match.group("path"))
+        path = _normalize_repo_path(match.group("path"), repo_root)
         if path == "." or path in seen:
             continue
         seen.add(path)
@@ -409,7 +520,7 @@ def _parse_find_symbol(
                 access_type="lsp_nav",
                 path=path,
                 lines=(line_no, line_no),
-                **kw,
+                **event_kwargs,
             )
         )
     return events
@@ -421,15 +532,21 @@ def _parse_search_symbol(
     if not isinstance(result, str) or result.startswith(("Error", "No symbols", "No results")):
         return []
 
+    repo_root = kw.get("repo_root")
+    query = args.get("query")
+    query_text = query if isinstance(query, str) and query else None
+    event_kwargs = _event_kwargs(kw)
     events: list[FileAccessEvent] = []
     seen: set[str] = set()
     for line in result.splitlines():
         symbol_match = _LSP_SYMBOL_RE.match(line)
         if symbol_match:
-            path = _normalize_repo_path(symbol_match.group("path"))
-            if path == "." or path in seen:
+            path = _normalize_repo_path(symbol_match.group("path"), repo_root)
+            symbol_name = symbol_match.group("name").strip()
+            dedupe_key = f"{path}::{symbol_name}"
+            if path == "." or dedupe_key in seen:
                 continue
-            seen.add(path)
+            seen.add(dedupe_key)
             line_no = int(symbol_match.group("line"))
             events.append(
                 FileAccessEvent(
@@ -438,7 +555,10 @@ def _parse_search_symbol(
                     access_type="lsp_search",
                     path=path,
                     lines=(line_no, line_no),
-                    **kw,
+                    tool_query=query_text,
+                    symbol_name=symbol_name,
+                    symbol_kind=symbol_match.group("kind"),
+                    **event_kwargs,
                 )
             )
             continue
@@ -446,7 +566,7 @@ def _parse_search_symbol(
         grep_match = _GREP_LINE_RE.match(line)
         if not grep_match:
             continue
-        path = _normalize_repo_path(grep_match.group("path"))
+        path = _normalize_repo_path(grep_match.group("path"), repo_root)
         if path == "." or path in seen:
             continue
         seen.add(path)
@@ -458,9 +578,211 @@ def _parse_search_symbol(
                 access_type="lsp_search",
                 path=path,
                 lines=(line_no, line_no),
-                **kw,
+                tool_query=query_text,
+                **event_kwargs,
             )
         )
+    return events
+
+
+def _tokenize_shell_command(command: str) -> list[str]:
+    try:
+        return shlex.split(command)
+    except ValueError:
+        return command.split()
+
+
+def _split_shell_segments(command: str) -> list[list[str]]:
+    segments: list[list[str]] = []
+    current: list[str] = []
+    for token in _tokenize_shell_command(command):
+        if token in _CONTROL_TOKENS:
+            if current:
+                segments.append(current)
+                current = []
+            continue
+        current.append(token)
+    if current:
+        segments.append(current)
+    return segments
+
+
+def _git_subcommand(tokens: list[str]) -> str:
+    i = 1
+    while i < len(tokens):
+        token = tokens[i]
+        if token in {"-C", "--git-dir", "--work-tree"}:
+            i += 2
+            continue
+        if token.startswith("-"):
+            i += 1
+            continue
+        return token
+    return ""
+
+
+def _looks_like_path_token(token: str) -> bool:
+    if not token or token in {"-", "."}:
+        return False
+    if token.startswith("-"):
+        return False
+    return "/" in token or token.startswith(".") or Path(token).suffix != ""
+
+
+def _parse_plain_output_paths(
+    result: str,
+    repo_root: Path | None,
+    *,
+    base_path: str = ".",
+) -> list[str]:
+    paths: list[str] = []
+    seen: set[str] = set()
+    for raw_line in result.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith(("Exit code:", "stdout:", "stderr:", "... output capped")):
+            continue
+        if base_path != "." and "/" not in line and not line.startswith("."):
+            normalized = _join_repo_path(base_path, line, repo_root)
+        else:
+            normalized = _normalize_repo_path(line, repo_root)
+        if normalized == "." or normalized in seen:
+            continue
+        seen.add(normalized)
+        paths.append(normalized)
+    return paths
+
+
+def _build_discover_events(
+    turn: int,
+    paths: list[str],
+    *,
+    command: str,
+    latency_ms: float,
+    success: bool,
+) -> list[FileAccessEvent]:
+    return [
+        FileAccessEvent(
+            turn=turn,
+            tool_name="bash",
+            access_type="discover",
+            path=path,
+            is_success=success,
+            latency_ms=latency_ms,
+            tool_command=command,
+        )
+        for path in paths
+    ]
+
+
+def _parse_bash(
+    turn: int,
+    args: dict[str, Any],
+    result: Any,
+    **kw: Any,
+) -> list[FileAccessEvent]:
+    command = args.get("command")
+    if not isinstance(command, str) or not command.strip():
+        return []
+    if not isinstance(result, str) or result.startswith("Error"):
+        return []
+
+    repo_root = kw.get("repo_root")
+    latency_ms = float(kw.get("latency_ms", 0.0) or 0.0)
+    success = bool(kw.get("is_success", True))
+    events: list[FileAccessEvent] = []
+    segments = _split_shell_segments(command)
+
+    grep_like = any(
+        segment
+        and (
+            segment[0] in {"rg", "grep"}
+            or (segment[0] == "git" and _git_subcommand(segment) == "grep")
+        )
+        for segment in segments
+    )
+    if grep_like:
+        seen: set[str] = set()
+        for line in result.splitlines():
+            match = _GREP_LINE_RE.match(line)
+            if not match:
+                continue
+            path = _normalize_repo_path(match.group("path"), repo_root)
+            if path == "." or path in seen:
+                continue
+            seen.add(path)
+            line_no = int(match.group("line"))
+            events.append(
+                FileAccessEvent(
+                    turn=turn,
+                    tool_name="bash",
+                    access_type="grep_hit",
+                    path=path,
+                    lines=(line_no, line_no),
+                    is_success=success,
+                    latency_ms=latency_ms,
+                    tool_command=command,
+                )
+            )
+
+    for segment in segments:
+        if not segment:
+            continue
+        cmd = segment[0]
+        if cmd == "git":
+            cmd = f"git {_git_subcommand(segment)}".strip()
+
+        if cmd in {"find", "ls", "git ls-files"}:
+            base_path = "."
+            if cmd == "ls":
+                path_tokens = [token for token in segment[1:] if not token.startswith("-")]
+                if path_tokens:
+                    base_path = path_tokens[-1]
+            paths = _parse_plain_output_paths(result, repo_root, base_path=base_path)
+            events.extend(
+                _build_discover_events(
+                    turn,
+                    paths,
+                    command=command,
+                    latency_ms=latency_ms,
+                    success=success,
+                )
+            )
+            continue
+
+        if cmd == "rg" and "--files" in segment:
+            paths = _parse_plain_output_paths(result, repo_root)
+            events.extend(
+                _build_discover_events(
+                    turn,
+                    paths,
+                    command=command,
+                    latency_ms=latency_ms,
+                    success=success,
+                )
+            )
+            continue
+
+        if cmd == "cat":
+            seen_paths = {event.path for event in events}
+            for token in segment[1:]:
+                if token.startswith("-"):
+                    continue
+                path = _normalize_repo_path(token, repo_root)
+                if path == "." or path in seen_paths:
+                    continue
+                seen_paths.add(path)
+                events.append(
+                    FileAccessEvent(
+                        turn=turn,
+                        tool_name="bash",
+                        access_type="read",
+                        path=path,
+                        is_success=success,
+                        latency_ms=latency_ms,
+                        tool_command=command,
+                    )
+                )
+
     return events
 
 
@@ -472,6 +794,7 @@ _TOOL_PARSERS: dict[str, Any] = {
     "report_back": _parse_report_back,
     "find_symbol": _parse_find_symbol,
     "search_symbol": _parse_search_symbol,
+    "bash": _parse_bash,
 }
 
 
@@ -484,6 +807,8 @@ def _parse_tool_results(
     turn: int,
     tool_calls_raw: list[dict[str, Any]],
     tool_results: list[dict[str, Any]],
+    *,
+    repo_root: Path | None = None,
 ) -> list[FileAccessEvent]:
     args_by_id: dict[str, dict[str, Any]] = {}
     for tc in tool_calls_raw:
@@ -514,9 +839,70 @@ def _parse_tool_results(
                 result,
                 is_success=success,
                 latency_ms=latency_ms,
+                repo_root=repo_root,
             )
         )
     return events
+
+
+def _line_numbers_from_range(lines: tuple[int, int] | None) -> set[int]:
+    if lines is None:
+        return set()
+    start, end = lines
+    if start <= 0 or end < start:
+        return set()
+    if end - start > 200:
+        midpoint = start + (end - start) // 2
+        return {start, midpoint, end}
+    return set(range(start, end + 1))
+
+
+def _function_key(function: dict[str, Any]) -> tuple[str, str | None, str, tuple[int, int]]:
+    raw_range = function.get("range") or [0, 0]
+    if (
+        isinstance(raw_range, list)
+        and len(raw_range) >= 2
+        and isinstance(raw_range[0], int)
+        and isinstance(raw_range[1], int)
+    ):
+        range_key = (raw_range[0], raw_range[1])
+    else:
+        range_key = (0, 0)
+    return (
+        str(function.get("path", "")),
+        function.get("class") if isinstance(function.get("class"), str) else None,
+        str(function.get("function", "")),
+        range_key,
+    )
+
+
+def _infer_repo_root(meta: dict[str, Any]) -> Path | None:
+    repo = meta.get("repo")
+    if not isinstance(repo, str) or not repo.strip():
+        return None
+    return get_repos_dir() / repo.replace("/", "__")
+
+
+def _augment_functions(sm: SearchMap, repo_root: Path | None) -> None:
+    if repo_root is None:
+        return
+
+    cache: dict[tuple[str, tuple[int, int]], list[dict[str, Any]]] = {}
+    for event in sm.events:
+        if not _is_file_path(event.path) or not event.path.endswith(".py"):
+            continue
+        line_numbers = _line_numbers_from_range(event.lines)
+        if not line_numbers:
+            continue
+        key = (event.path, event.lines)
+        if key not in cache:
+            scopes = extract_function_scopes(
+                repo_root / event.path,
+                line_numbers,
+                relative_path=event.path,
+            )
+            cache[key] = [scope.to_dict() for scope in scopes]
+        event.functions = [dict(function) for function in cache[key]]
 
 
 def extract_search_map(
@@ -538,6 +924,7 @@ def extract_search_map(
     meta, _ = load_trace_meta(meta_path if meta_path is not None else None)
     if not meta and trace_path is not None and meta_path is None:
         meta, _ = load_trace_meta(trace_path.with_suffix(".meta.json"))
+    repo_root = _infer_repo_root(meta)
 
     sm = SearchMap(case_id=cid, total_turns=len(turns), meta=meta)
     for entry in turns:
@@ -548,7 +935,10 @@ def extract_search_map(
         tool_results = entry.get("tool_results", [])
         if not isinstance(tool_calls_raw, list) or not isinstance(tool_results, list):
             continue
-        sm.events.extend(_parse_tool_results(turn, tool_calls_raw, tool_results))
+        sm.events.extend(
+            _parse_tool_results(turn, tool_calls_raw, tool_results, repo_root=repo_root)
+        )
+    _augment_functions(sm, repo_root)
     return sm
 
 
@@ -571,6 +961,7 @@ def aggregate_search_maps(maps: list[SearchMap]) -> dict[str, Any]:
             "total_events": 0,
             "avg_events_per_case": 0.0,
             "avg_unique_files_per_case": 0.0,
+            "avg_unique_functions_per_case": 0.0,
             "avg_selected_files_per_case": 0.0,
             "avg_wasted_reads_per_case": 0.0,
             "avg_semantic_hints_per_case": 0.0,
@@ -581,6 +972,7 @@ def aggregate_search_maps(maps: list[SearchMap]) -> dict[str, Any]:
 
     total_events = sum(len(m.events) for m in maps)
     total_unique = sum(len(m.unique_files) for m in maps)
+    total_unique_functions = sum(len(m.unique_functions) for m in maps)
     total_selected = sum(len(m.selected_files) for m in maps)
     total_wasted = sum(len(m.wasted_reads()) for m in maps)
     total_semantic_hints = sum(m.semantic_hints_count for m in maps)
@@ -598,6 +990,7 @@ def aggregate_search_maps(maps: list[SearchMap]) -> dict[str, Any]:
         "total_events": total_events,
         "avg_events_per_case": round(total_events / len(maps), 1),
         "avg_unique_files_per_case": round(total_unique / len(maps), 1),
+        "avg_unique_functions_per_case": round(total_unique_functions / len(maps), 1),
         "avg_selected_files_per_case": round(total_selected / len(maps), 1),
         "avg_wasted_reads_per_case": round(total_wasted / len(maps), 1),
         "avg_semantic_hints_per_case": round(total_semantic_hints / len(maps), 1),
@@ -625,6 +1018,7 @@ def format_search_map_report(maps: list[SearchMap]) -> str:
     lines.append(f"Total file-access events: {agg['total_events']}")
     lines.append(f"Avg events/case: {agg['avg_events_per_case']}")
     lines.append(f"Avg unique files/case: {agg['avg_unique_files_per_case']}")
+    lines.append(f"Avg unique functions/case: {agg['avg_unique_functions_per_case']}")
     lines.append(f"Avg selected files/case: {agg['avg_selected_files_per_case']}")
     lines.append(f"Avg wasted reads/case: {agg['avg_wasted_reads_per_case']}")
     lines.append("")

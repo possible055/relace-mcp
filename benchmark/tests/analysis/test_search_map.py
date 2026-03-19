@@ -214,6 +214,9 @@ class TestLSPParsing:
         sm = extract_search_map(_make_trace_jsonl(turns))
         lsp_events = [e for e in sm.events if e.tool_name == "search_symbol"]
         assert {e.path for e in lsp_events} == {"src/models.py", "src/views.py"}
+        assert lsp_events[0].tool_query == "UserModel"
+        assert lsp_events[0].symbol_name == "UserModel"
+        assert lsp_events[0].symbol_kind == "function"
 
 
 class TestSearchMapMetadata:
@@ -295,6 +298,147 @@ class TestSearchMapMetadata:
         assert maps[1].semantic_hints_files == ["src/only_hint.py"]
 
 
+class TestSearchMapEventPayloads:
+    def test_to_dict_includes_ordered_events_and_queries(self) -> None:
+        path = _make_trace_jsonl(SAMPLE_TURNS)
+
+        sm = extract_search_map(path)
+        payload = sm.to_dict()
+
+        assert payload["events_count"] == len(payload["events"])
+        assert payload["events"][0]["turn"] == 1
+        assert payload["events"][0]["tool_name"] == "view_directory"
+        grep_event = next(
+            event for event in payload["events"] if event["tool_name"] == "grep_search"
+        )
+        assert grep_event["tool_query"] == "def handler"
+        assert payload["events"][-1]["tool_name"] == "report_back"
+        assert payload["events"][-1]["access_type"] == "select"
+
+
+class TestBashParsing:
+    def test_bash_parses_find_ls_cat_and_git_grep_outputs(
+        self,
+        tmp_path: Path,
+        monkeypatch,
+    ) -> None:
+        repos_dir = tmp_path / "repos"
+        repo_root = repos_dir / "example__repo"
+        (repo_root / "src" / "pkg").mkdir(parents=True)
+        (repo_root / "README.md").write_text("hello\n", encoding="utf-8")
+
+        trace_path = _make_trace_jsonl(
+            [
+                {
+                    "turn": 1,
+                    "llm_latency_ms": 100.0,
+                    "llm_response": {},
+                    "tool_calls_raw": [
+                        _tc("t1", "bash", {"command": "find . -maxdepth 2 -type f"}),
+                        _tc("t2", "bash", {"command": "ls src"}),
+                        _tc("t3", "bash", {"command": "cat README.md"}),
+                        _tc("t4", "bash", {"command": "git grep handler"}),
+                    ],
+                    "tool_results": [
+                        _tr("t1", "bash", "./README.md\n./src/main.py\n./src/pkg/\n"),
+                        _tr("t2", "bash", "main.py\npkg/\n"),
+                        _tr("t3", "bash", "hello\n"),
+                        _tr(
+                            "t4",
+                            "bash",
+                            "src/main.py:10:def handler():",
+                        ),
+                    ],
+                    "report_back": None,
+                }
+            ]
+        )
+        _write_meta(
+            trace_path,
+            {
+                "case_id": trace_path.stem,
+                "repo": "example/repo",
+                "search_mode": "agentic",
+                "semantic_hints_used": 0,
+                "semantic_hints": [],
+            },
+        )
+
+        monkeypatch.setattr("benchmark.analysis.search_map.get_repos_dir", lambda: repos_dir)
+
+        sm = extract_search_map(trace_path)
+
+        discover_paths = {
+            e.path for e in sm.events if e.tool_name == "bash" and e.access_type == "discover"
+        }
+        assert "README.md" in discover_paths
+        assert "src/main.py" in discover_paths
+        assert "src/pkg/" in discover_paths
+
+        read_events = [e for e in sm.events if e.tool_name == "bash" and e.access_type == "read"]
+        assert len(read_events) == 1
+        assert read_events[0].path == "README.md"
+        assert read_events[0].tool_command == "cat README.md"
+
+        grep_events = [
+            e for e in sm.events if e.tool_name == "bash" and e.access_type == "grep_hit"
+        ]
+        assert len(grep_events) == 1
+        assert grep_events[0].path == "src/main.py"
+        assert grep_events[0].lines == (10, 10)
+        assert grep_events[0].tool_command == "git grep handler"
+
+    def test_bash_normalizes_absolute_repo_paths_and_augments_python_functions(
+        self,
+        tmp_path: Path,
+        monkeypatch,
+    ) -> None:
+        repos_dir = tmp_path / "repos"
+        repo_root = repos_dir / "example__repo"
+        (repo_root / "src").mkdir(parents=True)
+        source = "\n" * 9 + "def handler():\n    return True\n"
+        (repo_root / "src" / "main.py").write_text(source, encoding="utf-8")
+
+        trace_path = _make_trace_jsonl(
+            [
+                {
+                    "turn": 1,
+                    "llm_latency_ms": 100.0,
+                    "llm_response": {},
+                    "tool_calls_raw": [
+                        _tc("t1", "bash", {"command": "rg -n handler /repo/src"}),
+                    ],
+                    "tool_results": [
+                        _tr("t1", "bash", f"{repo_root}/src/main.py:10:def handler():"),
+                    ],
+                    "report_back": None,
+                }
+            ]
+        )
+        _write_meta(
+            trace_path,
+            {
+                "case_id": trace_path.stem,
+                "repo": "example/repo",
+                "search_mode": "agentic",
+                "semantic_hints_used": 0,
+                "semantic_hints": [],
+            },
+        )
+
+        monkeypatch.setattr("benchmark.analysis.search_map.get_repos_dir", lambda: repos_dir)
+
+        sm = extract_search_map(trace_path)
+
+        grep_event = next(e for e in sm.events if e.tool_name == "bash")
+        assert grep_event.path == "src/main.py"
+        assert grep_event.functions[0]["function"] == "handler"
+        assert sm.unique_functions[0]["function"] == "handler"
+        payload = sm.to_dict()
+        assert payload["unique_functions_count"] == 1
+        assert payload["events"][0]["functions"][0]["signature"] == "def handler()"
+
+
 class TestSearchMapMetrics:
     def test_unique_files_and_selected_files(self) -> None:
         path = _make_trace_jsonl(SAMPLE_TURNS)
@@ -332,6 +476,7 @@ class TestSearchMapMetrics:
         assert agg["cases"] == 2
         assert agg["cases_with_semantic_hints"] == 2
         assert agg["avg_semantic_hints_per_case"] == 1.0
+        assert "avg_unique_functions_per_case" in agg
 
     def test_format_report_mentions_retrieval_hints(self) -> None:
         path = _make_trace_jsonl(SAMPLE_TURNS)
@@ -350,6 +495,7 @@ class TestSearchMapMetrics:
         report = format_search_map_report([sm])
         assert "Retrieval hints" in report
         assert "Avg semantic_hints/case" in report
+        assert "Avg unique functions/case" in report
 
     def test_failed_tool_with_unparseable_output_is_skipped(self) -> None:
         turns = [

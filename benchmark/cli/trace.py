@@ -5,10 +5,10 @@ import click
 
 from .._config.paths import get_experiments_dir
 from ..analysis.search_map import (
-    aggregate_search_maps,
     extract_batch,
     format_search_map_report,
 )
+from ..analysis.search_map_bundle import build_search_map_bundle
 from ..analysis.trace_analyzer import aggregate_summary, analyze_batch, format_report
 from ..analysis.trace_artifacts import (
     collect_trace_artifacts,
@@ -94,13 +94,11 @@ def main(
             click.echo(f"Error: No trace artifacts found in {traces_dir}", err=True)
             raise SystemExit(1)
         click.echo(f"Analyzing {len(trace_artifacts)} trace artifact sets from: {traces_dir}")
-        maps = extract_batch(traces_dir)
         if json_out:
-            summary = aggregate_search_maps(maps)
-            per_case = [m.to_dict() for m in maps]
-            summary["per_case"] = per_case
-            content = json.dumps(summary, indent=2, ensure_ascii=False)
+            bundle = build_search_map_bundle(traces_dir)
+            content = json.dumps(bundle, indent=2, ensure_ascii=False)
         else:
+            maps = extract_batch(traces_dir)
             content = format_search_map_report(maps)
     else:
         if not trace_files:

@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
-TRACE_ARTIFACT_SCHEMA_VERSION = "1.0"
+TRACE_ARTIFACT_SCHEMA_VERSION = "1.1"
 TRACE_META_SUFFIX = ".meta.json"
 
 ArtifactState = Literal["disabled", "written", "missing", "write_error"]
@@ -18,6 +18,7 @@ class TraceMetaPayload(TypedDict, total=False):
     schema_version: str
     case_id: str
     repo: str
+    query: str
     search_mode: str
     retrieval_backend: str | None
     retrieval_latency_s: float | None
@@ -181,6 +182,10 @@ def normalize_trace_meta(data: Any) -> TraceMetaPayload:
         elif value is None and key == "retrieval_backend":
             payload[key] = None
 
+    query = data.get("query")
+    if isinstance(query, str):
+        payload["query"] = query
+
     for key in ("hint_policy", "hints_index_freshness", "reindex_action"):
         value = data.get(key)
         if isinstance(value, str):
@@ -266,6 +271,7 @@ def build_trace_meta_payload(
     *,
     case_id: str,
     repo: str,
+    query: str | None,
     search_mode: str,
     retrieval_backend: str | None,
     retrieval_latency_s: float | None,
@@ -282,6 +288,7 @@ def build_trace_meta_payload(
         "schema_version": TRACE_ARTIFACT_SCHEMA_VERSION,
         "case_id": case_id,
         "repo": repo,
+        "query": query or "",
         "search_mode": search_mode,
         "retrieval_backend": retrieval_backend,
         "retrieval_latency_s": retrieval_latency,

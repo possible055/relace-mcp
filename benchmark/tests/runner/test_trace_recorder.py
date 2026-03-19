@@ -104,6 +104,7 @@ def test_trace_recorder_writes_trace_meta_and_events(tmp_path: Path) -> None:
         meta_write = recorder.write_case_meta(
             case_id="case_1",
             repo="example/repo",
+            query="find auth logic",
             result=result,
         )
         recorder.write_case_events(
@@ -126,6 +127,7 @@ def test_trace_recorder_writes_trace_meta_and_events(tmp_path: Path) -> None:
 
     meta_payload = json.loads(Path(meta_write.path).read_text(encoding="utf-8"))
     assert meta_payload["case_id"] == "case_1"
+    assert meta_payload["query"] == "find auth logic"
     assert meta_payload["semantic_hints_used"] == 2
 
     assert recorder.events_path is not None

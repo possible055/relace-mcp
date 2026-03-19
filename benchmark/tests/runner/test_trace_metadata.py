@@ -82,6 +82,7 @@ def test_execute_search_writes_trace_meta_without_turns_log(tmp_path: Path) -> N
     payload = json.loads(meta_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == TRACE_ARTIFACT_SCHEMA_VERSION
     assert payload["case_id"] == "case_1"
+    assert payload["query"] == "find auth logic"
     assert payload["search_mode"] == "indexed"
     assert payload["retrieval_backend"] == "chunkhound"
     assert payload["semantic_hints_used"] == 2
