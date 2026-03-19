@@ -1,0 +1,53 @@
+@import "./styles/carbon-tokens.css";
+@import "tailwindcss";
+
+@layer base {
+  html {
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    color: var(--cds-text-primary);
+    background: var(--cds-background);
+  }
+
+  code,
+  pre {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  table {
+    border-collapse: collapse;
+  }
+}
+
+@layer utilities {
+  .type-label-01 { font-size: 0.75rem; line-height: 1rem; font-weight: 400; letter-spacing: 0.32px; }
+  .type-label-02 { font-size: 0.75rem; line-height: 1rem; font-weight: 600; letter-spacing: 0.32px; }
+  .type-body-compact-01 { font-size: 0.875rem; line-height: 1.125rem; font-weight: 400; }
+  .type-body-01 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 400; }
+  .type-body-02 { font-size: 1rem; line-height: 1.5rem; font-weight: 400; }
+  .type-heading-02 { font-size: 1rem; line-height: 1.5rem; font-weight: 600; }
+  .type-heading-03 { font-size: 1.25rem; line-height: 1.75rem; font-weight: 400; }
+  .type-heading-04 { font-size: 1.75rem; line-height: 2.25rem; font-weight: 400; }
+  .type-kpi-sm { font-size: 1.5rem; line-height: 2rem; font-weight: 600; letter-spacing: -0.01em; }
+}

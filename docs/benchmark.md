@@ -208,6 +208,9 @@ uv run --extra benchmark python -m benchmark.cli.report -o comparison.md *.repor
 uv run --extra benchmark python -m benchmark.cli.case_map \
   path/to/grid-experiment/reports/summary.report.json \
   --case-id case_1 -o case_1.compare.md
+
+# Start the local benchmark web analyzer
+uv run --extra benchmark --extra benchmark-web python -m benchmark.cli.web
 ```
 
 **Accepted inputs by mode**:
@@ -227,6 +230,22 @@ uv run --extra benchmark python -m benchmark.cli.case_map \
 
 Each `summary.report.json` includes metadata tracking for reproducibility. Grid parent reports also include `metadata.experiment.type = "grid"` plus a `grid` section with `search_space`, `trials`, and `best_trial`.
 
+## 6.1 Web Analyzer
+
+The benchmark web analyzer is a local SPA plus Python API for browsing experiments and comparing the same `case_id` across runs.
+
+```bash
+# Terminal 1: Python API + static app server
+uv run --extra benchmark --extra benchmark-web python -m benchmark.cli.web
+
+# Terminal 2: frontend dev server
+cd benchmark/frontend
+npm install
+npm run dev
+```
+
+The web app reads benchmark artifacts under `benchmark/artifacts/experiments/` and uses the derived `search_map.bundle.json` / `case_map_compare` payloads as its source of truth.
+
 ## 7. Troubleshooting
 
 | Problem | Solution |
@@ -242,6 +261,12 @@ Each `summary.report.json` includes metadata tracking for reproducibility. Grid 
 
 ```bash
 uv run --extra dev --extra benchmark pytest benchmark/tests -q
+```
+
+Web analyzer backend tests:
+
+```bash
+uv run --extra dev --extra benchmark --extra benchmark-web pytest benchmark/tests/web -q
 ```
 
 These tests are benchmark-specific and are not included in the repository's default `pytest` testpaths. CI runs them in a dedicated Ubuntu / Python 3.13 benchmark job.
@@ -262,6 +287,8 @@ benchmark/
 │   ├── validate.py      # Dataset validation
 │   └── build_locbench.py  # Loc-Bench builder
 ├── analysis/            # Analysis tools (function scope, etc.)
+├── web/                 # Local benchmark web backend (repo-local only)
+├── frontend/            # Benchmark SPA frontend (repo-local only)
 ├── datasets/            # Dataset loaders
 ├── metrics/             # Metrics implementation
 ├── runner/              # Execution pipeline

@@ -70,6 +70,10 @@ benchmark = [
   "tree-sitter>=0.24.0",
   "tree-sitter-python>=0.24.0",
 ]
+"benchmark-web" = [
+  "fastapi>=0.115.0,<1",
+  "uvicorn>=0.32.0,<1",
+]
 
 [project.scripts]
 relace-mcp = "relace_mcp.server:main"
@@ -108,7 +112,6 @@ follow_untyped_imports = true
 [[tool.mypy.overrides]]
 module = ["relace_dashboard.*"]
 disable_error_code = ["misc"]
-
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
