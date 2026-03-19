@@ -160,6 +160,7 @@ def build_server(
 
     from fastmcp import FastMCP
 
+    from .background_index_monitor import BackgroundIndexMonitor
     from .config.bootstrap import initialize_runtime_from_env
 
     if initialize_runtime:
@@ -186,7 +187,9 @@ def build_server(
             logger.error("Health check failed: %s", exc)
             raise
 
-    mcp = FastMCP("Relace Fast Apply MCP")
+    background_index_monitor = BackgroundIndexMonitor(config)
+    mcp = FastMCP("Relace Fast Apply MCP", lifespan=background_index_monitor.lifespan)
+    mcp._relace_background_index_monitor = background_index_monitor  # type: ignore[attr-defined]
 
     # Register middleware to handle MCP notifications (e.g., roots/list_changed)
     mcp.add_middleware(RootsMiddleware())

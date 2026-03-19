@@ -17,6 +17,29 @@ _TOOL_RELOAD_KEYS = (
     "RETRIEVAL_BACKEND",
     "RETRIEVAL_HINT_POLICY",
     "AGENTIC_RETRIEVAL_ENABLED",
+    "SEARCH_PROVIDER",
+    "SEARCH_API_KEY",
+    "SEARCH_ENDPOINT",
+    "SEARCH_MODEL",
+    "SEARCH_PROMPT_FILE",
+    "RETRIEVAL_PROMPT_FILE",
+    "SEARCH_TIMEOUT_SECONDS",
+    "SEARCH_TEMPERATURE",
+    "SEARCH_BASH_TOOLS",
+    "SEARCH_LSP_TOOLS",
+    "SEARCH_TOOL_STRICT",
+    "SEARCH_MAX_TURNS",
+    "SEARCH_PARALLEL_TOOL_CALLS",
+    "SEARCH_TOP_P",
+    "SEARCH_LSP_TIMEOUT_SECONDS",
+    "SEARCH_LSP_MAX_CLIENTS",
+    "MCP_BACKGROUND_INDEX_MONITOR",
+    "MCP_BACKGROUND_INDEX_INTERVAL_SECONDS",
+    "MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS",
+    "RELACE_UPLOAD_MAX_WORKERS",
+    "RELACE_API_KEY",
+    "MCP_BASE_DIR",
+    "MCP_EXTRA_PATHS",
 )
 
 
@@ -116,6 +139,81 @@ class TestReloadToolSettings:
 
         assert settings_mod.RETRIEVAL_HINT_POLICY == "strict"
 
+<<<<<<< HEAD
+=======
+    def test_search_bash_tools_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_BASH_TOOLS", "true")
+        reload_tool_settings()
+
+        assert settings_mod.SEARCH_BASH_TOOLS is True
+
+    def test_search_lsp_tools_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_LSP_TOOLS", "true")
+        reload_tool_settings()
+
+        assert settings_mod.SEARCH_LSP_TOOLS is True
+
+    def test_background_index_monitor_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_BACKGROUND_INDEX_MONITOR", "true")
+        reload_tool_settings()
+
+        assert settings_mod.MCP_BACKGROUND_INDEX_MONITOR is True
+
+    def test_background_index_interval_reloaded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_BACKGROUND_INDEX_INTERVAL_SECONDS", "480")
+        monkeypatch.setenv("MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS", "45")
+        reload_tool_settings()
+
+        assert settings_mod.MCP_BACKGROUND_INDEX_INTERVAL_SECONDS == 480
+        assert settings_mod.MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS == 45
+
+    def test_background_index_interval_invalid_falls_back(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("MCP_BACKGROUND_INDEX_INTERVAL_SECONDS", "0")
+        monkeypatch.setenv("MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS", "bad")
+        reload_tool_settings()
+
+        assert settings_mod.MCP_BACKGROUND_INDEX_INTERVAL_SECONDS == 300
+        assert settings_mod.MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS == 30
+
+    def test_search_tool_strict_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_TOOL_STRICT", "false")
+        reload_tool_settings()
+
+        assert settings_mod.SEARCH_TOOL_STRICT is False
+
+    def test_search_max_turns_reloaded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_MAX_TURNS", "7")
+        reload_tool_settings()
+
+        assert settings_mod.SEARCH_MAX_TURNS == 7
+
+    def test_search_max_turns_invalid_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_MAX_TURNS", "0")
+        reload_tool_settings()
+
+        assert settings_mod.SEARCH_MAX_TURNS == 6
+
+    def test_search_lsp_timeout_invalid_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_LSP_TIMEOUT_SECONDS", "not-a-number")
+        reload_settings_from_env()
+
+        assert settings_mod.SEARCH_LSP_TIMEOUT_SECONDS == 15.0
+
+    def test_search_temperature_invalid_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_TEMPERATURE", "not-a-number")
+        reload_settings_from_env()
+
+        assert settings_mod.SEARCH_TEMPERATURE == 1.0
+
+    def test_search_top_p_invalid_falls_back_to_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SEARCH_TOP_P", "bad")
+        reload_settings_from_env()
+
+        assert settings_mod.SEARCH_TOP_P is None
+
+>>>>>>> 29557ca (feat(indexing): add background monitor with cross-platform locking for local indexes)
     def test_module_attribute_access_sees_reloaded_values(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

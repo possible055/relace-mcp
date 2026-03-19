@@ -113,6 +113,7 @@ This tool takes no parameters.
 - `relace`, `codanna`, and `chunkhound` each include `freshness`: `fresh`, `stale`, `missing`, or `unknown`
 - `relace`, `codanna`, and `chunkhound` each include `hints_usable`: whether `agentic_retrieval` may use that backend's semantic hints under `prefer-stale`
 - `codanna` and `chunkhound` include `background_refresh_scheduled`: `true` if a background reindex was triggered
+- `background_monitor` summarizes the opt-in periodic local index monitor: whether it is active, which backend it tracks, and why it may be disabled
 - For local backends, `missing` also covers bootstrap/empty index directories that do not yet contain usable index artifacts
 - For Relace cloud: if stale, `status.recommended_action` tells you to run `cloud_sync()`
 

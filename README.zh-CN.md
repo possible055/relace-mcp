@@ -143,6 +143,8 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 | `MCP_SEARCH_RETRIEVAL` | ❌ | 设为 `1` 注册 `agentic_retrieval` 工具 |
 | `MCP_RETRIEVAL_BACKEND` | ❌ | semantic retrieval backend：`relace`（默认）、`codanna`、`chunkhound`、`auto` 或 `none` |
 | `MCP_RETRIEVAL_HINT_POLICY` | ❌ | retrieval hint policy：`prefer-stale`（默认）或 `strict` |
+| `MCP_BACKGROUND_INDEX_MONITOR` | ❌ | 为 local index 启用可选的周期 refresh monitor；要求固定的 `MCP_BASE_DIR` 与 local backend |
+| `MCP_BACKGROUND_INDEX_INTERVAL_SECONDS` | ❌ | 周期 local index monitor 的检查间隔（秒，默认 `300`） |
 | `SEARCH_BASH_TOOLS` | ❌ | 启用 `agentic_search` / `agentic_retrieval` 内部使用的 `bash` subtool：`1`（开）、`0`（关，默认） |
 | `SEARCH_LSP_TOOLS` | ❌ | 启用 `agentic_search` / `agentic_retrieval` 内部使用的 `find_symbol` / `search_symbol` subtools：`1`（开）、`0`（关，默认） |
 | `MCP_BASE_DIR` | ❌ | 项目根目录覆盖值（自动检测顺序：MCP Roots → Git → workspace storage → CWD） |
@@ -156,6 +158,8 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 ## 工具
 
 始终可用的 top-level tools 有：`fast_apply`、`agentic_search`、`index_status`。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`agentic_retrieval` 需设置 `MCP_SEARCH_RETRIEVAL=1`，其 semantic backend 由 `MCP_RETRIEVAL_BACKEND` 选择。
+
+`index_status` 现在还会返回 `background_monitor` 摘要，用于显示可选的 local index monitor 是否处于活动状态。这个 monitor 只面向单进程、固定 `MCP_BASE_DIR` 的部署；如果你使用 multi-worker 或 multi-pod HTTP 部署，建议关闭它，改用 backend 自带的 watch/daemon 或外部 scheduler。
 
 `SEARCH_BASH_TOOLS` 与 `SEARCH_LSP_TOOLS` 不会给 `list_tools()` 新增 top-level 条目。它们只会扩展 `agentic_search` / `agentic_retrieval` 在探索代码库时可使用的内部工具集。
 

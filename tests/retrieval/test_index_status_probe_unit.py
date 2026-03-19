@@ -58,6 +58,8 @@ async def test_refresh_scheduled_when_stale_on_any_retrieval_backend(
 
     payload = result.structured_content
     assert payload is not None
+    assert payload["background_monitor"]["enabled"] is False
+    assert payload["background_monitor"]["requested"] is False
 
     for backend in ("codanna", "chunkhound"):
         scheduled = payload[backend]["background_refresh_scheduled"]
@@ -88,6 +90,8 @@ async def test_no_refresh_when_cli_missing(tmp_path) -> None:
             result = await client.call_tool("index_status", {})
 
     payload = result.structured_content
+    assert payload["background_monitor"]["enabled"] is False
+    assert payload["background_monitor"]["requested"] is False
     for backend in ("codanna", "chunkhound"):
         assert payload[backend]["background_refresh_scheduled"] is False, (
             f"{backend}: expected False when CLI missing, got "
