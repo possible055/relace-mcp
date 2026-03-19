@@ -90,11 +90,17 @@ uv run --extra benchmark python -m benchmark.cli.run \
 
 # Export the derived search map as JSON
 uv run --extra benchmark python -m benchmark.cli.trace \
-  --latest --search-map --json-out -o search_map.json
+  --latest --search-map --json-out -o search_map.bundle.json
 
 # Validate trace/meta/events consistency for the latest run
 uv run --extra benchmark python -m benchmark.cli.trace \
   --latest --validate
+
+# Compare a single case across multiple runs or grid trials
+uv run --extra benchmark python -m benchmark.cli.case_map \
+  benchmark/artifacts/experiments/run-a \
+  benchmark/artifacts/experiments/run-b \
+  --case-id case_1 --json-out -o case_1.compare.json
 ```
 
 Each run now archives all outputs under one experiment directory. `<case_id>.meta.json` stores retrieval-side metadata for the case, including `semantic_hints` file lists from external index backends. Both trace metadata and run-level events include a `schema_version` field so consumers can validate artifact compatibility.
@@ -197,6 +203,11 @@ uv run --extra benchmark python -m benchmark.cli.report --failures \
 
 # Output comparison to file
 uv run --extra benchmark python -m benchmark.cli.report -o comparison.md *.report.json
+
+# Compare the code-space map for one case across grid trials
+uv run --extra benchmark python -m benchmark.cli.case_map \
+  path/to/grid-experiment/reports/summary.report.json \
+  --case-id case_1 -o case_1.compare.md
 ```
 
 **Accepted inputs by mode**:

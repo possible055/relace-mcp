@@ -90,11 +90,17 @@ uv run --extra benchmark python -m benchmark.cli.run \
 
 # 导出派生后的 search map JSON
 uv run --extra benchmark python -m benchmark.cli.trace \
-  --latest --search-map --json-out -o search_map.json
+  --latest --search-map --json-out -o search_map.bundle.json
 
 # 校验最新一轮 run 的 trace/meta/events 一致性
 uv run --extra benchmark python -m benchmark.cli.trace \
   --latest --validate
+
+# 对比单个 case 在多个 runs / grid trials 中的代码空间搜索轨迹
+uv run --extra benchmark python -m benchmark.cli.case_map \
+  benchmark/artifacts/experiments/run-a \
+  benchmark/artifacts/experiments/run-b \
+  --case-id case_1 --json-out -o case_1.compare.json
 ```
 
 现在单次 run 的所有输出都会归档在同一个 experiment 目录下。`<case_id>.meta.json` 会保存该 case 的 retrieval metadata，包括外部索引 backend 返回的 `semantic_hints` 文件列表。Trace metadata 与 run-level events 都会带上 `schema_version` 字段，方便 consumer 做兼容性检查。
@@ -197,6 +203,11 @@ uv run --extra benchmark python -m benchmark.cli.report --failures \
 
 # 输出比较报告到文件
 uv run --extra benchmark python -m benchmark.cli.report -o comparison.md *.report.json
+
+# 对比一个 case 在 grid trials 之间的代码空间 map
+uv run --extra benchmark python -m benchmark.cli.case_map \
+  path/to/grid-experiment/reports/summary.report.json \
+  --case-id case_1 -o case_1.compare.md
 ```
 
 **各模式接受的输入**:

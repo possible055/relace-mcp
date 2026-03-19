@@ -2,7 +2,7 @@
 
 Commands:
     - run: Execute benchmark on agentic_search
-    - filter: Filter dataset with solvability evaluation
+    - case_map: Compare one benchmark case across runs
     - validate: Validate filtered dataset
     - analyze: Analyze benchmark results
 """
