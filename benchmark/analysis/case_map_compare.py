@@ -79,6 +79,10 @@ def _run_label(bundle: dict[str, Any]) -> str:
     )
 
 
+def _run_id(index: int) -> str:
+    return f"run_{index + 1}"
+
+
 def _case_index(bundle: dict[str, Any]) -> dict[str, dict[str, Any]]:
     cases = bundle.get("cases", [])
     if not isinstance(cases, list):
@@ -292,14 +296,16 @@ def _turn_curves(case_map: dict[str, Any]) -> dict[str, list[list[float | int]]]
 def build_case_map_compare(case_id: str, experiment_roots: list[Path]) -> dict[str, Any]:
     runs: list[dict[str, Any]] = []
     present_case_maps: list[dict[str, Any]] = []
-    for experiment_root in experiment_roots:
+    for index, experiment_root in enumerate(experiment_roots):
         bundle = load_search_map_bundle(experiment_root)
         label = _run_label(bundle)
+        run_id = _run_id(index)
         case_map = _case_index(bundle).get(case_id)
         if case_map is not None:
             present_case_maps.append(case_map)
         runs.append(
             {
+                "run_id": run_id,
                 "run_label": label,
                 "experiment": bundle.get("experiment", {}),
                 "search_config": _search_config(bundle),
@@ -315,12 +321,12 @@ def build_case_map_compare(case_id: str, experiment_roots: list[Path]) -> dict[s
 
     anchor = present_case_maps[0] if present_case_maps else {}
     file_sets = {
-        run["run_label"]: set(run["case_map"].get("unique_files", []))
+        run["run_id"]: set(run["case_map"].get("unique_files", []))
         for run in runs
         if isinstance(run.get("case_map"), dict)
     }
     function_sets = {
-        run["run_label"]: {
+        run["run_id"]: {
             _function_key(function)
             for function in run["case_map"].get("unique_functions", [])
             if isinstance(function, dict)
@@ -337,41 +343,41 @@ def build_case_map_compare(case_id: str, experiment_roots: list[Path]) -> dict[s
     )
 
     unique_files_by_run: dict[str, list[str]] = {}
-    for label, file_set in file_sets.items():
+    for run_id, file_set in file_sets.items():
         others: set[str] = set()
-        for other_label, other_set in file_sets.items():
-            if other_label != label:
+        for other_run_id, other_set in file_sets.items():
+            if other_run_id != run_id:
                 others |= other_set
-        unique_files_by_run[label] = sorted(file_set - others)
+        unique_files_by_run[run_id] = sorted(file_set - others)
 
     unique_functions_by_run: dict[str, list[dict[str, Any]]] = {}
-    for label, function_set in function_sets.items():
+    for run_id, function_set in function_sets.items():
         others: set[tuple[str, str | None, str, tuple[int, int]]] = set()
-        for other_label, other_set in function_sets.items():
-            if other_label != label:
+        for other_run_id, other_set in function_sets.items():
+            if other_run_id != run_id:
                 others |= other_set
         unique_keys = function_set - others
         source_case = next(
             (
                 run["case_map"]
                 for run in runs
-                if run["run_label"] == label and isinstance(run.get("case_map"), dict)
+                if run["run_id"] == run_id and isinstance(run.get("case_map"), dict)
             ),
             {},
         )
-        unique_functions_by_run[label] = [
+        unique_functions_by_run[run_id] = [
             _serialize_function(function)
             for function in source_case.get("unique_functions", [])
             if isinstance(function, dict) and _function_key(function) in unique_keys
         ]
 
     selected_sets = {
-        run["run_label"]: set(run["case_map"].get("selected_files", []))
+        run["run_id"]: set(run["case_map"].get("selected_files", []))
         for run in runs
         if isinstance(run.get("case_map"), dict)
     }
     hint_sets = {
-        run["run_label"]: {
+        run["run_id"]: {
             item.get("filename")
             for item in run["case_map"].get("semantic_hints", [])
             if isinstance(item, dict) and isinstance(item.get("filename"), str)
@@ -406,10 +412,10 @@ def build_case_map_compare(case_id: str, experiment_roots: list[Path]) -> dict[s
         for run in runs:
             case_map = run.get("case_map")
             if not isinstance(case_map, dict):
-                row["runs"][run["run_label"]] = {"status": "missing_case"}
+                row["runs"][run["run_id"]] = {"status": "missing_case"}
                 continue
             statuses = _path_status(case_map)
-            row["runs"][run["run_label"]] = statuses.get(
+            row["runs"][run["run_id"]] = statuses.get(
                 path,
                 {
                     "hinted": False,
@@ -442,14 +448,14 @@ def build_case_map_compare(case_id: str, experiment_roots: list[Path]) -> dict[s
         for run in runs:
             case_map = run.get("case_map")
             if not isinstance(case_map, dict):
-                row["runs"][run["run_label"]] = {"status": "missing_case"}
+                row["runs"][run["run_id"]] = {"status": "missing_case"}
                 continue
             statuses = _function_status(case_map)
-            row["runs"][run["run_label"]] = statuses.get(key, {"status": "missing_function"})
+            row["runs"][run["run_id"]] = statuses.get(key, {"status": "missing_function"})
         function_matrix_rows.append(row)
 
     turn_curves = {
-        run["run_label"]: _turn_curves(run["case_map"])
+        run["run_id"]: _turn_curves(run["case_map"])
         for run in runs
         if isinstance(run.get("case_map"), dict)
     }
@@ -508,6 +514,10 @@ def _format_path_status_cell(status: dict[str, Any]) -> str:
     return "".join(tokens) or "-"
 
 
+def _escape_markdown_cell(value: Any) -> str:
+    return str(value).replace("|", "\\|")
+
+
 def format_case_map_compare_report(payload: dict[str, Any]) -> str:
     lines = [
         f"# Case Map Comparison: {payload.get('case_id')}",
@@ -526,9 +536,12 @@ def format_case_map_compare_report(payload: dict[str, Any]) -> str:
         case_map = run.get("case_map") or {}
         metrics = case_map.get("metrics_snapshot", {}) if isinstance(case_map, dict) else {}
         lines.append(
-            f"| {run.get('run_label')} | {run.get('result_status')} | "
-            f"{metrics.get('file_recall', '-')} | {metrics.get('file_precision', '-')} | "
-            f"{metrics.get('turns_used', '-')} | {metrics.get('latency_s', '-')} |"
+            f"| {_escape_markdown_cell(run.get('run_label', ''))} | "
+            f"{_escape_markdown_cell(run.get('result_status', ''))} | "
+            f"{_escape_markdown_cell(metrics.get('file_recall', '-'))} | "
+            f"{_escape_markdown_cell(metrics.get('file_precision', '-'))} | "
+            f"{_escape_markdown_cell(metrics.get('turns_used', '-'))} | "
+            f"{_escape_markdown_cell(metrics.get('latency_s', '-'))} |"
         )
 
     comparisons = payload.get("comparisons", {})
@@ -543,7 +556,11 @@ def format_case_map_compare_report(payload: dict[str, Any]) -> str:
             "",
         ]
     )
-    for run_label, files in comparisons.get("unique_files_by_run", {}).items():
+    unique_files_by_run = comparisons.get("unique_files_by_run", {})
+    for run in runs:
+        run_id = str(run.get("run_id", ""))
+        run_label = str(run.get("run_label", ""))
+        files = unique_files_by_run.get(run_id, [])
         lines.append(f"- {run_label}: {', '.join(files) if files else '(none)'}")
 
     lines.extend(
@@ -551,15 +568,21 @@ def format_case_map_compare_report(payload: dict[str, Any]) -> str:
             "",
             "## Path Matrix",
             "",
-            "| Path | " + " | ".join(run.get("run_label", "") for run in runs) + " |",
+            "| Path | "
+            + " | ".join(_escape_markdown_cell(run.get("run_label", "")) for run in runs)
+            + " |",
             "|------|" + "|".join("---" for _ in runs) + "|",
         ]
     )
     for row in comparisons.get("path_matrix", []):
         cells = [
-            _format_path_status_cell(row.get("runs", {}).get(run.get("run_label", ""), {}))
+            _escape_markdown_cell(
+                _format_path_status_cell(row.get("runs", {}).get(run.get("run_id", ""), {}))
+            )
             for run in runs
         ]
-        lines.append(f"| {row.get('path')} | " + " | ".join(cells) + " |")
+        lines.append(
+            f"| {_escape_markdown_cell(row.get('path', ''))} | " + " | ".join(cells) + " |"
+        )
 
     return "\n".join(lines)

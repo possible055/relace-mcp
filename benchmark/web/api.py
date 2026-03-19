@@ -61,10 +61,10 @@ def create_app(experiments_root: Path) -> FastAPI:
     @app.post("/api/search-map/bundle")
     def bundle(request: BundleRequest) -> dict[str, Any]:
         experiment_root = _resolve_within_root(app.state.experiments_root, request.experiment_root)
-        traces_dir = experiment_root / "traces"
-        if not traces_dir.is_dir():
-            raise HTTPException(status_code=404, detail="Experiment traces directory not found.")
-        return load_search_map_bundle(experiment_root)
+        try:
+            return load_search_map_bundle(experiment_root)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Search map bundle not found.") from exc
 
     @app.post("/api/case-map/compare")
     def compare(request: CompareRequest) -> dict[str, Any]:
