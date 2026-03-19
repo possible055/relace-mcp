@@ -208,6 +208,9 @@ uv run --extra benchmark python -m benchmark.cli.report -o comparison.md *.repor
 uv run --extra benchmark python -m benchmark.cli.case_map \
   path/to/grid-experiment/reports/summary.report.json \
   --case-id case_1 -o case_1.compare.md
+
+# 启动本地 benchmark web analyzer
+uv run --extra benchmark --extra benchmark-web python -m benchmark.cli.web
 ```
 
 **各模式接受的输入**:
@@ -227,6 +230,22 @@ uv run --extra benchmark python -m benchmark.cli.case_map \
 
 每个 `summary.report.json` 都包含可复现所需的 metadata。Grid parent report 另外会带 `metadata.experiment.type = "grid"`，以及包含 `search_space`、`trials`、`best_trial` 的 `grid` 区块。
 
+## 6.1 Web Analyzer
+
+benchmark web analyzer 是一个本地 SPA + Python API，用来浏览 experiments，并对比同一个 `case_id` 在不同 runs 之间的代码空间搜索轨迹。
+
+```bash
+# 终端 1: Python API + static app server
+uv run --extra benchmark --extra benchmark-web python -m benchmark.cli.web
+
+# 终端 2: frontend dev server
+cd benchmark/frontend
+npm install
+npm run dev
+```
+
+Web app 默认读取 `benchmark/artifacts/experiments/` 下的 benchmark artifacts，并以派生后的 `search_map.bundle.json` / `case_map_compare` 作为唯一分析数据源。
+
 ## 7. 故障排除
 
 | 问题 | 解决方案 |
@@ -242,6 +261,12 @@ uv run --extra benchmark python -m benchmark.cli.case_map \
 
 ```bash
 uv run --extra dev --extra benchmark pytest benchmark/tests -q
+```
+
+Web analyzer backend 测试:
+
+```bash
+uv run --extra dev --extra benchmark --extra benchmark-web pytest benchmark/tests/web -q
 ```
 
 这组测试只覆盖 benchmark 子系统，不包含在仓库默认 `pytest` testpaths 里。CI 会用单独的 Ubuntu / Python 3.13 benchmark job 持续执行它们。
@@ -262,6 +287,8 @@ benchmark/
 │   ├── validate.py      # 数据集验证
 │   └── build_locbench.py  # Loc-Bench 构建
 ├── analysis/            # 分析工具 (function scope 等)
+├── web/                 # 本地 benchmark web backend（仅 repo-local）
+├── frontend/            # benchmark SPA 前端（仅 repo-local）
 ├── datasets/            # 数据集加载器
 ├── metrics/             # 指标实现
 ├── runner/              # 执行流程

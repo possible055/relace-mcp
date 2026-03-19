@@ -371,9 +371,7 @@ class TestBashParsing:
         discover_paths = {
             e.path for e in sm.events if e.tool_name == "bash" and e.access_type == "discover"
         }
-        assert "README.md" in discover_paths
-        assert "src/main.py" in discover_paths
-        assert "src/pkg/" in discover_paths
+        assert discover_paths == {"README.md", "src/main.py", "src/pkg/"}
 
         read_events = [e for e in sm.events if e.tool_name == "bash" and e.access_type == "read"]
         assert len(read_events) == 1

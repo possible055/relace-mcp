@@ -641,7 +641,7 @@ def _parse_plain_output_paths(
         line = raw_line.strip()
         if not line or line.startswith(("Exit code:", "stdout:", "stderr:", "... output capped")):
             continue
-        if base_path != "." and "/" not in line and not line.startswith("."):
+        if base_path != "." and not Path(line).is_absolute() and not line.startswith("/repo"):
             normalized = _join_repo_path(base_path, line, repo_root)
         else:
             normalized = _normalize_repo_path(line, repo_root)

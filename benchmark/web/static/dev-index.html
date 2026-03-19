@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Relace Benchmark Web</title>
+    <style>
+      :root {
+        --cds-background: #f4f4f4;
+        --cds-layer-01: #ffffff;
+        --cds-text-primary: #161616;
+        --cds-text-secondary: #525252;
+        --cds-border-subtle-01: #e0e0e0;
+        --cds-interactive: #0f62fe;
+      }
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background: var(--cds-background);
+        color: var(--cds-text-primary);
+      }
+      .shell {
+        max-width: 840px;
+        margin: 64px auto;
+        padding: 0 24px;
+      }
+      .card {
+        background: var(--cds-layer-01);
+        border: 1px solid var(--cds-border-subtle-01);
+        border-radius: 4px;
+        padding: 24px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+        line-height: 1.2;
+      }
+      p {
+        margin: 0 0 16px;
+        color: var(--cds-text-secondary);
+      }
+      code, pre {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+      }
+      pre {
+        overflow: auto;
+        background: #161616;
+        color: #f4f4f4;
+        padding: 16px;
+        border-radius: 4px;
+      }
+      a {
+        color: var(--cds-interactive);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="card">
+        <h1>Relace Benchmark Web</h1>
+        <p>The API server is running, but the SPA assets have not been built yet.</p>
+        <p>Use the frontend dev server during development, or build the frontend before serving it from Python.</p>
+        <pre>npm --prefix frontend install
+npm --prefix frontend run dev
+
+# or build for local serving
+npm --prefix frontend run build</pre>
+        <p>The API remains available under <code>/api/*</code>.</p>
+      </div>
+    </div>
+  </body>
+</html>

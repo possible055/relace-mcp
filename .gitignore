@@ -7,10 +7,12 @@ __pycache__/
 # Virtual environment / Package manager
 .venv/
 .uv-cache/
+node_modules/
 
 # Build / Distribution
 build/
 dist/
+*.tsbuildinfo
 
 # Testing / Coverage / Linter / Type checker
 .pytest_cache/
