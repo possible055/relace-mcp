@@ -222,6 +222,9 @@ SEARCH_BASH_TOOLS: bool
 SEARCH_LSP_TOOLS: bool
 SEARCH_LSP_TIMEOUT_SECONDS: float
 SEARCH_LSP_MAX_CLIENTS: int
+MCP_BACKGROUND_INDEX_MONITOR: bool
+MCP_BACKGROUND_INDEX_INTERVAL_SECONDS: int
+MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS: int
 RELACE_UPLOAD_MAX_WORKERS: int
 RELACE_API_KEY: str | None
 MCP_BASE_DIR: str | None
@@ -276,6 +279,18 @@ def reload_settings_from_env() -> None:
         "SEARCH_LSP_TOOLS": env_bool("SEARCH_LSP_TOOLS", default=False),
         "SEARCH_LSP_TIMEOUT_SECONDS": _parse_positive_float_env("SEARCH_LSP_TIMEOUT_SECONDS", 15.0),
         "SEARCH_LSP_MAX_CLIENTS": _parse_nonnegative_int_env("SEARCH_LSP_MAX_CLIENTS", 2),
+        "MCP_BACKGROUND_INDEX_MONITOR": env_bool(
+            "MCP_BACKGROUND_INDEX_MONITOR",
+            default=False,
+        ),
+        "MCP_BACKGROUND_INDEX_INTERVAL_SECONDS": _parse_positive_int_env(
+            "MCP_BACKGROUND_INDEX_INTERVAL_SECONDS",
+            300,
+        ),
+        "MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS": _parse_positive_int_env(
+            "MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS",
+            30,
+        ),
         "RELACE_UPLOAD_MAX_WORKERS": _parse_positive_int_env("RELACE_UPLOAD_MAX_WORKERS", 8),
         "RELACE_API_KEY": _parse_optional_stripped_env("RELACE_API_KEY"),
         "MCP_BASE_DIR": _parse_optional_stripped_env("MCP_BASE_DIR"),

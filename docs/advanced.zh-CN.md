@@ -32,6 +32,9 @@
 | `RELACE_CLOUD_TOOLS` | `0` | 设为 `1` 启用云工具（cloud_sync、cloud_search 等） |
 | `MCP_SEARCH_RETRIEVAL` | `0` | 设为 `1` 注册 `agentic_retrieval` 工具 |
 | `MCP_RETRIEVAL_BACKEND` | `relace` | semantic retrieval backend：`relace`、`codanna`、`chunkhound`、`auto`、`none` |
+| `MCP_BACKGROUND_INDEX_MONITOR` | `0` | 为 local index 启用可选的周期 refresh monitor；要求 `MCP_BASE_DIR` 与 local backend |
+| `MCP_BACKGROUND_INDEX_INTERVAL_SECONDS` | `300` | 周期 local index 检查间隔 |
+| `MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS` | `30` | server 启动后首次周期 local index 检查前的延迟 |
 
 > **注意：** 仅当**同时满足**以下条件时可省略 `RELACE_API_KEY`：(1) `APPLY_PROVIDER` 和 `SEARCH_PROVIDER` 均使用非 Relace 提供商，且 (2) `RELACE_CLOUD_TOOLS=false`。否则必须设置。
 
@@ -202,6 +205,25 @@ MCP_RETRIEVAL_BACKEND=auto
 Server 按优先级自动选择当前 session 可用的后端：`codanna` → `chunkhound` → `relace`（云端兜底）。
 
 当选中的本地后端处于 stale 或 missing 状态时，retrieval 可以排程 background refresh；query path 不会等待 rebuild 完成。
+
+### Background Index Monitor
+
+```bash
+MCP_SEARCH_RETRIEVAL=1
+MCP_RETRIEVAL_BACKEND=codanna
+MCP_BASE_DIR=/absolute/path/to/repo
+MCP_BACKGROUND_INDEX_MONITOR=1
+```
+
+启用后，server 会定期检查当前 local backend 的 freshness，并在需要时触发 background refresh。
+
+- 默认关闭。
+- 只有在 `MCP_BASE_DIR` 固定到单一 repo 时才会启动。
+- 只监控当前生效的 local backend（`codanna`、`chunkhound`，或 `auto` 选中的 local backend）。
+- 会使用 host-local file lock，避免多个本地 MCP process 意外指向同一 repo 时重复启动 index CLI。
+- 设计目标是单进程部署。若是 multi-worker 或 multi-pod HTTP 部署，请关闭它，改用 backend 自带的 watch/daemon 或外部 scheduler。
+
+`index_status` 会返回 `background_monitor` 摘要，方便确认 monitor 是否真的在运行，以及为何没有运行。
 
 ---
 
@@ -405,6 +427,8 @@ export SEARCH_PARALLEL_TOOL_CALLS=1
 ## 远程部署 (Streamable HTTP)
 
 > **安全提示：** 本服务可读写文件。请勿直接暴露到公网。使用 `stdio`，或在 HTTP 前增加鉴权/VPN。
+>
+> **部署边界：** Stateful MCP HTTP session 是 process-local 的。若你依赖 session state 或 background index monitor，请为每个固定 repo 使用单一 server process。multi-worker 或 multi-pod 部署需要外部协调，并且应保持 `MCP_BACKGROUND_INDEX_MONITOR=0`。
 
 ### 运行服务器
 

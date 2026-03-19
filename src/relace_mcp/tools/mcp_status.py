@@ -6,6 +6,7 @@ from typing import Any
 from fastmcp import FastMCP
 from fastmcp.server.context import Context
 
+from ..background_index_monitor import get_background_index_monitor_summary
 from ..config import resolve_base_dir
 from ..config import settings as _settings
 from ..observability import get_trace_id, log_event, redact_value
@@ -14,6 +15,137 @@ from ..repo.core import get_current_git_info, is_git_dirty
 from ..repo.core.state import load_sync_state
 from ..repo.freshness import classify_cloud_index_freshness, classify_local_index_freshness
 from ._registry import ToolRegistryDeps, read_text_safe
+
+
+def _build_relace_status(base_dir: str) -> dict[str, Any]:
+    current_branch, current_head = get_current_git_info(base_dir)
+    git_dirty = is_git_dirty(base_dir)
+    sync_state = load_sync_state(base_dir)
+
+    relace_freshness = classify_cloud_index_freshness(base_dir)
+    relace_status: dict[str, Any] = {
+        "cloud_tools_enabled": _settings.RELACE_CLOUD_TOOLS,
+        "local_git": {
+            "git_branch": current_branch,
+            "git_head": current_head[:8] if current_head else "",
+            "git_dirty": git_dirty,
+        },
+        "freshness": relace_freshness.freshness,
+        "hints_usable": relace_freshness.hints_usable,
+        "sync_state": None,
+        "status": None,
+    }
+
+    if sync_state is None:
+        relace_status["status"] = {
+            "ref_changed": False,
+            "needs_sync": True,
+            "recommended_action": "No sync state found. Run cloud_sync().",
+        }
+        return relace_status
+
+    relace_status["sync_state"] = {
+        "repo_id": sync_state.repo_id,
+        "repo_head": sync_state.repo_head[:8] if sync_state.repo_head else "",
+        "git_branch": sync_state.git_branch,
+        "git_head": sync_state.git_head_sha[:8] if sync_state.git_head_sha else "",
+        "last_sync": sync_state.last_sync,
+        "tracked_files": len(sync_state.files),
+        "skipped_files": len(sync_state.skipped_files),
+        "files_found": sync_state.files_found,
+        "files_selected": sync_state.files_selected,
+        "file_limit": sync_state.file_limit,
+        "files_truncated": sync_state.files_truncated,
+    }
+
+    ref_changed = False
+    needs_sync = False
+    recommended_action = None
+
+    if sync_state.git_head_sha and current_head and sync_state.git_head_sha != current_head:
+        ref_changed = True
+        needs_sync = True
+        recommended_action = (
+            "Git HEAD changed since last sync. Run cloud_sync() "
+            "or cloud_sync(force=True, mirror=True)."
+        )
+    elif git_dirty:
+        needs_sync = True
+        recommended_action = (
+            "Local working tree is dirty. Run cloud_sync() if you want cloud_search "
+            "to reflect uncommitted changes."
+        )
+
+    relace_status["status"] = {
+        "ref_changed": ref_changed,
+        "needs_sync": needs_sync,
+        "recommended_action": recommended_action,
+    }
+    return relace_status
+
+
+def _build_local_backend_status(base_dir: str, backend_name: str) -> tuple[dict[str, Any], Any]:
+    base_path = Path(base_dir)
+    cli_path = shutil.which(backend_name)
+    freshness = classify_local_index_freshness(base_dir, backend_name)
+    head_path = base_path / f".{backend_name}" / "last_indexed_head"
+    if backend_name == "codanna":
+        index_dir_exists = (base_path / ".codanna").is_dir()
+    else:
+        index_dir_exists = (base_path / ".chunkhound").is_dir()
+
+    status_obj: dict[str, Any] = {
+        "cli_found": bool(cli_path),
+        "cli_path": cli_path,
+        "index_dir_exists": index_dir_exists,
+        "last_indexed_head": read_text_safe(head_path),
+        "freshness": freshness.freshness,
+        "hints_usable": freshness.hints_usable,
+        "background_refresh_scheduled": False,
+    }
+    return status_obj, freshness
+
+
+def collect_index_status_payload(
+    base_dir: str,
+    base_dir_source: str,
+    *,
+    retrieval_backend: str,
+    schedule_local_refresh: bool,
+    background_monitor: dict[str, Any],
+) -> dict[str, Any]:
+    relace_status = _build_relace_status(base_dir)
+    codanna_status, codanna_freshness = _build_local_backend_status(base_dir, "codanna")
+    chunkhound_status, chunkhound_freshness = _build_local_backend_status(base_dir, "chunkhound")
+
+    if schedule_local_refresh:
+        for backend_name, status_obj, freshness_obj in (
+            ("codanna", codanna_status, codanna_freshness),
+            ("chunkhound", chunkhound_status, chunkhound_freshness),
+        ):
+            if not status_obj["cli_found"]:
+                status_obj["hints_usable"] = False
+                continue
+            if freshness_obj.refresh_recommended:
+                if backend_name == "codanna":
+                    schedule_bg_codanna_full_index(base_dir)
+                else:
+                    schedule_bg_chunkhound_index(base_dir)
+                status_obj["background_refresh_scheduled"] = True
+    else:
+        for status_obj in (codanna_status, chunkhound_status):
+            if not status_obj["cli_found"]:
+                status_obj["hints_usable"] = False
+
+    return {
+        "base_dir": base_dir,
+        "base_dir_source": base_dir_source,
+        "retrieval_backend": retrieval_backend,
+        "background_monitor": background_monitor,
+        "relace": relace_status,
+        "codanna": codanna_status,
+        "chunkhound": chunkhound_status,
+    }
 
 
 def register_status_tools(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
@@ -65,127 +197,35 @@ def register_status_tools(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
                 "error": str(exc),
             }
 
-        base_path = Path(base_dir)
-        current_branch, current_head = get_current_git_info(base_dir)
-        git_dirty = is_git_dirty(base_dir)
-        sync_state = load_sync_state(base_dir)
-
-        relace_freshness = classify_cloud_index_freshness(base_dir)
-        relace_status: dict[str, Any] = {
-            "cloud_tools_enabled": _settings.RELACE_CLOUD_TOOLS,
-            "local_git": {
-                "git_branch": current_branch,
-                "git_head": current_head[:8] if current_head else "",
-                "git_dirty": git_dirty,
-            },
-            "freshness": relace_freshness.freshness,
-            "hints_usable": relace_freshness.hints_usable,
-            "sync_state": None,
-            "status": None,
-        }
-
-        if sync_state is None:
-            relace_status["status"] = {
-                "ref_changed": False,
-                "needs_sync": True,
-                "recommended_action": "No sync state found. Run cloud_sync().",
-            }
-        else:
-            relace_status["sync_state"] = {
-                "repo_id": sync_state.repo_id,
-                "repo_head": sync_state.repo_head[:8] if sync_state.repo_head else "",
-                "git_branch": sync_state.git_branch,
-                "git_head": sync_state.git_head_sha[:8] if sync_state.git_head_sha else "",
-                "last_sync": sync_state.last_sync,
-                "tracked_files": len(sync_state.files),
-                "skipped_files": len(sync_state.skipped_files),
-                "files_found": sync_state.files_found,
-                "files_selected": sync_state.files_selected,
-                "file_limit": sync_state.file_limit,
-                "files_truncated": sync_state.files_truncated,
-            }
-
-            ref_changed = False
-            needs_sync = False
-            recommended_action = None
-
-            if sync_state.git_head_sha and current_head and sync_state.git_head_sha != current_head:
-                ref_changed = True
-                needs_sync = True
-                recommended_action = (
-                    "Git HEAD changed since last sync. Run cloud_sync() "
-                    "or cloud_sync(force=True, mirror=True)."
-                )
-            elif git_dirty:
-                needs_sync = True
-                recommended_action = (
-                    "Local working tree is dirty. Run cloud_sync() if you want cloud_search "
-                    "to reflect uncommitted changes."
-                )
-
-            relace_status["status"] = {
-                "ref_changed": ref_changed,
-                "needs_sync": needs_sync,
-                "recommended_action": recommended_action,
-            }
-
-        codanna_cli_path = shutil.which("codanna")
-        chunkhound_cli_path = shutil.which("chunkhound")
-
-        codanna_head_path = base_path / ".codanna" / "last_indexed_head"
-        chunkhound_head_path = base_path / ".chunkhound" / "last_indexed_head"
-
-        codanna_freshness = classify_local_index_freshness(base_dir, "codanna")
-        chunkhound_freshness = classify_local_index_freshness(base_dir, "chunkhound")
-
-        codanna_status: dict[str, Any] = {
-            "cli_found": bool(codanna_cli_path),
-            "cli_path": codanna_cli_path,
-            "index_dir_exists": (base_path / ".codanna").is_dir(),
-            "last_indexed_head": read_text_safe(codanna_head_path),
-            "freshness": codanna_freshness.freshness,
-            "hints_usable": codanna_freshness.hints_usable,
-            "background_refresh_scheduled": False,
-        }
-        chunkhound_status: dict[str, Any] = {
-            "cli_found": bool(chunkhound_cli_path),
-            "cli_path": chunkhound_cli_path,
-            "index_dir_exists": (base_path / ".chunkhound").is_dir(),
-            "last_indexed_head": read_text_safe(chunkhound_head_path),
-            "freshness": chunkhound_freshness.freshness,
-            "hints_usable": chunkhound_freshness.hints_usable,
-            "background_refresh_scheduled": False,
-        }
-
-        for backend_name, status_obj, freshness_obj in (
-            ("codanna", codanna_status, codanna_freshness),
-            ("chunkhound", chunkhound_status, chunkhound_freshness),
-        ):
-            if not status_obj["cli_found"]:
-                status_obj["hints_usable"] = False
-                continue
-            if freshness_obj.refresh_recommended:
-                if backend_name == "codanna":
-                    schedule_bg_codanna_full_index(base_dir)
-                else:
-                    schedule_bg_chunkhound_index(base_dir)
-                status_obj["background_refresh_scheduled"] = True
-
-        payload = {
+        status_payload: dict[str, Any] = collect_index_status_payload(
+            base_dir,
+            base_dir_source,
+            retrieval_backend=_settings.RETRIEVAL_BACKEND,
+            schedule_local_refresh=True,
+            background_monitor=get_background_index_monitor_summary(mcp),
+        )
+        payload: dict[str, Any] = {
             "trace_id": trace_id,
-            "base_dir": base_dir,
-            "base_dir_source": base_dir_source,
-            "retrieval_backend": _settings.RETRIEVAL_BACKEND,
-            "relace": relace_status,
-            "codanna": codanna_status,
-            "chunkhound": chunkhound_status,
+            **status_payload,
         }
+
+        relace_status = status_payload["relace"]
+        codanna_status = status_payload["codanna"]
+        chunkhound_status = status_payload["chunkhound"]
+
+        if not isinstance(relace_status, dict):
+            relace_status = {}
+        if not isinstance(codanna_status, dict):
+            codanna_status = {}
+        if not isinstance(chunkhound_status, dict):
+            chunkhound_status = {}
 
         relace_needs_sync = None
         relace_recommended_action = None
-        if isinstance(relace_status.get("status"), dict):
-            relace_needs_sync = relace_status["status"].get("needs_sync")
-            relace_recommended_action = relace_status["status"].get("recommended_action")
+        relace_status_detail = relace_status.get("status")
+        if isinstance(relace_status_detail, dict):
+            relace_needs_sync = relace_status_detail.get("needs_sync")
+            relace_recommended_action = relace_status_detail.get("recommended_action")
 
         log_event(
             {

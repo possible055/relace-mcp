@@ -45,6 +45,9 @@ _TOOL_RELOAD_KEYS = (
     "SEARCH_TOP_P",
     "SEARCH_LSP_TIMEOUT_SECONDS",
     "SEARCH_LSP_MAX_CLIENTS",
+    "MCP_BACKGROUND_INDEX_MONITOR",
+    "MCP_BACKGROUND_INDEX_INTERVAL_SECONDS",
+    "MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS",
     "RELACE_UPLOAD_MAX_WORKERS",
     "RELACE_API_KEY",
     "MCP_BASE_DIR",
@@ -159,6 +162,30 @@ class TestReloadToolSettings:
         reload_tool_settings()
 
         assert settings_mod.SEARCH_LSP_TOOLS is True
+
+    def test_background_index_monitor_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_BACKGROUND_INDEX_MONITOR", "true")
+        reload_tool_settings()
+
+        assert settings_mod.MCP_BACKGROUND_INDEX_MONITOR is True
+
+    def test_background_index_interval_reloaded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_BACKGROUND_INDEX_INTERVAL_SECONDS", "480")
+        monkeypatch.setenv("MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS", "45")
+        reload_tool_settings()
+
+        assert settings_mod.MCP_BACKGROUND_INDEX_INTERVAL_SECONDS == 480
+        assert settings_mod.MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS == 45
+
+    def test_background_index_interval_invalid_falls_back(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("MCP_BACKGROUND_INDEX_INTERVAL_SECONDS", "0")
+        monkeypatch.setenv("MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS", "bad")
+        reload_tool_settings()
+
+        assert settings_mod.MCP_BACKGROUND_INDEX_INTERVAL_SECONDS == 300
+        assert settings_mod.MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS == 30
 
     def test_search_tool_strict_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("SEARCH_TOOL_STRICT", "false")
