@@ -1,0 +1,40 @@
+pyproject.toml
+  9aa390b735dd1a77 74-76
+  9df9afae9f28006a 73
+benchmark/cli/web.py
+  9aa390b735dd1a77 1-24,26-28,30-31,33-41
+  9df9afae9f28006a 25,29,32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "e5b8e1dde107171d614381c1c685cc0208bb45de",
+  "prompts": {
+    "9aa390b735dd1a77": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d0287-d4c5-7193-8dd8-1afcb29f3cc8",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 52,
+      "total_deletions": 1,
+      "accepted_lines": 41,
+      "overriden_lines": 0
+    },
+    "9df9afae9f28006a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d0265-7403-78e2-b0c7-9867e5f43f4c",
+        "model": "unknown"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 11,
+      "total_deletions": 18,
+      "accepted_lines": 6,
+      "overriden_lines": 0
+    }
+  }
+}
