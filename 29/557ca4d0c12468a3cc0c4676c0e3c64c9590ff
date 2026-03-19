@@ -1,0 +1,34 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "29557ca4d0c12468a3cc0c4676c0e3c64c9590ff",
+  "prompts": {
+    "318263009567ce61": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d0238-ea2b-7102-a401-0405453fcfc8",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 2,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    },
+    "688d8e5032adea1d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1e751580-7c7d-4cf8-8d1f-5b5889ba3ad3",
+        "model": "claude-sonnet-4-5-20250929"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 294,
+      "total_deletions": 1,
+      "accepted_lines": 292,
+      "overriden_lines": 0
+    }
+  }
+}
