@@ -275,6 +275,41 @@ def test_search_map_bundle_endpoint_lazy_builds_from_experiment(tmp_path: Path) 
     assert payload["cases"][0]["query"] == "find handler"
 
 
+def test_search_map_bundle_endpoint_returns_existing_bundle_without_traces(tmp_path: Path) -> None:
+    experiment_root = tmp_path / "run-bundle-only"
+    _write_bundle(
+        experiment_root,
+        experiment_name="run-bundle-only",
+        cases=[
+            {
+                "case_id": "case_1",
+                "query": "find handler",
+                "repo": "example/repo",
+                "ground_truth_files": {},
+                "ground_truth_functions": [],
+                "ground_truth_context_files": {},
+                "semantic_hints": [],
+                "selected_files": [],
+                "unique_files": ["src/main.py"],
+                "unique_functions": [],
+                "file_blocks": [],
+                "function_blocks": [],
+                "turn_summaries": [],
+                "metrics_snapshot": {"file_recall": 1.0},
+                "result_status": "ok",
+            }
+        ],
+    )
+
+    client = TestClient(create_app(tmp_path))
+    response = client.post("/api/search-map/bundle", json={"experiment_root": str(experiment_root)})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["kind"] == "search_map_bundle"
+    assert payload["cases"][0]["case_id"] == "case_1"
+
+
 def test_case_compare_endpoint_returns_compare_payload(tmp_path: Path) -> None:
     run_a = tmp_path / "run-a"
     run_b = tmp_path / "run-b"

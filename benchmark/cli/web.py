@@ -22,14 +22,14 @@ def main(experiments_root: str | None, host: str, port: int, no_open: bool) -> N
         import uvicorn
     except ImportError as exc:
         raise click.ClickException(
-            "benchmark web requires optional dependencies. Install with: uv sync --extra benchmark-web"
+            "benchmark web requires optional dependencies. Install with: uv sync --extra benchmark --extra benchmark-web"
         ) from exc
 
     try:
         from benchmark.web import create_app
     except ImportError as exc:
         raise click.ClickException(
-            "benchmark web requires optional dependencies. Install with: uv sync --extra benchmark-web"
+            "benchmark web requires optional dependencies. Install with: uv sync --extra benchmark --extra benchmark-web"
         ) from exc
 
     root = Path(experiments_root) if experiments_root else get_experiments_dir()

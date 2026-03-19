@@ -53,12 +53,12 @@ function buildCurveRows(
     return []
   }
   const byTurn = new Map<number, Record<string, number | string>>()
-  for (const [runLabel, curves] of Object.entries(compare.comparisons.turn_curves)) {
+  for (const [runId, curves] of Object.entries(compare.comparisons.turn_curves)) {
     for (const point of curves[keyName] ?? []) {
       const turn = Number(point[0] ?? 0)
       const value = Number(point[1] ?? 0)
       const row = byTurn.get(turn) ?? { turn }
-      row[runLabel] = value
+      row[runId] = value
       byTurn.set(turn, row)
     }
   }
@@ -245,7 +245,7 @@ export default function CaseCompare() {
                   {compare.runs.map((run, index) => {
                     const metrics = run.case_map?.metrics_snapshot ?? {}
                     return (
-                      <tr key={run.run_label} className="border-t border-[var(--cds-border-subtle-01)]">
+                      <tr key={run.run_id} className="border-t border-[var(--cds-border-subtle-01)]">
                         <td className="p-3">
                           <div className="flex items-start gap-2">
                             <span
@@ -289,9 +289,10 @@ export default function CaseCompare() {
                     <Legend />
                     {compare.runs.map((run, index) => (
                       <Line
-                        key={run.run_label}
+                        key={run.run_id}
                         type="monotone"
-                        dataKey={run.run_label}
+                        dataKey={run.run_id}
+                        name={run.run_label}
                         stroke={RUN_COLORS[index % RUN_COLORS.length]}
                         strokeWidth={2}
                         dot={false}
@@ -313,9 +314,10 @@ export default function CaseCompare() {
                     <Legend />
                     {compare.runs.map((run, index) => (
                       <Line
-                        key={run.run_label}
+                        key={run.run_id}
                         type="monotone"
-                        dataKey={run.run_label}
+                        dataKey={run.run_id}
+                        name={run.run_label}
                         stroke={RUN_COLORS[index % RUN_COLORS.length]}
                         strokeWidth={2}
                         dot={false}
@@ -335,7 +337,7 @@ export default function CaseCompare() {
                   <tr className="type-label-01 text-[var(--cds-text-helper)]">
                     <th className="p-3">Path</th>
                     {compare.runs.map((run) => (
-                      <th key={run.run_label} className="p-3">{run.run_label}</th>
+                      <th key={run.run_id} className="p-3">{run.run_label}</th>
                     ))}
                   </tr>
                 </thead>
@@ -352,9 +354,9 @@ export default function CaseCompare() {
                         ) : null}
                       </td>
                       {compare.runs.map((run) => {
-                        const status = row.runs[run.run_label] ?? {}
+                        const status = row.runs[run.run_id] ?? {}
                         return (
-                          <td key={run.run_label} className="p-3">
+                          <td key={run.run_id} className="p-3">
                             <div className="type-body-compact-01 text-[var(--cds-text-primary)]">
                               {statusString(status)}
                             </div>
@@ -384,7 +386,7 @@ export default function CaseCompare() {
                     <tr className="type-label-01 text-[var(--cds-text-helper)]">
                       <th className="p-3">Function</th>
                       {compare.runs.map((run) => (
-                        <th key={run.run_label} className="p-3">{run.run_label}</th>
+                        <th key={run.run_id} className="p-3">{run.run_label}</th>
                       ))}
                     </tr>
                   </thead>
@@ -400,9 +402,9 @@ export default function CaseCompare() {
                           </div>
                         </td>
                         {compare.runs.map((run) => {
-                          const status = row.runs[run.run_label] ?? {}
+                          const status = row.runs[run.run_id] ?? {}
                           return (
-                            <td key={run.run_label} className="p-3 type-body-compact-01">
+                            <td key={run.run_id} className="p-3 type-body-compact-01">
                               {Array.isArray(status.access_kinds) ? status.access_kinds.join(', ') : String(status.status ?? '-')}
                             </td>
                           )
@@ -419,27 +421,37 @@ export default function CaseCompare() {
             <Card>
               <CardHeader><CardTitle>Unique Files By Run</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                {Object.entries(compare.comparisons.unique_files_by_run).map(([runLabel, files]) => (
-                  <div key={runLabel}>
-                    <div className="type-label-02 text-[var(--cds-text-primary)]">{runLabel}</div>
-                    <div className="type-body-compact-01 text-[var(--cds-text-secondary)]">
-                      {files.length > 0 ? files.join(', ') : '(none)'}
+                {compare.runs.map((run) => {
+                  const files = compare.comparisons.unique_files_by_run[run.run_id] ?? []
+                  return (
+                    <div key={run.run_id}>
+                      <div className="type-label-02 text-[var(--cds-text-primary)]">
+                        {run.run_label}
+                      </div>
+                      <div className="type-body-compact-01 text-[var(--cds-text-secondary)]">
+                        {files.length > 0 ? files.join(', ') : '(none)'}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </CardContent>
             </Card>
             <Card>
               <CardHeader><CardTitle>Unique Functions By Run</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                {Object.entries(compare.comparisons.unique_functions_by_run).map(([runLabel, functions]) => (
-                  <div key={runLabel}>
-                    <div className="type-label-02 text-[var(--cds-text-primary)]">{runLabel}</div>
-                    <div className="type-body-compact-01 text-[var(--cds-text-secondary)]">
-                      {functions.length > 0 ? functions.map(formatFunctionLabel).join(', ') : '(none)'}
+                {compare.runs.map((run) => {
+                  const functions = compare.comparisons.unique_functions_by_run[run.run_id] ?? []
+                  return (
+                    <div key={run.run_id}>
+                      <div className="type-label-02 text-[var(--cds-text-primary)]">
+                        {run.run_label}
+                      </div>
+                      <div className="type-body-compact-01 text-[var(--cds-text-secondary)]">
+                        {functions.length > 0 ? functions.map(formatFunctionLabel).join(', ') : '(none)'}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </CardContent>
             </Card>
           </div>

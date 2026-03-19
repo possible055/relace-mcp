@@ -111,6 +111,7 @@ export type SearchMapBundle = {
 }
 
 export type CaseCompareRun = {
+  run_id: string
   run_label: string
   experiment: Record<string, unknown>
   search_config: Record<string, unknown>
