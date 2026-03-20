@@ -203,7 +203,7 @@ uv run --extra benchmark python -m benchmark.cli.build_locbench --output artifac
 uv run --extra benchmark python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.jsonl --limit 20
 ```
 
-所有 benchmark 产物都会写入 `benchmark/artifacts/`。
+所有 benchmark 产物都会写入 `benchmark/.data/`。
 
 网格搜索、分析工具及指标说明请参见 [docs/benchmark.zh-CN.md](docs/benchmark.zh-CN.md)。
 

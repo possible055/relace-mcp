@@ -40,7 +40,8 @@ CLAUDE.md
 .codanna/
 .codannaignore
 .fastembed_cache
-benchmark/artifacts/
+.bench-repos/
+benchmark/.data/
 sonar-project.properties
 site/
 plans/

@@ -27,7 +27,7 @@ For non-Relace providers, benchmark commands read `SEARCH_API_KEY`. Provider-spe
 
 `benchmark.cli.run` and `benchmark.cli.grid` now share the same runtime bootstrap as the MCP server. They load `MCP_DOTENV_PATH` when set, otherwise fall back to the default dotenv search, then apply CLI overrides and refresh centralized settings. Effective precedence is: CLI flags > process env > dotenv values.
 
-When a benchmark CLI path is not absolute, it is resolved relative to `benchmark/`. In the examples below, `artifacts/...` maps to `benchmark/artifacts/...` on disk.
+When a benchmark CLI path is not absolute, it is resolved relative to `benchmark/`. In the examples below, `artifacts/...` maps to `benchmark/.data/...` on disk.
 
 **Dataset**:
 
@@ -67,12 +67,12 @@ uv run --extra benchmark python -m benchmark.cli.run \
 ```
 
 **Outputs**:
-- Experiment root: `benchmark/artifacts/experiments/<experiment_name>/`
-- Results: `benchmark/artifacts/experiments/<experiment_name>/results/results.jsonl`
-- Report: `benchmark/artifacts/experiments/<experiment_name>/reports/summary.report.json`
-- Traces (when `--trace`): `benchmark/artifacts/experiments/<experiment_name>/traces/<case_id>.jsonl`
-- Trace metadata (when `--trace`): `benchmark/artifacts/experiments/<experiment_name>/traces/<case_id>.meta.json`
-- Events (when `--trace`): `benchmark/artifacts/experiments/<experiment_name>/events/events.jsonl`
+- Experiment root: `benchmark/.data/experiments/<experiment_name>/`
+- Results: `benchmark/.data/experiments/<experiment_name>/results/results.jsonl`
+- Report: `benchmark/.data/experiments/<experiment_name>/reports/summary.report.json`
+- Traces (when `--trace`): `benchmark/.data/experiments/<experiment_name>/traces/<case_id>.jsonl`
+- Trace metadata (when `--trace`): `benchmark/.data/experiments/<experiment_name>/traces/<case_id>.meta.json`
+- Events (when `--trace`): `benchmark/.data/experiments/<experiment_name>/events/events.jsonl`
 
 Run reports also include `metadata.artifacts` with the trace `schema_version`, `experiment_root`, `traces_dir`, and `events_path`.
 
@@ -98,8 +98,8 @@ uv run --extra benchmark python -m benchmark.cli.trace \
 
 # Compare a single case across multiple runs or grid trials
 uv run --extra benchmark python -m benchmark.cli.case_map \
-  benchmark/artifacts/experiments/run-a \
-  benchmark/artifacts/experiments/run-b \
+  benchmark/.data/experiments/run-a \
+  benchmark/.data/experiments/run-b \
   --case-id case_1 --json-out -o case_1.compare.json
 ```
 
@@ -149,7 +149,7 @@ uv run --extra benchmark python -m benchmark.cli.grid \
 | `--output` | | Grid experiment directory |
 | `--dry-run` | | Print planned runs without executing |
 
-**Output**: Grid parent summary saved to `benchmark/artifacts/experiments/<grid_name>/reports/summary.report.json`
+**Output**: Grid parent summary saved to `benchmark/.data/experiments/<grid_name>/reports/summary.report.json`
 
 ## 4. Dataset Validation
 
@@ -244,7 +244,7 @@ npm install
 npm run dev
 ```
 
-The web app reads benchmark artifacts under `benchmark/artifacts/experiments/` and uses the derived `search_map.bundle.json` / `case_map_compare` payloads as its source of truth.
+The web app reads benchmark artifacts under `benchmark/.data/experiments/` and uses the derived `search_map.bundle.json` / `case_map_compare` payloads as its source of truth.
 
 ## 7. Troubleshooting
 
@@ -254,7 +254,7 @@ The web app reads benchmark artifacts under `benchmark/artifacts/experiments/` a
 | Missing API key | Set `RELACE_API_KEY` for Relace, or set `SEARCH_PROVIDER` plus `SEARCH_ENDPOINT`, `SEARCH_MODEL`, and `SEARCH_API_KEY` for a non-Relace provider |
 | Clone fails | Check network, ensure `git` installed |
 | `indexed` preflight fails | Ensure the retrieval backend is available and its index / cloud sync state is fresh |
-| Dataset not found | Place dataset in `benchmark/artifacts/data/` |
+| Dataset not found | Place dataset in `benchmark/.data/datasets/` |
 | Slow first run | Normal—repos cached after first download |
 
 ## 8. Running Unit Tests
@@ -275,7 +275,7 @@ These tests are benchmark-specific and are not included in the repository's defa
 
 ```
 benchmark/
-├── _config/             # Internal benchmark configuration
+├── config/             # Internal benchmark configuration
 │   ├── paths.py         # Directory/path helpers and dataset defaults
 │   └── settings.py      # Internal benchmark settings (e.g. EXCLUDED_REPOS)
 ├── cli/
@@ -287,7 +287,7 @@ benchmark/
 │   ├── validate.py      # Dataset validation
 │   └── build_locbench.py  # Loc-Bench builder
 ├── analysis/            # Analysis tools (function scope, etc.)
-├── web/                 # Local benchmark web backend (repo-local only)
+├── viewer/             # Benchmark result viewer (FastAPI backend + React SPA)
 ├── frontend/            # Benchmark SPA frontend (repo-local only)
 ├── datasets/            # Dataset loaders
 ├── metrics/             # Metrics implementation

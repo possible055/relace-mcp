@@ -47,12 +47,12 @@ def _resolve_within_root(root: Path, raw_path: str) -> Path:
 
 
 def _frontend_dist_root() -> Path:
-    return Path(__file__).resolve().parents[1] / "frontend" / "dist"
+    return Path(__file__).resolve().parent / "frontend" / "dist"
 
 
 def _fallback_html() -> str:
     with (
-        resources.files("benchmark.web")
+        resources.files("benchmark.viewer")
         .joinpath("static/dev-index.html")
         .open("r", encoding="utf-8") as handle
     ):

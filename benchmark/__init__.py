@@ -5,7 +5,7 @@
 #   datasets/   - Dataset loaders (MULocBench, filtered)
 #   metrics/    - Metric implementations
 #   analysis/   - AST and code analysis (tree-sitter)
-#   _config/    - Internal paths and settings
+#   config/     - Paths and settings
 #   runner/     - Execution pipeline
 #
 # Usage:

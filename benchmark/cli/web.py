@@ -2,14 +2,14 @@ from pathlib import Path
 
 import click
 
-from .._config.paths import get_experiments_dir
+from ..config.paths import get_experiments_dir
 
 
 @click.command()
 @click.option(
     "--experiments-root",
     default=None,
-    help="Experiments root directory (defaults to benchmark/artifacts/experiments).",
+    help="Experiments root directory (defaults to benchmark/.data/experiments).",
 )
 @click.option("--host", default="127.0.0.1", show_default=True, help="Bind host.")
 @click.option("--port", default=8000, show_default=True, type=int, help="Bind port.")
@@ -26,7 +26,7 @@ def main(experiments_root: str | None, host: str, port: int, no_open: bool) -> N
         ) from exc
 
     try:
-        from benchmark.web import create_app
+        from benchmark.viewer import create_app
     except ImportError as exc:
         raise click.ClickException(
             "benchmark web requires optional dependencies. Install with: uv sync --extra benchmark --extra benchmark-web"
