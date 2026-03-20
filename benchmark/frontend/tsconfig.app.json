@@ -4,16 +4,21 @@
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
+    "types": ["vite/client"],
     "skipLibCheck": true,
     "moduleResolution": "Bundler",
     "allowImportingTsExtensions": false,
     "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
   },
   "include": ["src"]
 }

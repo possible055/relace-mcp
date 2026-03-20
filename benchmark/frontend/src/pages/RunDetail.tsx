@@ -1,8 +1,10 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
-import { fetchBundle } from '../lib/api'
+import { apiErrorMessage, fetchRunCaseDetail, isApiNotFound } from '../lib/api'
+import ExplorationTree from '../components/search/ExplorationTree'
 import { decodeExperimentRoot } from '../lib/experimentRoots'
+import type { MetricsSnapshot } from '../lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 
 function rangeLabel(range?: [number, number] | number[]) {
@@ -10,6 +12,10 @@ function rangeLabel(range?: [number, number] | number[]) {
     return '-'
   }
   return `${range[0]}-${range[1]}`
+}
+
+function formatMetric(value: number | null | undefined): string {
+  return typeof value === 'number' ? String(value) : '-'
 }
 
 export default function RunDetail() {
@@ -20,15 +26,15 @@ export default function RunDetail() {
   )
   const caseId = params.caseId ?? ''
 
-  const bundleQuery = useQuery({
-    queryKey: ['bundle-detail', experimentRoot],
-    queryFn: () => fetchBundle(experimentRoot),
-    enabled: experimentRoot.length > 0,
+  const caseQuery = useQuery({
+    queryKey: ['run-case-detail', experimentRoot, caseId],
+    queryFn: () => fetchRunCaseDetail(experimentRoot, caseId),
+    enabled: experimentRoot.length > 0 && caseId.length > 0,
   })
 
   const casePayload = useMemo(
-    () => bundleQuery.data?.cases.find((item) => item.case_id === caseId) ?? null,
-    [bundleQuery.data, caseId],
+    () => caseQuery.data ?? null,
+    [caseQuery.data],
   )
 
   if (!experimentRoot) {
@@ -43,12 +49,29 @@ export default function RunDetail() {
     )
   }
 
-  if (bundleQuery.isLoading) {
+  if (caseQuery.isLoading) {
     return (
       <Card>
         <CardContent>
           <div className="py-10 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
             Loading run detail...
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (caseQuery.isError && !isApiNotFound(caseQuery.error)) {
+    return (
+      <Card>
+        <CardContent>
+          <div className="py-10 text-center">
+            <div className="type-body-compact-01 text-[var(--cds-support-error)]">
+              Unable to load run detail.
+            </div>
+            <div className="mt-2 type-label-01 text-[var(--cds-text-helper)]">
+              {apiErrorMessage(caseQuery.error, 'Run detail request failed.')}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -67,7 +90,7 @@ export default function RunDetail() {
     )
   }
 
-  const metrics = casePayload.metrics_snapshot
+  const metrics: MetricsSnapshot = casePayload.metrics_snapshot
 
   return (
     <div className="space-y-6">
@@ -78,15 +101,15 @@ export default function RunDetail() {
         </Card>
         <Card>
           <CardHeader><CardTitle>Recall</CardTitle></CardHeader>
-          <CardContent className="type-kpi-sm">{String(metrics.file_recall ?? '-')}</CardContent>
+          <CardContent className="type-kpi-sm">{formatMetric(metrics.file_recall)}</CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle>Turns</CardTitle></CardHeader>
-          <CardContent className="type-kpi-sm">{String(metrics.turns_used ?? '-')}</CardContent>
+          <CardContent className="type-kpi-sm">{formatMetric(metrics.turns_used)}</CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle>Latency</CardTitle></CardHeader>
-          <CardContent className="type-kpi-sm">{String(metrics.latency_s ?? '-')}</CardContent>
+          <CardContent className="type-kpi-sm">{formatMetric(metrics.latency_s)}</CardContent>
         </Card>
       </div>
 
@@ -94,6 +117,19 @@ export default function RunDetail() {
         <CardHeader><CardTitle>Query</CardTitle></CardHeader>
         <CardContent className="type-body-compact-01 text-[var(--cds-text-secondary)]">
           {casePayload.query}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Exploration Tree</CardTitle></CardHeader>
+        <CardContent>
+          {casePayload.exploration_tree ? (
+            <ExplorationTree root={casePayload.exploration_tree} />
+          ) : (
+            <div className="type-body-compact-01 text-[var(--cds-text-helper)]">
+              No exploration tree is available for this case.
+            </div>
+          )}
         </CardContent>
       </Card>
 

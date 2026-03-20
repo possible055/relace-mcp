@@ -1,5 +1,10 @@
 import axios from 'axios'
-import type { CaseMapCompare, ExperimentSummary, SearchMapBundle } from './types'
+import type {
+  CaseIntersectionResponse,
+  CaseMapCompare,
+  ExperimentSummary,
+  SearchMapCase,
+} from './types'
 
 const api = axios.create({
   baseURL: '/api',
@@ -10,9 +15,22 @@ export async function fetchExperiments(): Promise<ExperimentSummary[]> {
   return data
 }
 
-export async function fetchBundle(experimentRoot: string): Promise<SearchMapBundle> {
-  const { data } = await api.post<SearchMapBundle>('/search-map/bundle', {
+export async function fetchCaseIntersection(
+  experimentRoots: string[],
+): Promise<CaseIntersectionResponse> {
+  const { data } = await api.post<CaseIntersectionResponse>('/cases/intersection', {
+    experiment_roots: experimentRoots,
+  })
+  return data
+}
+
+export async function fetchRunCaseDetail(
+  experimentRoot: string,
+  caseId: string,
+): Promise<SearchMapCase> {
+  const { data } = await api.post<SearchMapCase>('/run-case/detail', {
     experiment_root: experimentRoot,
+    case_id: caseId,
   })
   return data
 }
@@ -26,4 +44,24 @@ export async function compareCase(
     experiment_roots: experimentRoots,
   })
   return data
+}
+
+export function apiErrorMessage(error: unknown, fallback = 'Request failed.'): string {
+  if (axios.isAxiosError<{ detail?: unknown }>(error)) {
+    const detail = error.response?.data?.detail
+    if (typeof detail === 'string' && detail) {
+      return detail
+    }
+    if (typeof error.message === 'string' && error.message) {
+      return error.message
+    }
+  }
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+  return fallback
+}
+
+export function isApiNotFound(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 404
 }
