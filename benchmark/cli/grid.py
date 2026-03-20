@@ -12,7 +12,7 @@ import click
 
 from relace_mcp.config.bootstrap import initialize_runtime_from_env
 
-from .._config.paths import DEFAULT_LOCBENCH_PATH, get_benchmark_dir, get_experiments_dir
+from ..config.paths import DEFAULT_LOCBENCH_PATH, get_benchmark_dir, get_experiments_dir
 from ..runner.experiment_paths import (
     build_experiment_name,
     build_trial_name,

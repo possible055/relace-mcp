@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from .._config.paths import get_repos_dir
+from ..config.paths import get_repos_dir
 from .function_scope import extract_function_scopes
 from .trace_artifacts import collect_trace_artifacts, load_trace_meta, load_trace_turns
 

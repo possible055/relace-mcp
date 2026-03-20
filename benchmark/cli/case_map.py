@@ -4,9 +4,9 @@ from typing import Any
 
 import click
 
-from .._config.paths import get_experiments_dir
 from ..analysis.case_map_compare import build_case_map_compare, format_case_map_compare_report
 from ..analysis.search_map_bundle import SEARCH_MAP_BUNDLE_FILENAME
+from ..config.paths import get_experiments_dir
 
 
 def _load_json(path: Path) -> Any:
@@ -125,7 +125,7 @@ def _resolve_input_paths(inputs: tuple[str, ...]) -> list[Path]:
     "-o",
     "--output",
     default=None,
-    help="Output file (default: stdout; relative paths write under benchmark/artifacts/experiments/_compare/).",
+    help="Output file (default: stdout; relative paths write under benchmark/.data/experiments/_compare/).",
 )
 def main(inputs: tuple[str, ...], case_id: str, json_out: bool, output: str | None) -> None:
     """Compare a single benchmark case across multiple runs or grid trials."""

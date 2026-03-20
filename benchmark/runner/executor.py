@@ -13,8 +13,8 @@ from relace_mcp.config import RelaceConfig
 from relace_mcp.lsp.languages import get_lsp_languages
 from relace_mcp.search import FastAgenticSearchHarness
 
-from .._config.paths import get_repos_dir
 from ..analysis.trace_artifacts import ArtifactStatus
+from ..config.paths import get_repos_dir
 from ..metrics import (
     compute_file_precision,
     compute_file_recall,

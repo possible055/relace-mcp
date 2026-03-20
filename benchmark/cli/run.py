@@ -8,12 +8,12 @@ from pathlib import Path
 import click
 from dotenv import load_dotenv
 
-from .._config.paths import (
+from ..config.paths import (
     DEFAULT_LOCBENCH_PATH,
     get_benchmark_dir,
     get_experiments_dir,
 )
-from .._config.settings import EXCLUDED_REPOS
+from ..config.settings import EXCLUDED_REPOS
 from ..datasets import load_dataset
 from ..runner.experiment_paths import (
     build_experiment_name,

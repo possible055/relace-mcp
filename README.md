@@ -210,7 +210,7 @@ uv run --extra benchmark python -m benchmark.cli.build_locbench --output artifac
 uv run --extra benchmark python -m benchmark.cli.run --dataset artifacts/data/raw/locbench_v1.jsonl --limit 20
 ```
 
-All benchmark artifacts are written under `benchmark/artifacts/`.
+All benchmark artifacts are written under `benchmark/.data/`.
 
 For grid search, analysis tools, and metrics interpretation, see [docs/benchmark.md](docs/benchmark.md).
 
