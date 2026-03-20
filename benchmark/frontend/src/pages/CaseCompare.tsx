@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useQueries, useQuery } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   CartesianGrid,
   Legend,
@@ -11,9 +11,15 @@ import {
   YAxis,
 } from 'recharts'
 import { Link, useSearchParams } from 'react-router-dom'
-import { compareCase, fetchBundle } from '../lib/api'
+import { apiErrorMessage, compareCase, fetchCaseIntersection } from '../lib/api'
 import { encodeExperimentRoot } from '../lib/experimentRoots'
-import type { CaseMapCompare, FunctionBlock, SearchMapBundle } from '../lib/types'
+import type {
+  CaseMapCompare,
+  FunctionBlock,
+  FunctionMatrixStatus,
+  MetricsSnapshot,
+  PathMatrixStatus,
+} from '../lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 
 const RUN_COLORS = [
@@ -27,7 +33,7 @@ const RUN_COLORS = [
   'var(--cds-chart-8)',
 ]
 
-function statusString(status: Record<string, unknown>): string {
+function statusString(status: PathMatrixStatus): string {
   if (status.status === 'missing_case') {
     return 'missing'
   }
@@ -71,46 +77,54 @@ function formatFunctionLabel(functionBlock: FunctionBlock): string {
     : `${functionBlock.path}:${functionBlock.function}`
 }
 
+function formatMetric(value: number | null | undefined): string {
+  return typeof value === 'number' ? String(value) : '-'
+}
+
+function formatStatusTurns(status: PathMatrixStatus): string {
+  const firstTurn = typeof status.first_turn === 'number' ? String(status.first_turn) : '-'
+  const lastTurn = typeof status.last_turn === 'number' ? String(status.last_turn) : '-'
+  return `T${firstTurn} - T${lastTurn}`
+}
+
+function formatFunctionStatus(status: FunctionMatrixStatus): string {
+  if (Array.isArray(status.access_kinds) && status.access_kinds.length > 0) {
+    return status.access_kinds.join(', ')
+  }
+  return status.status ?? '-'
+}
+
 export default function CaseCompare() {
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedRoots = searchParams.getAll('root')
   const [caseIdInput, setCaseIdInput] = useState(searchParams.get('case') ?? '')
 
-  const bundleQueries = useQueries({
-    queries: selectedRoots.map((root) => ({
-      queryKey: ['bundle', root],
-      queryFn: () => fetchBundle(root),
-      enabled: root.length > 0,
-    })),
+  const intersectionQuery = useQuery({
+    queryKey: ['case-intersection', selectedRoots],
+    queryFn: () => fetchCaseIntersection(selectedRoots),
+    enabled: selectedRoots.length > 0,
   })
 
-  const bundles = bundleQueries
-    .map((query) => query.data)
-    .filter(Boolean) as SearchMapBundle[]
+  const commonCaseIds = useMemo(
+    () => intersectionQuery.data?.case_ids ?? [],
+    [intersectionQuery.data],
+  )
+  const activeCaseId = caseIdInput || commonCaseIds[0] || ''
 
-  const commonCaseIds = useMemo(() => {
-    if (bundles.length === 0) {
-      return []
+  const commitCaseId = (nextCaseId: string) => {
+    const next = new URLSearchParams(searchParams)
+    if (nextCaseId) {
+      next.set('case', nextCaseId)
+    } else {
+      next.delete('case')
     }
-    const intersections = bundles.map((bundle) => new Set(bundle.cases.map((item) => item.case_id)))
-    const [first, ...rest] = intersections
-    const shared = Array.from(first).filter((caseId) => rest.every((set) => set.has(caseId)))
-    return shared.sort()
-  }, [bundles])
-
-  useEffect(() => {
-    if (!caseIdInput && commonCaseIds.length > 0) {
-      setCaseIdInput(commonCaseIds[0])
-      const next = new URLSearchParams(searchParams)
-      next.set('case', commonCaseIds[0])
-      setSearchParams(next, { replace: true })
-    }
-  }, [caseIdInput, commonCaseIds, searchParams, setSearchParams])
+    setSearchParams(next, { replace: true })
+  }
 
   const compareQuery = useQuery({
-    queryKey: ['compare', selectedRoots, caseIdInput],
-    queryFn: () => compareCase(caseIdInput, selectedRoots),
-    enabled: selectedRoots.length > 0 && caseIdInput.length > 0,
+    queryKey: ['compare', selectedRoots, activeCaseId],
+    queryFn: () => compareCase(activeCaseId, selectedRoots),
+    enabled: selectedRoots.length > 0 && activeCaseId.length > 0,
   })
 
   const compare = compareQuery.data
@@ -148,17 +162,9 @@ export default function CaseCompare() {
             <label className="type-label-01 text-[var(--cds-text-secondary)]">
               Case ID
               <input
-                value={caseIdInput}
+                value={caseIdInput || commonCaseIds[0] || ''}
                 onChange={(event) => setCaseIdInput(event.target.value)}
-                onBlur={() => {
-                  const next = new URLSearchParams(searchParams)
-                  if (caseIdInput) {
-                    next.set('case', caseIdInput)
-                  } else {
-                    next.delete('case')
-                  }
-                  setSearchParams(next, { replace: true })
-                }}
+                onBlur={() => commitCaseId(caseIdInput || commonCaseIds[0] || '')}
                 className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 py-2 type-body-compact-01"
                 placeholder="Enter case_id"
               />
@@ -166,12 +172,10 @@ export default function CaseCompare() {
             <label className="type-label-01 text-[var(--cds-text-secondary)]">
               Common Cases
               <select
-                value={commonCaseIds.includes(caseIdInput) ? caseIdInput : ''}
+                value={commonCaseIds.includes(activeCaseId) ? activeCaseId : ''}
                 onChange={(event) => {
                   setCaseIdInput(event.target.value)
-                  const next = new URLSearchParams(searchParams)
-                  next.set('case', event.target.value)
-                  setSearchParams(next, { replace: true })
+                  commitCaseId(event.target.value)
                 }}
                 className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 py-2 type-body-compact-01"
               >
@@ -197,11 +201,53 @@ export default function CaseCompare() {
         </CardContent>
       </Card>
 
-      {compareQuery.isLoading ? (
+      {intersectionQuery.isLoading ? (
+        <Card>
+          <CardContent>
+            <div className="py-10 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
+              Loading shared cases...
+            </div>
+          </CardContent>
+        </Card>
+      ) : intersectionQuery.isError ? (
+        <Card>
+          <CardContent>
+            <div className="py-10 text-center">
+              <div className="type-body-compact-01 text-[var(--cds-support-error)]">
+                Unable to load shared cases.
+              </div>
+              <div className="mt-2 type-label-01 text-[var(--cds-text-helper)]">
+                {apiErrorMessage(intersectionQuery.error, 'Shared case lookup failed.')}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : commonCaseIds.length === 0 ? (
+        <Card>
+          <CardContent>
+            <div className="py-10 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
+              No shared cases were found across the selected runs.
+            </div>
+          </CardContent>
+        </Card>
+      ) : compareQuery.isLoading ? (
         <Card>
           <CardContent>
             <div className="py-10 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
               Building comparison...
+            </div>
+          </CardContent>
+        </Card>
+      ) : compareQuery.isError ? (
+        <Card>
+          <CardContent>
+            <div className="py-10 text-center">
+              <div className="type-body-compact-01 text-[var(--cds-support-error)]">
+                Unable to build comparison.
+              </div>
+              <div className="mt-2 type-label-01 text-[var(--cds-text-helper)]">
+                {apiErrorMessage(compareQuery.error, 'Case comparison request failed.')}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -243,7 +289,8 @@ export default function CaseCompare() {
                 </thead>
                 <tbody>
                   {compare.runs.map((run, index) => {
-                    const metrics = run.case_map?.metrics_snapshot ?? {}
+                    const metrics: MetricsSnapshot = run.case_map?.metrics_snapshot ?? {}
+                    const experimentRoot = run.experiment.root ?? ''
                     return (
                       <tr key={run.run_id} className="border-t border-[var(--cds-border-subtle-01)]">
                         <td className="p-3">
@@ -256,17 +303,21 @@ export default function CaseCompare() {
                           </div>
                         </td>
                         <td className="p-3 type-body-compact-01">{run.result_status}</td>
-                        <td className="p-3 type-body-compact-01">{String(metrics.file_recall ?? '-')}</td>
-                        <td className="p-3 type-body-compact-01">{String(metrics.file_precision ?? '-')}</td>
-                        <td className="p-3 type-body-compact-01">{String(metrics.turns_used ?? '-')}</td>
-                        <td className="p-3 type-body-compact-01">{String(metrics.latency_s ?? '-')}</td>
+                        <td className="p-3 type-body-compact-01">{formatMetric(metrics.file_recall)}</td>
+                        <td className="p-3 type-body-compact-01">{formatMetric(metrics.file_precision)}</td>
+                        <td className="p-3 type-body-compact-01">{formatMetric(metrics.turns_used)}</td>
+                        <td className="p-3 type-body-compact-01">{formatMetric(metrics.latency_s)}</td>
                         <td className="p-3 type-body-compact-01">
-                          <Link
-                            className="text-[var(--cds-link-primary)]"
-                            to={`/runs/${encodeExperimentRoot(String(run.experiment.root ?? ''))}/cases/${compare.case_id}`}
-                          >
-                            Open
-                          </Link>
+                          {experimentRoot ? (
+                            <Link
+                              className="text-[var(--cds-link-primary)]"
+                              to={`/runs/${encodeExperimentRoot(experimentRoot)}/cases/${compare.case_id}`}
+                            >
+                              Open
+                            </Link>
+                          ) : (
+                            '-'
+                          )}
                         </td>
                       </tr>
                     )
@@ -361,7 +412,7 @@ export default function CaseCompare() {
                               {statusString(status)}
                             </div>
                             <div className="type-label-01 text-[var(--cds-text-helper)]">
-                              T{String(status.first_turn ?? '-')} - T{String(status.last_turn ?? '-')}
+                              {formatStatusTurns(status)}
                             </div>
                           </td>
                         )
@@ -405,7 +456,7 @@ export default function CaseCompare() {
                           const status = row.runs[run.run_id] ?? {}
                           return (
                             <td key={run.run_id} className="p-3 type-body-compact-01">
-                              {Array.isArray(status.access_kinds) ? status.access_kinds.join(', ') : String(status.status ?? '-')}
+                              {formatFunctionStatus(status)}
                             </td>
                           )
                         })}

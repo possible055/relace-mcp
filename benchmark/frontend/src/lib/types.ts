@@ -14,6 +14,7 @@ export type ExperimentSummary = {
 export type SearchMapEvent = {
   turn: number
   tool_name: string
+  tool_call_id?: string
   access_type: string
   path: string
   lines?: [number, number] | number[]
@@ -62,6 +63,29 @@ export type TurnSummary = {
   completion_tokens?: number | null
 }
 
+export type ExplorationTreeNode = {
+  id: string
+  kind: 'case' | 'turn' | 'tool' | 'file' | 'path' | 'function' | 'result' | 'note'
+  status: string
+  label: string
+  detail?: string | null
+  turn?: number
+  tool_name?: string
+  path?: string
+  lines?: [number, number] | number[]
+  latency_ms?: number | null
+  is_success?: boolean | null
+  children: ExplorationTreeNode[]
+}
+
+export type MetricsSnapshot = {
+  file_recall?: number | null
+  file_precision?: number | null
+  turns_used?: number | null
+  latency_s?: number | null
+  [key: string]: unknown
+}
+
 export type SearchMapCase = {
   case_id: string
   query: string
@@ -84,39 +108,46 @@ export type SearchMapCase = {
   selected_files: string[]
   unique_files: string[]
   unique_functions: FunctionBlock[]
-  metrics_snapshot: Record<string, unknown>
+  metrics_snapshot: MetricsSnapshot
   result_status: string
+  exploration_tree: ExplorationTreeNode
 }
 
-export type SearchMapBundle = {
-  schema_version: string
-  kind: 'search_map_bundle'
-  experiment: {
-    name: string
-    root: string
-    type: string
-    search?: {
-      provider?: string | null
-      model?: string | null
-      max_turns?: number | null
-      temperature?: number | null
-      prompt_file?: string | null
-    }
-    run?: {
-      search_mode?: string | null
-    }
-  }
-  summary: Record<string, unknown>
-  cases: SearchMapCase[]
+export type CaseIntersectionResponse = {
+  case_ids: string[]
+}
+
+export type CaseCompareRunExperiment = {
+  root?: string | null
+  [key: string]: unknown
 }
 
 export type CaseCompareRun = {
   run_id: string
   run_label: string
-  experiment: Record<string, unknown>
+  experiment: CaseCompareRunExperiment
   search_config: Record<string, unknown>
   result_status: string
   case_map: SearchMapCase | null
+}
+
+export type PathMatrixStatus = {
+  status?: string | null
+  hinted?: boolean
+  discovered?: boolean
+  read?: boolean
+  grep_hit?: boolean
+  lsp_touched?: boolean
+  selected?: boolean
+  first_turn?: number | null
+  last_turn?: number | null
+  [key: string]: unknown
+}
+
+export type FunctionMatrixStatus = {
+  status?: string | null
+  access_kinds?: string[]
+  [key: string]: unknown
 }
 
 export type CaseMapCompare = {
@@ -141,7 +172,7 @@ export type CaseMapCompare = {
     path_matrix: Array<{
       path: string
       ground_truth: boolean
-      runs: Record<string, Record<string, unknown>>
+      runs: Record<string, PathMatrixStatus>
     }>
     function_matrix: Array<{
       path: string
@@ -149,7 +180,7 @@ export type CaseMapCompare = {
       class?: string | null
       range: [number, number] | number[]
       ground_truth: boolean
-      runs: Record<string, Record<string, unknown>>
+      runs: Record<string, FunctionMatrixStatus>
     }>
     turn_curves: Record<
       string,

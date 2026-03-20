@@ -95,6 +95,173 @@ def test_trace_search_map_json_out_includes_meta_only_case(tmp_path: Path) -> No
     assert payload["cases"][0]["semantic_hints"] == [{"filename": "src/only_hint.py", "score": 0.9}]
 
 
+def test_trace_search_map_json_out_builds_exploration_tree_for_failed_and_empty_turns(
+    tmp_path: Path,
+) -> None:
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+
+    trace_path = traces_dir / "case_1.jsonl"
+    trace_path.write_text(
+        json.dumps(
+            {
+                "turn": 1,
+                "llm_latency_ms": 8.0,
+                "llm_response": {},
+                "tool_calls_raw": [
+                    {
+                        "id": "t1",
+                        "function": {
+                            "name": "grep_search",
+                            "arguments": json.dumps({"query": "handler"}),
+                        },
+                    }
+                ],
+                "tool_results": [
+                    {
+                        "id": "t1",
+                        "name": "grep_search",
+                        "result": "Error: rg not found",
+                        "success": False,
+                        "latency_ms": 2.0,
+                    }
+                ],
+                "report_back": None,
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "turn": 2,
+                "llm_latency_ms": 6.0,
+                "llm_response": {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": "I need more context before using a tool.",
+                            }
+                        }
+                    ]
+                },
+                "tool_calls_raw": [],
+                "tool_results": [],
+                "report_back": None,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    trace_path.with_suffix(".meta.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "1.1",
+                "case_id": "case_1",
+                "repo": "example/repo",
+                "query": "find handler",
+                "search_mode": "agentic",
+                "semantic_hints_used": 0,
+                "semantic_hints": [],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        trace_main,
+        [str(traces_dir), "--search-map", "--json-out", "-o", "search_map.json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads((tmp_path / "reports" / "search_map.json").read_text(encoding="utf-8"))
+    tree = payload["cases"][0]["exploration_tree"]
+    assert tree["status"] == "missing"
+    assert tree["children"][0]["kind"] == "turn"
+    assert tree["children"][0]["status"] == "error"
+    assert tree["children"][0]["children"][0]["kind"] == "tool"
+    assert tree["children"][0]["children"][0]["status"] == "error"
+    assert "rg not found" in str(tree["children"][0]["children"][0]["detail"])
+    assert tree["children"][1]["kind"] == "turn"
+    assert tree["children"][1]["status"] == "empty"
+    assert tree["children"][1]["children"][0]["kind"] == "note"
+    assert "No tool calls returned" == tree["children"][1]["children"][0]["label"]
+    assert tree["children"][-1]["kind"] == "result"
+    assert tree["children"][-1]["status"] == "missing"
+
+
+def test_trace_search_map_json_out_keeps_bash_children_attached_to_tool_nodes(
+    tmp_path: Path,
+) -> None:
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+
+    trace_path = traces_dir / "case_1.jsonl"
+    trace_path.write_text(
+        json.dumps(
+            {
+                "turn": 1,
+                "llm_latency_ms": 8.0,
+                "llm_response": {},
+                "tool_calls_raw": [
+                    {
+                        "id": "t1",
+                        "function": {
+                            "name": "bash",
+                            "arguments": json.dumps({"command": "find . -maxdepth 1 -type f"}),
+                        },
+                    }
+                ],
+                "tool_results": [
+                    {
+                        "id": "t1",
+                        "name": "bash",
+                        "result": "./README.md\n./src/main.py\n",
+                        "success": True,
+                        "latency_ms": 2.0,
+                    }
+                ],
+                "report_back": None,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    trace_path.with_suffix(".meta.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "1.1",
+                "case_id": "case_1",
+                "repo": "example/repo",
+                "query": "list files",
+                "search_mode": "agentic",
+                "semantic_hints_used": 0,
+                "semantic_hints": [],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        trace_main,
+        [str(traces_dir), "--search-map", "--json-out", "-o", "search_map.json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads((tmp_path / "reports" / "search_map.json").read_text(encoding="utf-8"))
+    tree = payload["cases"][0]["exploration_tree"]
+    tool_node = tree["children"][0]["children"][0]
+    assert tool_node["kind"] == "tool"
+    assert tool_node["tool_name"] == "bash"
+    assert [child["label"] for child in tool_node["children"]] == ["README.md", "src/main.py"]
+
+
 def test_trace_search_map_json_out_joins_dataset_and_results(tmp_path: Path) -> None:
     experiment_root = tmp_path
     traces_dir = experiment_root / "traces"
@@ -290,6 +457,8 @@ def test_trace_search_map_json_out_joins_dataset_and_results(tmp_path: Path) -> 
     assert payload["cases"][0]["turn_summaries"][0]["tool_names"] == ["grep_search"]
     assert payload["cases"][0]["file_blocks"][0]["path"] == "src/main.py"
     assert payload["cases"][0]["events"][0]["tool_query"] == "handler"
+    assert payload["cases"][0]["exploration_tree"]["kind"] == "case"
+    assert payload["cases"][0]["exploration_tree"]["children"][0]["kind"] == "turn"
 
 
 def test_trace_validate_json_out_reports_metadata_only_case(tmp_path: Path) -> None:

@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, FolderSearch } from 'lucide-react'
-import { fetchExperiments } from '../lib/api'
+import { apiErrorMessage, fetchExperiments } from '../lib/api'
 import type { ExperimentSummary } from '../lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
+
+const EMPTY_EXPERIMENTS: ExperimentSummary[] = []
 
 function ExperimentRow({
   experiment,
@@ -63,19 +65,31 @@ export default function Experiments() {
     queryFn: fetchExperiments,
   })
 
-  const experiments = experimentsQuery.data ?? []
+  const experiments = experimentsQuery.data ?? EMPTY_EXPERIMENTS
   const providerOptions = useMemo(
     () =>
-      Array.from(new Set(experiments.map((item) => item.provider).filter(Boolean))).sort() as string[],
+      Array.from(
+        new Set(
+          experiments
+            .map((item) => item.provider)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      ).sort(),
     [experiments],
   )
   const modeOptions = useMemo(
     () =>
-      Array.from(new Set(experiments.map((item) => item.search_mode).filter(Boolean))).sort() as string[],
+      Array.from(
+        new Set(
+          experiments
+            .map((item) => item.search_mode)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      ).sort(),
     [experiments],
   )
   const typeOptions = useMemo(
-    () => Array.from(new Set(experiments.map((item) => item.type).filter(Boolean))).sort(),
+    () => Array.from(new Set(experiments.map((item) => item.type))).sort(),
     [experiments],
   )
 
@@ -101,7 +115,7 @@ export default function Experiments() {
   const openCompare = () => {
     const params = new URLSearchParams()
     selectedRoots.forEach((root) => params.append('root', root))
-    navigate(`/compare?${params.toString()}`)
+    void navigate(`/compare?${params.toString()}`)
   }
 
   return (
@@ -176,6 +190,15 @@ export default function Experiments() {
           {experimentsQuery.isLoading ? (
             <div className="py-12 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
               Loading experiments...
+            </div>
+          ) : experimentsQuery.isError ? (
+            <div className="flex flex-col items-center gap-3 py-12 text-center">
+              <div className="type-body-compact-01 text-[var(--cds-support-error)]">
+                Unable to load experiments.
+              </div>
+              <div className="type-label-01 text-[var(--cds-text-helper)]">
+                {apiErrorMessage(experimentsQuery.error, 'Experiments request failed.')}
+              </div>
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-12 text-center">

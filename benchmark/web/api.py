@@ -8,7 +8,11 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
 from benchmark.analysis.case_map_compare import build_case_map_compare
-from benchmark.analysis.search_map_bundle import load_search_map_bundle
+from benchmark.analysis.search_map_bundle import (
+    intersect_case_ids,
+    load_search_map_bundle,
+    load_search_map_case,
+)
 
 from .discovery import list_experiments
 
@@ -22,6 +26,15 @@ class BundleRequest(BaseModel):
 class CompareRequest(BaseModel):
     case_id: str
     experiment_roots: list[str]
+
+
+class CaseIntersectionRequest(BaseModel):
+    experiment_roots: list[str]
+
+
+class RunCaseDetailRequest(BaseModel):
+    experiment_root: str
+    case_id: str
 
 
 def _resolve_within_root(root: Path, raw_path: str) -> Path:
@@ -76,6 +89,27 @@ def create_app(experiments_root: Path) -> FastAPI:
             logger.exception(f"Failed to load bundle for {request.experiment_root}")
             raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
+    @app.post("/api/cases/intersection")
+    def case_intersection(request: CaseIntersectionRequest) -> dict[str, list[str]]:
+        if not request.experiment_roots:
+            raise HTTPException(status_code=400, detail="experiment_roots must not be empty.")
+        roots = [
+            _resolve_within_root(app.state.experiments_root, root)
+            for root in request.experiment_roots
+        ]
+        try:
+            return {"case_ids": intersect_case_ids(roots)}
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Search map bundle not found.") from exc
+
+    @app.post("/api/run-case/detail")
+    def run_case_detail(request: RunCaseDetailRequest) -> dict[str, Any]:
+        experiment_root = _resolve_within_root(app.state.experiments_root, request.experiment_root)
+        try:
+            return load_search_map_case(experiment_root, request.case_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     @app.post("/api/case-map/compare")
     def compare(request: CompareRequest) -> dict[str, Any]:
         if not request.experiment_roots:
@@ -86,6 +120,10 @@ def create_app(experiments_root: Path) -> FastAPI:
         ]
         try:
             return build_case_map_compare(request.case_id, roots)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Search map bundle not found.") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except HTTPException:
             raise
         except Exception as exc:
