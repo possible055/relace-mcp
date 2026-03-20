@@ -363,7 +363,7 @@ async def _async_run_codanna_index(file_path: str, base_dir: str) -> BackendInde
         )
         logger.info("Codanna background index skipped for %s (%s)", rel_path, lease.reason)
         return BackendIndexRunResult(
-            status=lease.reason or "lock_error",
+            status="lock_held" if lease.reason == "lock_held" else "lock_error",
             reason=lease.reason,
             lock_path=lease.lock_path,
         )
@@ -564,7 +564,7 @@ async def _async_run_codanna_full_index(base_dir: str) -> BackendIndexRunResult:
         )
         logger.info("Codanna full background index skipped for %s (%s)", base_dir, lease.reason)
         return BackendIndexRunResult(
-            status=lease.reason or "lock_error",
+            status="lock_held" if lease.reason == "lock_held" else "lock_error",
             reason=lease.reason,
             lock_path=lease.lock_path,
         )

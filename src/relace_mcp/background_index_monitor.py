@@ -181,6 +181,7 @@ class BackgroundIndexMonitor:
 
             if result.status in {
                 "lock_held",
+                "lock_error",
                 "cli_not_found",
                 "backend_disabled",
                 "spawn_error",

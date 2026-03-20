@@ -5,9 +5,12 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 import relace_mcp.background_index_monitor as bgmon
+import relace_mcp.repo.backends.chunkhound as chunkhound_backend
+import relace_mcp.repo.backends.codanna_indexing as codanna_indexing
 from relace_mcp.background_index_monitor import BackgroundIndexMonitor
 from relace_mcp.config import RelaceConfig
 from relace_mcp.repo.backends.locking import (
+    BackendIndexLease,
     BackendIndexRunResult,
     supports_backend_index_locking,
     try_acquire_backend_index_lock,
@@ -110,8 +113,9 @@ class TestBackgroundIndexMonitor:
         mock_chunkhound.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_run_loop_uses_backoff_after_lock_contention(
-        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    @pytest.mark.parametrize("status", ["lock_held", "lock_error"])
+    async def test_run_loop_uses_backoff_after_lock_failures(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch, status: str
     ) -> None:
         _configure_monitor_settings(
             monkeypatch,
@@ -129,7 +133,7 @@ class TestBackgroundIndexMonitor:
                 raise asyncio.CancelledError()
 
         monitor._tick = AsyncMock(  # type: ignore[method-assign]
-            return_value=BackendIndexRunResult(status="lock_held")
+            return_value=BackendIndexRunResult(status=status)
         )
 
         with (
@@ -163,6 +167,44 @@ class TestBackgroundIndexMonitor:
 
 
 class TestBackendIndexLock:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("target", ["chunkhound", "codanna_index", "codanna_full"])
+    async def test_lock_error_status_is_normalized(self, tmp_path, target: str) -> None:
+        base_dir = str(tmp_path)
+        lease = BackendIndexLease(
+            backend="codanna" if target.startswith("codanna") else "chunkhound",
+            base_dir=base_dir,
+            lock_path=f"{base_dir}/test.lock",
+            acquired=False,
+            reason="lock_error:[Errno 13] Permission denied",
+        )
+
+        if target == "chunkhound":
+            with patch(
+                "relace_mcp.repo.backends.chunkhound.try_acquire_backend_index_lock",
+                return_value=lease,
+            ):
+                result = await chunkhound_backend._async_run_chunkhound_index(base_dir)
+        elif target == "codanna_index":
+            with patch(
+                "relace_mcp.repo.backends.codanna_indexing.try_acquire_backend_index_lock",
+                return_value=lease,
+            ):
+                result = await codanna_indexing._async_run_codanna_index(
+                    f"{base_dir}/sample.py",
+                    base_dir,
+                )
+        else:
+            with patch(
+                "relace_mcp.repo.backends.codanna_indexing.try_acquire_backend_index_lock",
+                return_value=lease,
+            ):
+                result = await codanna_indexing._async_run_codanna_full_index(base_dir)
+
+        assert result.status == "lock_error"
+        assert result.reason == lease.reason
+        assert result.lock_path == lease.lock_path
+
     def test_second_lease_is_rejected_when_locking_supported(self, tmp_path) -> None:
         if not supports_backend_index_locking():
             pytest.skip("backend index locking is not supported on this platform")

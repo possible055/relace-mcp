@@ -542,7 +542,7 @@ async def _async_run_chunkhound_index(base_dir: str) -> BackendIndexRunResult:
         )
         logger.info("ChunkHound background index skipped for %s (%s)", base_dir, lease.reason)
         return BackendIndexRunResult(
-            status=lease.reason or "lock_error",
+            status="lock_held" if lease.reason == "lock_held" else "lock_error",
             reason=lease.reason,
             lock_path=lease.lock_path,
         )
