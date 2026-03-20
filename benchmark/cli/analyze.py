@@ -3,6 +3,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import click
+
 from ..config.paths import get_experiments_dir
 
 
@@ -129,8 +131,9 @@ def print_summary_stats(results: list[dict[str, Any]], key: str, label: str) -> 
     print(f"  Range:  {max_v - min_v:.1f}%")
 
 
-def main() -> None:
-    # Default path
+@click.command()
+@click.argument("path", default=None, required=False)
+def main(path: str | None) -> None:
     experiments_dir = get_experiments_dir()
     result_candidates = (
         list(experiments_dir.rglob("results.jsonl")) if experiments_dir.exists() else []
@@ -140,7 +143,8 @@ def main() -> None:
         if result_candidates
         else experiments_dir / "results.jsonl"
     )
-    path = sys.argv[1] if len(sys.argv) > 1 else str(default_path)
+    if path is None:
+        path = str(default_path)
 
     if not Path(path).exists():
         print(f"Error: File not found: {path}")
