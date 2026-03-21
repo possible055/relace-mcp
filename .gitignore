@@ -41,6 +41,7 @@ CLAUDE.md
 .codannaignore
 .fastembed_cache
 .bench-repos/
+.dev
 benchmark/.data/
 sonar-project.properties
 site/
