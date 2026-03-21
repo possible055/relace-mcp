@@ -5,6 +5,7 @@ import { ArrowRight, FolderSearch } from 'lucide-react'
 import { apiErrorMessage, fetchExperiments } from '../lib/api'
 import type { ExperimentSummary } from '../lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
+import { Skeleton } from '../components/ui/Skeleton'
 
 const EMPTY_EXPERIMENTS: ExperimentSummary[] = []
 
@@ -18,7 +19,7 @@ function ExperimentRow({
   onToggle: (root: string) => void
 }) {
   return (
-    <tr className="border-t border-[var(--cds-border-subtle-01)] align-top">
+    <tr className="border-t border-[var(--cds-border-subtle-01)] align-top transition-colors hover:bg-[var(--cds-layer-hover-01)]">
       <td className="p-3">
         <input
           type="checkbox"
@@ -40,13 +41,13 @@ function ExperimentRow({
       <td className="p-3 type-body-compact-01 text-[var(--cds-text-secondary)]">
         {experiment.search_mode ?? '-'}
       </td>
-      <td className="p-3 type-body-compact-01 text-[var(--cds-text-secondary)]">
+      <td className="p-3 type-body-compact-01 tabular-nums text-[var(--cds-text-secondary)]">
         {experiment.max_turns ?? '-'}
       </td>
-      <td className="p-3 type-body-compact-01 text-[var(--cds-text-secondary)]">
+      <td className="p-3 type-body-compact-01 tabular-nums text-[var(--cds-text-secondary)]">
         {experiment.temperature ?? '-'}
       </td>
-      <td className="p-3 type-body-compact-01 text-[var(--cds-text-secondary)]">
+      <td className="p-3 type-body-compact-01 tabular-nums text-[var(--cds-text-secondary)]">
         {experiment.case_count ?? '-'}
       </td>
     </tr>
@@ -122,30 +123,25 @@ export default function Experiments() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div>
-            <CardTitle>Experiment Catalog</CardTitle>
-            <p className="type-label-01 text-[var(--cds-text-helper)]">
-              Select runs or grid trials, then open a same-case comparison view.
-            </p>
-          </div>
+          <CardTitle>Experiments</CardTitle>
           <button
             type="button"
             disabled={selectedRoots.length === 0}
             onClick={openCompare}
-            className="inline-flex items-center gap-2 rounded-[var(--cds-radius-md)] bg-[var(--cds-interactive)] px-4 py-2 type-body-compact-01 text-[var(--cds-text-on-color)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="cds-btn--primary"
           >
             Compare Selected
             <ArrowRight className="h-4 w-4" />
           </button>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="p-[var(--cds-spacing-05)] space-y-4">
           <div className="grid gap-3 md:grid-cols-3">
             <label className="type-label-01 text-[var(--cds-text-secondary)]">
               Provider
               <select
                 value={providerFilter}
                 onChange={(event) => setProviderFilter(event.target.value)}
-                className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 py-2 type-body-compact-01"
+                className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 pr-8 py-2 type-body-compact-01 hover:bg-[var(--cds-layer-hover-01)] transition"
               >
                 <option value="">All</option>
                 {providerOptions.map((value) => (
@@ -160,7 +156,7 @@ export default function Experiments() {
               <select
                 value={modeFilter}
                 onChange={(event) => setModeFilter(event.target.value)}
-                className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 py-2 type-body-compact-01"
+                className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 pr-8 py-2 type-body-compact-01 hover:bg-[var(--cds-layer-hover-01)] transition"
               >
                 <option value="">All</option>
                 {modeOptions.map((value) => (
@@ -175,7 +171,7 @@ export default function Experiments() {
               <select
                 value={typeFilter}
                 onChange={(event) => setTypeFilter(event.target.value)}
-                className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 py-2 type-body-compact-01"
+                className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 pr-8 py-2 type-body-compact-01 hover:bg-[var(--cds-layer-hover-01)] transition"
               >
                 <option value="">All</option>
                 {typeOptions.map((value) => (
@@ -188,8 +184,11 @@ export default function Experiments() {
           </div>
 
           {experimentsQuery.isLoading ? (
-            <div className="py-12 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
-              Loading experiments...
+            <div className="space-y-3 py-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-3/4" />
             </div>
           ) : experimentsQuery.isError ? (
             <div className="flex flex-col items-center gap-3 py-12 text-center">

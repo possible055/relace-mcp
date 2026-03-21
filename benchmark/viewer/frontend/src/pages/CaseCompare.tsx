@@ -21,6 +21,7 @@ import type {
   PathMatrixStatus,
 } from '../lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
+import { Skeleton } from '../components/ui/Skeleton'
 
 const RUN_COLORS = [
   'var(--cds-chart-1)',
@@ -137,9 +138,9 @@ export default function CaseCompare() {
         <CardHeader>
           <CardTitle>Case Compare</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-[var(--cds-spacing-05)] pb-[var(--cds-spacing-05)]">
           <p className="type-body-compact-01 text-[var(--cds-text-helper)]">
-            No experiments selected. Start from <Link to="/experiments" className="text-[var(--cds-link-primary)]">Experiments</Link>.
+            No experiments selected. Start from <Link to="/experiments" className="text-[var(--cds-link-primary)] hover:text-[var(--cds-link-primary-hover)]">Experiments</Link>.
           </p>
         </CardContent>
       </Card>
@@ -150,22 +151,17 @@ export default function CaseCompare() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div>
-            <CardTitle>Case Compare</CardTitle>
-            <p className="type-label-01 text-[var(--cds-text-helper)]">
-              Compare code-space exploration blocks across selected runs.
-            </p>
-          </div>
+          <CardTitle>Case Compare</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="p-[var(--cds-spacing-05)] space-y-4">
           <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
             <label className="type-label-01 text-[var(--cds-text-secondary)]">
               Case ID
               <input
                 value={caseIdInput}
                 onChange={(event) => setCaseIdInput(event.target.value)}
-                onBlur={() => commitCaseId(caseIdInput.trim())}
-                className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 py-2 type-body-compact-01"
+                onBlur={() => commitCaseId(caseIdInput || commonCaseIds[0] || '')}
+                className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 py-2 type-body-compact-01 hover:bg-[var(--cds-layer-hover-01)] transition"
                 placeholder="Enter case_id"
               />
             </label>
@@ -177,7 +173,7 @@ export default function CaseCompare() {
                   setCaseIdInput(event.target.value)
                   commitCaseId(event.target.value)
                 }}
-                className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 py-2 type-body-compact-01"
+                className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 pr-8 py-2 type-body-compact-01 hover:bg-[var(--cds-layer-hover-01)] transition"
               >
                 <option value="">Choose a shared case</option>
                 {commonCaseIds.map((caseId) => (
@@ -202,16 +198,14 @@ export default function CaseCompare() {
       </Card>
 
       {intersectionQuery.isLoading ? (
-        <Card>
-          <CardContent>
-            <div className="py-10 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
-              Loading shared cases...
-            </div>
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-3/4" />
+        </div>
       ) : intersectionQuery.isError ? (
         <Card>
-          <CardContent>
+          <CardContent className="p-[var(--cds-spacing-05)]">
             <div className="py-10 text-center">
               <div className="type-body-compact-01 text-[var(--cds-support-error)]">
                 Unable to load shared cases.
@@ -224,23 +218,29 @@ export default function CaseCompare() {
         </Card>
       ) : commonCaseIds.length === 0 ? (
         <Card>
-          <CardContent>
+          <CardContent className="p-[var(--cds-spacing-05)]">
             <div className="py-10 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
               No shared cases were found across the selected runs.
             </div>
           </CardContent>
         </Card>
       ) : compareQuery.isLoading ? (
-        <Card>
-          <CardContent>
-            <div className="py-10 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
-              Building comparison...
-            </div>
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-4">
+            <Skeleton className="h-24" />
+            <Skeleton className="h-24" />
+            <Skeleton className="h-24" />
+            <Skeleton className="h-24" />
+          </div>
+          <Skeleton className="h-60" />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Skeleton className="h-80" />
+            <Skeleton className="h-80" />
+          </div>
+        </div>
       ) : compareQuery.isError ? (
         <Card>
-          <CardContent>
+          <CardContent className="p-[var(--cds-spacing-05)]">
             <div className="py-10 text-center">
               <div className="type-body-compact-01 text-[var(--cds-support-error)]">
                 Unable to build comparison.
@@ -256,25 +256,25 @@ export default function CaseCompare() {
           <div className="grid gap-4 lg:grid-cols-4">
             <Card>
               <CardHeader><CardTitle>Query</CardTitle></CardHeader>
-              <CardContent className="type-body-compact-01 text-[var(--cds-text-secondary)]">{compare.query}</CardContent>
+              <CardContent className="px-[var(--cds-spacing-05)] pb-[var(--cds-spacing-05)] type-body-compact-01 text-[var(--cds-text-secondary)]">{compare.query}</CardContent>
             </Card>
             <Card>
               <CardHeader><CardTitle>Shared Files</CardTitle></CardHeader>
-              <CardContent className="type-kpi-sm">{compare.comparisons.shared_files.length}</CardContent>
+              <CardContent className="px-[var(--cds-spacing-05)] pb-[var(--cds-spacing-05)] type-kpi-sm tabular-nums">{compare.comparisons.shared_files.length}</CardContent>
             </Card>
             <Card>
               <CardHeader><CardTitle>Selected Overlap</CardTitle></CardHeader>
-              <CardContent className="type-kpi-sm">{compare.comparisons.selected_overlap.length}</CardContent>
+              <CardContent className="px-[var(--cds-spacing-05)] pb-[var(--cds-spacing-05)] type-kpi-sm tabular-nums">{compare.comparisons.selected_overlap.length}</CardContent>
             </Card>
             <Card>
               <CardHeader><CardTitle>Hint Overlap</CardTitle></CardHeader>
-              <CardContent className="type-kpi-sm">{compare.comparisons.hint_overlap.length}</CardContent>
+              <CardContent className="px-[var(--cds-spacing-05)] pb-[var(--cds-spacing-05)] type-kpi-sm tabular-nums">{compare.comparisons.hint_overlap.length}</CardContent>
             </Card>
           </div>
 
           <Card>
             <CardHeader><CardTitle>Run Metrics</CardTitle></CardHeader>
-            <CardContent className="overflow-x-auto">
+            <CardContent className="overflow-x-auto p-[var(--cds-spacing-05)]">
               <table className="min-w-full">
                 <thead className="bg-[var(--cds-layer-02)] text-left">
                   <tr className="type-label-01 text-[var(--cds-text-helper)]">
@@ -292,7 +292,7 @@ export default function CaseCompare() {
                     const metrics: MetricsSnapshot = run.case_map?.metrics_snapshot ?? {}
                     const experimentRoot = run.experiment.root ?? ''
                     return (
-                      <tr key={run.run_id} className="border-t border-[var(--cds-border-subtle-01)]">
+                      <tr key={run.run_id} className="border-t border-[var(--cds-border-subtle-01)] transition-colors hover:bg-[var(--cds-layer-hover-01)]">
                         <td className="p-3">
                           <div className="flex items-start gap-2">
                             <span
@@ -303,14 +303,14 @@ export default function CaseCompare() {
                           </div>
                         </td>
                         <td className="p-3 type-body-compact-01">{run.result_status}</td>
-                        <td className="p-3 type-body-compact-01">{formatMetric(metrics.file_recall)}</td>
-                        <td className="p-3 type-body-compact-01">{formatMetric(metrics.file_precision)}</td>
-                        <td className="p-3 type-body-compact-01">{formatMetric(metrics.turns_used)}</td>
-                        <td className="p-3 type-body-compact-01">{formatMetric(metrics.latency_s)}</td>
+                        <td className="p-3 type-body-compact-01 tabular-nums">{formatMetric(metrics.file_recall)}</td>
+                        <td className="p-3 type-body-compact-01 tabular-nums">{formatMetric(metrics.file_precision)}</td>
+                        <td className="p-3 type-body-compact-01 tabular-nums">{formatMetric(metrics.turns_used)}</td>
+                        <td className="p-3 type-body-compact-01 tabular-nums">{formatMetric(metrics.latency_s)}</td>
                         <td className="p-3 type-body-compact-01">
                           {experimentRoot ? (
                             <Link
-                              className="text-[var(--cds-link-primary)]"
+                              className="text-[var(--cds-link-primary)] hover:text-[var(--cds-link-primary-hover)]"
                               to={`/runs/${encodeExperimentRoot(experimentRoot)}/cases/${compare.case_id}`}
                             >
                               Open
@@ -330,10 +330,10 @@ export default function CaseCompare() {
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader><CardTitle>Cumulative Unique Files</CardTitle></CardHeader>
-              <CardContent className="h-80">
+              <CardContent className="h-80 p-[var(--cds-spacing-05)]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={uniqueFilesCurve}>
-                    <CartesianGrid stroke="#e0e0e0" strokeDasharray="3 3" />
+                    <CartesianGrid stroke="var(--cds-border-subtle-01)" strokeDasharray="3 3" />
                     <XAxis dataKey="turn" />
                     <YAxis />
                     <Tooltip />
@@ -355,10 +355,10 @@ export default function CaseCompare() {
             </Card>
             <Card>
               <CardHeader><CardTitle>Ground Truth File Recall</CardTitle></CardHeader>
-              <CardContent className="h-80">
+              <CardContent className="h-80 p-[var(--cds-spacing-05)]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={recallCurve}>
-                    <CartesianGrid stroke="#e0e0e0" strokeDasharray="3 3" />
+                    <CartesianGrid stroke="var(--cds-border-subtle-01)" strokeDasharray="3 3" />
                     <XAxis dataKey="turn" />
                     <YAxis domain={[0, 1]} />
                     <Tooltip />
@@ -382,7 +382,7 @@ export default function CaseCompare() {
 
           <Card>
             <CardHeader><CardTitle>Path Matrix</CardTitle></CardHeader>
-            <CardContent className="overflow-x-auto">
+            <CardContent className="overflow-x-auto p-[var(--cds-spacing-05)]">
               <table className="min-w-full">
                 <thead className="bg-[var(--cds-layer-02)] text-left">
                   <tr className="type-label-01 text-[var(--cds-text-helper)]">
@@ -396,7 +396,7 @@ export default function CaseCompare() {
                   {compare.comparisons.path_matrix.map((row) => (
                     <tr
                       key={row.path}
-                      className={`border-t border-[var(--cds-border-subtle-01)] ${row.ground_truth ? 'bg-[var(--cds-layer-selected-01)]/40' : ''}`}
+                      className={`border-t border-[var(--cds-border-subtle-01)] transition-colors hover:bg-[var(--cds-layer-hover-01)] ${row.ground_truth ? 'bg-[var(--cds-layer-selected-01)]/40' : ''}`}
                     >
                       <td className="p-3">
                         <div className="type-body-compact-01 font-medium">{row.path}</div>
@@ -426,10 +426,10 @@ export default function CaseCompare() {
 
           <Card>
             <CardHeader><CardTitle>Function Matrix</CardTitle></CardHeader>
-            <CardContent className="overflow-x-auto">
+            <CardContent className="overflow-x-auto p-[var(--cds-spacing-05)]">
               {compare.comparisons.function_matrix.length === 0 ? (
-                <div className="type-body-compact-01 text-[var(--cds-text-helper)]">
-                  No function-level data is available for this case. Python runs expose function overlays; other languages stay file-first.
+                <div className="py-8 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
+                  No function-level data available.
                 </div>
               ) : (
                 <table className="min-w-full">
@@ -443,7 +443,7 @@ export default function CaseCompare() {
                   </thead>
                   <tbody>
                     {compare.comparisons.function_matrix.map((row) => (
-                      <tr key={`${row.path}:${row.function}:${row.range.join('-')}`} className="border-t border-[var(--cds-border-subtle-01)]">
+                      <tr key={`${row.path}:${row.function}:${row.range.join('-')}`} className="border-t border-[var(--cds-border-subtle-01)] transition-colors hover:bg-[var(--cds-layer-hover-01)]">
                         <td className="p-3">
                           <div className="type-body-compact-01 font-medium">
                             {row.class ? `${row.class}.${row.function}` : row.function}
@@ -471,7 +471,7 @@ export default function CaseCompare() {
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader><CardTitle>Unique Files By Run</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="p-[var(--cds-spacing-05)] space-y-3">
                 {compare.runs.map((run) => {
                   const files = compare.comparisons.unique_files_by_run[run.run_id] ?? []
                   return (
@@ -489,7 +489,7 @@ export default function CaseCompare() {
             </Card>
             <Card>
               <CardHeader><CardTitle>Unique Functions By Run</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="p-[var(--cds-spacing-05)] space-y-3">
                 {compare.runs.map((run) => {
                   const functions = compare.comparisons.unique_functions_by_run[run.run_id] ?? []
                   return (
@@ -509,7 +509,7 @@ export default function CaseCompare() {
         </>
       ) : (
         <Card>
-          <CardContent>
+          <CardContent className="p-[var(--cds-spacing-05)]">
             <div className="py-10 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
               Select a case to begin comparison.
             </div>
