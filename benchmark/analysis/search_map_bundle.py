@@ -23,8 +23,11 @@ def search_map_bundle_path(experiment_root: Path) -> Path:
 def _load_json(path: Path | None) -> Any:
     if path is None or not path.exists():
         return None
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
 def _persist_json(path: Path, payload: Any) -> None:
@@ -74,7 +77,10 @@ def _load_results_by_case(results_path: Path | None) -> dict[str, dict[str, Any]
             stripped = line.strip()
             if not stripped:
                 continue
-            data = json.loads(stripped)
+            try:
+                data = json.loads(stripped)
+            except json.JSONDecodeError:
+                continue
             if not isinstance(data, dict):
                 continue
             case_id = data.get("case_id")

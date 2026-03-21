@@ -76,7 +76,10 @@ def list_experiments(experiments_root: Path) -> list[dict[str, Any]]:
 
     for report_path in sorted(experiments_root.rglob(REPORT_FILENAME)):
         experiment_root = _experiment_from_report(report_path)
-        summaries[str(experiment_root.resolve())] = _summary_from_report(report_path)
+        try:
+            summaries[str(experiment_root.resolve())] = _summary_from_report(report_path)
+        except (json.JSONDecodeError, OSError):
+            continue
 
     for bundle_path in sorted(experiments_root.rglob(SEARCH_MAP_BUNDLE_FILENAME)):
         experiment_root = bundle_path.parent.parent
