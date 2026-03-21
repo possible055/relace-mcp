@@ -1,11 +1,13 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
+import { Clock, FileSearch, RotateCcw, Target } from 'lucide-react'
 import { apiErrorMessage, fetchRunCaseDetail, isApiNotFound } from '../lib/api'
 import ExplorationTree from '../components/search/ExplorationTree'
 import { decodeExperimentRoot } from '../lib/experimentRoots'
 import type { MetricsSnapshot } from '../lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
+import { Skeleton } from '../components/ui/Skeleton'
 
 function rangeLabel(range?: [number, number] | number[]) {
   if (!range || range.length < 2) {
@@ -16,6 +18,30 @@ function rangeLabel(range?: [number, number] | number[]) {
 
 function formatMetric(value: number | null | undefined): string {
   return typeof value === 'number' ? String(value) : '-'
+}
+
+function KpiCard({
+  title,
+  value,
+  icon: Icon,
+}: {
+  title: string
+  value: string
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
+}) {
+  return (
+    <Card>
+      <div className="p-[var(--cds-spacing-05)]">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-[var(--cds-radius-md)] bg-[var(--cds-interactive)]/10">
+            <Icon className="h-3.5 w-3.5 text-[var(--cds-interactive)]" strokeWidth={2.2} />
+          </div>
+          <span className="type-label-01 text-[var(--cds-text-helper)]">{title}</span>
+        </div>
+        <div className="mt-2 type-kpi-sm tabular-nums text-[var(--cds-text-primary)]">{value}</div>
+      </div>
+    </Card>
+  )
 }
 
 export default function RunDetail() {
@@ -40,7 +66,7 @@ export default function RunDetail() {
   if (!experimentRoot) {
     return (
       <Card>
-        <CardContent>
+        <CardContent className="p-[var(--cds-spacing-05)]">
           <div className="py-10 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
             Missing experiment root.
           </div>
@@ -51,20 +77,23 @@ export default function RunDetail() {
 
   if (caseQuery.isLoading) {
     return (
-      <Card>
-        <CardContent>
-          <div className="py-10 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
-            Loading run detail...
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <div className="grid gap-4 lg:grid-cols-4">
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+        </div>
+        <Skeleton className="h-20" />
+        <Skeleton className="h-64" />
+      </div>
     )
   }
 
   if (caseQuery.isError && !isApiNotFound(caseQuery.error)) {
     return (
       <Card>
-        <CardContent>
+        <CardContent className="p-[var(--cds-spacing-05)]">
           <div className="py-10 text-center">
             <div className="type-body-compact-01 text-[var(--cds-support-error)]">
               Unable to load run detail.
@@ -81,7 +110,7 @@ export default function RunDetail() {
   if (!casePayload) {
     return (
       <Card>
-        <CardContent>
+        <CardContent className="p-[var(--cds-spacing-05)]">
           <div className="py-10 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
             Case `{caseId}` was not found in this experiment.
           </div>
@@ -96,38 +125,36 @@ export default function RunDetail() {
     <div className="space-y-6">
       <div className="grid gap-4 lg:grid-cols-4">
         <Card>
-          <CardHeader><CardTitle>Case</CardTitle></CardHeader>
-          <CardContent className="type-body-compact-01 text-[var(--cds-text-secondary)]">{casePayload.case_id}</CardContent>
+          <div className="p-[var(--cds-spacing-05)]">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-[var(--cds-radius-md)] bg-[var(--cds-interactive)]/10">
+                <FileSearch className="h-3.5 w-3.5 text-[var(--cds-interactive)]" strokeWidth={2.2} />
+              </div>
+              <span className="type-label-01 text-[var(--cds-text-helper)]">Case</span>
+            </div>
+            <div className="mt-2 type-body-compact-01 font-medium text-[var(--cds-text-primary)] truncate">{casePayload.case_id}</div>
+          </div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>Recall</CardTitle></CardHeader>
-          <CardContent className="type-kpi-sm">{formatMetric(metrics.file_recall)}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Turns</CardTitle></CardHeader>
-          <CardContent className="type-kpi-sm">{formatMetric(metrics.turns_used)}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Latency</CardTitle></CardHeader>
-          <CardContent className="type-kpi-sm">{formatMetric(metrics.latency_s)}</CardContent>
-        </Card>
+        <KpiCard title="Recall" value={formatMetric(metrics.file_recall)} icon={Target} />
+        <KpiCard title="Turns" value={formatMetric(metrics.turns_used)} icon={RotateCcw} />
+        <KpiCard title="Latency" value={formatMetric(metrics.latency_s)} icon={Clock} />
       </div>
 
       <Card>
         <CardHeader><CardTitle>Query</CardTitle></CardHeader>
-        <CardContent className="type-body-compact-01 text-[var(--cds-text-secondary)]">
+        <CardContent className="px-[var(--cds-spacing-05)] pb-[var(--cds-spacing-05)] type-body-compact-01 text-[var(--cds-text-secondary)]">
           {casePayload.query}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader><CardTitle>Exploration Tree</CardTitle></CardHeader>
-        <CardContent>
+        <CardContent className="p-[var(--cds-spacing-05)]">
           {casePayload.exploration_tree ? (
             <ExplorationTree root={casePayload.exploration_tree} />
           ) : (
-            <div className="type-body-compact-01 text-[var(--cds-text-helper)]">
-              No exploration tree is available for this case.
+            <div className="py-6 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
+              No exploration data.
             </div>
           )}
         </CardContent>
@@ -135,7 +162,7 @@ export default function RunDetail() {
 
       <Card>
         <CardHeader><CardTitle>Turn Summaries</CardTitle></CardHeader>
-        <CardContent className="overflow-x-auto">
+        <CardContent className="overflow-x-auto p-[var(--cds-spacing-05)]">
           <table className="min-w-full">
             <thead className="bg-[var(--cds-layer-02)] text-left">
               <tr className="type-label-01 text-[var(--cds-text-helper)]">
@@ -147,11 +174,11 @@ export default function RunDetail() {
             </thead>
             <tbody>
               {casePayload.turn_summaries.map((summary) => (
-                <tr key={summary.turn} className="border-t border-[var(--cds-border-subtle-01)]">
-                  <td className="p-3 type-body-compact-01">{summary.turn}</td>
+                <tr key={summary.turn} className="border-t border-[var(--cds-border-subtle-01)] transition-colors hover:bg-[var(--cds-layer-hover-01)]">
+                  <td className="p-3 type-body-compact-01 tabular-nums">{summary.turn}</td>
                   <td className="p-3 type-body-compact-01">{summary.tool_names.join(', ')}</td>
                   <td className="p-3 type-body-compact-01">{summary.new_files.join(', ') || '(none)'}</td>
-                  <td className="p-3 type-body-compact-01">{String(summary.llm_latency_ms ?? '-')}</td>
+                  <td className="p-3 type-body-compact-01 tabular-nums">{String(summary.llm_latency_ms ?? '-')}</td>
                 </tr>
               ))}
             </tbody>
@@ -161,7 +188,7 @@ export default function RunDetail() {
 
       <Card>
         <CardHeader><CardTitle>Ordered Events</CardTitle></CardHeader>
-        <CardContent className="overflow-x-auto">
+        <CardContent className="overflow-x-auto p-[var(--cds-spacing-05)]">
           <table className="min-w-full">
             <thead className="bg-[var(--cds-layer-02)] text-left">
               <tr className="type-label-01 text-[var(--cds-text-helper)]">
@@ -175,12 +202,12 @@ export default function RunDetail() {
             </thead>
             <tbody>
               {casePayload.events.map((event, index) => (
-                <tr key={`${event.turn}-${event.tool_name}-${event.path}-${index}`} className="border-t border-[var(--cds-border-subtle-01)]">
-                  <td className="p-3 type-body-compact-01">{event.turn}</td>
+                <tr key={`${event.turn}-${event.tool_name}-${event.path}-${index}`} className="border-t border-[var(--cds-border-subtle-01)] transition-colors hover:bg-[var(--cds-layer-hover-01)]">
+                  <td className="p-3 type-body-compact-01 tabular-nums">{event.turn}</td>
                   <td className="p-3 type-body-compact-01">{event.tool_name}</td>
                   <td className="p-3 type-body-compact-01">{event.access_type}</td>
                   <td className="p-3 type-body-compact-01">{event.path}</td>
-                  <td className="p-3 type-body-compact-01">{rangeLabel(event.lines)}</td>
+                  <td className="p-3 type-body-compact-01 tabular-nums">{rangeLabel(event.lines)}</td>
                   <td className="p-3 type-body-compact-01">
                     {event.tool_query ?? event.symbol_name ?? event.tool_command ?? '-'}
                   </td>
@@ -194,7 +221,7 @@ export default function RunDetail() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>File Blocks</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="p-[var(--cds-spacing-05)] space-y-3">
             {casePayload.file_blocks.map((block) => (
               <div key={`${block.path}:${block.block_kind}:${block.first_turn}`} className="rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] p-3">
                 <div className="type-body-compact-01 font-medium">{block.path}</div>
@@ -207,10 +234,10 @@ export default function RunDetail() {
         </Card>
         <Card>
           <CardHeader><CardTitle>Function Blocks</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="p-[var(--cds-spacing-05)] space-y-3">
             {casePayload.function_blocks.length === 0 ? (
-              <div className="type-body-compact-01 text-[var(--cds-text-helper)]">
-                No function overlays are available for this case.
+              <div className="py-6 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
+                No function data available.
               </div>
             ) : (
               casePayload.function_blocks.map((block) => (

@@ -1,51 +1,318 @@
+/* ============================================================
+ * Carbon Design Language — Design Tokens (CSS Variables)
+ *
+ * Based on IBM Carbon Design System (White / Gray 90 themes).
+ * These tokens drive ALL visual decisions across the app.
+ * Do NOT use raw Tailwind color classes (gray-50, amber-600…)
+ * in dashboard components — use these tokens instead.
+ * ============================================================ */
+
 :root {
+  /* ── Surfaces ─────────────────────────────────────────────── */
   --cds-background: #f4f4f4;
   --cds-layer-01: #ffffff;
   --cds-layer-02: #f4f4f4;
   --cds-layer-accent-01: #e0e0e0;
   --cds-layer-hover-01: #e8e8e8;
-  --cds-layer-selected-01: #d0e2ff;
+  --cds-layer-selected-01: #e0e0e0;
 
+  /* ── Text ──────────────────────────────────────────────────── */
   --cds-text-primary: #161616;
   --cds-text-secondary: #525252;
   --cds-text-helper: #6f6f6f;
   --cds-text-placeholder: #a8a8a8;
   --cds-text-on-color: #ffffff;
+  --cds-text-inverse: #ffffff;
 
+  /* ── Link ──────────────────────────────────────────────────── */
   --cds-link-primary: #0f62fe;
   --cds-link-primary-hover: #0043ce;
+  --cds-link-visited: #8a3ffc;
 
+  /* ── Borders ───────────────────────────────────────────────── */
+  --cds-border-subtle-00: #e0e0e0;
   --cds-border-subtle-01: #e0e0e0;
   --cds-border-strong-01: #8d8d8d;
   --cds-border-interactive: #0f62fe;
 
+  /* ── Interactive ───────────────────────────────────────────── */
   --cds-interactive: #0f62fe;
   --cds-interactive-hover: #0353e9;
+  --cds-interactive-active: #002d9c;
   --cds-focus: #0f62fe;
+  --cds-highlight: #d0e2ff;
 
+  /* ── Support / Status ──────────────────────────────────────── */
   --cds-support-success: #198038;
   --cds-support-warning: #f1c21b;
   --cds-support-error: #da1e28;
   --cds-support-info: #0043ce;
 
-  --cds-icon-secondary: #525252;
+  --cds-support-success-inverse: #24a148;
+  --cds-support-error-inverse: #fa4d56;
 
+  /* ── Icon ──────────────────────────────────────────────────── */
+  --cds-icon-primary: #161616;
+  --cds-icon-secondary: #525252;
+  --cds-icon-disabled: #a8a8a8;
+  --cds-icon-on-color: #ffffff;
+  --cds-icon-interactive: #0f62fe;
+
+  /* ── Radius & Shadow ───────────────────────────────────────── */
   --cds-radius-sm: 2px;
   --cds-radius-md: 4px;
   --cds-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --cds-shadow-md: 0 2px 6px rgba(0, 0, 0, 0.12);
 
-  --cds-spacing-03: 0.5rem;
-  --cds-spacing-04: 0.75rem;
-  --cds-spacing-05: 1rem;
-  --cds-spacing-06: 1.5rem;
-  --cds-spacing-07: 2rem;
+  /* ── Spacing (Carbon scale) ────────────────────────────────── */
+  --cds-spacing-01: 0.125rem;  /*  2px */
+  --cds-spacing-02: 0.25rem;   /*  4px */
+  --cds-spacing-03: 0.5rem;    /*  8px */
+  --cds-spacing-04: 0.75rem;   /* 12px */
+  --cds-spacing-05: 1rem;      /* 16px */
+  --cds-spacing-06: 1.5rem;    /* 24px */
+  --cds-spacing-07: 2rem;      /* 32px */
+  --cds-spacing-08: 2.5rem;    /* 40px */
+  --cds-spacing-09: 3rem;      /* 48px */
 
-  --cds-chart-1: #6929c4;
-  --cds-chart-2: #1192e8;
-  --cds-chart-3: #005d5d;
-  --cds-chart-4: #9f1853;
-  --cds-chart-5: #fa4d56;
-  --cds-chart-6: #570408;
-  --cds-chart-7: #198038;
-  --cds-chart-8: #002d9c;
+  /* ── Data Visualization — Categorical Palette ──────────────── */
+  --cds-chart-1: #6929c4;  /* Purple 70  */
+  --cds-chart-2: #1192e8;  /* Cyan 50    */
+  --cds-chart-3: #005d5d;  /* Teal 70    */
+  --cds-chart-4: #9f1853;  /* Magenta 70 */
+  --cds-chart-5: #fa4d56;  /* Red 50     */
+  --cds-chart-6: #570408;  /* Red 90     */
+  --cds-chart-7: #198038;  /* Green 60   */
+  --cds-chart-8: #002d9c;  /* Blue 80    */
+  --cds-chart-other: #a8a8a8; /* Gray 40 */
+}
+
+/* ============================================================
+ * Carbon Design System — Button Components
+ * ============================================================ */
+
+/* Primary Button */
+.cds-btn--primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background-color: var(--cds-interactive);
+  color: var(--cds-text-on-color);
+  border-radius: var(--cds-radius-md);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.125rem;
+  transition: background-color 0.15s ease;
+}
+
+.cds-btn--primary:hover {
+  background-color: var(--cds-interactive-hover);
+}
+
+.cds-btn--primary:focus {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: 2px;
+}
+
+.cds-btn--primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Secondary Button */
+.cds-btn--secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background-color: var(--cds-layer-accent-01);
+  color: var(--cds-text-primary);
+  border-radius: var(--cds-radius-md);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.125rem;
+  transition: background-color 0.15s ease;
+}
+
+.cds-btn--secondary:hover {
+  background-color: var(--cds-layer-hover-01);
+}
+
+.cds-btn--secondary:focus {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: 2px;
+}
+
+/* Tertiary Button */
+.cds-btn--tertiary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background-color: transparent;
+  border: 1px solid var(--cds-interactive);
+  color: var(--cds-interactive);
+  border-radius: var(--cds-radius-md);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.125rem;
+  transition: background-color 0.15s ease;
+}
+
+.cds-btn--tertiary:hover {
+  background-color: rgba(15, 98, 254, 0.1);
+}
+
+.cds-btn--tertiary:focus {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: 2px;
+}
+
+.cds-btn--tertiary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Ghost Button */
+.cds-btn--ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background-color: transparent;
+  color: var(--cds-interactive);
+  border-radius: var(--cds-radius-md);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.125rem;
+  transition: background-color 0.15s ease;
+}
+
+.cds-btn--ghost:hover {
+  background-color: var(--cds-layer-hover-01);
+}
+
+.cds-btn--ghost:focus {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: 2px;
+}
+
+/* Danger Ghost */
+.cds-btn--danger-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background-color: transparent;
+  color: var(--cds-support-error);
+  border-radius: var(--cds-radius-md);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.125rem;
+  transition: background-color 0.15s ease;
+}
+
+.cds-btn--danger-ghost:hover {
+  background-color: rgba(218, 30, 40, 0.1);
+}
+
+.cds-btn--danger-ghost:focus {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: 2px;
+}
+
+.cds-btn--danger-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Danger Tertiary */
+.cds-btn--danger-tertiary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background-color: transparent;
+  border: 1px solid var(--cds-support-error);
+  color: var(--cds-support-error);
+  border-radius: var(--cds-radius-md);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.125rem;
+  transition: background-color 0.15s ease;
+}
+
+.cds-btn--danger-tertiary:hover {
+  background-color: rgba(218, 30, 40, 0.1);
+}
+
+.cds-btn--danger-tertiary:focus {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: 2px;
+}
+
+.cds-btn--danger-tertiary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Dark theme (Gray 90) ────────────────────────────────────── */
+.dark {
+  --cds-background: #161616;
+  --cds-layer-01: #262626;
+  --cds-layer-02: #393939;
+  --cds-layer-accent-01: #525252;
+  --cds-layer-hover-01: #353535;
+  --cds-layer-selected-01: #393939;
+
+  --cds-text-primary: #f4f4f4;
+  --cds-text-secondary: #c6c6c6;
+  --cds-text-helper: #a8a8a8;
+  --cds-text-placeholder: #6f6f6f;
+  --cds-text-on-color: #ffffff;
+  --cds-text-inverse: #161616;
+
+  --cds-link-primary: #78a9ff;
+  --cds-link-primary-hover: #a6c8ff;
+  --cds-link-visited: #be95ff;
+
+  --cds-border-subtle-00: #393939;
+  --cds-border-subtle-01: #393939;
+  --cds-border-strong-01: #6f6f6f;
+  --cds-border-interactive: #4589ff;
+
+  --cds-interactive: #4589ff;
+  --cds-interactive-hover: #6ea6ff;
+  --cds-interactive-active: #002d9c;
+  --cds-focus: #ffffff;
+  --cds-highlight: #002d9c;
+
+  --cds-support-success: #42be65;
+  --cds-support-warning: #f1c21b;
+  --cds-support-error: #ff8389;
+  --cds-support-info: #4589ff;
+
+  --cds-support-success-inverse: #24a148;
+  --cds-support-error-inverse: #da1e28;
+
+  --cds-icon-primary: #f4f4f4;
+  --cds-icon-secondary: #c6c6c6;
+  --cds-icon-disabled: #6f6f6f;
+  --cds-icon-on-color: #ffffff;
+  --cds-icon-interactive: #4589ff;
+
+  --cds-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --cds-shadow-md: 0 2px 6px rgba(0, 0, 0, 0.4);
+
+  /* Dark categorical palette */
+  --cds-chart-1: #a56eff;
+  --cds-chart-2: #33b1ff;
+  --cds-chart-3: #009d9a;
+  --cds-chart-4: #ee538b;
+  --cds-chart-5: #ff8389;
+  --cds-chart-6: #ffb3b8;
+  --cds-chart-7: #42be65;
+  --cds-chart-8: #4589ff;
+  --cds-chart-other: #6f6f6f;
 }
