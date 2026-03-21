@@ -1,0 +1,23 @@
+.pre-commit-config.yaml
+  58f8527b2b6c9c3c 69,71,76,78,84,93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "bf571c74e8a065ab029f3ec113f1ee44bf06ea60",
+  "prompts": {
+    "58f8527b2b6c9c3c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd190c9c-a7d6-432b-840a-2d2600058cfe",
+        "model": "<synthetic>"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 6,
+      "total_deletions": 6,
+      "accepted_lines": 6,
+      "overriden_lines": 0
+    }
+  }
+}
