@@ -10,13 +10,13 @@ from relace_mcp.search._impl import (
     MAX_TOOL_RESULT_CHARS,
     bash_handler,
     estimate_context_size,
-    glob_handler,
     grep_search_handler,
     map_repo_path,
     truncate_for_context,
     view_directory_handler,
     view_file_handler,
 )
+from relace_mcp.search._impl.glob import glob_handler
 from relace_mcp.search.schemas import GrepSearchParams
 from relace_mcp.utils import validate_file_path
 

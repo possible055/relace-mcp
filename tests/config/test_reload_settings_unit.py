@@ -3,7 +3,11 @@ from collections.abc import Generator
 import pytest
 
 import relace_mcp.config.settings as settings_mod
-from relace_mcp.config.settings import reload_logging_settings, reload_tool_settings
+from relace_mcp.config.settings import (
+    reload_logging_settings,
+    reload_settings_from_env,
+    reload_tool_settings,
+)
 
 _RELOAD_KEYS = (
     "MCP_LOGGING_MODE",
@@ -139,8 +143,6 @@ class TestReloadToolSettings:
 
         assert settings_mod.RETRIEVAL_HINT_POLICY == "strict"
 
-<<<<<<< HEAD
-=======
     def test_search_bash_tools_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("SEARCH_BASH_TOOLS", "true")
         reload_tool_settings()
@@ -213,7 +215,6 @@ class TestReloadToolSettings:
 
         assert settings_mod.SEARCH_TOP_P is None
 
->>>>>>> 29557ca (feat(indexing): add background monitor with cross-platform locking for local indexes)
     def test_module_attribute_access_sees_reloaded_values(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

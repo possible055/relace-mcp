@@ -6,10 +6,10 @@ import pytest
 
 from relace_mcp.search._impl import (
     bash_handler,
-    glob_handler,
     grep_search_handler,
     view_file_handler,
 )
+from relace_mcp.search._impl.glob import glob_handler
 from relace_mcp.search.schemas.types import GrepSearchParams
 
 
