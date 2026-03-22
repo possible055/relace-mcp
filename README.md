@@ -160,6 +160,8 @@ For `.env` usage, encoding settings, custom LLM providers, and more, see [docs/a
 
 Always-available top-level tools: `fast_apply`, `agentic_search`, `index_status`. Cloud tools require `RELACE_CLOUD_TOOLS=1`. `agentic_retrieval` requires `MCP_SEARCH_RETRIEVAL=1`, and its semantic backend is selected via `MCP_RETRIEVAL_BACKEND`.
 
+Use MCP-native discovery surfaces: `list_tools()` for tools and `list_resources()` for resources.
+
 `index_status` now also reports a `background_monitor` summary for the opt-in local index monitor. The monitor is intentionally limited to single-process deployments with a pinned `MCP_BASE_DIR`; for multi-worker or multi-pod HTTP deployments, prefer backend-native watch/daemon flows or an external scheduler.
 
 `SEARCH_BASH_TOOLS` and `SEARCH_LSP_TOOLS` do not add new top-level entries to `list_tools()`. They only expand the internal toolset used while `agentic_search` / `agentic_retrieval` explore the codebase.

@@ -2,6 +2,8 @@
 
 This document covers the public top-level MCP tools plus the search-only internal subtools that can be enabled inside `agentic_search` / `agentic_retrieval`.
 
+Use MCP-native discovery for availability: `list_tools()` for tools and `list_resources()` for resources. The legacy `relace://tools_list` catalog resource has been removed.
+
 ## Search Behavior
 
 The live local exploration used by `agentic_search` and `agentic_retrieval` has a few user-visible guarantees:

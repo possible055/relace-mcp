@@ -23,6 +23,7 @@ dist/
 # IDE / Editor / AI agent
 .vscode/
 .cursor/
+.claude/
 .kilocode/
 .kiro/
 .gemini/
@@ -38,7 +39,9 @@ CLAUDE.md
 .codanna/
 .codannaignore
 .fastembed_cache
-benchmark/artifacts/
+.bench-repos/
+.dev
+benchmark/.data/
 sonar-project.properties
 site/
 plans/

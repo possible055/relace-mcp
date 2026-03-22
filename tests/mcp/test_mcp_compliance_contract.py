@@ -1,9 +1,7 @@
-import json
 from pathlib import Path
 
 import pytest
 from fastmcp import Client
-from mcp.types import TextResourceContents
 
 from relace_mcp.config import RelaceConfig
 from relace_mcp.server import build_server
@@ -250,15 +248,18 @@ class TestMCPToolResponseContract:
 class TestMCPResourceExistence:
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("clean_env")
-    async def test_tools_list_resource_exists(self, mock_config: RelaceConfig) -> None:
-        """relace://tools_list resource must be registered."""
+    async def test_tools_list_resource_absent(self, mock_config: RelaceConfig) -> None:
+        """Legacy tools_list resource should not be registered."""
         server = build_server(config=mock_config, run_health_check=False)
 
         async with Client(server) as client:
             resources = await client.list_resources()
             resource_uris = [r.uri for r in resources]
 
-            assert any("tools_list" in str(uri) for uri in resource_uris)
+            assert not any("tools_list" in str(uri) for uri in resource_uris)
+
+            with pytest.raises(Exception, match="Unknown resource"):
+                await client.read_resource("relace://tools_list")
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("clean_env")
@@ -296,28 +297,17 @@ class TestMCPResourceExistence:
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("clean_env")
-    async def test_tools_list_returns_valid_structure(self, mock_config: RelaceConfig) -> None:
-        """relace://tools_list must return list of tool info dicts."""
+    async def test_cloud_status_resource_can_be_read_when_enabled(
+        self,
+        mock_config: RelaceConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Cloud status resource must remain readable when cloud tools are enabled."""
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "1")
         server = build_server(config=mock_config, run_health_check=False)
 
         async with Client(server) as client:
-            result = await client.read_resource("relace://tools_list")
-            # FastMCP returns TextContent list
+            result = await client.read_resource("relace://cloud/status")
+
             assert result is not None
             assert len(result) > 0
-            first_content = result[0]
-            # Handle both TextResourceContents and BlobResourceContents
-            if isinstance(first_content, TextResourceContents):
-                content_text = first_content.text
-            else:
-                # BlobResourceContents has blob attribute
-                content_text = first_content.blob.decode("utf-8")  # type: ignore[union-attr]
-
-            tools_list = json.loads(content_text)
-            assert isinstance(tools_list, list)
-            assert len(tools_list) >= 2  # at least core tools
-
-            for tool_info in tools_list:
-                assert "id" in tool_info
-                assert "name" in tool_info
-                assert "enabled" in tool_info

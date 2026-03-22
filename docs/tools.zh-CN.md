@@ -2,6 +2,8 @@
 
 本文档说明对外可见的 top-level MCP tools，以及 `agentic_search` / `agentic_retrieval` 内部可启用的 search-only subtools。
 
+可用性发现请使用 MCP 原生接口：tools 用 `list_tools()`，resources 用 `list_resources()`。旧的 `relace://tools_list` catalog resource 已移除。
+
 ## 搜索行为
 
 `agentic_search` 与 `agentic_retrieval` 背后的 live local exploration 有几个对用户可感知的保证：

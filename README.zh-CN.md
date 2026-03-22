@@ -160,6 +160,8 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 
 始终可用的 top-level tools 有：`fast_apply`、`agentic_search`、`index_status`。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`agentic_retrieval` 需设置 `MCP_SEARCH_RETRIEVAL=1`，其 semantic backend 由 `MCP_RETRIEVAL_BACKEND` 选择。
 
+可用性发现请使用 MCP 原生接口：tools 用 `list_tools()`，resources 用 `list_resources()`。
+
 `index_status` 现在还会返回 `background_monitor` 摘要，用于显示可选的 local index monitor 是否处于活动状态。这个 monitor 只面向单进程、固定 `MCP_BASE_DIR` 的部署；如果你使用 multi-worker 或 multi-pod HTTP 部署，建议关闭它，改用 backend 自带的 watch/daemon 或外部 scheduler。
 
 `SEARCH_BASH_TOOLS` 与 `SEARCH_LSP_TOOLS` 不会给 `list_tools()` 新增 top-level 条目。它们只会扩展 `agentic_search` / `agentic_retrieval` 在探索代码库时可使用的内部工具集。
