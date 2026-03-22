@@ -1,0 +1,44 @@
+benchmark/tests/viewer/test_web_api.py
+  652b82c8728e2ec4 376,402-405
+  897b59d727d19877 55-104,377-401
+benchmark/viewer/frontend/src/lib/types.ts
+  897b59d727d19877 166-172,174
+benchmark/viewer/frontend/src/pages/ExperimentDetail.tsx
+  652b82c8728e2ec4 1,7,90-98,213
+benchmark/viewer/server.py
+  652b82c8728e2ec4 169-178
+  897b59d727d19877 63-106,167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "c755186f48b2e49341a44b7f4dd73baa3b23a4bc",
+  "prompts": {
+    "652b82c8728e2ec4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d150f-95c1-7ad1-9ff0-bb7b3a0ee353",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 31,
+      "total_deletions": 128,
+      "accepted_lines": 28,
+      "overriden_lines": 1
+    },
+    "897b59d727d19877": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d1331-ca0c-7922-9d67-8769702bcd9e",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 255,
+      "total_deletions": 27,
+      "accepted_lines": 130,
+      "overriden_lines": 0
+    }
+  }
+}
