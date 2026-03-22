@@ -1,0 +1,109 @@
+benchmark/viewer/frontend/src/components/layout/Header.tsx
+  94f7cf756c939129 18
+benchmark/viewer/frontend/src/index.css
+  c3bfe45e47749625 51-61,74-75
+  94f7cf756c939129 64,66,68-73,76-84,87-111
+benchmark/analysis/search_map_bundle.py
+  4f23b2541197042f 1110
+benchmark/cli/case_map.py
+  4f23b2541197042f 34,52-54
+benchmark/viewer/frontend/src/pages/RunDetail.tsx
+  94f7cf756c939129 167-168,193-194
+docs/benchmark.zh-CN.md
+  68debf1a72a9fe39 30,36,51,55,59,241,268
+benchmark/viewer/frontend/src/components/layout/Sidebar.tsx
+  94f7cf756c939129 11-13,15,19,25,27-28,32-39
+benchmark/runner/executor.py
+  4d30a2cc54621304 178-203,210-211,215-217,246-248,257,259-260
+benchmark/cli/build_locbench.py
+  68debf1a72a9fe39 368
+benchmark/viewer/frontend/src/components/ui/Card.tsx
+  94f7cf756c939129 26
+benchmark/viewer/frontend/src/components/search/ExplorationTree.tsx
+  94f7cf756c939129 76
+benchmark/viewer/frontend/src/pages/Experiments.tsx
+  c3bfe45e47749625 8,139,141,143-149,151,153-159,161,163-168
+  94f7cf756c939129 7,126,197-198
+benchmark/viewer/frontend/src/pages/CaseCompare.tsx
+  94f7cf756c939129 139,159,272-273,330-343,365-378,400-401,449-450
+  c3bfe45e47749625 24,163,165,167-169,171-178
+docs/benchmark.md
+  68debf1a72a9fe39 30,36,51,55,59,241,268
+benchmark/viewer/frontend/src/styles/carbon-tokens.css
+  c3bfe45e47749625 28-30,36,39-43,49,59,86,164,276-278,283,285-287,289,294,303,316,327-331,337-338,340-341,344
+  94f7cf756c939129 319-326,332-336,339,342-343,345
+benchmark/viewer/frontend/src/components/ui/Select.tsx
+  c3bfe45e47749625 1-155
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "54b56e23f3dfc1b823da23a639e23505de53a8ff",
+  "prompts": {
+    "4d30a2cc54621304": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1d94ee24-4168-41fe-87e3-a15666bbf944",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 38,
+      "total_deletions": 39,
+      "accepted_lines": 37,
+      "overriden_lines": 0
+    },
+    "4f23b2541197042f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f03d0704-10c9-4493-9ea3-851c03c002ea",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 5,
+      "total_deletions": 4,
+      "accepted_lines": 5,
+      "overriden_lines": 0
+    },
+    "68debf1a72a9fe39": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36577b54-1146-4644-b6bd-6000a66abb7a",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 15,
+      "total_deletions": 17,
+      "accepted_lines": 15,
+      "overriden_lines": 0
+    },
+    "94f7cf756c939129": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ff40cbd1-fed4-47ca-a8ad-4b2012b84810",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 140,
+      "total_deletions": 51,
+      "accepted_lines": 124,
+      "overriden_lines": 0
+    },
+    "c3bfe45e47749625": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9e324533-afda-42e3-9d5c-c30a44f18087",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 278,
+      "total_deletions": 125,
+      "accepted_lines": 241,
+      "overriden_lines": 0
+    }
+  }
+}
