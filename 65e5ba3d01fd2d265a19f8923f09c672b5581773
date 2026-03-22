@@ -1,0 +1,43 @@
+benchmark/analysis/layered_tree.py
+  0f6596d6bcd56e17 1-228
+benchmark/viewer/server.py
+  0f6596d6bcd56e17 10,119-158
+benchmark/viewer/frontend/src/lib/api.ts
+  0f6596d6bcd56e17 5,7,51-70
+benchmark/viewer/frontend/src/pages/ExperimentDetail.tsx
+  0f6596d6bcd56e17 1-244
+benchmark/viewer/frontend/src/lib/types.ts
+  0f6596d6bcd56e17 153-202
+benchmark/viewer/frontend/src/components/search/LayeredFileTree.tsx
+  0f6596d6bcd56e17 1-244
+benchmark/viewer/frontend/src/pages/Experiments.tsx
+  0f6596d6bcd56e17 6,18,23,36-40,42,130-133,227
+benchmark/viewer/frontend/src/pages/CaseDetail.tsx
+  0f6596d6bcd56e17 1-182
+benchmark/viewer/frontend/src/App.tsx
+  0f6596d6bcd56e17 6-7,25-26
+benchmark/cli/run.py
+  0f6596d6bcd56e17 72-73
+benchmark/viewer/frontend/src/components/layout/Header.tsx
+  0f6596d6bcd56e17 1,11-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "65e5ba3d01fd2d265a19f8923f09c672b5581773",
+  "prompts": {
+    "0f6596d6bcd56e17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f87e63bf-7de2-4f75-872b-a5dc99e7686a",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 1039,
+      "total_deletions": 6,
+      "accepted_lines": 1038,
+      "overriden_lines": 0
+    }
+  }
+}
