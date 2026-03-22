@@ -1,0 +1,27 @@
+benchmark/viewer/discovery.py
+  f90c8a2433969db7 79,81-82
+benchmark/analysis/search_map_bundle.py
+  f90c8a2433969db7 26,28-30,80-82
+benchmark/tests/analysis/test_search_map_bundle_robustness.py
+  f90c8a2433969db7 1-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "729c8d3ca925ef1f2fe4e75affd5ae0d1b459b3c",
+  "prompts": {
+    "f90c8a2433969db7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d0d59-82f8-7893-bb88-52bc03cb40df",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 96,
+      "total_deletions": 6,
+      "accepted_lines": 92,
+      "overriden_lines": 0
+    }
+  }
+}

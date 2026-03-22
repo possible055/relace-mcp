@@ -1,0 +1,25 @@
+benchmark/cli/__main__.py
+  f90c8a2433969db7 1-3
+benchmark/cli/__init__.py
+  f90c8a2433969db7 1-2,13,15-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "f023a1bad8f237dc50e6b827a044e7d5e56d0a19",
+  "prompts": {
+    "f90c8a2433969db7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d0d59-82f8-7893-bb88-52bc03cb40df",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 78,
+      "total_deletions": 29,
+      "accepted_lines": 44,
+      "overriden_lines": 0
+    }
+  }
+}
