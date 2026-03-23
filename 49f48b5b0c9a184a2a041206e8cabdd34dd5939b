@@ -1,0 +1,25 @@
+benchmark/web/api.py
+  91f3c672fd91a4c2 104-106,115-117
+benchmark/frontend/src/pages/CaseCompare.tsx
+  91f3c672fd91a4c2 112,165,167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "49f48b5b0c9a184a2a041206e8cabdd34dd5939b",
+  "prompts": {
+    "91f3c672fd91a4c2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "175fe995-910d-4047-aca3-3fd0e355c445",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 9,
+      "total_deletions": 3,
+      "accepted_lines": 9,
+      "overriden_lines": 0
+    }
+  }
+}
