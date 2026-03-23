@@ -15,7 +15,8 @@
         "docs",
         ".vscode",
         ".github",
-        "benchmark/artifacts/"
+        "benchmark/.data/",
+        ".bench-repos/"
     ],
     "venvPath": ".",
     "venv": ".venv",

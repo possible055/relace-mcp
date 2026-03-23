@@ -7,7 +7,7 @@ pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient
 
-from benchmark.web import create_app
+from benchmark.viewer import create_app
 
 
 def _write_bundle(

@@ -3,7 +3,6 @@ from pathlib import Path
 
 import click
 
-from .._config.paths import get_experiments_dir
 from ..analysis.search_map import (
     extract_batch,
     format_search_map_report,
@@ -15,6 +14,7 @@ from ..analysis.trace_artifacts import (
     format_trace_validation_report,
     validate_trace_run,
 )
+from ..config.paths import get_experiments_dir
 from ..runner.experiment_paths import (
     experiment_reports_dir,
     find_latest_traces_dir,

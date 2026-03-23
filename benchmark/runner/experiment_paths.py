@@ -2,7 +2,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .._config.paths import get_experiments_dir
+from ..config.paths import get_experiments_dir
 
 RESULTS_DIRNAME = "results"
 REPORTS_DIRNAME = "reports"

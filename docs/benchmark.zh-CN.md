@@ -27,7 +27,7 @@ SEARCH_API_KEY=your-provider-key
 
 `benchmark.cli.run` 和 `benchmark.cli.grid` 现在与 MCP server 共用同一套 runtime bootstrap。若设置了 `MCP_DOTENV_PATH`，会优先加载该文件；否则回退到默认的 dotenv 搜索路径。之后再应用 CLI 覆盖并刷新集中式 settings。实际优先级固定为：CLI flags > process env > dotenv values。
 
-当 benchmark CLI 的路径参数不是绝对路径时，会按 `benchmark/` 作为基准目录解析。下面示例中的 `artifacts/...`，在磁盘上的实际位置就是 `benchmark/artifacts/...`。
+当 benchmark CLI 的路径参数不是绝对路径时，会按 `benchmark/` 作为基准目录解析。下面示例中的 `artifacts/...`，在磁盘上的实际位置就是 `benchmark/.data/...`。
 
 **数据集**:
 
@@ -67,12 +67,12 @@ uv run --extra benchmark python -m benchmark.cli.run \
 ```
 
 **输出**:
-- Experiment root: `benchmark/artifacts/experiments/<experiment_name>/`
-- Results: `benchmark/artifacts/experiments/<experiment_name>/results/results.jsonl`
-- Report: `benchmark/artifacts/experiments/<experiment_name>/reports/summary.report.json`
-- Traces (启用 `--trace`): `benchmark/artifacts/experiments/<experiment_name>/traces/<case_id>.jsonl`
-- Trace metadata (启用 `--trace`): `benchmark/artifacts/experiments/<experiment_name>/traces/<case_id>.meta.json`
-- Events (启用 `--trace`): `benchmark/artifacts/experiments/<experiment_name>/events/events.jsonl`
+- Experiment root: `benchmark/.data/experiments/<experiment_name>/`
+- Results: `benchmark/.data/experiments/<experiment_name>/results/results.jsonl`
+- Report: `benchmark/.data/experiments/<experiment_name>/reports/summary.report.json`
+- Traces (启用 `--trace`): `benchmark/.data/experiments/<experiment_name>/traces/<case_id>.jsonl`
+- Trace metadata (启用 `--trace`): `benchmark/.data/experiments/<experiment_name>/traces/<case_id>.meta.json`
+- Events (启用 `--trace`): `benchmark/.data/experiments/<experiment_name>/events/events.jsonl`
 
 Run report 的 `metadata.artifacts` 也会写入 trace `schema_version`、`experiment_root`、`traces_dir` 与 `events_path`，方便机器消费这些 artifact。
 
@@ -98,8 +98,8 @@ uv run --extra benchmark python -m benchmark.cli.trace \
 
 # 对比单个 case 在多个 runs / grid trials 中的代码空间搜索轨迹
 uv run --extra benchmark python -m benchmark.cli.case_map \
-  benchmark/artifacts/experiments/run-a \
-  benchmark/artifacts/experiments/run-b \
+  benchmark/.data/experiments/run-a \
+  benchmark/.data/experiments/run-b \
   --case-id case_1 --json-out -o case_1.compare.json
 ```
 
@@ -149,7 +149,7 @@ uv run --extra benchmark python -m benchmark.cli.grid \
 | `--output` | | Grid experiment 目录 |
 | `--dry-run` | | 仅打印计划的 run，不执行 |
 
-**输出**: Grid parent 摘要保存至 `benchmark/artifacts/experiments/<grid_name>/reports/summary.report.json`
+**输出**: Grid parent 摘要保存至 `benchmark/.data/experiments/<grid_name>/reports/summary.report.json`
 
 ## 4. 数据集验证
 
@@ -244,7 +244,7 @@ npm install
 npm run dev
 ```
 
-Web app 默认读取 `benchmark/artifacts/experiments/` 下的 benchmark artifacts，并以派生后的 `search_map.bundle.json` / `case_map_compare` 作为唯一分析数据源。
+Web app 默认读取 `benchmark/.data/experiments/` 下的 benchmark artifacts，并以派生后的 `search_map.bundle.json` / `case_map_compare` 作为唯一分析数据源。
 
 ## 7. 故障排除
 
@@ -254,7 +254,7 @@ Web app 默认读取 `benchmark/artifacts/experiments/` 下的 benchmark artifac
 | 缺少 API key | Relace 模式设置 `RELACE_API_KEY`；非 Relace 模式设置 `SEARCH_PROVIDER`、`SEARCH_ENDPOINT`、`SEARCH_MODEL` 与 `SEARCH_API_KEY` |
 | 克隆失败 | 检查网络，确保 `git` 已安装 |
 | `indexed` preflight 失败 | 确认 retrieval backend 可用，且 index / cloud sync state 是最新的 |
-| 找不到数据集 | 将数据集放入 `benchmark/artifacts/data/` |
+| 找不到数据集 | 将数据集放入 `benchmark/.data/datasets/` |
 | 首次运行慢 | 正常—仓库首次下载后会缓存 |
 
 ## 8. 运行单元测试
@@ -275,7 +275,7 @@ uv run --extra dev --extra benchmark --extra benchmark-web pytest benchmark/test
 
 ```
 benchmark/
-├── _config/             # benchmark 内部配置
+├── config/             # benchmark 内部配置
 │   ├── paths.py         # 目录/路径 helper 与默认数据集路径
 │   └── settings.py      # benchmark 内部设置（如 EXCLUDED_REPOS）
 ├── cli/
@@ -287,7 +287,7 @@ benchmark/
 │   ├── validate.py      # 数据集验证
 │   └── build_locbench.py  # Loc-Bench 构建
 ├── analysis/            # 分析工具 (function scope 等)
-├── web/                 # 本地 benchmark web backend（仅 repo-local）
+├── viewer/             # Benchmark 结果查看器（FastAPI + React SPA）
 ├── frontend/            # benchmark SPA 前端（仅 repo-local）
 ├── datasets/            # 数据集加载器
 ├── metrics/             # 指标实现
