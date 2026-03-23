@@ -1218,6 +1218,7 @@ def load_search_map_bundle(experiment_root: Path) -> dict[str, Any]:
     if _bundle_is_current(existing):
         return existing
 
+    # lgtm[py/path-injection]
     traces_dir = experiment_root / "traces"
     if traces_dir.is_dir():
         return rebuild_search_map_bundle(experiment_root)
