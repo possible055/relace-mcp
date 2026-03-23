@@ -8,10 +8,14 @@ from typing import TYPE_CHECKING, Any
 
 from .config import settings as _settings
 from .observability import log_event
-from .repo.backends.chunkhound import _async_run_chunkhound_index
-from .repo.backends.codanna import _async_run_codanna_full_index
+from .repo.backends.chunkhound import schedule_bg_chunkhound_index
+from .repo.backends.codanna import schedule_bg_codanna_full_index
 from .repo.backends.locking import BackendIndexRunResult, supports_backend_index_locking
-from .repo.backends.registry import is_backend_disabled, is_bg_index_running
+from .repo.backends.registry import (
+    get_bg_index_task,
+    is_backend_disabled,
+    is_bg_index_running,
+)
 from .repo.freshness import classify_local_index_freshness
 
 if TYPE_CHECKING:
@@ -44,11 +48,16 @@ class BackgroundIndexMonitor:
     def requested(self) -> bool:
         return self._requested
 
+    def _is_task_running(self) -> bool:
+        task = self._task
+        return task is not None and not task.done()
+
     def summary(self) -> dict[str, Any]:
+        enabled = self._is_task_running()
         return {
-            "enabled": self._running,
+            "enabled": enabled,
             "requested": self._requested,
-            "reason": None if self._running else self._reason,
+            "reason": None if enabled else self._reason,
             "active_backend": self._active_backend,
             "interval_seconds": self._interval_seconds if self._requested else None,
             "initial_delay_seconds": self._initial_delay_seconds if self._requested else None,
@@ -175,7 +184,24 @@ class BackgroundIndexMonitor:
         delay = self._initial_delay_seconds
         while True:
             await asyncio.sleep(delay)
-            result = await self._tick()
+            try:
+                result = await self._tick()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self._failure_count += 1
+                self._last_status = "error"
+                self._last_error = str(exc)
+                logger.warning(
+                    "Background index monitor unexpected error: %s",
+                    exc,
+                    exc_info=True,
+                )
+                delay = min(
+                    _BACKOFF_BASE_SECONDS * (2 ** (self._failure_count - 1)),
+                    _BACKOFF_MAX_SECONDS,
+                )
+                continue
             self._last_status = result.status
             self._last_error = result.reason
 
@@ -242,8 +268,21 @@ class BackgroundIndexMonitor:
         )
 
         if backend == "codanna":
-            return await _async_run_codanna_full_index(base_dir)
-        return await _async_run_chunkhound_index(base_dir)
+            schedule_bg_codanna_full_index(base_dir)
+        else:
+            schedule_bg_chunkhound_index(base_dir)
+
+        task = get_bg_index_task(base_dir, backend)
+        if task is None:
+            logger.warning(
+                "Background index monitor scheduled %s index but no task was registered.",
+                backend,
+            )
+            return BackendIndexRunResult(
+                status="error",
+                reason="bg_task_not_registered",
+            )
+        return await asyncio.shield(task)
 
     def _with_jitter(self, seconds: float) -> float:
         basis_points = secrets.randbelow(3001) - 1500

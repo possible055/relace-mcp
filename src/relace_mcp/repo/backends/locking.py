@@ -147,9 +147,8 @@ def _lock_handle_nonblocking(handle: TextIO) -> None:
     if msvcrt is None:  # pragma: no cover
         raise OSError("backend index locking is unavailable on this platform")
 
-    handle.seek(0)
-    handle.write("\0")
-    handle.flush()
+    # msvcrt.locking() locks bytes starting at the current file position.
+    # Keep both lock and unlock pinned to byte 0 so the locked range is stable.
     handle.seek(0)
     try:
         msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
@@ -165,5 +164,6 @@ def _unlock_handle(handle: TextIO) -> None:
     if msvcrt is None:  # pragma: no cover
         return
 
+    # Unlock the same byte range acquired in _lock_handle_nonblocking().
     handle.seek(0)
     msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)

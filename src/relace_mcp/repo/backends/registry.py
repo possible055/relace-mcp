@@ -33,3 +33,7 @@ def disable_backend(name: str, reason: str) -> None:
 def is_bg_index_running(base_dir: str, backend: str) -> bool:
     t = _bg_index_tasks.get((base_dir, backend))
     return t is not None and not t.done()
+
+
+def get_bg_index_task(base_dir: str, backend: str) -> asyncio.Task[Any] | None:
+    return _bg_index_tasks.get((base_dir, backend))
