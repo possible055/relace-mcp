@@ -418,6 +418,7 @@ class BenchmarkRunner:
             meta_write = self.trace_recorder.write_case_meta(
                 case_id=case.id,
                 repo=case.repo,
+                query=case.query,
                 result=result,
             )
             trace_meta_path_str = meta_write.path

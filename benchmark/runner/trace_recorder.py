@@ -117,6 +117,7 @@ class BenchmarkTraceRecorder:
         *,
         case_id: str,
         repo: str,
+        query: str | None,
         result: dict[str, Any],
     ) -> ArtifactWriteResult:
         if not self.enabled:
@@ -128,6 +129,7 @@ class BenchmarkTraceRecorder:
         payload = build_trace_meta_payload(
             case_id=case_id,
             repo=repo,
+            query=query,
             search_mode=self.search_mode,
             retrieval_backend=result.get("retrieval_backend"),
             retrieval_latency_s=result.get("retrieval_latency_s"),
