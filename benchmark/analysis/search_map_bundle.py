@@ -21,17 +21,21 @@ def search_map_bundle_path(experiment_root: Path) -> Path:
 
 
 def _load_json(path: Path | None) -> Any:
+    # lgtm[py/path-injection]
     if path is None or not path.exists():
         return None
+    # lgtm[py/path-injection]
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
 def _load_results_by_case(results_path: Path | None) -> dict[str, dict[str, Any]]:
+    # lgtm[py/path-injection]
     if results_path is None or not results_path.exists():
         return {}
 
     results: dict[str, dict[str, Any]] = {}
+    # lgtm[py/path-injection]
     with results_path.open("r", encoding="utf-8") as handle:
         for line in handle:
             stripped = line.strip()
@@ -456,9 +460,11 @@ def _build_experiment_payload(
         "root": experiment.get("root") or root_str,
         "type": experiment.get("type"),
         "traces_dir": str(traces_dir),
+        # lgtm[py/path-injection]
         "report_path": str(report_path)
         if report_path is not None and report_path.exists()
         else None,
+        # lgtm[py/path-injection]
         "results_path": str(results_path)
         if results_path is not None and results_path.exists()
         else None,

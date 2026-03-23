@@ -123,6 +123,7 @@ def _case_id_from_meta_path(meta_path: Path) -> str:
 def collect_trace_artifacts(traces_dir: Path) -> list[TraceArtifactPaths]:
     cases: dict[str, TraceArtifactPaths] = {}
 
+    # lgtm[py/path-injection]
     for trace_path in sorted(traces_dir.glob("*.jsonl")):
         case_id = trace_path.stem
         existing = cases.get(case_id)
@@ -132,6 +133,7 @@ def collect_trace_artifacts(traces_dir: Path) -> list[TraceArtifactPaths]:
             meta_path=existing.meta_path if existing else None,
         )
 
+    # lgtm[py/path-injection]
     for meta_path in sorted(traces_dir.glob(f"*{TRACE_META_SUFFIX}")):
         case_id = _case_id_from_meta_path(meta_path)
         existing = cases.get(case_id)

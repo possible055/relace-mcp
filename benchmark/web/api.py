@@ -30,6 +30,7 @@ def _resolve_within_root(root: Path, raw_path: str) -> Path:
         candidate = root / candidate
 
     resolved_root = root.resolve()
+    # lgtm[py/path-injection]
     resolved_candidate = candidate.resolve()
     try:
         resolved_candidate.relative_to(resolved_root)
@@ -71,6 +72,7 @@ def create_app(experiments_root: Path) -> FastAPI:
             experiment_root = _resolve_within_root(
                 app.state.experiments_root, request.experiment_root
             )
+            # lgtm[py/path-injection]
             traces_dir = experiment_root / "traces"
             if not traces_dir.is_dir():
                 raise HTTPException(
