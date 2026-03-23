@@ -11,6 +11,8 @@ from textual.widgets.tree import TreeNode
 from .log_reader import (
     ALL_KINDS,
     APPLY_KINDS,
+    ERROR_KINDS,
+    INSIGHTS_KINDS,
     SEARCH_KINDS,
     get_aggregated_tool_stats,
     get_time_presets,
@@ -528,11 +530,9 @@ class CompactHeader(Static):
         elif filter_type == "search":
             self._enabled_kinds = set(SEARCH_KINDS)
         elif filter_type == "insights":
-            from .log_reader import INSIGHTS_KINDS
-
             self._enabled_kinds = set(INSIGHTS_KINDS)
         elif filter_type == "errors":
-            self._enabled_kinds = {"apply_error", "search_error"}
+            self._enabled_kinds = set(ERROR_KINDS)
 
         self.post_message(FilterChanged(self._enabled_kinds.copy()))
 

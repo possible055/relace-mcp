@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from fastmcp import Client
@@ -9,6 +10,7 @@ from relace_mcp.server import build_server
 CORE_TOOLS = ["fast_apply", "agentic_search"]
 CLOUD_TOOLS = ["cloud_sync", "cloud_search", "cloud_clear", "cloud_list"]
 RETRIEVAL_TOOLS = ["agentic_retrieval"]
+STATUS_TOOL = "index_status"
 
 
 @pytest.fixture
@@ -65,6 +67,92 @@ class TestMCPToolExistence:
 
             for tool in CLOUD_TOOLS:
                 assert tool not in tool_names, f"Cloud tool '{tool}' should NOT be registered"
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("clean_env")
+    async def test_index_status_visible_when_cloud_tools_enabled(
+        self,
+        mock_config: RelaceConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """index_status must be visible when cloud indexing is enabled."""
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "1")
+        with patch("relace_mcp.tools.register.shutil.which", return_value=None):
+            server = build_server(config=mock_config, run_health_check=False)
+
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            tool_names = {t.name for t in tools}
+
+        assert STATUS_TOOL in tool_names
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("clean_env")
+    async def test_index_status_visible_when_codanna_cli_available(
+        self,
+        mock_config: RelaceConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """index_status must be visible when codanna CLI is available."""
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "0")
+
+        def _which(name: str) -> str | None:
+            if name == "codanna":
+                return "/usr/local/bin/codanna"
+            return None
+
+        with patch("relace_mcp.tools.register.shutil.which", side_effect=_which):
+            server = build_server(config=mock_config, run_health_check=False)
+
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            tool_names = {t.name for t in tools}
+
+        assert STATUS_TOOL in tool_names
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("clean_env")
+    async def test_index_status_visible_when_chunkhound_cli_available(
+        self,
+        mock_config: RelaceConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """index_status must be visible when chunkhound CLI is available."""
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "0")
+
+        def _which(name: str) -> str | None:
+            if name == "chunkhound":
+                return "/usr/local/bin/chunkhound"
+            return None
+
+        with patch("relace_mcp.tools.register.shutil.which", side_effect=_which):
+            server = build_server(config=mock_config, run_health_check=False)
+
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            tool_names = {t.name for t in tools}
+
+        assert STATUS_TOOL in tool_names
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("clean_env")
+    async def test_index_status_hidden_without_indexing_capability(
+        self,
+        mock_config: RelaceConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """index_status must be hidden when no cloud or local indexing capability exists."""
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "0")
+        with patch("relace_mcp.tools.register.shutil.which", return_value=None):
+            server = build_server(config=mock_config, run_health_check=False)
+
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            tool_names = {t.name for t in tools}
+
+            assert STATUS_TOOL not in tool_names
+            with pytest.raises(Exception, match="Unknown tool"):
+                await client.call_tool(STATUS_TOOL, {})
 
 
 class TestMCPToolSchemas:

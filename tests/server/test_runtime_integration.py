@@ -87,7 +87,10 @@ class TestServerToolExecution:
     @pytest.mark.asyncio
     async def test_index_status_success(self, mock_config: RelaceConfig) -> None:
         """Should execute index_status tool successfully."""
-        with patch("relace_mcp.tools.mcp_status.shutil.which", return_value=None):
+        with (
+            patch("relace_mcp.tools.register._should_register_index_status", return_value=True),
+            patch("relace_mcp.tools.mcp_status.shutil.which", return_value=None),
+        ):
             server = build_server(config=mock_config)
 
             async with Client(server) as client:

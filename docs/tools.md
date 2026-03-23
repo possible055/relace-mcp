@@ -106,6 +106,8 @@ Search the codebase and return relevant files and line ranges. Uses an agentic l
 
 ## `index_status`
 
+Available when `RELACE_CLOUD_TOOLS=1` or a local index CLI (`codanna` / `chunkhound`) is discoverable in `PATH`. Hidden otherwise.
+
 Inspect cloud/local indexing readiness. Automatically schedules a background reindex for local backends (Codanna/ChunkHound) when their index is stale or missing.
 
 This tool takes no parameters.

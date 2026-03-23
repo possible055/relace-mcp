@@ -26,6 +26,7 @@ dist/
 .claude/
 .kilocode/
 .kiro/
+.github/copilot-instructions.md
 .gemini/
 .agent/
 .augment/

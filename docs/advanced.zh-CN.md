@@ -215,6 +215,8 @@ MCP_BASE_DIR=/absolute/path/to/repo
 MCP_BACKGROUND_INDEX_MONITOR=1
 ```
 
+`index_status` 只会在 `RELACE_CLOUD_TOOLS=1`，或 `PATH` 中可发现本地 index CLI（`codanna` / `chunkhound`）时暴露。
+
 启用后，server 会定期检查当前 local backend 的 freshness，并在需要时触发 background refresh。
 
 - 默认关闭。

@@ -158,7 +158,7 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 
 ## 工具
 
-始终可用的 top-level tools 有：`fast_apply`、`agentic_search`、`index_status`。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`agentic_retrieval` 需设置 `MCP_SEARCH_RETRIEVAL=1`，其 semantic backend 由 `MCP_RETRIEVAL_BACKEND` 选择。
+始终可用的 top-level tools 有：`fast_apply`、`agentic_search`。`index_status` 只会在 `RELACE_CLOUD_TOOLS=1`，或 `PATH` 中可找到本地 index CLI（`codanna` / `chunkhound`）时暴露。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`agentic_retrieval` 需设置 `MCP_SEARCH_RETRIEVAL=1`，其 semantic backend 由 `MCP_RETRIEVAL_BACKEND` 选择。
 
 可用性发现请使用 MCP 原生接口：tools 用 `list_tools()`，resources 用 `list_resources()`。
 

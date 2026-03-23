@@ -106,9 +106,11 @@
 
 ## `index_status`
 
-检查 cloud/local indexing readiness。若本地 backend（Codanna/ChunkHound）的 index 过期或缺失，自动安排后台 reindex 任务。
+仅在 `RELACE_CLOUD_TOOLS=1`，或 `PATH` 中可发现本地 index CLI（`codanna` / `chunkhound`）时暴露；否则会被隐藏。
 
-此工具无参数。
+检查 cloud/local 索引就绪状态。当本地后端（Codanna/ChunkHound）的 index 处于 stale 或 missing 时，会自动排程 background reindex。
+
+此工具不接受参数。
 
 ### 返回
 

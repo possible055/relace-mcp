@@ -2,7 +2,7 @@
 
 实时终端日志查看器，用于监控 `fast_apply` 和 `agentic_search` 操作。
 
-当 `MCP_LOGGING=safe` 或 `MCP_LOGGING=full` 时，Cloud 工具事件（`cloud_*`）也会出现在 **All** 与 **Errors** 视图中。
+当 `MCP_LOGGING=safe` 或 `MCP_LOGGING=full` 时，Cloud 工具事件（`cloud_*`）会出现在 **All** 视图中，而 backend/retrieval 或 cloud 的 `*_error` 事件也会出现在 **Errors** 视图中。
 
 ## 安装
 
@@ -32,11 +32,11 @@ Dashboard 提供五个不同的视图，可通过顶部的标签栏切换：
 
 | 标签页 | 说明 | 快捷键 |
 |--------|------|--------|
-| **All** | 所有日志事件（包含 `apply`、`search` 与 `cloud_*`） | 默认视图 |
+| **All** | 所有日志事件（包含 `apply`、`search`、backend/retrieval 与 `cloud_*`） | 默认视图 |
 | **Apply** | 仅文件创建和编辑事件 (`create_success`, `apply_success`, `apply_error`) | - |
 | **Search** | 树形结构显示搜索会话、轮次和工具调用 | - |
 | **Insights** | 工具使用统计与可视化柱状图 | - |
-| **Errors** | 所有错误事件（`*_error`，包含 `cloud_*_error`） | - |
+| **Errors** | 所有错误事件（`*_error`，包含 backend/retrieval 与 `cloud_*_error`） | - |
 
 ### 2. 导航快捷键
 
@@ -156,15 +156,20 @@ Turn 2 [████████████████████████
 | `search_complete` | 搜索会话完成 | `agentic_search` |
 | `search_error` | 搜索会话失败 | `agentic_search` |
 
-### 后端事件
+### 后端与 Retrieval 事件
 
 | 类型 | 说明 | 来源 |
 |------|------|------|
-| `index_status` | 索引后端汇总 | `agentic_retrieval` |
+| `index_status` | 索引后端汇总 | `index_status` |
+| `index_status_error` | 索引状态探测失败 | `index_status` |
+| `retrieval_backend_selected` | 已选定 retrieval backend | `agentic_retrieval` |
+| `retrieval_hints_skipped` | 因 policy 或 backend 状态而跳过 semantic hints | `agentic_retrieval` |
+| `retrieval_hints_complete` | semantic hints 收集完成 | `agentic_retrieval` |
+| `retrieval_hints_error` | semantic hints 检索失败 | `agentic_retrieval` |
 | `backend_index_start` | CLI 索引开始 | `codanna` / `chunkhound` |
 | `backend_index_complete` | CLI 索引完成 | `codanna` / `chunkhound` |
 | `backend_index_error` | CLI 索引失败 | `codanna` / `chunkhound` |
-| `backend_disabled` | 后端已禁用 | 启动 |
+| `backend_disabled` | 当前 session 的 backend 已被禁用 | `agentic_retrieval` / indexing startup |
 
 ### LSP 事件
 

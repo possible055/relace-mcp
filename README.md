@@ -158,7 +158,7 @@ For `.env` usage, encoding settings, custom LLM providers, and more, see [docs/a
 
 ## Tools
 
-Always-available top-level tools: `fast_apply`, `agentic_search`, `index_status`. Cloud tools require `RELACE_CLOUD_TOOLS=1`. `agentic_retrieval` requires `MCP_SEARCH_RETRIEVAL=1`, and its semantic backend is selected via `MCP_RETRIEVAL_BACKEND`.
+Top-level tools always available: `fast_apply`, `agentic_search`. `index_status` is exposed only when `RELACE_CLOUD_TOOLS=1` or a local index CLI (`codanna` / `chunkhound`) is available in `PATH`. Cloud tools require `RELACE_CLOUD_TOOLS=1`. `agentic_retrieval` requires `MCP_SEARCH_RETRIEVAL=1`, and its semantic backend is selected via `MCP_RETRIEVAL_BACKEND`.
 
 Use MCP-native discovery surfaces: `list_tools()` for tools and `list_resources()` for resources.
 

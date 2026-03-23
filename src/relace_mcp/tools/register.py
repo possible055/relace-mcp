@@ -1,5 +1,7 @@
 # pyright: reportUnusedFunction=false
 # Decorator-registered functions (@mcp.tool, @mcp.resource) are accessed by the framework
+import shutil
+
 from fastmcp import FastMCP
 
 from ..config import RelaceConfig
@@ -15,6 +17,12 @@ from .mcp_status import register_status_tools
 __all__ = ["register_tools"]
 
 
+def _should_register_index_status() -> bool:
+    return _settings.RELACE_CLOUD_TOOLS or any(
+        shutil.which(name) for name in ("codanna", "chunkhound")
+    )
+
+
 def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
     """Register Relace tools to the FastMCP instance."""
     deps = ToolRegistryDeps(
@@ -25,6 +33,7 @@ def register_tools(mcp: FastMCP, config: RelaceConfig) -> None:
 
     register_apply_tools(mcp, deps)
     register_search_tools(mcp, deps)
-    register_status_tools(mcp, deps)
+    if _should_register_index_status():
+        register_status_tools(mcp, deps)
     if _settings.RELACE_CLOUD_TOOLS:
         register_cloud_components(mcp, deps)

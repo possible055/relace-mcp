@@ -12,6 +12,7 @@ from relace_mcp.config import RelaceConfig
 from relace_mcp.server import build_server
 
 _TOOLS_MOD = "relace_mcp.tools.mcp_status"
+_REGISTER_MOD = "relace_mcp.tools.register"
 
 
 def _make_config(tmp_path) -> RelaceConfig:
@@ -40,6 +41,7 @@ async def test_refresh_scheduled_when_stale_on_any_retrieval_backend(
     (chunkhound_dir / "db").write_bytes(b"index")
 
     with (
+        patch(f"{_REGISTER_MOD}._should_register_index_status", return_value=True),
         patch(f"{_TOOLS_MOD}._settings") as mock_settings,
         patch(f"{_TOOLS_MOD}.shutil.which", return_value="/usr/local/bin/fake"),
         patch(f"{_TOOLS_MOD}.schedule_bg_codanna_full_index") as mock_codanna_refresh,
@@ -75,6 +77,7 @@ async def test_no_refresh_when_cli_missing(tmp_path) -> None:
     config = _make_config(tmp_path)
 
     with (
+        patch(f"{_REGISTER_MOD}._should_register_index_status", return_value=True),
         patch(f"{_TOOLS_MOD}._settings") as mock_settings,
         patch(f"{_TOOLS_MOD}.shutil.which", return_value=None),
     ):
