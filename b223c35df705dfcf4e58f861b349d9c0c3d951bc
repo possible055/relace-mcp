@@ -1,0 +1,43 @@
+src/relace_mcp/background_index_monitor.py
+  120d0312492def95 11-12,14-18,51-54,56,58,60,187-204,271-285
+src/relace_mcp/repo/backends/registry.py
+  120d0312492def95 36-39
+tests/retrieval/test_background_index_monitor_unit.py
+  120d0312492def95 3,11,20-25,101-103,116-118,123,159-193,195-268,270-288,363-388
+  2ae683d77d76f1b7 194
+src/relace_mcp/repo/backends/locking.py
+  120d0312492def95 150-151,167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "b223c35df705dfcf4e58f861b349d9c0c3d951bc",
+  "prompts": {
+    "120d0312492def95": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d1c29-485d-7193-b6d1-17178c10b4d3",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 225,
+      "total_deletions": 15,
+      "accepted_lines": 224,
+      "overriden_lines": 0
+    },
+    "2ae683d77d76f1b7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "33b43815-5d2f-4907-9473-3cf5148f6908",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
