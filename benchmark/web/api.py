@@ -30,8 +30,7 @@ def _resolve_within_root(root: Path, raw_path: str) -> Path:
         candidate = root / candidate
 
     resolved_root = root.resolve()
-    # lgtm[py/path-injection]
-    resolved_candidate = candidate.resolve()
+    resolved_candidate = candidate.resolve()  # lgtm[py/path-injection]
     try:
         resolved_candidate.relative_to(resolved_root)
     except ValueError:
@@ -72,8 +71,7 @@ def create_app(experiments_root: Path) -> FastAPI:
             experiment_root = _resolve_within_root(
                 app.state.experiments_root, request.experiment_root
             )
-            # lgtm[py/path-injection]
-            traces_dir = experiment_root / "traces"
+            traces_dir = experiment_root / "traces"  # lgtm[py/path-injection]
             if not traces_dir.is_dir():
                 raise HTTPException(
                     status_code=404, detail="Experiment traces directory not found."
@@ -93,7 +91,13 @@ def create_app(experiments_root: Path) -> FastAPI:
             _resolve_within_root(app.state.experiments_root, root)
             for root in request.experiment_roots
         ]
-        return build_case_map_compare(request.case_id, roots)
+        try:
+            return build_case_map_compare(request.case_id, roots)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception(f"Failed to compare case {request.case_id!r}")
+            raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
     @app.get("/", response_class=HTMLResponse, response_model=None)
     def root():

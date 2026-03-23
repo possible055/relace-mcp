@@ -8,10 +8,14 @@ export function encodeExperimentRoot(root: string): string {
 }
 
 export function decodeExperimentRoot(value: string): string {
-  const normalized = value.replace(/-/g, '+').replace(/_/g, '/')
-  const pad = normalized.length % 4
-  const padded = normalized + (pad === 0 ? '' : '='.repeat(4 - pad))
-  const binary = atob(padded)
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
-  return new TextDecoder().decode(bytes)
+  try {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/')
+    const pad = normalized.length % 4
+    const padded = normalized + (pad === 0 ? '' : '='.repeat(4 - pad))
+    const binary = atob(padded)
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return ''
+  }
 }
