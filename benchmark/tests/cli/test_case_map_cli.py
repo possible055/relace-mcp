@@ -178,11 +178,13 @@ def test_case_map_cli_compares_arbitrary_runs(tmp_path: Path) -> None:
     assert payload["kind"] == "case_map_compare"
     assert payload["case_id"] == "case_1"
     assert len(payload["runs"]) == 2
+    assert payload["runs"][0]["run_id"] == "run_1"
+    assert payload["runs"][1]["run_id"] == "run_2"
     assert payload["comparisons"]["shared_files"] == ["src/main.py"]
-    assert payload["comparisons"]["unique_files_by_run"][payload["runs"][0]["run_label"]] == [
+    assert payload["comparisons"]["unique_files_by_run"][payload["runs"][0]["run_id"]] == [
         "src/util.py"
     ]
-    assert payload["comparisons"]["unique_files_by_run"][payload["runs"][1]["run_label"]] == [
+    assert payload["comparisons"]["unique_files_by_run"][payload["runs"][1]["run_id"]] == [
         "src/service.py"
     ]
     assert payload["comparisons"]["selected_overlap"] == ["src/main.py"]
@@ -275,6 +277,102 @@ def test_case_map_cli_expands_grid_report_and_marks_missing_case(tmp_path: Path)
     assert len(payload["runs"]) == 2
     assert payload["runs"][1]["result_status"] == "missing_case"
     assert (
-        payload["comparisons"]["path_matrix"][0]["runs"][payload["runs"][1]["run_label"]]["status"]
+        payload["comparisons"]["path_matrix"][0]["runs"][payload["runs"][1]["run_id"]]["status"]
         == "missing_case"
     )
+
+
+def test_case_map_cli_preserves_distinct_runs_when_run_labels_collide(tmp_path: Path) -> None:
+    run_a = tmp_path / "run-a"
+    run_b = tmp_path / "run-b"
+    case_a = {
+        "case_id": "case_1",
+        "query": "find handler",
+        "repo": "example/repo",
+        "ground_truth_files": {},
+        "ground_truth_functions": [],
+        "ground_truth_context_files": {},
+        "semantic_hints": [],
+        "selected_files": [],
+        "unique_files": ["src/only_a.py"],
+        "unique_functions": [],
+        "file_blocks": [],
+        "function_blocks": [],
+        "turn_summaries": [],
+        "metrics_snapshot": {"file_recall": 0.5},
+        "result_status": "ok",
+    }
+    case_b = dict(case_a)
+    case_b["unique_files"] = ["src/only_b.py"]
+
+    shared_kwargs = {
+        "experiment_name": "same-name",
+        "provider": "openai",
+        "model": "gpt-5-mini",
+        "search_mode": "agentic",
+        "max_turns": 8,
+        "temperature": 0.2,
+    }
+    _write_bundle(run_a, cases=[case_a], **shared_kwargs)
+    _write_bundle(run_b, cases=[case_b], **shared_kwargs)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        case_map_main,
+        [
+            str(run_a),
+            str(run_b),
+            "--case-id",
+            "case_1",
+            "--json-out",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["runs"][0]["run_label"] == payload["runs"][1]["run_label"]
+    assert payload["runs"][0]["run_id"] != payload["runs"][1]["run_id"]
+    assert payload["comparisons"]["unique_files_by_run"][payload["runs"][0]["run_id"]] == [
+        "src/only_a.py"
+    ]
+    assert payload["comparisons"]["unique_files_by_run"][payload["runs"][1]["run_id"]] == [
+        "src/only_b.py"
+    ]
+
+
+def test_case_map_cli_markdown_escapes_run_label_pipes(tmp_path: Path) -> None:
+    run_a = tmp_path / "run-a"
+    _write_bundle(
+        run_a,
+        experiment_name="run-a",
+        provider="openai",
+        model="gpt-5-mini",
+        search_mode="agentic",
+        max_turns=8,
+        temperature=0.2,
+        cases=[
+            {
+                "case_id": "case_1",
+                "query": "find handler",
+                "repo": "example/repo",
+                "ground_truth_files": {},
+                "ground_truth_functions": [],
+                "ground_truth_context_files": {},
+                "semantic_hints": [],
+                "selected_files": [],
+                "unique_files": ["src/main.py"],
+                "unique_functions": [],
+                "file_blocks": [],
+                "function_blocks": [],
+                "turn_summaries": [],
+                "metrics_snapshot": {"file_recall": 1.0},
+                "result_status": "ok",
+            }
+        ],
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(case_map_main, [str(run_a), "--case-id", "case_1"])
+
+    assert result.exit_code == 0
+    assert "run-a \\| openai/gpt-5-mini \\| mode=agentic \\| turns=8 \\| temp=0.2" in result.output

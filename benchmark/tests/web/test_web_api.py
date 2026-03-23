@@ -273,6 +273,223 @@ def test_search_map_bundle_endpoint_lazy_builds_from_experiment(tmp_path: Path) 
     assert payload["kind"] == "search_map_bundle"
     assert payload["cases"][0]["case_id"] == "case_1"
     assert payload["cases"][0]["query"] == "find handler"
+    bundle_path = reports_dir / "search_map.bundle.json"
+    assert bundle_path.exists()
+    saved = json.loads(bundle_path.read_text(encoding="utf-8"))
+    assert saved["schema_version"] == "1.1"
+    assert saved["cases"][0]["exploration_tree"]["kind"] == "case"
+
+
+def test_search_map_bundle_endpoint_returns_existing_bundle_without_traces(tmp_path: Path) -> None:
+    experiment_root = tmp_path / "run-bundle-only"
+    _write_bundle(
+        experiment_root,
+        experiment_name="run-bundle-only",
+        cases=[
+            {
+                "case_id": "case_1",
+                "query": "find handler",
+                "repo": "example/repo",
+                "ground_truth_files": {},
+                "ground_truth_functions": [],
+                "ground_truth_context_files": {},
+                "semantic_hints": [],
+                "selected_files": [],
+                "unique_files": ["src/main.py"],
+                "unique_functions": [],
+                "file_blocks": [],
+                "function_blocks": [],
+                "turn_summaries": [],
+                "metrics_snapshot": {"file_recall": 1.0},
+                "result_status": "ok",
+            }
+        ],
+    )
+
+    client = TestClient(create_app(tmp_path))
+    response = client.post("/api/search-map/bundle", json={"experiment_root": str(experiment_root)})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["kind"] == "search_map_bundle"
+    assert payload["schema_version"] == "1.1"
+    assert payload["cases"][0]["case_id"] == "case_1"
+    assert payload["cases"][0]["exploration_tree"]["kind"] == "case"
+    assert payload["cases"][0]["exploration_tree"]["children"][-1]["kind"] == "result"
+    saved = json.loads(
+        (experiment_root / "reports" / "search_map.bundle.json").read_text(encoding="utf-8")
+    )
+    assert saved["schema_version"] == "1.1"
+    assert saved["cases"][0]["exploration_tree"]["kind"] == "case"
+
+
+def test_case_intersection_endpoint_returns_shared_case_ids(tmp_path: Path) -> None:
+    run_a = tmp_path / "run-a"
+    run_b = tmp_path / "run-b"
+    _write_bundle(
+        run_a,
+        experiment_name="run-a",
+        cases=[
+            {
+                "case_id": "case_1",
+                "query": "",
+                "repo": "",
+                "ground_truth_files": {},
+                "ground_truth_functions": [],
+                "ground_truth_context_files": {},
+                "semantic_hints": [],
+                "selected_files": [],
+                "unique_files": [],
+                "unique_functions": [],
+                "file_blocks": [],
+                "function_blocks": [],
+                "turn_summaries": [],
+                "metrics_snapshot": {},
+                "result_status": "ok",
+            },
+            {
+                "case_id": "case_2",
+                "query": "",
+                "repo": "",
+                "ground_truth_files": {},
+                "ground_truth_functions": [],
+                "ground_truth_context_files": {},
+                "semantic_hints": [],
+                "selected_files": [],
+                "unique_files": [],
+                "unique_functions": [],
+                "file_blocks": [],
+                "function_blocks": [],
+                "turn_summaries": [],
+                "metrics_snapshot": {},
+                "result_status": "ok",
+            },
+        ],
+    )
+    _write_bundle(
+        run_b,
+        experiment_name="run-b",
+        cases=[
+            {
+                "case_id": "case_2",
+                "query": "",
+                "repo": "",
+                "ground_truth_files": {},
+                "ground_truth_functions": [],
+                "ground_truth_context_files": {},
+                "semantic_hints": [],
+                "selected_files": [],
+                "unique_files": [],
+                "unique_functions": [],
+                "file_blocks": [],
+                "function_blocks": [],
+                "turn_summaries": [],
+                "metrics_snapshot": {},
+                "result_status": "ok",
+            },
+            {
+                "case_id": "case_3",
+                "query": "",
+                "repo": "",
+                "ground_truth_files": {},
+                "ground_truth_functions": [],
+                "ground_truth_context_files": {},
+                "semantic_hints": [],
+                "selected_files": [],
+                "unique_files": [],
+                "unique_functions": [],
+                "file_blocks": [],
+                "function_blocks": [],
+                "turn_summaries": [],
+                "metrics_snapshot": {},
+                "result_status": "ok",
+            },
+        ],
+    )
+
+    client = TestClient(create_app(tmp_path))
+    response = client.post(
+        "/api/cases/intersection",
+        json={"experiment_roots": [str(run_a), str(run_b)]},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"case_ids": ["case_2"]}
+
+
+def test_run_case_detail_endpoint_returns_single_case(tmp_path: Path) -> None:
+    experiment_root = tmp_path / "run-a"
+    _write_bundle(
+        experiment_root,
+        experiment_name="run-a",
+        cases=[
+            {
+                "case_id": "case_1",
+                "query": "find handler",
+                "repo": "example/repo",
+                "ground_truth_files": {},
+                "ground_truth_functions": [],
+                "ground_truth_context_files": {},
+                "semantic_hints": [],
+                "selected_files": [],
+                "unique_files": ["src/main.py"],
+                "unique_functions": [],
+                "file_blocks": [],
+                "function_blocks": [],
+                "turn_summaries": [],
+                "metrics_snapshot": {"file_recall": 1.0},
+                "result_status": "ok",
+            }
+        ],
+    )
+
+    client = TestClient(create_app(tmp_path))
+    response = client.post(
+        "/api/run-case/detail",
+        json={"experiment_root": str(experiment_root), "case_id": "case_1"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["case_id"] == "case_1"
+    assert payload["query"] == "find handler"
+    assert payload["exploration_tree"]["kind"] == "case"
+
+
+def test_run_case_detail_endpoint_returns_404_for_missing_case(tmp_path: Path) -> None:
+    experiment_root = tmp_path / "run-a"
+    _write_bundle(
+        experiment_root,
+        experiment_name="run-a",
+        cases=[
+            {
+                "case_id": "case_1",
+                "query": "find handler",
+                "repo": "example/repo",
+                "ground_truth_files": {},
+                "ground_truth_functions": [],
+                "ground_truth_context_files": {},
+                "semantic_hints": [],
+                "selected_files": [],
+                "unique_files": [],
+                "unique_functions": [],
+                "file_blocks": [],
+                "function_blocks": [],
+                "turn_summaries": [],
+                "metrics_snapshot": {"file_recall": 1.0},
+                "result_status": "ok",
+            }
+        ],
+    )
+
+    client = TestClient(create_app(tmp_path))
+    response = client.post(
+        "/api/run-case/detail",
+        json={"experiment_root": str(experiment_root), "case_id": "case_2"},
+    )
+
+    assert response.status_code == 404
+    assert "case_2" in response.json()["detail"]
 
 
 def test_case_compare_endpoint_returns_compare_payload(tmp_path: Path) -> None:
@@ -328,3 +545,40 @@ def test_case_compare_endpoint_returns_compare_payload(tmp_path: Path) -> None:
     assert payload["kind"] == "case_map_compare"
     assert payload["case_id"] == "case_1"
     assert len(payload["runs"]) == 2
+
+
+def test_case_compare_endpoint_returns_404_when_bundle_is_missing(tmp_path: Path) -> None:
+    existing_root = tmp_path / "run-a"
+    missing_root = tmp_path / "run-missing"
+    _write_bundle(
+        existing_root,
+        experiment_name="run-a",
+        cases=[
+            {
+                "case_id": "case_1",
+                "query": "find handler",
+                "repo": "example/repo",
+                "ground_truth_files": {},
+                "ground_truth_functions": [],
+                "ground_truth_context_files": {},
+                "semantic_hints": [],
+                "selected_files": [],
+                "unique_files": [],
+                "unique_functions": [],
+                "file_blocks": [],
+                "function_blocks": [],
+                "turn_summaries": [],
+                "metrics_snapshot": {"file_recall": 1.0},
+                "result_status": "ok",
+            }
+        ],
+    )
+
+    client = TestClient(create_app(tmp_path))
+    response = client.post(
+        "/api/case-map/compare",
+        json={"case_id": "case_1", "experiment_roots": [str(existing_root), str(missing_root)]},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Search map bundle not found."

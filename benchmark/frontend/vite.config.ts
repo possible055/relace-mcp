@@ -17,5 +17,29 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) {
+            return undefined
+          }
+          if (id.includes('/recharts/')) {
+            return 'chart-vendor'
+          }
+          if (id.includes('/@tanstack/react-query/') || id.includes('/axios/')) {
+            return 'query-vendor'
+          }
+          if (
+            id.includes('/react/') ||
+            id.includes('/react-dom/') ||
+            id.includes('/react-router/') ||
+            id.includes('/react-router-dom/')
+          ) {
+            return 'react-vendor'
+          }
+          return undefined
+        },
+      },
+    },
   },
 })

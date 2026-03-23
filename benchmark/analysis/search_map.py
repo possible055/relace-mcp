@@ -23,6 +23,7 @@ class FileAccessEvent:
     tool_name: str
     access_type: str  # read | discover | grep_hit | select | lsp_nav | lsp_search
     path: str
+    tool_call_id: str | None = None
     lines: tuple[int, int] | None = None
     is_success: bool = True
     latency_ms: float = 0.0
@@ -42,6 +43,8 @@ class FileAccessEvent:
             "latency_ms": self.latency_ms,
             "functions": self.functions,
         }
+        if self.tool_call_id is not None:
+            payload["tool_call_id"] = self.tool_call_id
         if self.lines is not None:
             payload["lines"] = [self.lines[0], self.lines[1]]
         if self.tool_query is not None:
@@ -321,6 +324,11 @@ def _extract_view_file_lines(result: Any) -> tuple[int, int] | None:
 
 def _event_kwargs(kw: dict[str, Any]) -> dict[str, Any]:
     return {
+        "tool_call_id": (
+            kw.get("tool_call_id")
+            if isinstance(kw.get("tool_call_id"), str) and kw.get("tool_call_id")
+            else None
+        ),
         "is_success": bool(kw.get("is_success", True)),
         "latency_ms": float(kw.get("latency_ms", 0.0) or 0.0),
     }
@@ -657,6 +665,7 @@ def _build_discover_events(
     paths: list[str],
     *,
     command: str,
+    tool_call_id: str | None,
     latency_ms: float,
     success: bool,
 ) -> list[FileAccessEvent]:
@@ -666,6 +675,7 @@ def _build_discover_events(
             tool_name="bash",
             access_type="discover",
             path=path,
+            tool_call_id=tool_call_id,
             is_success=success,
             latency_ms=latency_ms,
             tool_command=command,
@@ -687,6 +697,7 @@ def _parse_bash(
         return []
 
     repo_root = kw.get("repo_root")
+    tool_call_id = kw.get("tool_call_id") if isinstance(kw.get("tool_call_id"), str) else None
     latency_ms = float(kw.get("latency_ms", 0.0) or 0.0)
     success = bool(kw.get("is_success", True))
     events: list[FileAccessEvent] = []
@@ -717,6 +728,7 @@ def _parse_bash(
                     tool_name="bash",
                     access_type="grep_hit",
                     path=path,
+                    tool_call_id=tool_call_id,
                     lines=(line_no, line_no),
                     is_success=success,
                     latency_ms=latency_ms,
@@ -743,6 +755,7 @@ def _parse_bash(
                     turn,
                     paths,
                     command=command,
+                    tool_call_id=tool_call_id,
                     latency_ms=latency_ms,
                     success=success,
                 )
@@ -756,6 +769,7 @@ def _parse_bash(
                     turn,
                     paths,
                     command=command,
+                    tool_call_id=tool_call_id,
                     latency_ms=latency_ms,
                     success=success,
                 )
@@ -777,6 +791,7 @@ def _parse_bash(
                         tool_name="bash",
                         access_type="read",
                         path=path,
+                        tool_call_id=tool_call_id,
                         is_success=success,
                         latency_ms=latency_ms,
                         tool_command=command,
@@ -837,6 +852,7 @@ def _parse_tool_results(
                 turn,
                 args,
                 result,
+                tool_call_id=tc_id,
                 is_success=success,
                 latency_ms=latency_ms,
                 repo_root=repo_root,

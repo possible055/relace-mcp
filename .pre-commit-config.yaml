@@ -1,3 +1,6 @@
+default_install_hook_types: [pre-commit, pre-push]
+default_stages: [pre-commit]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -59,3 +62,36 @@ repos:
         language: system
         files: '\.py$'
         pass_filenames: false
+
+      # Frontend lint — oxlint for fast staged-file checks
+      - id: benchmark-frontend-lint
+        name: benchmark frontend oxlint
+        entry: bash -c 'cd benchmark/frontend && args=(); for f in "$@"; do args+=("${f#benchmark/frontend/}"); done; if [ -x ./node_modules/.bin/oxlint ]; then ./node_modules/.bin/oxlint "${args[@]}"; else npm exec --yes --package=oxlint@1.56.0 -- oxlint "${args[@]}"; fi' --
+        language: system
+        files: '^benchmark/frontend/.*\.(ts|tsx|js|jsx)$'
+
+      # Frontend type check — whole-project analysis
+      - id: benchmark-frontend-typecheck
+        name: benchmark frontend typecheck
+        entry: bash -c "cd benchmark/frontend && npm run typecheck"
+        language: system
+        files: '^benchmark/frontend/.*\.(ts|tsx)$'
+        pass_filenames: false
+
+      # Frontend lint — type-aware rules, pre-push only
+      - id: benchmark-frontend-lint-typechecked
+        name: benchmark frontend eslint
+        entry: bash -c "cd benchmark/frontend && npm run lint"
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      # Frontend dead code — export/file analysis, pre-push only
+      - id: benchmark-frontend-deadcode
+        name: benchmark frontend knip
+        entry: bash -c "cd benchmark/frontend && npm run deadcode"
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
