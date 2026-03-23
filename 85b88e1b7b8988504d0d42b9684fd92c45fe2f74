@@ -1,0 +1,23 @@
+tests/search/test_harness_unit.py
+  d8c120b72e916ee7 519,544-545,547
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "85b88e1b7b8988504d0d42b9684fd92c45fe2f74",
+  "prompts": {
+    "d8c120b72e916ee7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cc1d9e18-aa14-4937-90e5-a71373853d42",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 4,
+      "total_deletions": 5,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    }
+  }
+}
