@@ -1,0 +1,51 @@
+:root {
+  --cds-background: #f4f4f4;
+  --cds-layer-01: #ffffff;
+  --cds-layer-02: #f4f4f4;
+  --cds-layer-accent-01: #e0e0e0;
+  --cds-layer-hover-01: #e8e8e8;
+  --cds-layer-selected-01: #d0e2ff;
+
+  --cds-text-primary: #161616;
+  --cds-text-secondary: #525252;
+  --cds-text-helper: #6f6f6f;
+  --cds-text-placeholder: #a8a8a8;
+  --cds-text-on-color: #ffffff;
+
+  --cds-link-primary: #0f62fe;
+  --cds-link-primary-hover: #0043ce;
+
+  --cds-border-subtle-01: #e0e0e0;
+  --cds-border-strong-01: #8d8d8d;
+  --cds-border-interactive: #0f62fe;
+
+  --cds-interactive: #0f62fe;
+  --cds-interactive-hover: #0353e9;
+  --cds-focus: #0f62fe;
+
+  --cds-support-success: #198038;
+  --cds-support-warning: #f1c21b;
+  --cds-support-error: #da1e28;
+  --cds-support-info: #0043ce;
+
+  --cds-icon-secondary: #525252;
+
+  --cds-radius-sm: 2px;
+  --cds-radius-md: 4px;
+  --cds-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+
+  --cds-spacing-03: 0.5rem;
+  --cds-spacing-04: 0.75rem;
+  --cds-spacing-05: 1rem;
+  --cds-spacing-06: 1.5rem;
+  --cds-spacing-07: 2rem;
+
+  --cds-chart-1: #6929c4;
+  --cds-chart-2: #1192e8;
+  --cds-chart-3: #005d5d;
+  --cds-chart-4: #9f1853;
+  --cds-chart-5: #fa4d56;
+  --cds-chart-6: #570408;
+  --cds-chart-7: #198038;
+  --cds-chart-8: #002d9c;
+}
