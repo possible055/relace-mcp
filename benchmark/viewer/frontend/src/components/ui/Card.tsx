@@ -23,7 +23,7 @@ export function CardHeader({ children, className }: CardProps) {
   return (
     <div
       className={cn(
-        'flex flex-row items-center justify-between p-[var(--cds-spacing-05)]',
+        'flex flex-row items-center justify-between border-b border-[var(--cds-border-subtle-01)] px-[var(--cds-spacing-05)] py-3',
         className,
       )}
     >
