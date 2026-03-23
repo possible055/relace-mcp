@@ -64,17 +64,38 @@ def try_acquire_backend_index_lock(base_dir: str, backend: str) -> BackendIndexL
             _lockless=True,
         )
 
+    # Try to acquire lock with primary lock dir first
+    result = _try_acquire_with_lock_dir(_LOCK_DIR, lock_path, base_dir, backend)
+    if result is not None:
+        return result
+
+    # Fallback to base_dir/.lock-index if LOG_DIR is not writable
+    fallback_lock_dir = Path(base_dir) / ".lock-index"
+    fallback_lock_path = _build_lock_path(base_dir, backend, fallback_lock_dir)
+    result = _try_acquire_with_lock_dir(fallback_lock_dir, fallback_lock_path, base_dir, backend)
+    if result is not None:
+        return result
+
+    # Both lock dirs failed
+    return BackendIndexLease(
+        backend=backend,
+        base_dir=base_dir,
+        lock_path=lock_path,
+        acquired=False,
+        reason="lock_error:no_writable_lock_dir",
+    )
+
+
+def _try_acquire_with_lock_dir(
+    lock_dir: Path, lock_path: str, base_dir: str, backend: str
+) -> BackendIndexLease | None:
+    """Try to acquire lock with a specific lock directory. Returns None if lock_dir not writable."""
     try:
-        _LOCK_DIR.mkdir(parents=True, exist_ok=True)
+        lock_dir.mkdir(parents=True, exist_ok=True)
         handle = Path(lock_path).open("a+", encoding="utf-8")
-    except OSError as exc:
-        return BackendIndexLease(
-            backend=backend,
-            base_dir=base_dir,
-            lock_path=lock_path,
-            acquired=False,
-            reason=f"lock_error:{exc}",
-        )
+    except OSError:
+        # Lock dir not writable, return None to try fallback
+        return None
 
     try:
         _lock_handle_nonblocking(handle)
@@ -111,9 +132,11 @@ def try_acquire_backend_index_lock(base_dir: str, backend: str) -> BackendIndexL
     )
 
 
-def _build_lock_path(base_dir: str, backend: str) -> str:
+def _build_lock_path(base_dir: str, backend: str, lock_dir: Path | None = None) -> str:
+    if lock_dir is None:
+        lock_dir = _LOCK_DIR
     digest = sha256(os.path.realpath(base_dir).encode("utf-8")).hexdigest()[:16]
-    return str(_LOCK_DIR / f"{backend}-{digest}.lock")
+    return str(lock_dir / f"{backend}-{digest}.lock")
 
 
 def _lock_handle_nonblocking(handle: TextIO) -> None:

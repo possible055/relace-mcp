@@ -105,53 +105,51 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
-    # --- Disabled glob tool (pending removal) ---
-    # {
-    #     "type": "function",
-    #     "function": {
-    #         "name": "glob",
-    #         "strict": True,
-    #         "description": (
-    #             "Find files by glob pattern.\n\n"
-    #             "Examples: '**/*.py' (all Python), 'src/**/*.ts' (TS under src).\n"
-    #             "Returns empty list if no matches."
-    #         ),
-    #         "parameters": {
-    #             "type": "object",
-    #             "required": ["pattern"],
-    #             "properties": {
-    #                 "pattern": {
-    #                     "type": "string",
-    #                     "description": "Glob pattern (no leading '/'). Use '**' to match across directories.",
-    #                 },
-    #                 "path": {
-    #                     "type": "string",
-    #                     "default": "/repo",
-    #                     "description": (
-    #                         "Base directory for search. '/repo' is substituted with actual repo root at runtime. "
-    #                         "Use absolute paths like '/repo/src' to scope search."
-    #                     ),
-    #                 },
-    #                 "include_hidden": {
-    #                     "type": "boolean",
-    #                     "default": False,
-    #                     "description": (
-    #                         "Include dot-prefixed files/directories (default: false). "
-    #                         "Performance prune directories (for example node_modules/dist/target) "
-    #                         "may still be skipped."
-    #                     ),
-    #                 },
-    #                 "max_results": {
-    #                     "type": "integer",
-    #                     "default": 200,
-    #                     "description": "Max matches to return (default: 200).",
-    #                 },
-    #             },
-    #             "additionalProperties": False,
-    #         },
-    #     },
-    # },
-    # --- End disabled glob tool ---
+    {
+        "type": "function",
+        "function": {
+            "name": "glob",
+            "strict": True,
+            "description": (
+                "Find files by glob pattern.\n\n"
+                "Examples: '**/*.py' (all Python), 'src/**/*.ts' (TS under src).\n"
+                "Returns empty list if no matches."
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["pattern"],
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "Glob pattern (no leading '/'). Use '**' to match across directories.",
+                    },
+                    "path": {
+                        "type": "string",
+                        "default": "/repo",
+                        "description": (
+                            "Base directory for search. '/repo' is substituted with actual repo root at runtime. "
+                            "Use absolute paths like '/repo/src' to scope search."
+                        ),
+                    },
+                    "include_hidden": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": (
+                            "Include dot-prefixed files/directories (default: false). "
+                            "Performance prune directories (for example node_modules/dist/target) "
+                            "may still be skipped."
+                        ),
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "default": 200,
+                        "description": "Max matches to return (default: 200).",
+                    },
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
     {
         "type": "function",
         "function": {
@@ -445,6 +443,7 @@ _DEFAULT_TOOL_NAMES = {
     "view_file",
     "view_directory",
     "grep_search",
+    "glob",
     "report_back",
 }
 

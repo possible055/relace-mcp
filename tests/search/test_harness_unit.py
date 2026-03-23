@@ -336,9 +336,9 @@ class TestFastAgenticSearchHarness:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Partial results should never contain invalid ranges like end=-1."""
-        import relace_mcp.search.harness.core as harness_core
+        import relace_mcp.config.settings as test_settings
 
-        monkeypatch.setattr(harness_core, "SEARCH_MAX_TURNS", 2)
+        monkeypatch.setattr(test_settings, "SEARCH_MAX_TURNS", 2)
         (tmp_path / "test.py").write_text("line1\nline2\nline3\n")
 
         view_to_eof_call = {
@@ -529,10 +529,12 @@ class TestToolSchemas:
         """bash should be available when explicitly enabled."""
         import shutil
 
+        import relace_mcp.config.settings as settings
         import relace_mcp.search.schemas.tool_schemas as tool_schemas
 
         monkeypatch.setenv("SEARCH_BASH_TOOLS", "1")
         monkeypatch.setenv("SEARCH_LSP_TOOLS", "0")
+        settings.reload_tool_settings()
 
         schemas = tool_schemas.get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
@@ -547,6 +549,7 @@ class TestToolSchemas:
 
     def test_legacy_allowlist_no_longer_enables_bash(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """SEARCH_ENABLED_TOOLS should not control tool exposure anymore."""
+        import relace_mcp.config.settings as settings
         import relace_mcp.search.schemas.tool_schemas as tool_schemas
 
         monkeypatch.setenv(
@@ -555,6 +558,7 @@ class TestToolSchemas:
         )
         monkeypatch.setenv("SEARCH_BASH_TOOLS", "0")
         monkeypatch.setenv("SEARCH_LSP_TOOLS", "0")
+        settings.reload_tool_settings()
 
         schemas = tool_schemas.get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
@@ -576,10 +580,12 @@ class TestToolSchemas:
 
     def test_lsp_tools_opt_in(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """SEARCH_LSP_TOOLS=1 should enable LSP tools."""
+        import relace_mcp.config.settings as settings
         import relace_mcp.search.schemas.tool_schemas as tool_schemas
 
         monkeypatch.setenv("SEARCH_LSP_TOOLS", "1")
         monkeypatch.setenv("SEARCH_BASH_TOOLS", "0")
+        settings.reload_tool_settings()
 
         schemas = tool_schemas.get_tool_schemas()
         names = {t["function"]["name"] for t in schemas}
