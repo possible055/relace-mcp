@@ -1,0 +1,27 @@
+benchmark/web/api.py
+  4aee75dd79bdbb2c 33,75
+benchmark/analysis/trace_artifacts.py
+  4aee75dd79bdbb2c 126,136
+benchmark/analysis/search_map_bundle.py
+  4aee75dd79bdbb2c 24,27,33,38,463,467
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "5545e08030979b67e344ca60dba6d2042f3a53d9",
+  "prompts": {
+    "4aee75dd79bdbb2c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aaf2f86a-90e1-4fbc-b34b-f7fa4c4b4059",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 10,
+      "total_deletions": 0,
+      "accepted_lines": 10,
+      "overriden_lines": 0
+    }
+  }
+}
