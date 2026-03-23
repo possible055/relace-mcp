@@ -1,0 +1,33 @@
+src/relace_mcp/background_index_monitor.py
+  a17373114b773dbb 184
+README.md
+  a17373114b773dbb 148
+src/relace_mcp/repo/backends/codanna_indexing.py
+  a17373114b773dbb 366,567
+src/relace_mcp/repo/backends/chunkhound.py
+  a17373114b773dbb 545
+tests/retrieval/test_background_index_monitor_unit.py
+  a17373114b773dbb 8-9,13,116-118,136,170-207
+README.zh-CN.md
+  a17373114b773dbb 148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "1507d5a20c94cdd801eaec8dafbc7aeab03e4298",
+  "prompts": {
+    "a17373114b773dbb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d0d23-37a2-7e22-86fd-3065cdbe3f70",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 51,
+      "total_deletions": 6,
+      "accepted_lines": 51,
+      "overriden_lines": 0
+    }
+  }
+}

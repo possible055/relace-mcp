@@ -1,0 +1,56 @@
+scripts/clone-dev-tree.sh
+  9c59b795713c8b9f 8-9,17-18,21,25-26,56,58-63,67-94,106,109-110,116-131,156-165,184-203,211-212,215-222,235-242,254-271,295,297,313-325
+  40b2a7f5194d1084 19,243-253
+src/relace_mcp/repo/backends/chunkhound.py
+  a17373114b773dbb 545
+src/relace_mcp/repo/backends/codanna_indexing.py
+  a17373114b773dbb 366,567
+tests/retrieval/test_background_index_monitor_unit.py
+  a17373114b773dbb 113-114,132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "1a244ae6c3afddb1cd44a42aa4f5e612db8ab6b1",
+  "prompts": {
+    "40b2a7f5194d1084": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d0d3b-8e4a-7f13-b871-a9b77b3554d5",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 12,
+      "total_deletions": 0,
+      "accepted_lines": 12,
+      "overriden_lines": 0
+    },
+    "9c59b795713c8b9f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d0cb7-6195-78c3-a3b0-c8e7aaf37416",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 150,
+      "total_deletions": 14,
+      "accepted_lines": 142,
+      "overriden_lines": 0
+    },
+    "a17373114b773dbb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d0d23-37a2-7e22-86fd-3065cdbe3f70",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 51,
+      "total_deletions": 6,
+      "accepted_lines": 6,
+      "overriden_lines": 0
+    }
+  }
+}

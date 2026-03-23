@@ -1,0 +1,27 @@
+tests/search/test_handlers_unit.py
+  808aa048ea48bb7f 19
+tests/search/test_commands_integration.py
+  808aa048ea48bb7f 12
+tests/config/test_reload_settings_unit.py
+  808aa048ea48bb7f 6-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "58e520f10e87f129e4f6c216f598f34d562e12c9",
+  "prompts": {
+    "808aa048ea48bb7f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3ec67e9b-7c9a-4d5c-9da2-d4c3fa2d6dfa",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 7,
+      "total_deletions": 6,
+      "accepted_lines": 7,
+      "overriden_lines": 0
+    }
+  }
+}
