@@ -1,0 +1,27 @@
+benchmark/web/discovery.py
+  4aee75dd79bdbb2c 79-82
+benchmark/web/api.py
+  4aee75dd79bdbb2c 33,74,94-100
+benchmark/frontend/src/lib/experimentRoots.ts
+  4aee75dd79bdbb2c 11-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "4e68e33363fe81cf2af5af7f33ef9c17cdfac0a9",
+  "prompts": {
+    "4aee75dd79bdbb2c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aaf2f86a-90e1-4fbc-b34b-f7fa4c4b4059",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 23,
+      "total_deletions": 12,
+      "accepted_lines": 23,
+      "overriden_lines": 0
+    }
+  }
+}
