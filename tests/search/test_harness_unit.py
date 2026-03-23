@@ -516,12 +516,11 @@ class TestToolSchemas:
     def test_tool_names(self) -> None:
         """Default tool schemas should include only basic exploration tools."""
         names = {t["function"]["name"] for t in TOOL_SCHEMAS}
-        # Default set: basic tools only (LSP tools require opt-in)
+        # Default set: basic tools only (LSP tools require opt-in, glob is disabled pending removal)
         assert names == {
             "view_file",
             "view_directory",
             "grep_search",
-            "glob",
             "report_back",
         }
 
@@ -542,10 +541,14 @@ class TestToolSchemas:
             pytest.skip("bash is not available on this platform")
         assert "bash" in names
 
-    def test_glob_tool_exists(self) -> None:
-        """Should include glob tool for file discovery."""
+    def test_glob_tool_disabled(self) -> None:
+        """Glob tool should be disabled in default schema to prevent MCP invocation,
+        but its implementation should still exist for internal use."""
+        from relace_mcp.search._impl.glob import glob_handler
+
         names = {t["function"]["name"] for t in TOOL_SCHEMAS}
-        assert "glob" in names
+        assert "glob" not in names, "glob should not be in default MCP schema"
+        assert callable(glob_handler), "glob implementation must remain available internally"
 
     def test_legacy_allowlist_no_longer_enables_bash(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """SEARCH_ENABLED_TOOLS should not control tool exposure anymore."""
