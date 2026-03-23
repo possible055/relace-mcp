@@ -21,6 +21,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/experiments" element={<Experiments />} />
           <Route path="/compare" element={<CaseCompare />} />
+          <Route path="/experiments/:encodedRoot/cases/:caseId" element={<RunDetail />} />
           <Route path="/runs/:encodedRoot/cases/:caseId" element={<RunDetail />} />
         </Route>
         <Route path="/" element={<Navigate to="/experiments" replace />} />

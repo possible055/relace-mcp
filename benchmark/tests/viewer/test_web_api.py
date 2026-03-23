@@ -276,8 +276,10 @@ def test_search_map_bundle_endpoint_lazy_builds_from_experiment(tmp_path: Path) 
     bundle_path = reports_dir / "search_map.bundle.json"
     assert bundle_path.exists()
     saved = json.loads(bundle_path.read_text(encoding="utf-8"))
-    assert saved["schema_version"] == "1.1"
+    assert saved["schema_version"] == "1.2"
     assert saved["cases"][0]["exploration_tree"]["kind"] == "case"
+    assert saved["cases"][0]["journey_graph"]["meta"]["mode"] == "single"
+    assert saved["cases"][0]["journey_graph"]["meta"]["default_view"] == "cumulative"
 
 
 def test_search_map_bundle_endpoint_returns_existing_bundle_without_traces(tmp_path: Path) -> None:
@@ -312,15 +314,17 @@ def test_search_map_bundle_endpoint_returns_existing_bundle_without_traces(tmp_p
     assert response.status_code == 200
     payload = response.json()
     assert payload["kind"] == "search_map_bundle"
-    assert payload["schema_version"] == "1.1"
+    assert payload["schema_version"] == "1.2"
     assert payload["cases"][0]["case_id"] == "case_1"
     assert payload["cases"][0]["exploration_tree"]["kind"] == "case"
     assert payload["cases"][0]["exploration_tree"]["children"][-1]["kind"] == "result"
+    assert payload["cases"][0]["journey_graph"]["meta"]["degraded"] is True
     saved = json.loads(
         (experiment_root / "reports" / "search_map.bundle.json").read_text(encoding="utf-8")
     )
-    assert saved["schema_version"] == "1.1"
+    assert saved["schema_version"] == "1.2"
     assert saved["cases"][0]["exploration_tree"]["kind"] == "case"
+    assert saved["cases"][0]["journey_graph"]["meta"]["degraded"] is True
 
 
 def test_case_intersection_endpoint_returns_shared_case_ids(tmp_path: Path) -> None:
@@ -454,6 +458,8 @@ def test_run_case_detail_endpoint_returns_single_case(tmp_path: Path) -> None:
     assert payload["case_id"] == "case_1"
     assert payload["query"] == "find handler"
     assert payload["exploration_tree"]["kind"] == "case"
+    assert payload["journey_graph"]["meta"]["mode"] == "single"
+    assert payload["journey_graph"]["meta"]["default_view"] == "cumulative"
 
 
 def test_run_case_detail_endpoint_returns_404_for_missing_case(tmp_path: Path) -> None:

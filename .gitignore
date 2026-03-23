@@ -25,6 +25,7 @@ dist/
 # IDE / Editor / AI agent
 .vscode/
 .cursor/
+.claude/
 .kilocode/
 .kiro/
 .gemini/

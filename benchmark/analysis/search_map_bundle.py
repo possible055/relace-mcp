@@ -9,10 +9,11 @@ from ..runner.experiment_paths import (
     infer_experiment_root_from_traces,
 )
 from ..schemas import DatasetCase
+from .journey_graph import build_journey_graph
 from .search_map import SearchMap, aggregate_search_maps, extract_search_map
 from .trace_artifacts import collect_trace_artifacts, load_trace_meta, load_trace_turns
 
-SEARCH_MAP_BUNDLE_SCHEMA_VERSION = "1.1"
+SEARCH_MAP_BUNDLE_SCHEMA_VERSION = "1.2"
 SEARCH_MAP_BUNDLE_FILENAME = "search_map.bundle.json"
 
 
@@ -48,7 +49,10 @@ def _bundle_is_current(payload: Any) -> bool:
     if not isinstance(cases, list):
         return False
     return all(
-        isinstance(case, dict) and isinstance(case.get("exploration_tree"), dict) for case in cases
+        isinstance(case, dict)
+        and isinstance(case.get("exploration_tree"), dict)
+        and isinstance(case.get("journey_graph"), dict)
+        for case in cases
     )
 
 
@@ -1086,6 +1090,7 @@ def _build_case_payload(
         metrics_snapshot=metrics_snapshot,
         result_status=result_status,
     )
+    payload["journey_graph"] = build_journey_graph(payload, trace_turns=turns)
     return payload
 
 
@@ -1207,6 +1212,7 @@ def _upgrade_existing_bundle(existing: dict[str, Any]) -> dict[str, Any]:
             continue
         upgraded_case = dict(case)
         upgraded_case["exploration_tree"] = _build_exploration_tree_from_case_payload(upgraded_case)
+        upgraded_case["journey_graph"] = build_journey_graph(upgraded_case)
         upgraded_cases.append(upgraded_case)
     payload["cases"] = upgraded_cases
     return payload

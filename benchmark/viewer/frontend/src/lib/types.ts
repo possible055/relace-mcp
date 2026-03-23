@@ -18,6 +18,7 @@ export type SearchMapEvent = {
   access_type: string
   path: string
   lines?: [number, number] | number[]
+  ranges?: Array<[number, number] | number[]>
   is_success: boolean
   latency_ms: number
   tool_query?: string
@@ -78,6 +79,122 @@ export type ExplorationTreeNode = {
   children: ExplorationTreeNode[]
 }
 
+export type JourneyGraphStatusFlags = {
+  ground_truth: boolean
+  ground_truth_context: boolean
+  hinted: boolean
+  candidate: boolean
+  inspected: boolean
+  selected: boolean
+  hit: boolean
+  degraded: boolean
+}
+
+export type JourneyGraphNodeKind =
+  | 'query'
+  | 'tool_call'
+  | 'candidate_set'
+  | 'file'
+  | 'class'
+  | 'function'
+  | 'result'
+
+export type JourneyGraphNode = {
+  id: string
+  kind: JourneyGraphNodeKind
+  label: string
+  turn?: number | null
+  first_seen_turn?: number | null
+  last_seen_turn?: number | null
+  path?: string | null
+  class_name?: string | null
+  function_name?: string | null
+  range?: [number, number] | number[] | null
+  ranges: Array<[number, number] | number[]>
+  tool_name?: string | null
+  tool_call_id?: string | null
+  args_excerpt?: string | null
+  is_success?: boolean | null
+  candidate_count?: number | null
+  candidate_paths: string[]
+  preview_paths: string[]
+  candidate_access_type?: string | null
+  status_flags: JourneyGraphStatusFlags
+  access_types: string[]
+  source_tool_names: string[]
+  source_event_ids: string[]
+}
+
+export type JourneyGraphEdgeKind =
+  | 'hint'
+  | 'next_step'
+  | 'causal_exact'
+  | 'causal_temporal'
+  | 'produced_candidates'
+  | 'inspects'
+  | 'selects'
+  | 'contains'
+  | 'converges'
+
+export type JourneyGraphEdge = {
+  id: string
+  kind: JourneyGraphEdgeKind
+  source: string
+  target: string
+  turns: number[]
+  tool_names: string[]
+  access_types: string[]
+  detail?: string | null
+  is_final_path?: boolean
+}
+
+export type JourneyGraphTurnSummary = {
+  tool_names: string[]
+  new_files: string[]
+  new_functions: FunctionBlock[]
+  selected_files: string[]
+  hinted_file_count: number
+  candidate_file_count: number
+  inspected_file_count: number
+  selected_file_count: number
+  candidate_groups: Array<{
+    node_id: string
+    label: string
+    access_type: string
+    count: number
+    preview_paths: string[]
+  }>
+  llm_latency_ms?: number | null
+  prompt_tokens?: number | null
+  completion_tokens?: number | null
+}
+
+export type JourneyGraphTurn = {
+  turn: number
+  tool_call_ids: string[]
+  delta_node_ids: string[]
+  cumulative_node_ids: string[]
+  touched_node_ids: string[]
+  selected_node_ids: string[]
+  summary: JourneyGraphTurnSummary
+}
+
+export type JourneyGraphMeta = {
+  mode: 'single'
+  default_view: 'cumulative'
+  default_layout: 'klay' | 'dagre'
+  degraded: boolean
+  degraded_reasons: string[]
+  max_turn: number
+}
+
+export type JourneyGraphPayload = {
+  nodes: JourneyGraphNode[]
+  edges: JourneyGraphEdge[]
+  turns: JourneyGraphTurn[]
+  meta: JourneyGraphMeta
+}
+
 export type MetricsSnapshot = {
   file_recall?: number | null
   file_precision?: number | null
@@ -111,6 +228,7 @@ export type SearchMapCase = {
   metrics_snapshot: MetricsSnapshot
   result_status: string
   exploration_tree: ExplorationTreeNode
+  journey_graph?: JourneyGraphPayload | null
 }
 
 export type CaseIntersectionResponse = {

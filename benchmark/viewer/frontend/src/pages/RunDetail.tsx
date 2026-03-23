@@ -3,18 +3,12 @@ import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { Clock, FileSearch, RotateCcw, Target } from 'lucide-react'
 import { apiErrorMessage, fetchRunCaseDetail, isApiNotFound } from '../lib/api'
-import ExplorationTree from '../components/search/ExplorationTree'
+import GraphDiagnostics from '../components/search/GraphDiagnostics'
+import SingleCaseJourneyGraph from '../components/search/SingleCaseJourneyGraph'
 import { decodeExperimentRoot } from '../lib/experimentRoots'
 import type { MetricsSnapshot } from '../lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Skeleton } from '../components/ui/Skeleton'
-
-function rangeLabel(range?: [number, number] | number[]) {
-  if (!range || range.length < 2) {
-    return '-'
-  }
-  return `${range[0]}-${range[1]}`
-}
 
 function formatMetric(value: number | null | undefined): string {
   return typeof value === 'number' ? String(value) : '-'
@@ -148,112 +142,26 @@ export default function RunDetail() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Exploration Tree</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Journey Graph</CardTitle></CardHeader>
         <CardContent className="p-[var(--cds-spacing-05)]">
-          {casePayload.exploration_tree ? (
-            <ExplorationTree root={casePayload.exploration_tree} />
+          {casePayload.journey_graph ? (
+            <SingleCaseJourneyGraph graph={casePayload.journey_graph} caseData={casePayload} />
           ) : (
-            <div className="py-6 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
-              No exploration data.
-            </div>
+            <GraphDiagnostics
+              message="Journey graph payload is missing from this run detail response."
+              availableKeys={Object.keys(casePayload)}
+              stats={[
+                { label: 'Events', value: casePayload.events.length },
+                { label: 'Turns', value: casePayload.turn_summaries.length },
+                {
+                  label: 'Exploration Tree',
+                  value: casePayload.exploration_tree ? 'present' : 'missing',
+                },
+              ]}
+            />
           )}
         </CardContent>
       </Card>
-
-      <Card>
-        <CardHeader><CardTitle>Turn Summaries</CardTitle></CardHeader>
-        <CardContent className="overflow-x-auto p-[var(--cds-spacing-05)]">
-          <table className="min-w-full">
-            <thead className="bg-[var(--cds-layer-02)] text-left">
-              <tr className="type-label-01 text-[var(--cds-text-helper)]">
-                <th className="p-3">Turn</th>
-                <th className="p-3">Tools</th>
-                <th className="p-3">New Files</th>
-                <th className="p-3">LLM Latency</th>
-              </tr>
-            </thead>
-            <tbody>
-              {casePayload.turn_summaries.map((summary) => (
-                <tr key={summary.turn} className="border-t border-[var(--cds-border-subtle-01)] transition-colors hover:bg-[var(--cds-layer-hover-01)]">
-                  <td className="p-3 type-body-compact-01 tabular-nums">{summary.turn}</td>
-                  <td className="p-3 type-body-compact-01">{summary.tool_names.join(', ')}</td>
-                  <td className="p-3 type-body-compact-01">{summary.new_files.join(', ') || '(none)'}</td>
-                  <td className="p-3 type-body-compact-01 tabular-nums">{String(summary.llm_latency_ms ?? '-')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle>Ordered Events</CardTitle></CardHeader>
-        <CardContent className="overflow-x-auto p-[var(--cds-spacing-05)]">
-          <table className="min-w-full">
-            <thead className="bg-[var(--cds-layer-02)] text-left">
-              <tr className="type-label-01 text-[var(--cds-text-helper)]">
-                <th className="p-3">Turn</th>
-                <th className="p-3">Tool</th>
-                <th className="p-3">Access</th>
-                <th className="p-3">Path</th>
-                <th className="p-3">Range</th>
-                <th className="p-3">Intent</th>
-              </tr>
-            </thead>
-            <tbody>
-              {casePayload.events.map((event, index) => (
-                <tr key={`${event.turn}-${event.tool_name}-${event.path}-${index}`} className="border-t border-[var(--cds-border-subtle-01)] transition-colors hover:bg-[var(--cds-layer-hover-01)]">
-                  <td className="p-3 type-body-compact-01 tabular-nums">{event.turn}</td>
-                  <td className="p-3 type-body-compact-01">{event.tool_name}</td>
-                  <td className="p-3 type-body-compact-01">{event.access_type}</td>
-                  <td className="p-3 type-body-compact-01">{event.path}</td>
-                  <td className="p-3 type-body-compact-01 tabular-nums">{rangeLabel(event.lines)}</td>
-                  <td className="p-3 type-body-compact-01">
-                    {event.tool_query ?? event.symbol_name ?? event.tool_command ?? '-'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader><CardTitle>File Blocks</CardTitle></CardHeader>
-          <CardContent className="p-[var(--cds-spacing-05)] space-y-3">
-            {casePayload.file_blocks.map((block) => (
-              <div key={`${block.path}:${block.block_kind}:${block.first_turn}`} className="rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] p-3">
-                <div className="type-body-compact-01 font-medium">{block.path}</div>
-                <div className="type-label-01 text-[var(--cds-text-helper)]">
-                  {block.block_kind} | turns {String(block.first_turn ?? '-')} - {String(block.last_turn ?? '-')}
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Function Blocks</CardTitle></CardHeader>
-          <CardContent className="p-[var(--cds-spacing-05)] space-y-3">
-            {casePayload.function_blocks.length === 0 ? (
-              <div className="py-6 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
-                No function data available.
-              </div>
-            ) : (
-              casePayload.function_blocks.map((block) => (
-                <div key={`${block.path}:${block.function}:${rangeLabel(block.range)}`} className="rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] p-3">
-                  <div className="type-body-compact-01 font-medium">
-                    {block.class ? `${block.class}.${block.function}` : block.function}
-                  </div>
-                  <div className="type-label-01 text-[var(--cds-text-helper)]">
-                    {block.path}:{rangeLabel(block.range)}
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </div>
     </div>
   )
 }
