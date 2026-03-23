@@ -39,6 +39,7 @@ CLAUDE.md
 .chunkhound.json
 .codanna/
 .codannaignore
+.lock-index/
 .fastembed_cache
 .bench-repos/
 .dev

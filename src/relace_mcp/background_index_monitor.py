@@ -33,6 +33,8 @@ class BackgroundIndexMonitor:
     def __init__(self, config: "RelaceConfig") -> None:
         self._config = config
         self._requested = _settings.MCP_BACKGROUND_INDEX_MONITOR
+        # Settings are captured at construction time. The monitor does not re-read them
+        # after start(); restart the server to apply changes to interval/delay.
         self._interval_seconds = float(_settings.MCP_BACKGROUND_INDEX_INTERVAL_SECONDS)
         self._initial_delay_seconds = float(_settings.MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS)
         self._task: asyncio.Task[None] | None = None
