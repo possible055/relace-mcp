@@ -1,0 +1,23 @@
+benchmark/analysis/search_map_bundle.py
+  91f3c672fd91a4c2 1221
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "7779506266f3d59c442caa44b850cfac3cdc02a6",
+  "prompts": {
+    "91f3c672fd91a4c2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "175fe995-910d-4047-aca3-3fd0e355c445",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 0,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
