@@ -1,14 +1,14 @@
 import os
-import sys
 from pathlib import Path
 
-from benchmark.cli import analyze
+from click.testing import CliRunner
+
+from benchmark.cli.analyze import main as analyze_main
 
 
 def test_analyze_defaults_to_most_recent_results_file(
     tmp_path: Path,
     monkeypatch,
-    capsys,
 ) -> None:
     experiments_dir = tmp_path / "experiments"
     older = experiments_dir / "z-run--older" / "results" / "results.jsonl"
@@ -30,11 +30,11 @@ def test_analyze_defaults_to_most_recent_results_file(
     os.utime(older, ns=(1_700_000_000_000_000_000, 1_700_000_000_000_000_000))
     os.utime(newer, ns=(1_800_000_000_000_000_000, 1_800_000_000_000_000_000))
 
-    monkeypatch.setattr(analyze, "get_experiments_dir", lambda: experiments_dir)
-    monkeypatch.setattr(sys, "argv", ["analyze.py"])
+    monkeypatch.setattr("benchmark.cli.analyze.get_experiments_dir", lambda: experiments_dir)
 
-    analyze.main()
+    runner = CliRunner()
+    result = runner.invoke(analyze_main, [])
 
-    captured = capsys.readouterr()
-    assert f"Analyzing 1 benchmark results from: {newer}" in captured.out
-    assert "newer" in captured.out
+    assert result.exit_code == 0
+    assert f"Analyzing 1 benchmark results from: {newer}" in result.output
+    assert "newer" in result.output
