@@ -1,0 +1,23 @@
+.pre-commit-config.yaml
+  4aee75dd79bdbb2c 69,71,76,78,84,93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "2baee1543d674720c7b28aa9b35378a86702f027",
+  "prompts": {
+    "4aee75dd79bdbb2c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aaf2f86a-90e1-4fbc-b34b-f7fa4c4b4059",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 6,
+      "total_deletions": 6,
+      "accepted_lines": 6,
+      "overriden_lines": 0
+    }
+  }
+}
