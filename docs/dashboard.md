@@ -2,7 +2,7 @@
 
 A real-time terminal-based log viewer for monitoring `fast_apply` and `agentic_search` operations.
 
-Cloud tool events (`cloud_*`) also appear in the **All** and **Errors** views when `MCP_LOGGING=safe` or `MCP_LOGGING=full`.
+Cloud tool events (`cloud_*`) appear in the **All** view, and backend/retrieval or cloud `*_error` events also appear in the **Errors** view when `MCP_LOGGING=safe` or `MCP_LOGGING=full`.
 
 ## Installation
 
@@ -32,11 +32,11 @@ The dashboard provides five different views accessible via the tab bar at the to
 
 | Tab | Description | Keyboard Shortcut |
 |-----|-------------|-------------------|
-| **All** | All log events (includes `apply`, `search`, and `cloud_*`) | Default view |
+| **All** | All log events (including `apply`, `search`, backend/retrieval, and `cloud_*`) | Default view |
 | **Apply** | Only file creation and editing events (`create_success`, `apply_success`, `apply_error`) | - |
 | **Search** | Tree-structured view of search sessions with turns and tool calls | - |
 | **Insights** | Aggregated tool usage statistics with visual bar charts | - |
-| **Errors** | All error events (`*_error`, including `cloud_*_error`) | - |
+| **Errors** | All error events (`*_error`, including backend/retrieval and `cloud_*_error`) | - |
 
 ### 2. Navigation
 
@@ -156,15 +156,20 @@ Logs are stored using `platformdirs`:
 | `search_complete` | Search session completed | `agentic_search` |
 | `search_error` | Search session failed | `agentic_search` |
 
-### Backend Events
+### Backend & Retrieval Events
 
 | Kind | Description | Source |
 |------|-------------|--------|
-| `index_status` | Indexing backends summary | `agentic_retrieval` |
+| `index_status` | Indexing backends summary | `index_status` |
+| `index_status_error` | Indexing status probe failed | `index_status` |
+| `retrieval_backend_selected` | Retrieval backend selected | `agentic_retrieval` |
+| `retrieval_hints_skipped` | Semantic hints skipped because policy or backend state prevented them | `agentic_retrieval` |
+| `retrieval_hints_complete` | Semantic hints collected successfully | `agentic_retrieval` |
+| `retrieval_hints_error` | Semantic hints retrieval failed | `agentic_retrieval` |
 | `backend_index_start` | CLI indexing started | `codanna` / `chunkhound` |
 | `backend_index_complete` | CLI indexing completed | `codanna` / `chunkhound` |
 | `backend_index_error` | CLI indexing failed | `codanna` / `chunkhound` |
-| `backend_disabled` | Backend disabled for session | startup |
+| `backend_disabled` | Backend disabled for the current session | `agentic_retrieval` / indexing startup |
 
 ### LSP Events
 

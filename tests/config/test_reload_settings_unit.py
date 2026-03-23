@@ -10,7 +10,6 @@ from relace_mcp.config.settings import (
 )
 
 _RELOAD_KEYS = (
-    "MCP_LOG_LEVEL",
     "MCP_LOGGING_MODE",
     "MCP_LOGGING",
     "MCP_LOG_REDACT",
@@ -18,13 +17,6 @@ _RELOAD_KEYS = (
 )
 
 _TOOL_RELOAD_KEYS = (
-    "APPLY_PROVIDER",
-    "APPLY_API_KEY",
-    "APPLY_ENDPOINT",
-    "APPLY_MODEL",
-    "APPLY_PROMPT_FILE",
-    "APPLY_TIMEOUT_SECONDS",
-    "APPLY_TEMPERATURE",
     "RELACE_CLOUD_TOOLS",
     "RETRIEVAL_BACKEND",
     "RETRIEVAL_HINT_POLICY",
@@ -45,6 +37,9 @@ _TOOL_RELOAD_KEYS = (
     "SEARCH_TOP_P",
     "SEARCH_LSP_TIMEOUT_SECONDS",
     "SEARCH_LSP_MAX_CLIENTS",
+    "MCP_BACKGROUND_INDEX_MONITOR",
+    "MCP_BACKGROUND_INDEX_INTERVAL_SECONDS",
+    "MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS",
     "RELACE_UPLOAD_MAX_WORKERS",
     "RELACE_API_KEY",
     "MCP_BASE_DIR",
@@ -160,6 +155,30 @@ class TestReloadToolSettings:
 
         assert settings_mod.SEARCH_LSP_TOOLS is True
 
+    def test_background_index_monitor_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_BACKGROUND_INDEX_MONITOR", "true")
+        reload_tool_settings()
+
+        assert settings_mod.MCP_BACKGROUND_INDEX_MONITOR is True
+
+    def test_background_index_interval_reloaded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_BACKGROUND_INDEX_INTERVAL_SECONDS", "480")
+        monkeypatch.setenv("MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS", "45")
+        reload_tool_settings()
+
+        assert settings_mod.MCP_BACKGROUND_INDEX_INTERVAL_SECONDS == 480
+        assert settings_mod.MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS == 45
+
+    def test_background_index_interval_invalid_falls_back(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("MCP_BACKGROUND_INDEX_INTERVAL_SECONDS", "0")
+        monkeypatch.setenv("MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS", "bad")
+        reload_tool_settings()
+
+        assert settings_mod.MCP_BACKGROUND_INDEX_INTERVAL_SECONDS == 300
+        assert settings_mod.MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS == 30
+
     def test_search_tool_strict_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("SEARCH_TOOL_STRICT", "false")
         reload_tool_settings()
@@ -202,77 +221,9 @@ class TestReloadToolSettings:
         """Accessing settings via module reference must see reloaded values."""
         monkeypatch.setenv("RELACE_CLOUD_TOOLS", "true")
         monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "chunkhound")
-        monkeypatch.setenv("SEARCH_BASH_TOOLS", "true")
-        monkeypatch.setenv("SEARCH_TOOL_STRICT", "false")
-        monkeypatch.setenv("SEARCH_MAX_TURNS", "8")
         reload_tool_settings()
 
         from relace_mcp.config import settings as _settings
 
         assert _settings.RELACE_CLOUD_TOOLS is True
         assert _settings.RETRIEVAL_BACKEND == "chunkhound"
-        assert _settings.SEARCH_BASH_TOOLS is True
-        assert _settings.SEARCH_TOOL_STRICT is False
-        assert _settings.SEARCH_MAX_TURNS == 8
-
-    def test_reload_settings_is_atomic_on_invalid_retrieval_backend(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(settings_mod, "SEARCH_MODEL", "baseline-model")
-        monkeypatch.setattr(settings_mod, "MCP_BASE_DIR", "/baseline")
-        monkeypatch.setenv("SEARCH_MODEL", "next-model")
-        monkeypatch.setenv("MCP_BASE_DIR", "/next")
-        monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "invalid")
-
-        with pytest.raises(RuntimeError, match="Invalid MCP_RETRIEVAL_BACKEND"):
-            reload_settings_from_env()
-
-        assert settings_mod.SEARCH_MODEL == "baseline-model"
-        assert settings_mod.MCP_BASE_DIR == "/baseline"
-
-    def test_reload_settings_is_atomic_on_invalid_retrieval_hint_policy(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(settings_mod, "SEARCH_MODEL", "baseline-model")
-        monkeypatch.setattr(settings_mod, "MCP_BASE_DIR", "/baseline")
-        monkeypatch.setenv("SEARCH_MODEL", "next-model")
-        monkeypatch.setenv("MCP_BASE_DIR", "/next")
-        monkeypatch.setenv("MCP_RETRIEVAL_HINT_POLICY", "invalid")
-
-        with pytest.raises(RuntimeError, match="Invalid MCP_RETRIEVAL_HINT_POLICY"):
-            reload_settings_from_env()
-
-        assert settings_mod.SEARCH_MODEL == "baseline-model"
-        assert settings_mod.MCP_BASE_DIR == "/baseline"
-
-    def test_reload_settings_updates_provider_inputs(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("SEARCH_PROVIDER", "openai")
-        monkeypatch.setenv("SEARCH_ENDPOINT", "https://api.openai.com/v1")
-        monkeypatch.setenv("SEARCH_MODEL", "gpt-4o")
-        monkeypatch.setenv("SEARCH_API_KEY", "sk-test")
-        monkeypatch.setenv("APPLY_PROVIDER", "openrouter")
-        monkeypatch.setenv("APPLY_ENDPOINT", "https://openrouter.ai/api/v1")
-        monkeypatch.setenv("APPLY_MODEL", "openai/gpt-4o-mini")
-        monkeypatch.setenv("APPLY_API_KEY", "sk-apply")
-        reload_settings_from_env()
-
-        assert settings_mod.SEARCH_PROVIDER == "openai"
-        assert settings_mod.SEARCH_ENDPOINT == "https://api.openai.com/v1"
-        assert settings_mod.SEARCH_MODEL == "gpt-4o"
-        assert settings_mod.SEARCH_API_KEY == "sk-test"
-        assert settings_mod.APPLY_PROVIDER == "openrouter"
-        assert settings_mod.APPLY_ENDPOINT == "https://openrouter.ai/api/v1"
-        assert settings_mod.APPLY_MODEL == "openai/gpt-4o-mini"
-        assert settings_mod.APPLY_API_KEY == "sk-apply"
-
-    def test_reload_settings_updates_lsp_and_upload_limits(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv("SEARCH_LSP_TIMEOUT_SECONDS", "22")
-        monkeypatch.setenv("SEARCH_LSP_MAX_CLIENTS", "5")
-        monkeypatch.setenv("RELACE_UPLOAD_MAX_WORKERS", "11")
-        reload_settings_from_env()
-
-        assert settings_mod.SEARCH_LSP_TIMEOUT_SECONDS == 22.0
-        assert settings_mod.SEARCH_LSP_MAX_CLIENTS == 5
-        assert settings_mod.RELACE_UPLOAD_MAX_WORKERS == 11

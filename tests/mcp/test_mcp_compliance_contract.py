@@ -1,9 +1,8 @@
-import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from fastmcp import Client
-from mcp.types import TextResourceContents
 
 from relace_mcp.config import RelaceConfig
 from relace_mcp.server import build_server
@@ -11,6 +10,7 @@ from relace_mcp.server import build_server
 CORE_TOOLS = ["fast_apply", "agentic_search"]
 CLOUD_TOOLS = ["cloud_sync", "cloud_search", "cloud_clear", "cloud_list"]
 RETRIEVAL_TOOLS = ["agentic_retrieval"]
+STATUS_TOOL = "index_status"
 
 
 @pytest.fixture
@@ -67,6 +67,92 @@ class TestMCPToolExistence:
 
             for tool in CLOUD_TOOLS:
                 assert tool not in tool_names, f"Cloud tool '{tool}' should NOT be registered"
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("clean_env")
+    async def test_index_status_visible_when_cloud_tools_enabled(
+        self,
+        mock_config: RelaceConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """index_status must be visible when cloud indexing is enabled."""
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "1")
+        with patch("relace_mcp.tools.register.shutil.which", return_value=None):
+            server = build_server(config=mock_config, run_health_check=False)
+
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            tool_names = {t.name for t in tools}
+
+        assert STATUS_TOOL in tool_names
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("clean_env")
+    async def test_index_status_visible_when_codanna_cli_available(
+        self,
+        mock_config: RelaceConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """index_status must be visible when codanna CLI is available."""
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "0")
+
+        def _which(name: str) -> str | None:
+            if name == "codanna":
+                return "/usr/local/bin/codanna"
+            return None
+
+        with patch("relace_mcp.tools.register.shutil.which", side_effect=_which):
+            server = build_server(config=mock_config, run_health_check=False)
+
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            tool_names = {t.name for t in tools}
+
+        assert STATUS_TOOL in tool_names
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("clean_env")
+    async def test_index_status_visible_when_chunkhound_cli_available(
+        self,
+        mock_config: RelaceConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """index_status must be visible when chunkhound CLI is available."""
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "0")
+
+        def _which(name: str) -> str | None:
+            if name == "chunkhound":
+                return "/usr/local/bin/chunkhound"
+            return None
+
+        with patch("relace_mcp.tools.register.shutil.which", side_effect=_which):
+            server = build_server(config=mock_config, run_health_check=False)
+
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            tool_names = {t.name for t in tools}
+
+        assert STATUS_TOOL in tool_names
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("clean_env")
+    async def test_index_status_hidden_without_indexing_capability(
+        self,
+        mock_config: RelaceConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """index_status must be hidden when no cloud or local indexing capability exists."""
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "0")
+        with patch("relace_mcp.tools.register.shutil.which", return_value=None):
+            server = build_server(config=mock_config, run_health_check=False)
+
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            tool_names = {t.name for t in tools}
+
+            assert STATUS_TOOL not in tool_names
+            with pytest.raises(Exception, match="Unknown tool"):
+                await client.call_tool(STATUS_TOOL, {})
 
 
 class TestMCPToolSchemas:
@@ -250,15 +336,18 @@ class TestMCPToolResponseContract:
 class TestMCPResourceExistence:
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("clean_env")
-    async def test_tools_list_resource_exists(self, mock_config: RelaceConfig) -> None:
-        """relace://tools_list resource must be registered."""
+    async def test_tools_list_resource_absent(self, mock_config: RelaceConfig) -> None:
+        """Legacy tools_list resource should not be registered."""
         server = build_server(config=mock_config, run_health_check=False)
 
         async with Client(server) as client:
             resources = await client.list_resources()
             resource_uris = [r.uri for r in resources]
 
-            assert any("tools_list" in str(uri) for uri in resource_uris)
+            assert not any("tools_list" in str(uri) for uri in resource_uris)
+
+            with pytest.raises(Exception, match="Unknown resource"):
+                await client.read_resource("relace://tools_list")
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("clean_env")
@@ -296,28 +385,17 @@ class TestMCPResourceExistence:
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("clean_env")
-    async def test_tools_list_returns_valid_structure(self, mock_config: RelaceConfig) -> None:
-        """relace://tools_list must return list of tool info dicts."""
+    async def test_cloud_status_resource_can_be_read_when_enabled(
+        self,
+        mock_config: RelaceConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Cloud status resource must remain readable when cloud tools are enabled."""
+        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "1")
         server = build_server(config=mock_config, run_health_check=False)
 
         async with Client(server) as client:
-            result = await client.read_resource("relace://tools_list")
-            # FastMCP returns TextContent list
+            result = await client.read_resource("relace://cloud/status")
+
             assert result is not None
             assert len(result) > 0
-            first_content = result[0]
-            # Handle both TextResourceContents and BlobResourceContents
-            if isinstance(first_content, TextResourceContents):
-                content_text = first_content.text
-            else:
-                # BlobResourceContents has blob attribute
-                content_text = first_content.blob.decode("utf-8")  # type: ignore[union-attr]
-
-            tools_list = json.loads(content_text)
-            assert isinstance(tools_list, list)
-            assert len(tools_list) >= 2  # at least core tools
-
-            for tool_info in tools_list:
-                assert "id" in tool_info
-                assert "name" in tool_info
-                assert "enabled" in tool_info

@@ -160,15 +160,14 @@ def build_server(
 
     from fastmcp import FastMCP
 
+    from .background_index_monitor import BackgroundIndexMonitor
     from .config.bootstrap import initialize_runtime_from_env
 
     if initialize_runtime:
         initialize_runtime_from_env()
 
     from .config import RelaceConfig
-    from .config import settings as _settings
     from .middleware import (
-        CloudVisibilityMiddleware,
         ProgressHeartbeatMiddleware,
         RootsMiddleware,
         ToolTracingMiddleware,
@@ -186,11 +185,12 @@ def build_server(
             logger.error("Health check failed: %s", exc)
             raise
 
-    mcp = FastMCP("Relace Fast Apply MCP")
+    background_index_monitor = BackgroundIndexMonitor(config)
+    mcp = FastMCP("Relace Fast Apply MCP", lifespan=background_index_monitor.lifespan)
+    mcp._relace_background_index_monitor = background_index_monitor  # type: ignore[attr-defined]
 
     # Register middleware to handle MCP notifications (e.g., roots/list_changed)
     mcp.add_middleware(RootsMiddleware())
-    mcp.add_middleware(CloudVisibilityMiddleware(cloud_tools_enabled=_settings.RELACE_CLOUD_TOOLS))
     mcp.add_middleware(ProgressHeartbeatMiddleware())
     mcp.add_middleware(ToolTracingMiddleware())
 

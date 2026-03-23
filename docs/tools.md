@@ -2,6 +2,8 @@
 
 This document covers the public top-level MCP tools plus the search-only internal subtools that can be enabled inside `agentic_search` / `agentic_retrieval`.
 
+Use MCP-native discovery for availability: `list_tools()` for tools and `list_resources()` for resources. The legacy `relace://tools_list` catalog resource has been removed.
+
 ## Search Behavior
 
 The live local exploration used by `agentic_search` and `agentic_retrieval` has a few user-visible guarantees:
@@ -104,6 +106,8 @@ Search the codebase and return relevant files and line ranges. Uses an agentic l
 
 ## `index_status`
 
+Available when `RELACE_CLOUD_TOOLS=1` or a local index CLI (`codanna` / `chunkhound`) is discoverable in `PATH`. Hidden otherwise.
+
 Inspect cloud/local indexing readiness. Automatically schedules a background reindex for local backends (Codanna/ChunkHound) when their index is stale or missing.
 
 This tool takes no parameters.
@@ -113,6 +117,7 @@ This tool takes no parameters.
 - `relace`, `codanna`, and `chunkhound` each include `freshness`: `fresh`, `stale`, `missing`, or `unknown`
 - `relace`, `codanna`, and `chunkhound` each include `hints_usable`: whether `agentic_retrieval` may use that backend's semantic hints under `prefer-stale`
 - `codanna` and `chunkhound` include `background_refresh_scheduled`: `true` if a background reindex was triggered
+- `background_monitor` summarizes the opt-in periodic local index monitor: whether it is active, which backend it tracks, and why it may be disabled
 - For local backends, `missing` also covers bootstrap/empty index directories that do not yet contain usable index artifacts
 - For Relace cloud: if stale, `status.recommended_action` tells you to run `cloud_sync()`
 

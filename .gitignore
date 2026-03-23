@@ -23,8 +23,10 @@ dist/
 # IDE / Editor / AI agent
 .vscode/
 .cursor/
+.claude/
 .kilocode/
 .kiro/
+.github/copilot-instructions.md
 .gemini/
 .agent/
 .augment/
@@ -37,8 +39,11 @@ CLAUDE.md
 .chunkhound.json
 .codanna/
 .codannaignore
+.lock-index/
 .fastembed_cache
-benchmark/artifacts/
+.bench-repos/
+.dev
+benchmark/.data/
 sonar-project.properties
 site/
 plans/

@@ -120,10 +120,7 @@ class TestGrepSearchIntegration:
         assert "noext" not in result
 
 
-@pytest.mark.skip(reason="glob tool pending removal")
 class TestGlobIntegration:
-    """Historical glob integration tests kept for future re-enablement."""
-
     def test_glob_py_files(self, tmp_path: Path) -> None:
         (tmp_path / "main.py").write_text("code")
         sub = tmp_path / "pkg"

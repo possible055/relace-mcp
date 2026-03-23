@@ -16,6 +16,7 @@ from .index_state import (
     _write_dirty_ts,
     _write_indexed_head,
 )
+from .locking import BackendIndexRunResult, try_acquire_backend_index_lock
 from .registry import (
     _bg_codanna_pending,
     _bg_index_rerun,
@@ -25,6 +26,14 @@ from .registry import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _mark_codanna_index_fresh(base_dir: str) -> None:
+    head = get_git_head(base_dir)
+    if head:
+        _write_indexed_head(base_dir, head, _CODANNA_HEAD_FILE)
+    if is_git_dirty(base_dir):
+        _write_dirty_ts(base_dir, _CODANNA_DIRTY_TS_FILE)
 
 
 def _build_codanna_env() -> dict[str, str]:
@@ -314,7 +323,7 @@ def codanna_index_file(file_path: str, base_dir: str) -> None:
     logger.debug("Codanna incremental reindex triggered by edit: %s", rel_path)
 
 
-async def _async_run_codanna_index(file_path: str, base_dir: str) -> None:
+async def _async_run_codanna_index(file_path: str, base_dir: str) -> BackendIndexRunResult:
     env = _build_codanna_env()
     rel_path = _resolve_codanna_rel_path(file_path, base_dir)
     command = ["codanna", "index", rel_path]
@@ -341,161 +350,240 @@ async def _async_run_codanna_index(file_path: str, base_dir: str) -> None:
         }
     )
 
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "codanna",
-            "index",
-            rel_path,
-            cwd=base_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
-    except FileNotFoundError as exc:
-        latency_ms = int((time.perf_counter() - started) * 1000)
-        logger.warning("codanna CLI not found in background index; disabling backend")
-        disable_backend("codanna", "cli_not_found: codanna not in PATH")
-        log_trace_event(
-            {
-                "kind": "cli_error",
-                "cli": "codanna",
-                "mode": "text",
-                "error_type": type(exc).__name__,
-                "error": str(exc),
-                **payload,
-            }
-        )
+    lease = try_acquire_backend_index_lock(base_dir, "codanna")
+    if not lease.acquired:
         log_event(
             {
-                "kind": "backend_index_error",
-                "level": "error",
-                "latency_ms": latency_ms,
-                "error_kind": "cli_not_found",
-                "error": "codanna CLI not found",
+                "kind": "backend_index_skipped",
+                "level": "info",
+                "reason": lease.reason,
+                "lock_path": lease.lock_path,
                 **payload,
             }
         )
-        return
-    except OSError as exc:
-        latency_ms = int((time.perf_counter() - started) * 1000)
-        logger.warning("codanna background index failed to start: %s", exc)
-        log_trace_event(
-            {
-                "kind": "cli_error",
-                "cli": "codanna",
-                "mode": "text",
-                "error_type": type(exc).__name__,
-                "error": str(exc),
-                **payload,
-            }
+        logger.info("Codanna background index skipped for %s (%s)", rel_path, lease.reason)
+        return BackendIndexRunResult(
+            status="lock_held" if lease.reason == "lock_held" else "lock_error",
+            reason=lease.reason,
+            lock_path=lease.lock_path,
         )
-        log_event(
-            {
-                "kind": "backend_index_error",
-                "level": "error",
-                "latency_ms": latency_ms,
-                "error_kind": "os_error",
-                "error": redact_value(str(exc), 500),
-                **payload,
-            }
-        )
-        return
 
     try:
-        stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
-    except TimeoutError as exc:
         try:
-            proc.kill()
-        except ProcessLookupError:
-            pass
+            proc = await asyncio.create_subprocess_exec(
+                "codanna",
+                "index",
+                rel_path,
+                cwd=base_dir,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+            )
+        except FileNotFoundError as exc:
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            logger.warning("codanna CLI not found in background index; disabling backend")
+            disable_backend("codanna", "cli_not_found: codanna not in PATH")
+            log_trace_event(
+                {
+                    "kind": "cli_error",
+                    "cli": "codanna",
+                    "mode": "text",
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    **payload,
+                }
+            )
+            log_event(
+                {
+                    "kind": "backend_index_error",
+                    "level": "error",
+                    "latency_ms": latency_ms,
+                    "error_kind": "cli_not_found",
+                    "error": "codanna CLI not found",
+                    "lock_path": lease.lock_path,
+                    **payload,
+                }
+            )
+            return BackendIndexRunResult(
+                status="cli_not_found",
+                reason="codanna CLI not found",
+                lock_path=lease.lock_path,
+            )
+        except OSError as exc:
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            logger.warning("codanna background index failed to start: %s", exc)
+            log_trace_event(
+                {
+                    "kind": "cli_error",
+                    "cli": "codanna",
+                    "mode": "text",
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    **payload,
+                }
+            )
+            log_event(
+                {
+                    "kind": "backend_index_error",
+                    "level": "error",
+                    "latency_ms": latency_ms,
+                    "error_kind": "os_error",
+                    "error": redact_value(str(exc), 500),
+                    "lock_path": lease.lock_path,
+                    **payload,
+                }
+            )
+            return BackendIndexRunResult(
+                status="spawn_error",
+                reason=str(exc),
+                lock_path=lease.lock_path,
+            )
+
+        try:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(), timeout=timeout_s
+            )
+        except TimeoutError as exc:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            logger.warning("Codanna background index timed out for %s", rel_path)
+            log_trace_event(
+                {
+                    "kind": "cli_error",
+                    "cli": "codanna",
+                    "mode": "text",
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    **payload,
+                }
+            )
+            log_event(
+                {
+                    "kind": "backend_index_error",
+                    "level": "error",
+                    "latency_ms": latency_ms,
+                    "error_kind": "timeout",
+                    "error": "codanna index timed out",
+                    "lock_path": lease.lock_path,
+                    **payload,
+                }
+            )
+            return BackendIndexRunResult(
+                status="timeout",
+                reason="codanna index timed out",
+                lock_path=lease.lock_path,
+            )
+
         latency_ms = int((time.perf_counter() - started) * 1000)
-        logger.warning("Codanna background index timed out for %s", rel_path)
+        stdout = (stdout_bytes or b"").decode("utf-8", errors="replace")
+        stderr = (stderr_bytes or b"").decode("utf-8", errors="replace")
+
+        if proc.returncode != 0:
+            stderr_str = stderr.strip()
+            logger.warning(
+                "Codanna background index failed (exit %d): %s",
+                proc.returncode,
+                stderr_str,
+            )
+            log_trace_event(
+                {
+                    "kind": "cli_error",
+                    "cli": "codanna",
+                    "mode": "text",
+                    "returncode": proc.returncode,
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "detail": stderr_str,
+                    **payload,
+                }
+            )
+            log_event(
+                {
+                    "kind": "backend_index_error",
+                    "level": "error",
+                    "latency_ms": latency_ms,
+                    "returncode": proc.returncode,
+                    "stderr_preview": redact_value(stderr_str, 500),
+                    "lock_path": lease.lock_path,
+                    **payload,
+                }
+            )
+            return BackendIndexRunResult(
+                status="nonzero_exit",
+                reason=stderr_str,
+                lock_path=lease.lock_path,
+            )
+
         log_trace_event(
             {
-                "kind": "cli_error",
-                "cli": "codanna",
-                "mode": "text",
-                "error_type": type(exc).__name__,
-                "error": str(exc),
-                **payload,
-            }
-        )
-        log_event(
-            {
-                "kind": "backend_index_error",
-                "level": "error",
-                "latency_ms": latency_ms,
-                "error_kind": "timeout",
-                "error": "codanna index timed out",
-                **payload,
-            }
-        )
-        return
-
-    latency_ms = int((time.perf_counter() - started) * 1000)
-    stdout = (stdout_bytes or b"").decode("utf-8", errors="replace")
-    stderr = (stderr_bytes or b"").decode("utf-8", errors="replace")
-
-    if proc.returncode != 0:
-        stderr_str = stderr.strip()
-        logger.warning("Codanna background index failed (exit %d): %s", proc.returncode, stderr_str)
-        log_trace_event(
-            {
-                "kind": "cli_error",
+                "kind": "cli_response",
                 "cli": "codanna",
                 "mode": "text",
                 "returncode": proc.returncode,
                 "stdout": stdout,
                 "stderr": stderr,
-                "detail": stderr_str,
                 **payload,
             }
         )
         log_event(
             {
-                "kind": "backend_index_error",
-                "level": "error",
+                "kind": "backend_index_complete",
+                "level": "info",
                 "latency_ms": latency_ms,
                 "returncode": proc.returncode,
-                "stderr_preview": redact_value(stderr_str, 500),
+                "stdout_len": len(stdout),
+                "stderr_len": len(stderr),
+                "lock_path": lease.lock_path,
                 **payload,
             }
         )
-        return
-
-    log_trace_event(
-        {
-            "kind": "cli_response",
-            "cli": "codanna",
-            "mode": "text",
-            "returncode": proc.returncode,
-            "stdout": stdout,
-            "stderr": stderr,
-            **payload,
-        }
-    )
-    log_event(
-        {
-            "kind": "backend_index_complete",
-            "level": "info",
-            "latency_ms": latency_ms,
-            "returncode": proc.returncode,
-            "stdout_len": len(stdout),
-            "stderr_len": len(stderr),
-            **payload,
-        }
-    )
-    logger.debug("Codanna background index completed for %s", rel_path)
+        logger.debug("Codanna background index completed for %s", rel_path)
+        return BackendIndexRunResult(status="completed", lock_path=lease.lock_path)
+    finally:
+        lease.release()
 
 
-async def _async_run_codanna_full_index(base_dir: str) -> None:
+async def _async_run_codanna_full_index(base_dir: str) -> BackendIndexRunResult:
     """Background full Codanna init+index when the index may not exist yet."""
+    lease = try_acquire_backend_index_lock(base_dir, "codanna")
+    if not lease.acquired:
+        log_event(
+            {
+                "kind": "backend_index_skipped",
+                "level": "info",
+                "backend": "codanna",
+                "op": "index",
+                "cwd": base_dir,
+                "background": True,
+                "reason": lease.reason,
+                "lock_path": lease.lock_path,
+            }
+        )
+        logger.info("Codanna full background index skipped for %s (%s)", base_dir, lease.reason)
+        return BackendIndexRunResult(
+            status="lock_held" if lease.reason == "lock_held" else "lock_error",
+            reason=lease.reason,
+            lock_path=lease.lock_path,
+        )
+
     try:
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _ensure_codanna_index, base_dir, _build_codanna_env())
+        _mark_codanna_index_fresh(base_dir)
         logger.debug("Codanna full background init+index completed for %s", base_dir)
+        return BackendIndexRunResult(status="completed", lock_path=lease.lock_path)
     except (RuntimeError, OSError) as exc:
         logger.warning("Codanna full background init+index failed: %s", exc)
+        return BackendIndexRunResult(
+            status="error",
+            reason=str(exc),
+            lock_path=lease.lock_path,
+        )
+    finally:
+        lease.release()
 
 
 def schedule_bg_codanna_full_index(base_dir: str) -> None:
@@ -506,7 +594,7 @@ def schedule_bg_codanna_full_index(base_dir: str) -> None:
         _bg_index_rerun[key] = True
         return
 
-    def _on_done(_task: asyncio.Task[None]) -> None:
+    def _on_done(_task: asyncio.Task[Any]) -> None:
         _bg_codanna_pending.pop(key, None)
         if _bg_index_rerun.pop(key, False):
             schedule_bg_codanna_full_index(base_dir)
@@ -528,7 +616,7 @@ def schedule_bg_codanna_index(file_path: str, base_dir: str) -> None:
         pending.add(file_path)
         return
 
-    def _on_done(_task: asyncio.Task[None]) -> None:
+    def _on_done(_task: asyncio.Task[Any]) -> None:
         pending = _bg_codanna_pending.get(key)
         if not pending:
             _bg_codanna_pending.pop(key, None)

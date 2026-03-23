@@ -11,7 +11,78 @@ SEARCH_KINDS = frozenset(
     {"search_start", "search_turn", "tool_call", "search_complete", "search_error"}
 )
 INSIGHTS_KINDS = frozenset({"search_start", "search_turn", "tool_call"})
-ALL_KINDS = APPLY_KINDS | SEARCH_KINDS
+BACKEND_KINDS = frozenset(
+    {
+        "index_status",
+        "index_status_error",
+        "backend_index_start",
+        "backend_index_complete",
+        "backend_index_error",
+        "backend_index_skipped",
+        "backend_disabled",
+        "retrieval_backend_selected",
+        "retrieval_hints_skipped",
+        "retrieval_hints_complete",
+        "retrieval_hints_error",
+        "background_index_monitor_started",
+        "background_index_monitor_tick",
+    }
+)
+CLOUD_KINDS = frozenset(
+    {
+        "cloud_sync_start",
+        "cloud_sync_complete",
+        "cloud_sync_error",
+        "cloud_search_start",
+        "cloud_search_complete",
+        "cloud_search_error",
+        "cloud_list_start",
+        "cloud_list_complete",
+        "cloud_list_error",
+        "cloud_clear_start",
+        "cloud_clear_complete",
+        "cloud_clear_error",
+        "cloud_info_start",
+        "cloud_info_complete",
+        "cloud_info_error",
+    }
+)
+LSP_KINDS = frozenset(
+    {
+        "lsp_server_start",
+        "lsp_server_stop",
+        "lsp_server_error",
+        "lsp_request_error",
+        "lsp_client_created",
+        "lsp_client_evicted",
+    }
+)
+TOOLING_KINDS = frozenset(
+    {
+        "tool_start",
+        "tool_complete",
+        "tool_error",
+        "mcp_tool_request",
+        "mcp_tool_response",
+        "mcp_tool_exception",
+        "agent_tool_call",
+        "llm_request",
+        "llm_response",
+        "llm_error",
+        "cli_request",
+        "cli_response",
+        "cli_error",
+        "server_start",
+    }
+)
+ERROR_KINDS = frozenset(
+    kind
+    for kind in (
+        APPLY_KINDS | SEARCH_KINDS | BACKEND_KINDS | CLOUD_KINDS | LSP_KINDS | TOOLING_KINDS
+    )
+    if "error" in kind or kind.endswith("_exception")
+)
+ALL_KINDS = APPLY_KINDS | SEARCH_KINDS | BACKEND_KINDS | CLOUD_KINDS | LSP_KINDS | TOOLING_KINDS
 
 
 def get_log_path() -> Path:

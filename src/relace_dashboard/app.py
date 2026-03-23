@@ -13,6 +13,8 @@ from textual.widgets import Button, ContentSwitcher, Footer, RichLog, Static
 
 from .log_reader import (
     ALL_KINDS,
+    ERROR_KINDS,
+    INSIGHTS_KINDS,
     filter_event,
     get_log_path,
     parse_log_event,
@@ -411,9 +413,9 @@ class LogViewerApp(App[None]):
             switcher.current = "tree-search"
         elif self._enabled_kinds == APPLY_KINDS:
             switcher.current = "log-apply"
-        elif self._enabled_kinds == {"search_start", "search_turn", "tool_call"}:  # INSIGHTS_KINDS
+        elif self._enabled_kinds == INSIGHTS_KINDS:
             switcher.current = "tree-insights"
-        elif self._enabled_kinds == {"apply_error", "search_error"}:
+        elif self._enabled_kinds == ERROR_KINDS:
             switcher.current = "log-errors"
         else:
             # Default to All

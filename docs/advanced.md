@@ -32,6 +32,9 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `RELACE_CLOUD_TOOLS` | `0` | Set to `1` to enable cloud tools (cloud_sync, cloud_search, etc.) |
 | `MCP_SEARCH_RETRIEVAL` | `0` | Set to `1` to register the `agentic_retrieval` tool |
 | `MCP_RETRIEVAL_BACKEND` | `relace` | Semantic retrieval backend: `relace`, `codanna`, `chunkhound`, `auto`, `none` |
+| `MCP_BACKGROUND_INDEX_MONITOR` | `0` | Opt-in periodic refresh monitor for local indexes; requires `MCP_BASE_DIR` and a local backend |
+| `MCP_BACKGROUND_INDEX_INTERVAL_SECONDS` | `300` | Interval between periodic local index checks |
+| `MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS` | `30` | Startup delay before the first periodic local index check |
 
 > **Note:** `RELACE_API_KEY` can be omitted if **both**: (1) using non-Relace providers for `APPLY_PROVIDER` and `SEARCH_PROVIDER`, and (2) `RELACE_CLOUD_TOOLS=false`. Otherwise it is required.
 
@@ -202,6 +205,27 @@ MCP_RETRIEVAL_BACKEND=auto
 The server picks the first available backend per session: `codanna` → `chunkhound` → `relace` (cloud fallback).
 
 When the selected local backend is stale or missing, retrieval can schedule a background refresh. The query path does not block on rebuild completion.
+
+### Background Index Monitor
+
+```bash
+MCP_SEARCH_RETRIEVAL=1
+MCP_RETRIEVAL_BACKEND=codanna
+MCP_BASE_DIR=/absolute/path/to/repo
+MCP_BACKGROUND_INDEX_MONITOR=1
+```
+
+`index_status` is exposed only when `RELACE_CLOUD_TOOLS=1` or a local index CLI (`codanna` / `chunkhound`) is discoverable in `PATH`.
+
+When enabled, the server runs a periodic local-only freshness check and triggers a background refresh for the selected local backend when needed.
+
+- It is `off` by default.
+- It only starts when `MCP_BASE_DIR` is pinned to a single repository.
+- It only monitors the active local backend (`codanna`, `chunkhound`, or the local choice from `auto`).
+- It uses a host-local file lock to avoid duplicate index CLI runs when multiple local MCP processes happen to point at the same repo.
+- It is intended for single-process deployments. For multi-worker or multi-pod HTTP deployments, disable it and use backend-native watch/daemon flows or an external scheduler.
+
+`index_status` includes a `background_monitor` summary so you can verify whether the monitor is active and why it may be disabled.
 
 ---
 
@@ -405,6 +429,8 @@ When enabled, `bash` stays on the current minimum-security model:
 ## Remote Deployment (Streamable HTTP)
 
 > **Security:** This server can read/write files. Do **NOT** expose directly to the internet. Use `stdio`, or put HTTP behind authentication/VPN.
+>
+> **Deployment scope:** Stateful MCP HTTP sessions are process-local. For `streamable-http`, use a single server process per pinned repo if you rely on session state or the background index monitor. Multi-worker or multi-pod deployments need external coordination and should keep `MCP_BACKGROUND_INDEX_MONITOR=0`.
 
 ### Running the Server
 

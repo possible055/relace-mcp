@@ -2,6 +2,8 @@
 
 本文档说明对外可见的 top-level MCP tools，以及 `agentic_search` / `agentic_retrieval` 内部可启用的 search-only subtools。
 
+可用性发现请使用 MCP 原生接口：tools 用 `list_tools()`，resources 用 `list_resources()`。旧的 `relace://tools_list` catalog resource 已移除。
+
 ## 搜索行为
 
 `agentic_search` 与 `agentic_retrieval` 背后的 live local exploration 有几个对用户可感知的保证：
@@ -104,15 +106,18 @@
 
 ## `index_status`
 
-检查 cloud/local indexing readiness。若本地 backend（Codanna/ChunkHound）的 index 过期或缺失，自动安排后台 reindex 任务。
+仅在 `RELACE_CLOUD_TOOLS=1`，或 `PATH` 中可发现本地 index CLI（`codanna` / `chunkhound`）时暴露；否则会被隐藏。
 
-此工具无参数。
+检查 cloud/local 索引就绪状态。当本地后端（Codanna/ChunkHound）的 index 处于 stale 或 missing 时，会自动排程 background reindex。
+
+此工具不接受参数。
 
 ### 返回
 
 - `relace`、`codanna`、`chunkhound` 都会包含 `freshness`：`fresh`、`stale`、`missing` 或 `unknown`
 - `relace`、`codanna`、`chunkhound` 都会包含 `hints_usable`：表示在 `prefer-stale` 下 `agentic_retrieval` 是否可以使用该 backend 的 semantic hints
 - `codanna` 和 `chunkhound` 包含 `background_refresh_scheduled`：`true` 表示已触发后台 reindex
+- `background_monitor` 会汇总可选的周期 local index monitor：是否处于活动状态、当前追踪哪个 backend，以及为何可能被禁用
 - 对 local backend 而言，`missing` 也包括仅创建了目录、但尚未生成可用 index artifact 的 bootstrap / empty 目录
 - Relace cloud 若过期，`status.recommended_action` 会告知调用 `cloud_sync()`
 
