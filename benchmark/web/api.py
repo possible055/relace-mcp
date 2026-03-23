@@ -101,6 +101,9 @@ def create_app(experiments_root: Path) -> FastAPI:
             return {"case_ids": intersect_case_ids(roots)}
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="Search map bundle not found.") from exc
+        except Exception as exc:
+            logger.exception("Failed to compute case intersection")
+            raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
     @app.post("/api/run-case/detail")
     def run_case_detail(request: RunCaseDetailRequest) -> dict[str, Any]:
@@ -109,6 +112,9 @@ def create_app(experiments_root: Path) -> FastAPI:
             return load_search_map_case(experiment_root, request.case_id)
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            logger.exception(f"Failed to load case detail for {request.experiment_root}")
+            raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
     @app.post("/api/case-map/compare")
     def compare(request: CompareRequest) -> dict[str, Any]:

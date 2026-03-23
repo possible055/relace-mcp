@@ -109,7 +109,7 @@ export default function CaseCompare() {
     () => intersectionQuery.data?.case_ids ?? [],
     [intersectionQuery.data],
   )
-  const activeCaseId = caseIdInput || commonCaseIds[0] || ''
+  const activeCaseId = caseIdInput.trim() || commonCaseIds[0] || ''
 
   const commitCaseId = (nextCaseId: string) => {
     const next = new URLSearchParams(searchParams)
@@ -162,9 +162,9 @@ export default function CaseCompare() {
             <label className="type-label-01 text-[var(--cds-text-secondary)]">
               Case ID
               <input
-                value={caseIdInput || commonCaseIds[0] || ''}
+                value={caseIdInput}
                 onChange={(event) => setCaseIdInput(event.target.value)}
-                onBlur={() => commitCaseId(caseIdInput || commonCaseIds[0] || '')}
+                onBlur={() => commitCaseId(caseIdInput.trim())}
                 className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 py-2 type-body-compact-01"
                 placeholder="Enter case_id"
               />
