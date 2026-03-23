@@ -1,0 +1,25 @@
+benchmark/analysis/trace_artifacts.py
+  4aee75dd79bdbb2c 231,233,258,265,422-423,429-430
+benchmark/web/api.py
+  4aee75dd79bdbb2c 1,15,34-36,39,70,79-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "0a42b49cebcf5d646db6076d88d732df5ab20a87",
+  "prompts": {
+    "4aee75dd79bdbb2c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aaf2f86a-90e1-4fbc-b34b-f7fa4c4b4059",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 30,
+      "total_deletions": 19,
+      "accepted_lines": 22,
+      "overriden_lines": 0
+    }
+  }
+}
