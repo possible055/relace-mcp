@@ -1,0 +1,25 @@
+src/relace_mcp/background_index_monitor.py
+  d8c120b72e916ee7 36-37
+.gitignore
+  d8c120b72e916ee7 42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "980631cb484e52db2ce442e2d406274580f6b973",
+  "prompts": {
+    "d8c120b72e916ee7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cc1d9e18-aa14-4937-90e5-a71373853d42",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 4,
+      "total_deletions": 1,
+      "accepted_lines": 3,
+      "overriden_lines": 0
+    }
+  }
+}
