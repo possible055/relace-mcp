@@ -1,0 +1,23 @@
+src/relace_mcp/search/schemas/tool_schemas.py
+  d8c120b72e916ee7 108-154
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "0e7df2e100177f38f47475208e954c59568c3cd7",
+  "prompts": {
+    "d8c120b72e916ee7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cc1d9e18-aa14-4937-90e5-a71373853d42",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 47,
+      "total_deletions": 46,
+      "accepted_lines": 47,
+      "overriden_lines": 0
+    }
+  }
+}
