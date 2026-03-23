@@ -1,3 +1,4 @@
+import logging
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,8 @@ from benchmark.analysis.case_map_compare import build_case_map_compare
 from benchmark.analysis.search_map_bundle import load_search_map_bundle
 
 from .discovery import list_experiments
+
+logger = logging.getLogger(__name__)
 
 
 class BundleRequest(BaseModel):
@@ -28,8 +31,12 @@ def _resolve_within_root(root: Path, raw_path: str) -> Path:
 
     resolved_root = root.resolve()
     resolved_candidate = candidate.resolve()
-    if not resolved_candidate.is_relative_to(resolved_root):
-        raise HTTPException(status_code=400, detail="Path must be inside experiments root.")
+    try:
+        resolved_candidate.relative_to(resolved_root)
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail="Path must be inside experiments root."
+        ) from None
     return resolved_candidate
 
 
@@ -60,11 +67,21 @@ def create_app(experiments_root: Path) -> FastAPI:
 
     @app.post("/api/search-map/bundle")
     def bundle(request: BundleRequest) -> dict[str, Any]:
-        experiment_root = _resolve_within_root(app.state.experiments_root, request.experiment_root)
-        traces_dir = experiment_root / "traces"
-        if not traces_dir.is_dir():
-            raise HTTPException(status_code=404, detail="Experiment traces directory not found.")
-        return load_search_map_bundle(experiment_root)
+        try:
+            experiment_root = _resolve_within_root(
+                app.state.experiments_root, request.experiment_root
+            )
+            traces_dir = experiment_root / "traces"
+            if not traces_dir.is_dir():
+                raise HTTPException(
+                    status_code=404, detail="Experiment traces directory not found."
+                )
+            return load_search_map_bundle(experiment_root)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception(f"Failed to load bundle for {request.experiment_root}")
+            raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
     @app.post("/api/case-map/compare")
     def compare(request: CompareRequest) -> dict[str, Any]:
