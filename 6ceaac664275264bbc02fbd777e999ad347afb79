@@ -1,0 +1,41 @@
+src/relace_mcp/search/schemas/tool_schemas.py
+  4193d5d5e6970ce2 108-152,446
+src/relace_mcp/repo/backends/locking.py
+  4193d5d5e6970ce2 67-92,94,97-98,135-137,139
+tests/search/test_harness_unit.py
+  9e2169cac2a41d48 339,341
+  4193d5d5e6970ce2 532,537,552,561,583,588
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "6ceaac664275264bbc02fbd777e999ad347afb79",
+  "prompts": {
+    "4193d5d5e6970ce2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0a15edbd-e251-49a8-bf50-4bac86832c07",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 84,
+      "total_deletions": 58,
+      "accepted_lines": 85,
+      "overriden_lines": 0
+    },
+    "9e2169cac2a41d48": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09c6d8a5-74e6-4ebc-a86d-a1ed1f4b88ad",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
