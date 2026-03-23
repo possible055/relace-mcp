@@ -4,46 +4,8 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
-from pydantic import BaseModel
-
-from benchmark.analysis.case_map_compare import build_case_map_compare
-from benchmark.analysis.search_map_bundle import (
-    intersect_case_ids,
-    load_search_map_bundle,
-    load_search_map_case,
-)
 
 from .discovery import list_experiments
-
-
-class BundleRequest(BaseModel):
-    experiment_root: str
-
-
-class CompareRequest(BaseModel):
-    case_id: str
-    experiment_roots: list[str]
-
-
-class CaseIntersectionRequest(BaseModel):
-    experiment_roots: list[str]
-
-
-class RunCaseDetailRequest(BaseModel):
-    experiment_root: str
-    case_id: str
-
-
-def _resolve_within_root(root: Path, raw_path: str) -> Path:
-    candidate = Path(raw_path)
-    if not candidate.is_absolute():
-        candidate = root / candidate
-
-    resolved_root = root.resolve()
-    resolved_candidate = candidate.resolve()
-    if not resolved_candidate.is_relative_to(resolved_root):
-        raise HTTPException(status_code=400, detail="Path must be inside experiments root.")
-    return resolved_candidate
 
 
 def _frontend_dist_root() -> Path:
@@ -71,49 +33,12 @@ def create_app(experiments_root: Path) -> FastAPI:
     def experiments() -> list[dict[str, Any]]:
         return list_experiments(app.state.experiments_root)
 
-    @app.post("/api/search-map/bundle")
-    def bundle(request: BundleRequest) -> dict[str, Any]:
-        experiment_root = _resolve_within_root(app.state.experiments_root, request.experiment_root)
-        try:
-            return load_search_map_bundle(experiment_root)
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="Search map bundle not found.") from exc
-
-    @app.post("/api/cases/intersection")
-    def case_intersection(request: CaseIntersectionRequest) -> dict[str, list[str]]:
-        if not request.experiment_roots:
-            raise HTTPException(status_code=400, detail="experiment_roots must not be empty.")
-        roots = [
-            _resolve_within_root(app.state.experiments_root, root)
-            for root in request.experiment_roots
-        ]
-        try:
-            return {"case_ids": intersect_case_ids(roots)}
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="Search map bundle not found.") from exc
-
-    @app.post("/api/run-case/detail")
-    def run_case_detail(request: RunCaseDetailRequest) -> dict[str, Any]:
-        experiment_root = _resolve_within_root(app.state.experiments_root, request.experiment_root)
-        try:
-            return load_search_map_case(experiment_root, request.case_id)
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-    @app.post("/api/case-map/compare")
-    def compare(request: CompareRequest) -> dict[str, Any]:
-        if not request.experiment_roots:
-            raise HTTPException(status_code=400, detail="experiment_roots must not be empty.")
-        roots = [
-            _resolve_within_root(app.state.experiments_root, root)
-            for root in request.experiment_roots
-        ]
-        try:
-            return build_case_map_compare(request.case_id, roots)
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="Search map bundle not found.") from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    @app.api_route(
+        "/api/{api_path:path}",
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    )
+    def missing_api(api_path: str) -> None:
+        raise HTTPException(status_code=404, detail="Not found")
 
     @app.get("/", response_class=HTMLResponse, response_model=None)
     def root():
@@ -125,9 +50,6 @@ def create_app(experiments_root: Path) -> FastAPI:
 
     @app.get("/{asset_path:path}", response_model=None)
     def spa_assets(asset_path: str):
-        if asset_path.startswith("api/"):
-            raise HTTPException(status_code=404, detail="Not found")
-
         dist_root = _frontend_dist_root()
         candidate = (dist_root / asset_path).resolve()
         if (

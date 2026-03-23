@@ -1,13 +1,10 @@
 import { useCallback, useState } from 'react'
-import { ChevronLeft, FlaskConical, GitCompareArrows, Layers3 } from 'lucide-react'
+import { ChevronLeft, FlaskConical, Layers3 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 const COLLAPSED_KEY = 'sidebar-collapsed'
 
-const links = [
-  { to: '/experiments', label: 'Experiments', icon: Layers3 },
-  { to: '/compare', label: 'Case Compare', icon: GitCompareArrows },
-]
+const links = [{ to: '/experiments', label: 'Experiments', icon: Layers3 }]
 
 function expandingLabelClass(collapsed: boolean, expandedWidthClass: string): string {
   return `pointer-events-none overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 motion-reduce:transition-none ${
@@ -42,12 +39,12 @@ export default function Sidebar() {
 
   return (
     <aside
-      className={`hidden h-screen shrink-0 flex-col overflow-hidden border-r border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] transition-[width] duration-200 motion-reduce:transition-none md:flex ${
+      className={`hidden shrink-0 flex-col self-stretch border-r border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] transition-[width] duration-200 motion-reduce:transition-none md:flex ${
         collapsed ? 'w-14' : 'w-72'
       }`}
     >
       <div
-        className={`flex h-12 shrink-0 items-center overflow-hidden border-b border-[var(--cds-border-strong-01)] transition-[padding-left,padding-right] duration-200 motion-reduce:transition-none ${
+        className={`flex h-12 shrink-0 items-center overflow-hidden border-b border-[var(--cds-border-subtle-01)] transition-[padding-left,padding-right] duration-200 motion-reduce:transition-none ${
           collapsed ? 'px-[18px]' : 'px-3'
         }`}
       >
