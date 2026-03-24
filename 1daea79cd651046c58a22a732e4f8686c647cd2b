@@ -1,0 +1,81 @@
+benchmark/viewer/frontend/src/lib/api.ts
+  1bd8510c33db6ca1 2-9,16-26,30-113
+benchmark/domain/checkpoint.py
+  1bd8510c33db6ca1 1-8,10-33,35-55,57-116,118-256
+benchmark/tests/domain/__init__.py
+  1bd8510c33db6ca1 1
+benchmark/viewer/frontend/src/pages/Cases.tsx
+  1bd8510c33db6ca1 1-154
+benchmark/viewer/api/__init__.py
+  1bd8510c33db6ca1 1-14
+benchmark/viewer/api/cases.py
+  1bd8510c33db6ca1 1-207
+benchmark/viewer/frontend/src/lib/types.ts
+  1bd8510c33db6ca1 2,4-81
+benchmark/tests/domain/test_checkpoint.py
+  1bd8510c33db6ca1 1-204
+benchmark/tests/domain/test_layered_metrics.py
+  1bd8510c33db6ca1 1-258
+benchmark/domain/metrics/engine.py
+  1bd8510c33db6ca1 1-218
+benchmark/tests/services/test_experiment_service.py
+  1bd8510c33db6ca1 1-315
+benchmark/tests/domain/test_tool_registry.py
+  1bd8510c33db6ca1 1-101
+benchmark/domain/metrics/layered.py
+  1bd8510c33db6ca1 1-239
+benchmark/viewer/frontend/src/pages/ExperimentDetail.tsx
+  1bd8510c33db6ca1 1-164
+benchmark/domain/__init__.py
+  1bd8510c33db6ca1 1-10,12-27,40-41,43-50,53-54,60
+benchmark/tests/services/__init__.py
+  1bd8510c33db6ca1 1
+benchmark/tests/domain/test_experiment.py
+  1bd8510c33db6ca1 1-218
+benchmark/services/__init__.py
+  1bd8510c33db6ca1 1-14
+benchmark/infrastructure/__init__.py
+  1bd8510c33db6ca1 1-15
+benchmark/viewer/api/experiments.py
+  1bd8510c33db6ca1 1-167
+benchmark/services/experiment_service.py
+  1bd8510c33db6ca1 1-7,10,12-26,28-52,54-122,124-136,138-147,149-316,318-370,372-420
+benchmark/viewer/frontend/src/App.tsx
+  1bd8510c33db6ca1 6-8,24-26
+benchmark/domain/experiment.py
+  1bd8510c33db6ca1 1-13,15-255,258-270,272-306,308-309,311-336
+benchmark/domain/tools/registry.py
+  1bd8510c33db6ca1 1-181
+benchmark/domain/metrics/__init__.py
+  1bd8510c33db6ca1 1-24
+benchmark/infrastructure/cache.py
+  1bd8510c33db6ca1 1-248
+benchmark/viewer/api/metrics.py
+  1bd8510c33db6ca1 1-228
+benchmark/domain/tools/__init__.py
+  1bd8510c33db6ca1 1-12
+benchmark/viewer/server.py
+  1bd8510c33db6ca1 8-10,31-35,40-42
+benchmark/viewer/frontend/src/pages/CaseDetail.tsx
+  1bd8510c33db6ca1 1-194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.18",
+  "base_commit_sha": "1daea79cd651046c58a22a732e4f8686c647cd2b",
+  "prompts": {
+    "1bd8510c33db6ca1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1370f152-acc6-47fe-adfa-0660d84c09b5",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 2889,
+      "total_deletions": 21,
+      "accepted_lines": 4601,
+      "overriden_lines": 0
+    }
+  }
+}
