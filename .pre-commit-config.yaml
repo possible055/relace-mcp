@@ -66,14 +66,14 @@ repos:
       # Frontend lint — oxlint for fast staged-file checks
       - id: benchmark-frontend-lint
         name: benchmark frontend oxlint
-        entry: bash -c 'cd benchmark/viewer/frontend && args=(); for f in "$@"; do args+=("${f#benchmark/viewer/frontend/}"); done; if [ -x ./node_modules/.bin/oxlint ]; then ./node_modules/.bin/oxlint "${args[@]}"; else npm exec --yes --package=oxlint@1.56.0 -- oxlint "${args[@]}"; fi' --
+        entry: bash scripts/run-benchmark-frontend-hook.sh oxlint
         language: system
         files: '^benchmark/viewer/frontend/.*\.(ts|tsx|js|jsx)$'
 
       # Frontend type check — whole-project analysis
       - id: benchmark-frontend-typecheck
         name: benchmark frontend typecheck
-        entry: bash -c "cd benchmark/viewer/frontend && npm run typecheck"
+        entry: bash scripts/run-benchmark-frontend-hook.sh typecheck
         language: system
         files: '^benchmark/viewer/frontend/.*\.(ts|tsx)$'
         pass_filenames: false
@@ -81,7 +81,7 @@ repos:
       # Frontend lint — type-aware rules, pre-push only
       - id: benchmark-frontend-lint-typechecked
         name: benchmark frontend eslint
-        entry: bash -c "cd benchmark/viewer/frontend && npm run lint"
+        entry: bash scripts/run-benchmark-frontend-hook.sh eslint
         language: system
         pass_filenames: false
         always_run: true
@@ -90,7 +90,7 @@ repos:
       # Frontend dead code — export/file analysis, pre-push only
       - id: benchmark-frontend-deadcode
         name: benchmark frontend knip
-        entry: bash -c "cd benchmark/viewer/frontend && npm run deadcode"
+        entry: bash scripts/run-benchmark-frontend-hook.sh deadcode
         language: system
         pass_filenames: false
         always_run: true

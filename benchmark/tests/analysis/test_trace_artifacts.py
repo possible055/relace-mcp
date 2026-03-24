@@ -3,7 +3,10 @@ from pathlib import Path
 
 from benchmark.analysis.trace_artifacts import (
     TRACE_ARTIFACT_SCHEMA_VERSION,
+    _read_event_lines,
     collect_trace_artifacts,
+    load_trace_meta,
+    load_trace_turns,
     validate_trace_run,
 )
 from benchmark.runner.executor import BenchmarkRunner
@@ -140,3 +143,51 @@ def test_run_benchmark_metadata_supports_trial_experiment_type(tmp_path: Path) -
     assert experiment["root"] == str(tmp_path / "trial-exp")
     assert experiment["name"] == "trial-exp"
     assert experiment["parent_root"] == str(tmp_path / "grid-exp")
+
+
+def test_load_trace_meta_includes_json_error_details(tmp_path: Path) -> None:
+    meta_path = tmp_path / "case_1.meta.json"
+    meta_path.write_text("{\n", encoding="utf-8")
+
+    payload, errors = load_trace_meta(meta_path)
+
+    assert payload == {}
+    assert len(errors) == 1
+    assert errors[0].startswith(f"Invalid JSON in trace metadata: {meta_path}: ")
+
+
+def test_load_trace_meta_includes_os_error_details(tmp_path: Path, monkeypatch) -> None:
+    meta_path = tmp_path / "case_1.meta.json"
+    meta_path.write_text("{}\n", encoding="utf-8")
+
+    def _raise_os_error(self: Path, *args: object, **kwargs: object) -> str:
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(Path, "read_text", _raise_os_error)
+
+    payload, errors = load_trace_meta(meta_path)
+
+    assert payload == {}
+    assert errors == [f"Unable to read trace metadata: {meta_path}: permission denied"]
+
+
+def test_load_trace_turns_includes_json_error_details(tmp_path: Path) -> None:
+    trace_path = tmp_path / "case_1.jsonl"
+    trace_path.write_text("{\n", encoding="utf-8")
+
+    turns, errors = load_trace_turns(trace_path)
+
+    assert turns == []
+    assert len(errors) == 1
+    assert errors[0].startswith(f"Invalid JSON in {trace_path}:1: ")
+
+
+def test_read_event_lines_includes_json_error_details(tmp_path: Path) -> None:
+    events_path = tmp_path / "events.jsonl"
+    events_path.write_text("{\n", encoding="utf-8")
+
+    events, errors = _read_event_lines(events_path)
+
+    assert events == []
+    assert len(errors) == 1
+    assert errors[0].startswith(f"Invalid JSON in {events_path}:1: ")

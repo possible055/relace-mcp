@@ -436,6 +436,55 @@ class TestBashParsing:
         assert payload["unique_functions_count"] == 1
         assert payload["events"][0]["functions"][0]["signature"] == "def handler()"
 
+    def test_bash_deduplicates_discover_events_across_compound_segments(
+        self,
+        tmp_path: Path,
+        monkeypatch,
+    ) -> None:
+        repos_dir = tmp_path / "repos"
+        repo_root = repos_dir / "example__repo"
+        (repo_root / "src").mkdir(parents=True)
+        (repo_root / "src" / "main.py").write_text("print('hello')\n", encoding="utf-8")
+
+        trace_path = _make_trace_jsonl(
+            [
+                {
+                    "turn": 1,
+                    "llm_latency_ms": 100.0,
+                    "llm_response": {},
+                    "tool_calls_raw": [
+                        _tc("t1", "bash", {"command": "find src -type f && git ls-files src"}),
+                    ],
+                    "tool_results": [
+                        _tr("t1", "bash", "src/main.py\nsrc/main.py\n"),
+                    ],
+                    "report_back": None,
+                }
+            ]
+        )
+        _write_meta(
+            trace_path,
+            {
+                "case_id": trace_path.stem,
+                "repo": "example/repo",
+                "search_mode": "agentic",
+                "semantic_hints_used": 0,
+                "semantic_hints": [],
+            },
+        )
+
+        monkeypatch.setattr("benchmark.analysis.search_map.get_repos_dir", lambda: repos_dir)
+
+        sm = extract_search_map(trace_path)
+
+        discover_events = [
+            event
+            for event in sm.events
+            if event.tool_name == "bash" and event.access_type == "discover"
+        ]
+        assert len(discover_events) == 1
+        assert discover_events[0].path == "src/main.py"
+
 
 class TestSearchMapMetrics:
     def test_unique_files_and_selected_files(self) -> None:

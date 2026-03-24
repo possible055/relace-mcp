@@ -1,5 +1,4 @@
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -147,15 +146,13 @@ def main(path: str | None) -> None:
         path = str(default_path)
 
     if not Path(path).exists():
-        print(f"Error: File not found: {path}")
-        sys.exit(1)
+        raise click.ClickException(f"File not found: {path}")
 
     data = load_results(path)
     results = data.get("results", [])
 
     if not results:
-        print("No results found.")
-        sys.exit(1)
+        raise click.ClickException("No results found.")
 
     print(f"Analyzing {len(results)} benchmark results from: {path}")
 

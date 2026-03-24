@@ -26,6 +26,7 @@ dist/
 .vscode/
 .cursor/
 .claude/
+.codebuddy/
 .kilocode/
 .kiro/
 .github/copilot-instructions.md

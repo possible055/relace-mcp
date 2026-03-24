@@ -239,8 +239,8 @@ The benchmark web analyzer is a local SPA plus Python API for browsing experimen
 uv run --extra benchmark --extra benchmark-web python -m benchmark.cli.web
 
 # Terminal 2: frontend dev server
-cd benchmark/frontend
-npm install
+cd benchmark/viewer/frontend
+npm ci
 npm run dev
 ```
 

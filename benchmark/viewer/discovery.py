@@ -1,10 +1,12 @@
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from benchmark.analysis.search_map_bundle import SEARCH_MAP_BUNDLE_FILENAME
 
 REPORT_FILENAME = "summary.report.json"
+logger = logging.getLogger(__name__)
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -79,6 +81,7 @@ def list_experiments(experiments_root: Path) -> list[dict[str, Any]]:
         try:
             summaries[str(experiment_root.resolve())] = _summary_from_report(report_path)
         except Exception:
+            logger.warning("Skipping malformed report: %s", report_path, exc_info=True)
             continue
 
     for bundle_path in sorted(experiments_root.rglob(SEARCH_MAP_BUNDLE_FILENAME)):

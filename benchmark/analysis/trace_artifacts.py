@@ -229,10 +229,10 @@ def load_trace_meta(meta_path: Path | None) -> tuple[TraceMetaPayload, list[str]
 
     try:
         data = json.loads(meta_path.read_text(encoding="utf-8"))
-    except OSError:
-        return {}, [f"Unable to read trace metadata: {meta_path}"]
-    except json.JSONDecodeError:
-        return {}, [f"Invalid JSON in trace metadata: {meta_path}"]
+    except OSError as exc:
+        return {}, [f"Unable to read trace metadata: {meta_path}: {exc}"]
+    except json.JSONDecodeError as exc:
+        return {}, [f"Invalid JSON in trace metadata: {meta_path}: {exc}"]
 
     if not isinstance(data, dict):
         return {}, [f"Trace metadata must be a JSON object: {meta_path}"]
@@ -256,15 +256,15 @@ def load_trace_turns(trace_path: Path | None) -> tuple[list[dict[str, Any]], lis
                     continue
                 try:
                     entry = json.loads(stripped)
-                except json.JSONDecodeError:
-                    errors.append(f"Invalid JSON in {trace_path}:{lineno}")
+                except json.JSONDecodeError as exc:
+                    errors.append(f"Invalid JSON in {trace_path}:{lineno}: {exc}")
                     continue
                 if not isinstance(entry, dict):
                     errors.append(f"Trace entry must be an object in {trace_path}:{lineno}")
                     continue
                 turns.append(entry)
-    except OSError:
-        errors.append(f"Unable to read trace JSONL: {trace_path}")
+    except OSError as exc:
+        errors.append(f"Unable to read trace JSONL: {trace_path}: {exc}")
 
     return turns, errors
 
@@ -421,15 +421,15 @@ def _read_event_lines(events_path: Path) -> tuple[list[dict[str, Any]], list[str
                     continue
                 try:
                     entry = json.loads(stripped)
-                except json.JSONDecodeError:
-                    errors.append(f"Invalid JSON in {events_path}:{lineno}")
+                except json.JSONDecodeError as exc:
+                    errors.append(f"Invalid JSON in {events_path}:{lineno}: {exc}")
                     continue
                 if not isinstance(entry, dict):
                     errors.append(f"Event entry must be an object in {events_path}:{lineno}")
                     continue
                 events.append(entry)
-    except OSError:
-        errors.append(f"Unable to read events file: {events_path}")
+    except OSError as exc:
+        errors.append(f"Unable to read events file: {events_path}: {exc}")
 
     return events, errors
 

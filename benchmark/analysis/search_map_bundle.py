@@ -26,8 +26,11 @@ def _load_json(path: Path | None) -> Any:
     if path is None or not path.exists():
         return None
     # lgtm[py/path-injection]
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
 def _persist_json(path: Path, payload: Any) -> None:
@@ -82,7 +85,10 @@ def _load_results_by_case(results_path: Path | None) -> dict[str, dict[str, Any]
             stripped = line.strip()
             if not stripped:
                 continue
-            data = json.loads(stripped)
+            try:
+                data = json.loads(stripped)
+            except json.JSONDecodeError:
+                continue
             if not isinstance(data, dict):
                 continue
             case_id = data.get("case_id")
@@ -505,6 +511,25 @@ def _group_events_by_tool(
     return grouped
 
 
+def _consume_tool_events(
+    events_by_tool: dict[tuple[int, str | None, str], list[dict[str, Any]]],
+    *,
+    turn_index: int,
+    tool_name: str,
+    normalized_tool_call_id: str | None,
+    consumed_no_id_keys: set[tuple[int, str]],
+) -> list[dict[str, Any]]:
+    key = (turn_index, normalized_tool_call_id, tool_name)
+    if normalized_tool_call_id is not None:
+        return events_by_tool.get(key, [])
+
+    no_id_key = (turn_index, tool_name)
+    if no_id_key in consumed_no_id_keys:
+        return []
+    consumed_no_id_keys.add(no_id_key)
+    return events_by_tool.get(key, [])
+
+
 def _build_turn_detail(turn: int, turn_entry: dict[str, Any], tool_count: int) -> str | None:
     details: list[str] = [f"tools: {tool_count}"]
     latency_ms = _safe_float(turn_entry.get("llm_latency_ms"))
@@ -579,6 +604,7 @@ def _build_turn_node(
             unnamed_tool_results_by_name.setdefault(name, []).append(item)
 
     seen_tool_keys: set[tuple[int, str | None, str]] = set()
+    consumed_no_id_keys: set[tuple[int, str]] = set()
     for call_index, tool_call in enumerate(tool_calls_raw):
         if not isinstance(tool_call, dict):
             continue
@@ -606,7 +632,13 @@ def _build_turn_node(
             case_id,
             turn_index,
             f"case:{case_id}:turn:{turn_index}:tool:{call_index}",
-            events_by_tool.get(key, []),
+            _consume_tool_events(
+                events_by_tool,
+                turn_index=turn_index,
+                tool_name=tool_name,
+                normalized_tool_call_id=normalized_tool_call_id,
+                consumed_no_id_keys=consumed_no_id_keys,
+            ),
         )
         tool_nodes.append(
             {
@@ -645,12 +677,17 @@ def _build_turn_node(
         normalized_tool_call_id = (
             tool_call_id if isinstance(tool_call_id, str) and tool_call_id else None
         )
-        key = (turn_index, normalized_tool_call_id, tool_name)
         child_nodes = _event_nodes(
             case_id,
             turn_index,
             f"case:{case_id}:turn:{turn_index}:tool:{orphan_index}",
-            events_by_tool.get(key, []),
+            _consume_tool_events(
+                events_by_tool,
+                turn_index=turn_index,
+                tool_name=tool_name,
+                normalized_tool_call_id=normalized_tool_call_id,
+                consumed_no_id_keys=consumed_no_id_keys,
+            ),
         )
         tool_nodes.append(
             {
@@ -1250,6 +1287,4 @@ def intersect_case_ids(experiment_roots: list[Path]) -> list[str]:
         return []
 
     case_sets = [set(_case_index(load_search_map_bundle(root)).keys()) for root in experiment_roots]
-    if not case_sets:
-        return []
     return sorted(set.intersection(*case_sets))

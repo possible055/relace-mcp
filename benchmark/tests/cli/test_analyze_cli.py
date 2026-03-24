@@ -38,3 +38,24 @@ def test_analyze_defaults_to_most_recent_results_file(
     assert result.exit_code == 0
     assert f"Analyzing 1 benchmark results from: {newer}" in result.output
     assert "newer" in result.output
+
+
+def test_analyze_raises_click_exception_for_missing_file(tmp_path: Path) -> None:
+    missing_path = tmp_path / "missing.jsonl"
+
+    runner = CliRunner()
+    result = runner.invoke(analyze_main, [str(missing_path)])
+
+    assert result.exit_code == 1
+    assert f"Error: File not found: {missing_path}" in result.output
+
+
+def test_analyze_raises_click_exception_for_empty_results(tmp_path: Path) -> None:
+    results_path = tmp_path / "results.json"
+    results_path.write_text("[]\n", encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(analyze_main, [str(results_path)])
+
+    assert result.exit_code == 1
+    assert "Error: No results found." in result.output
