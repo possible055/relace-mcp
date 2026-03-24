@@ -5,6 +5,9 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 
+from .api.cases import router as cases_router
+from .api.experiments import router as experiments_router
+from .api.metrics import router as metrics_router
 from .discovery import list_experiments
 
 
@@ -25,12 +28,18 @@ def create_app(experiments_root: Path) -> FastAPI:
     app = FastAPI(title="Relace Benchmark Web", version="0.1.0")
     app.state.experiments_root = experiments_root.resolve()
 
+    # Include API routers (fine-grained endpoints)
+    app.include_router(experiments_router)
+    app.include_router(cases_router)
+    app.include_router(metrics_router)
+
     @app.get("/api/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/api/experiments")
-    def experiments() -> list[dict[str, Any]]:
+    @app.get("/api/experiments/legacy")
+    def experiments_legacy() -> list[dict[str, Any]]:
+        """Legacy endpoint for backward compatibility."""
         return list_experiments(app.state.experiments_root)
 
     @app.api_route(

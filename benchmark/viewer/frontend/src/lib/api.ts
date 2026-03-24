@@ -1,16 +1,91 @@
 import axios from 'axios'
-import type { ExperimentSummary } from './types'
+import type {
+  CaseDetail,
+  CaseSummary,
+  CaseTrace,
+  ExperimentDetail,
+  ExperimentSummary,
+  MetricsSummary,
+  PaginatedResponse,
+} from './types'
 
 const api = axios.create({
   baseURL: '/api',
 })
 
-export async function fetchExperiments(): Promise<ExperimentSummary[]> {
-  const { data } = await api.get<ExperimentSummary[]>('/experiments')
+// Experiments API
+export async function fetchExperiments(params?: {
+  status?: string
+  dataset?: string
+  limit?: number
+  offset?: number
+}): Promise<PaginatedResponse<ExperimentSummary>> {
+  const { data } = await api.get<PaginatedResponse<ExperimentSummary>>(
+    '/experiments',
+    { params }
+  )
   return data
 }
 
-export function apiErrorMessage(error: unknown, fallback = 'Request failed.'): string {
+export async function fetchExperiment(
+  experimentId: string
+): Promise<ExperimentDetail> {
+  const { data } = await api.get<ExperimentDetail>(
+    `/experiments/${experimentId}`
+  )
+  return data
+}
+
+// Cases API
+export async function fetchCases(
+  experimentId: string,
+  params?: {
+    completed?: boolean
+    limit?: number
+    offset?: number
+  }
+): Promise<PaginatedResponse<CaseSummary>> {
+  const { data } = await api.get<PaginatedResponse<CaseSummary>>(
+    `/experiments/${experimentId}/cases`,
+    { params }
+  )
+  return data
+}
+
+export async function fetchCase(
+  experimentId: string,
+  caseId: string
+): Promise<CaseDetail> {
+  const { data } = await api.get<CaseDetail>(
+    `/experiments/${experimentId}/cases/${caseId}`
+  )
+  return data
+}
+
+export async function fetchCaseTrace(
+  experimentId: string,
+  caseId: string
+): Promise<CaseTrace> {
+  const { data } = await api.get<CaseTrace>(
+    `/experiments/${experimentId}/cases/${caseId}/trace`
+  )
+  return data
+}
+
+// Metrics API
+export async function fetchMetricsSummary(
+  experimentId: string
+): Promise<MetricsSummary> {
+  const { data } = await api.get<MetricsSummary>(
+    `/experiments/${experimentId}/metrics`
+  )
+  return data
+}
+
+export function apiErrorMessage(
+  error: unknown,
+  fallback = 'Request failed.'
+): string {
   if (axios.isAxiosError<{ detail?: unknown }>(error)) {
     const detail = error.response?.data?.detail
     if (typeof detail === 'string' && detail) {

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FolderSearch } from 'lucide-react'
 import { apiErrorMessage, fetchExperiments } from '../lib/api'
-import type { ExperimentSummary } from '../lib/types'
+import type { ExperimentSummary, PaginatedResponse } from '../lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Skeleton } from '../components/ui/Skeleton'
 
@@ -42,12 +42,12 @@ export default function Experiments() {
   const [modeFilter, setModeFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
 
-  const experimentsQuery = useQuery({
+  const experimentsQuery = useQuery<PaginatedResponse<ExperimentSummary>>({
     queryKey: ['experiments'],
-    queryFn: fetchExperiments,
+    queryFn: () => fetchExperiments(),
   })
 
-  const experiments = experimentsQuery.data ?? EMPTY_EXPERIMENTS
+  const experiments = experimentsQuery.data?.items ?? EMPTY_EXPERIMENTS
   const providerOptions = useMemo(
     () =>
       Array.from(

@@ -3,6 +3,9 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/layout/Layout'
 
 const Experiments = lazy(() => import('./pages/Experiments'))
+const ExperimentDetail = lazy(() => import('./pages/ExperimentDetail'))
+const Cases = lazy(() => import('./pages/Cases'))
+const CaseDetail = lazy(() => import('./pages/CaseDetail'))
 
 function RouteFallback() {
   return (
@@ -18,6 +21,9 @@ export default function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route path="/experiments" element={<Experiments />} />
+          <Route path="/experiments/:experimentId" element={<ExperimentDetail />} />
+          <Route path="/experiments/:experimentId/cases" element={<Cases />} />
+          <Route path="/experiments/:experimentId/cases/:caseId" element={<CaseDetail />} />
         </Route>
         <Route path="/" element={<Navigate to="/experiments" replace />} />
         <Route path="*" element={<Navigate to="/experiments" replace />} />

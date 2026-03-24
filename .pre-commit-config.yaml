@@ -1,3 +1,4 @@
+minimum_pre_commit_version: "4.5.0"
 default_install_hook_types: [pre-commit, pre-push]
 default_stages: [pre-commit]
 
@@ -66,14 +67,14 @@ repos:
       # Frontend lint — oxlint for fast staged-file checks
       - id: benchmark-frontend-lint
         name: benchmark frontend oxlint
-        entry: bash scripts/run-benchmark-frontend-hook.sh oxlint
+        entry: pre-commit hazmat cd benchmark/viewer/frontend npm exec oxlint --
         language: system
         files: '^benchmark/viewer/frontend/.*\.(ts|tsx|js|jsx)$'
 
       # Frontend type check — whole-project analysis
       - id: benchmark-frontend-typecheck
         name: benchmark frontend typecheck
-        entry: bash scripts/run-benchmark-frontend-hook.sh typecheck
+        entry: pre-commit hazmat cd benchmark/viewer/frontend npm run typecheck --
         language: system
         files: '^benchmark/viewer/frontend/.*\.(ts|tsx)$'
         pass_filenames: false
@@ -81,7 +82,7 @@ repos:
       # Frontend lint — type-aware rules, pre-push only
       - id: benchmark-frontend-lint-typechecked
         name: benchmark frontend eslint
-        entry: bash scripts/run-benchmark-frontend-hook.sh eslint
+        entry: pre-commit hazmat cd benchmark/viewer/frontend npm run lint --
         language: system
         pass_filenames: false
         always_run: true
@@ -90,7 +91,7 @@ repos:
       # Frontend dead code — export/file analysis, pre-push only
       - id: benchmark-frontend-deadcode
         name: benchmark frontend knip
-        entry: bash scripts/run-benchmark-frontend-hook.sh deadcode
+        entry: pre-commit hazmat cd benchmark/viewer/frontend npm run deadcode --
         language: system
         pass_filenames: false
         always_run: true
