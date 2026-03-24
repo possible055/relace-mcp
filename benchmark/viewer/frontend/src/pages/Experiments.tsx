@@ -1,32 +1,16 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRight, FolderSearch } from 'lucide-react'
+import { FolderSearch } from 'lucide-react'
 import { apiErrorMessage, fetchExperiments } from '../lib/api'
 import type { ExperimentSummary } from '../lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
+import { Skeleton } from '../components/ui/Skeleton'
 
 const EMPTY_EXPERIMENTS: ExperimentSummary[] = []
 
-function ExperimentRow({
-  experiment,
-  checked,
-  onToggle,
-}: {
-  experiment: ExperimentSummary
-  checked: boolean
-  onToggle: (root: string) => void
-}) {
+function ExperimentRow({ experiment }: { experiment: ExperimentSummary }) {
   return (
-    <tr className="border-t border-[var(--cds-border-subtle-01)] align-top">
-      <td className="p-3">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={() => onToggle(experiment.root)}
-          aria-label={`Select ${experiment.name}`}
-        />
-      </td>
+    <tr className="border-t border-[var(--cds-border-subtle-01)] align-top transition-colors hover:bg-[var(--cds-layer-hover-01)]">
       <td className="p-3">
         <div className="type-body-compact-01 font-semibold text-[var(--cds-text-primary)]">
           {experiment.name}
@@ -40,13 +24,13 @@ function ExperimentRow({
       <td className="p-3 type-body-compact-01 text-[var(--cds-text-secondary)]">
         {experiment.search_mode ?? '-'}
       </td>
-      <td className="p-3 type-body-compact-01 text-[var(--cds-text-secondary)]">
+      <td className="p-3 type-body-compact-01 tabular-nums text-[var(--cds-text-secondary)]">
         {experiment.max_turns ?? '-'}
       </td>
-      <td className="p-3 type-body-compact-01 text-[var(--cds-text-secondary)]">
+      <td className="p-3 type-body-compact-01 tabular-nums text-[var(--cds-text-secondary)]">
         {experiment.temperature ?? '-'}
       </td>
-      <td className="p-3 type-body-compact-01 text-[var(--cds-text-secondary)]">
+      <td className="p-3 type-body-compact-01 tabular-nums text-[var(--cds-text-secondary)]">
         {experiment.case_count ?? '-'}
       </td>
     </tr>
@@ -54,8 +38,6 @@ function ExperimentRow({
 }
 
 export default function Experiments() {
-  const navigate = useNavigate()
-  const [selectedRoots, setSelectedRoots] = useState<string[]>([])
   const [providerFilter, setProviderFilter] = useState('')
   const [modeFilter, setModeFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
@@ -106,46 +88,20 @@ export default function Experiments() {
     return true
   })
 
-  const toggleRoot = (root: string) => {
-    setSelectedRoots((current) =>
-      current.includes(root) ? current.filter((item) => item !== root) : [...current, root],
-    )
-  }
-
-  const openCompare = () => {
-    const params = new URLSearchParams()
-    selectedRoots.forEach((root) => params.append('root', root))
-    void navigate(`/compare?${params.toString()}`)
-  }
-
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div>
-            <CardTitle>Experiment Catalog</CardTitle>
-            <p className="type-label-01 text-[var(--cds-text-helper)]">
-              Select runs or grid trials, then open a same-case comparison view.
-            </p>
-          </div>
-          <button
-            type="button"
-            disabled={selectedRoots.length === 0}
-            onClick={openCompare}
-            className="inline-flex items-center gap-2 rounded-[var(--cds-radius-md)] bg-[var(--cds-interactive)] px-4 py-2 type-body-compact-01 text-[var(--cds-text-on-color)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Compare Selected
-            <ArrowRight className="h-4 w-4" />
-          </button>
+          <CardTitle>Experiments</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 p-[var(--cds-spacing-05)]">
           <div className="grid gap-3 md:grid-cols-3">
             <label className="type-label-01 text-[var(--cds-text-secondary)]">
               Provider
               <select
                 value={providerFilter}
                 onChange={(event) => setProviderFilter(event.target.value)}
-                className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 py-2 type-body-compact-01"
+                className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 py-2 pr-8 type-body-compact-01 transition hover:bg-[var(--cds-layer-hover-01)]"
               >
                 <option value="">All</option>
                 {providerOptions.map((value) => (
@@ -160,7 +116,7 @@ export default function Experiments() {
               <select
                 value={modeFilter}
                 onChange={(event) => setModeFilter(event.target.value)}
-                className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 py-2 type-body-compact-01"
+                className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 py-2 pr-8 type-body-compact-01 transition hover:bg-[var(--cds-layer-hover-01)]"
               >
                 <option value="">All</option>
                 {modeOptions.map((value) => (
@@ -175,7 +131,7 @@ export default function Experiments() {
               <select
                 value={typeFilter}
                 onChange={(event) => setTypeFilter(event.target.value)}
-                className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 py-2 type-body-compact-01"
+                className="mt-1 block w-full rounded-[var(--cds-radius-md)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] px-3 py-2 pr-8 type-body-compact-01 transition hover:bg-[var(--cds-layer-hover-01)]"
               >
                 <option value="">All</option>
                 {typeOptions.map((value) => (
@@ -188,8 +144,11 @@ export default function Experiments() {
           </div>
 
           {experimentsQuery.isLoading ? (
-            <div className="py-12 text-center type-body-compact-01 text-[var(--cds-text-helper)]">
-              Loading experiments...
+            <div className="space-y-3 py-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-3/4" />
             </div>
           ) : experimentsQuery.isError ? (
             <div className="flex flex-col items-center gap-3 py-12 text-center">
@@ -212,7 +171,6 @@ export default function Experiments() {
               <table className="min-w-full">
                 <thead className="bg-[var(--cds-layer-02)] text-left">
                   <tr className="type-label-01 text-[var(--cds-text-helper)]">
-                    <th className="p-3">Pick</th>
                     <th className="p-3">Experiment</th>
                     <th className="p-3">Type</th>
                     <th className="p-3">Model</th>
@@ -224,12 +182,7 @@ export default function Experiments() {
                 </thead>
                 <tbody>
                   {filtered.map((experiment) => (
-                    <ExperimentRow
-                      key={experiment.root}
-                      experiment={experiment}
-                      checked={selectedRoots.includes(experiment.root)}
-                      onToggle={toggleRoot}
-                    />
+                    <ExperimentRow key={experiment.root} experiment={experiment} />
                   ))}
                 </tbody>
               </table>

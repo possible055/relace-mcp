@@ -1,5 +1,25 @@
+@import "./fonts.css";
 @import "./styles/carbon-tokens.css";
 @import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+/* Chart animations */
+@keyframes chartFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes chartBarsGrow {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+
+.chart-bars-grow .recharts-bar-rectangle {
+  transform-box: fill-box;
+  transform-origin: bottom center;
+  animation: chartBarsGrow 800ms cubic-bezier(0.22, 1, 0.36, 1) 150ms both;
+}
 
 @layer base {
   html {
@@ -9,25 +29,18 @@
     text-rendering: optimizeLegibility;
   }
 
+  code, pre, .font-mono {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
   body {
     margin: 0;
     color: var(--cds-text-primary);
     background: var(--cds-background);
-  }
-
-  code,
-  pre {
-    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  }
-
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    font-weight: 600;
-    letter-spacing: -0.01em;
   }
 
   button:not(:disabled),
@@ -35,19 +48,36 @@
     cursor: pointer;
   }
 
+  select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    background-size: 1rem;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
   table {
     border-collapse: collapse;
   }
 }
 
+/* ── Carbon Productive Type Scale ────────────────────────────── */
 @layer utilities {
-  .type-label-01 { font-size: 0.75rem; line-height: 1rem; font-weight: 400; letter-spacing: 0.32px; }
-  .type-label-02 { font-size: 0.75rem; line-height: 1rem; font-weight: 600; letter-spacing: 0.32px; }
+  .type-label-01       { font-size: 0.75rem;  line-height: 1rem;    font-weight: 400; letter-spacing: 0.32px; }
+  .type-label-02       { font-size: 0.75rem;  line-height: 1rem;    font-weight: 600; letter-spacing: 0.32px; }
   .type-body-compact-01 { font-size: 0.875rem; line-height: 1.125rem; font-weight: 400; }
-  .type-body-01 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 400; }
-  .type-body-02 { font-size: 1rem; line-height: 1.5rem; font-weight: 400; }
-  .type-heading-02 { font-size: 1rem; line-height: 1.5rem; font-weight: 600; }
-  .type-heading-03 { font-size: 1.25rem; line-height: 1.75rem; font-weight: 400; }
-  .type-heading-04 { font-size: 1.75rem; line-height: 2.25rem; font-weight: 400; }
-  .type-kpi-sm { font-size: 1.5rem; line-height: 2rem; font-weight: 600; letter-spacing: -0.01em; }
+  .type-body-compact-02 { font-size: 1rem;     line-height: 1.375rem; font-weight: 400; }
+  .type-body-01        { font-size: 0.875rem; line-height: 1.25rem;  font-weight: 400; }
+  .type-body-02        { font-size: 1rem;     line-height: 1.5rem;   font-weight: 400; }
+  .type-heading-01     { font-size: 0.875rem; line-height: 1.125rem; font-weight: 600; }
+  .type-heading-02     { font-size: 1rem;     line-height: 1.5rem;   font-weight: 600; }
+  .type-heading-03     { font-size: 1.25rem;  line-height: 1.75rem;  font-weight: 400; }
+  .type-heading-04     { font-size: 1.75rem;  line-height: 2.25rem;  font-weight: 400; }
+  .type-kpi            { font-size: 2rem;     line-height: 2.5rem;   font-weight: 600; letter-spacing: -0.02em; }
+  .type-kpi-sm         { font-size: 1.5rem;   line-height: 2rem;     font-weight: 600; letter-spacing: -0.01em; }
 }

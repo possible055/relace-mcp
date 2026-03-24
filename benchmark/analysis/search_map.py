@@ -736,6 +736,24 @@ def _parse_bash(
                 )
             )
 
+    seen_discover: set[str] = set()
+
+    def _extend_discover(paths: list[str]) -> None:
+        fresh_paths = [path for path in paths if path not in seen_discover]
+        if not fresh_paths:
+            return
+        seen_discover.update(fresh_paths)
+        events.extend(
+            _build_discover_events(
+                turn,
+                fresh_paths,
+                command=command,
+                tool_call_id=tool_call_id,
+                latency_ms=latency_ms,
+                success=success,
+            )
+        )
+
     for segment in segments:
         if not segment:
             continue
@@ -750,30 +768,12 @@ def _parse_bash(
                 if path_tokens:
                     base_path = path_tokens[-1]
             paths = _parse_plain_output_paths(result, repo_root, base_path=base_path)
-            events.extend(
-                _build_discover_events(
-                    turn,
-                    paths,
-                    command=command,
-                    tool_call_id=tool_call_id,
-                    latency_ms=latency_ms,
-                    success=success,
-                )
-            )
+            _extend_discover(paths)
             continue
 
         if cmd == "rg" and "--files" in segment:
             paths = _parse_plain_output_paths(result, repo_root)
-            events.extend(
-                _build_discover_events(
-                    turn,
-                    paths,
-                    command=command,
-                    tool_call_id=tool_call_id,
-                    latency_ms=latency_ms,
-                    success=success,
-                )
-            )
+            _extend_discover(paths)
             continue
 
         if cmd == "cat":

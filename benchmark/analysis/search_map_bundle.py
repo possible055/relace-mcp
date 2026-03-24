@@ -9,10 +9,11 @@ from ..runner.experiment_paths import (
     infer_experiment_root_from_traces,
 )
 from ..schemas import DatasetCase
+from .journey_graph import build_journey_graph
 from .search_map import SearchMap, aggregate_search_maps, extract_search_map
 from .trace_artifacts import collect_trace_artifacts, load_trace_meta, load_trace_turns
 
-SEARCH_MAP_BUNDLE_SCHEMA_VERSION = "1.1"
+SEARCH_MAP_BUNDLE_SCHEMA_VERSION = "1.2"
 SEARCH_MAP_BUNDLE_FILENAME = "search_map.bundle.json"
 
 
@@ -25,8 +26,11 @@ def _load_json(path: Path | None) -> Any:
     if path is None or not path.exists():
         return None
     # lgtm[py/path-injection]
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
 def _persist_json(path: Path, payload: Any) -> None:
@@ -47,7 +51,10 @@ def _bundle_is_current(payload: Any) -> bool:
     if not isinstance(cases, list):
         return False
     return all(
-        isinstance(case, dict) and isinstance(case.get("exploration_tree"), dict) for case in cases
+        isinstance(case, dict)
+        and isinstance(case.get("exploration_tree"), dict)
+        and isinstance(case.get("journey_graph"), dict)
+        for case in cases
     )
 
 
@@ -78,7 +85,10 @@ def _load_results_by_case(results_path: Path | None) -> dict[str, dict[str, Any]
             stripped = line.strip()
             if not stripped:
                 continue
-            data = json.loads(stripped)
+            try:
+                data = json.loads(stripped)
+            except json.JSONDecodeError:
+                continue
             if not isinstance(data, dict):
                 continue
             case_id = data.get("case_id")
@@ -501,6 +511,25 @@ def _group_events_by_tool(
     return grouped
 
 
+def _consume_tool_events(
+    events_by_tool: dict[tuple[int, str | None, str], list[dict[str, Any]]],
+    *,
+    turn_index: int,
+    tool_name: str,
+    normalized_tool_call_id: str | None,
+    consumed_no_id_keys: set[tuple[int, str]],
+) -> list[dict[str, Any]]:
+    key = (turn_index, normalized_tool_call_id, tool_name)
+    if normalized_tool_call_id is not None:
+        return events_by_tool.get(key, [])
+
+    no_id_key = (turn_index, tool_name)
+    if no_id_key in consumed_no_id_keys:
+        return []
+    consumed_no_id_keys.add(no_id_key)
+    return events_by_tool.get(key, [])
+
+
 def _build_turn_detail(turn: int, turn_entry: dict[str, Any], tool_count: int) -> str | None:
     details: list[str] = [f"tools: {tool_count}"]
     latency_ms = _safe_float(turn_entry.get("llm_latency_ms"))
@@ -575,6 +604,7 @@ def _build_turn_node(
             unnamed_tool_results_by_name.setdefault(name, []).append(item)
 
     seen_tool_keys: set[tuple[int, str | None, str]] = set()
+    consumed_no_id_keys: set[tuple[int, str]] = set()
     for call_index, tool_call in enumerate(tool_calls_raw):
         if not isinstance(tool_call, dict):
             continue
@@ -602,7 +632,13 @@ def _build_turn_node(
             case_id,
             turn_index,
             f"case:{case_id}:turn:{turn_index}:tool:{call_index}",
-            events_by_tool.get(key, []),
+            _consume_tool_events(
+                events_by_tool,
+                turn_index=turn_index,
+                tool_name=tool_name,
+                normalized_tool_call_id=normalized_tool_call_id,
+                consumed_no_id_keys=consumed_no_id_keys,
+            ),
         )
         tool_nodes.append(
             {
@@ -641,12 +677,17 @@ def _build_turn_node(
         normalized_tool_call_id = (
             tool_call_id if isinstance(tool_call_id, str) and tool_call_id else None
         )
-        key = (turn_index, normalized_tool_call_id, tool_name)
         child_nodes = _event_nodes(
             case_id,
             turn_index,
             f"case:{case_id}:turn:{turn_index}:tool:{orphan_index}",
-            events_by_tool.get(key, []),
+            _consume_tool_events(
+                events_by_tool,
+                turn_index=turn_index,
+                tool_name=tool_name,
+                normalized_tool_call_id=normalized_tool_call_id,
+                consumed_no_id_keys=consumed_no_id_keys,
+            ),
         )
         tool_nodes.append(
             {
@@ -1084,6 +1125,7 @@ def _build_case_payload(
         metrics_snapshot=metrics_snapshot,
         result_status=result_status,
     )
+    payload["journey_graph"] = build_journey_graph(payload, trace_turns=turns)
     return payload
 
 
@@ -1207,6 +1249,7 @@ def _upgrade_existing_bundle(existing: dict[str, Any]) -> dict[str, Any]:
             continue
         upgraded_case = dict(case)
         upgraded_case["exploration_tree"] = _build_exploration_tree_from_case_payload(upgraded_case)
+        upgraded_case["journey_graph"] = build_journey_graph(upgraded_case)
         upgraded_cases.append(upgraded_case)
     payload["cases"] = upgraded_cases
     return payload
@@ -1244,6 +1287,4 @@ def intersect_case_ids(experiment_roots: list[Path]) -> list[str]:
         return []
 
     case_sets = [set(_case_index(load_search_map_bundle(root)).keys()) for root in experiment_roots]
-    if not case_sets:
-        return []
     return sorted(set.intersection(*case_sets))

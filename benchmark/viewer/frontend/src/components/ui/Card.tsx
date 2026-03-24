@@ -1,34 +1,46 @@
 import type { ReactNode } from 'react'
+import { cn } from '../../lib/utils'
 
 type CardProps = {
   children: ReactNode
   className?: string
 }
 
-export function Card({ children, className = '' }: CardProps) {
-  return (
-    <section
-      className={`rounded-[var(--cds-radius-sm)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] shadow-[var(--cds-shadow-sm)] ${className}`}
-    >
-      {children}
-    </section>
-  )
-}
-
-export function CardHeader({ children, className = '' }: CardProps) {
+export function Card({ children, className }: CardProps) {
   return (
     <div
-      className={`flex items-center justify-between gap-4 border-b border-[var(--cds-border-subtle-01)] p-[var(--cds-spacing-05)] ${className}`}
+      className={cn(
+        'rounded-[var(--cds-radius-sm)] border border-[var(--cds-border-subtle-01)] bg-[var(--cds-layer-01)] shadow-[var(--cds-shadow-sm)]',
+        className,
+      )}
     >
       {children}
     </div>
   )
 }
 
-export function CardTitle({ children, className = '' }: CardProps) {
-  return <h2 className={`type-heading-02 text-[var(--cds-text-primary)] ${className}`}>{children}</h2>
+export function CardHeader({ children, className }: CardProps) {
+  return (
+    <div
+      className={cn(
+        'flex flex-row items-center justify-between border-b border-[var(--cds-border-subtle-01)] px-[var(--cds-spacing-05)] py-3',
+        className,
+      )}
+    >
+      {children}
+    </div>
+  )
 }
 
-export function CardContent({ children, className = '' }: CardProps) {
-  return <div className={`p-[var(--cds-spacing-05)] ${className}`}>{children}</div>
+export function CardTitle({ children, className }: CardProps) {
+  return (
+    <h3 className={cn('type-heading-02 text-[var(--cds-text-primary)] truncate', className)}>
+      {children}
+    </h3>
+  )
+}
+
+export function CardContent({ children, className }: CardProps) {
+  const base = className ? '' : 'p-[var(--cds-spacing-05)] pt-0'
+  return <div className={cn(base, className)}>{children}</div>
 }
