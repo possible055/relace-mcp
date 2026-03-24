@@ -1,0 +1,99 @@
+benchmark/viewer/frontend/src/pages/ExperimentDetail.tsx
+  d3b907e08ffe28d6 5-6,65
+  1bd8510c33db6ca1 1-4,7-64,66-164
+benchmark/domain/experiment.py
+  1bd8510c33db6ca1 1-13,15-255,258-270,272-306,308-309,311-336
+benchmark/domain/metrics/layered.py
+  1bd8510c33db6ca1 1-239
+benchmark/viewer/frontend/src/App.tsx
+  1bd8510c33db6ca1 6-8,24-26
+benchmark/viewer/frontend/src/lib/types.ts
+  1bd8510c33db6ca1 2,4-81
+benchmark/domain/__init__.py
+  1bd8510c33db6ca1 1-10,12-27,40-41,43-50,53-54,60
+benchmark/tests/services/__init__.py
+  1bd8510c33db6ca1 1
+benchmark/services/__init__.py
+  1bd8510c33db6ca1 1-14
+benchmark/viewer/frontend/src/pages/Experiments.tsx
+  d3b907e08ffe28d6 45,47,50
+benchmark/domain/checkpoint.py
+  1bd8510c33db6ca1 1-8,10-33,35-55,57-116,118-256
+benchmark/tests/domain/test_experiment.py
+  1bd8510c33db6ca1 1-218
+benchmark/viewer/frontend/src/pages/CaseDetail.tsx
+  1bd8510c33db6ca1 1-4,7-30,32-194
+  d3b907e08ffe28d6 5-6,31
+benchmark/viewer/api/__init__.py
+  1bd8510c33db6ca1 1-14
+benchmark/tests/services/test_experiment_service.py
+  1bd8510c33db6ca1 1-315
+benchmark/tests/domain/test_checkpoint.py
+  1bd8510c33db6ca1 1-204
+benchmark/tests/domain/test_tool_registry.py
+  1bd8510c33db6ca1 1-101
+benchmark/infrastructure/__init__.py
+  1bd8510c33db6ca1 1-15
+benchmark/domain/metrics/__init__.py
+  1bd8510c33db6ca1 1-24
+benchmark/tests/domain/__init__.py
+  1bd8510c33db6ca1 1
+benchmark/viewer/server.py
+  1bd8510c33db6ca1 8-10,31-35,40-42
+benchmark/services/experiment_service.py
+  1bd8510c33db6ca1 1-7,10,12-26,28-52,54-122,124-136,138-147,149-316,318-370,372-420
+benchmark/tests/domain/test_layered_metrics.py
+  1bd8510c33db6ca1 1-258
+benchmark/domain/tools/__init__.py
+  1bd8510c33db6ca1 1-12
+benchmark/domain/metrics/engine.py
+  1bd8510c33db6ca1 1-218
+benchmark/domain/tools/registry.py
+  1bd8510c33db6ca1 1-181
+benchmark/viewer/frontend/src/pages/Cases.tsx
+  d3b907e08ffe28d6 5-6,26
+  1bd8510c33db6ca1 1-4,7-25,27-154
+benchmark/viewer/api/metrics.py
+  1bd8510c33db6ca1 1-228
+benchmark/viewer/frontend/src/lib/api.ts
+  1bd8510c33db6ca1 2-9,16-26,30-87
+benchmark/viewer/api/cases.py
+  1bd8510c33db6ca1 1-207
+benchmark/infrastructure/cache.py
+  1bd8510c33db6ca1 1-248
+benchmark/viewer/api/experiments.py
+  1bd8510c33db6ca1 1-167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.18",
+  "base_commit_sha": "6246974be0b411efc4f5d4df7503bbfedb83132d",
+  "prompts": {
+    "1bd8510c33db6ca1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1370f152-acc6-47fe-adfa-0660d84c09b5",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 4372,
+      "overriden_lines": 0
+    },
+    "d3b907e08ffe28d6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9f20aa04-8bec-488a-ae19-9cedfc27851f",
+        "model": "claude-sonnet-4-5-20250929"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 15,
+      "total_deletions": 41,
+      "accepted_lines": 12,
+      "overriden_lines": 0
+    }
+  }
+}
