@@ -1,0 +1,21 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.19",
+  "base_commit_sha": "7b19478fa11a9170c2d8e9211a5846b2e362c277",
+  "prompts": {
+    "472ec0517bf415f3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5953e904-d4fe-4042-bfa5-5c2a12404cc8",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 4,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
