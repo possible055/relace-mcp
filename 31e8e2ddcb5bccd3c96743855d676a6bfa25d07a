@@ -1,0 +1,29 @@
+.pre-commit-config.yaml
+  f132bff39c66e269 70,72,77,79,85,94
+docs/benchmark.zh-CN.md
+  f132bff39c66e269 242
+docs/benchmark.md
+  f132bff39c66e269 242
+benchmark/web/frontend/src/pages/ExperimentDetail.tsx
+  f132bff39c66e269 79-86,100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.18",
+  "base_commit_sha": "31e8e2ddcb5bccd3c96743855d676a6bfa25d07a",
+  "prompts": {
+    "f132bff39c66e269": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d21fe-5a24-7622-b1c1-95a32a905d70",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 17,
+      "total_deletions": 14,
+      "accepted_lines": 17,
+      "overriden_lines": 0
+    }
+  }
+}
