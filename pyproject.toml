@@ -92,17 +92,6 @@ where = ["src"]
 include = ["relace_mcp*", "relace_dashboard*"]
 exclude = ["tests*"]
 
-[tool.bandit]
-# Skip specific paths during security scans
-exclude_dirs = [
-  "tests",
-  "benchmark/.data",
-  ".bench-repos",
-  ".venv",
-  "*/test_*.py",
-  "*/*_test.py",
-]
-
 [tool.bandit.assert_used]
 # Allow assertions in testing environments
 skips = ["*/test_*.py", "*/*_test.py"]

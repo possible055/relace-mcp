@@ -56,12 +56,13 @@ repos:
         files: '^(src/.*\.py|pyproject\.toml)$'
         pass_filenames: false
 
-      # Frontend lint — oxlint for fast staged-file checks
+      # Frontend lint — oxlint for fast whole-src checks
       - id: benchmark-frontend-lint
         name: benchmark frontend oxlint
-        entry: pre-commit hazmat cd benchmark/viewer/frontend npm exec oxlint --
+        entry: pre-commit hazmat cd benchmark/viewer/frontend npm exec oxlint src --
         language: system
         files: '^benchmark/viewer/frontend/.*\.(ts|tsx|js|jsx)$'
+        pass_filenames: false
 
       # Frontend type check — whole-project analysis (Moved to pre-push for speed)
       - id: benchmark-frontend-typecheck
