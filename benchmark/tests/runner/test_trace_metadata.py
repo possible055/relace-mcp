@@ -1,11 +1,17 @@
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from benchmark.analysis.trace_artifacts import TRACE_ARTIFACT_SCHEMA_VERSION
-from benchmark.runner.executor import BenchmarkRunner
-from benchmark.runner.results import BenchmarkResult, BenchmarkSummary
-from benchmark.runner.trace_recorder import BenchmarkTraceRecorder
+from benchmark.analysis.traces import TRACE_ARTIFACT_SCHEMA_VERSION
+from benchmark.experiments.models import (
+    BenchmarkResult,
+    BenchmarkSummary,
+    ExperimentManifest,
+    ExperimentState,
+)
+from benchmark.experiments.runner import BenchmarkRunner
+from benchmark.experiments.trace_recorder import BenchmarkTraceRecorder
 from benchmark.schemas import DatasetCase
 from relace_mcp.config import RelaceConfig
 
@@ -52,9 +58,11 @@ def test_execute_search_writes_trace_meta_without_turns_log(tmp_path: Path) -> N
 
     try:
         with (
-            patch("benchmark.runner.executor.SearchLLMClient", return_value=MagicMock()),
-            patch("benchmark.runner.executor.get_lsp_languages", return_value=frozenset()),
-            patch("benchmark.runner.preflight.check_retrieval_backend", return_value={"ok": True}),
+            patch("benchmark.experiments.runner.SearchLLMClient", return_value=MagicMock()),
+            patch("benchmark.experiments.runner.get_lsp_languages", return_value=frozenset()),
+            patch(
+                "benchmark.experiments.preflight.check_retrieval_backend", return_value={"ok": True}
+            ),
             patch("relace_mcp.clients.RelaceRepoClient", return_value=MagicMock()),
             patch(
                 "relace_mcp.search.agentic_retrieval_logic",
@@ -134,9 +142,11 @@ def test_execute_search_emits_search_complete_with_retrieval_fields(tmp_path: Pa
 
     try:
         with (
-            patch("benchmark.runner.executor.SearchLLMClient", return_value=MagicMock()),
-            patch("benchmark.runner.executor.get_lsp_languages", return_value=frozenset()),
-            patch("benchmark.runner.preflight.check_retrieval_backend", return_value={"ok": True}),
+            patch("benchmark.experiments.runner.SearchLLMClient", return_value=MagicMock()),
+            patch("benchmark.experiments.runner.get_lsp_languages", return_value=frozenset()),
+            patch(
+                "benchmark.experiments.preflight.check_retrieval_backend", return_value={"ok": True}
+            ),
             patch("relace_mcp.clients.RelaceRepoClient", return_value=MagicMock()),
             patch(
                 "relace_mcp.search.agentic_retrieval_logic",
@@ -186,7 +196,21 @@ def test_summary_save_persists_trace_pointers_without_raw_result(tmp_path: Path)
         artifact_status={"trace_jsonl": "written", "trace_meta": "written"},
     )
     summary = BenchmarkSummary(
-        metadata={"artifacts": {}}, total_cases=1, stats={}, results=[result]
+        manifest=ExperimentManifest(
+            experiment_id="run-a",
+            kind="run",
+            name="run-a",
+            experiment_root=tmp_path / "run-a",
+            created_at=datetime.now(UTC),
+        ),
+        state=ExperimentState(
+            status="completed",
+            total_cases=1,
+            completed_cases=1,
+            failed_cases=0,
+        ),
+        stats={},
+        results=[result],
     )
 
     output_path = tmp_path / "run.jsonl"

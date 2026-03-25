@@ -16,8 +16,8 @@ def test_report_help_describes_text_output() -> None:
     assert "Accepted formats depend on mode." in result.output
 
 
-def test_report_comparison_accepts_report_json(tmp_path: Path) -> None:
-    report_path = tmp_path / "sample.report.json"
+def test_report_comparison_accepts_summary_json(tmp_path: Path) -> None:
+    report_path = tmp_path / "summary.json"
     report_path.write_text(
         '{"completion_rate": 1.0, "avg_quality_score": 0.5, "avg_file_recall": 0.5, '
         '"avg_file_precision": 0.5, "avg_line_coverage": 0.5, '
@@ -30,7 +30,7 @@ def test_report_comparison_accepts_report_json(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert "Benchmark Comparison Report" in result.output
-    assert "sample.report" in result.output
+    assert tmp_path.name in result.output
 
 
 def test_report_comparison_rejects_jsonl(tmp_path: Path) -> None:
@@ -41,7 +41,7 @@ def test_report_comparison_rejects_jsonl(tmp_path: Path) -> None:
     result = runner.invoke(report_main, [str(results_path)])
 
     assert result.exit_code != 0
-    assert "Comparison mode only accepts .report.json inputs." in result.output
+    assert "Comparison mode only accepts summary.json inputs." in result.output
     assert "--failures for .jsonl" in result.output
 
 
@@ -62,18 +62,18 @@ def test_report_failures_accepts_jsonl(tmp_path: Path) -> None:
 
 
 def test_report_best_rejects_non_grid_json(tmp_path: Path) -> None:
-    report_path = tmp_path / "sample.report.json"
+    report_path = tmp_path / "summary.json"
     report_path.write_text('{"metadata": {"experiment": {"type": "run"}}}', encoding="utf-8")
 
     runner = CliRunner()
     result = runner.invoke(report_main, ["--best", str(report_path)])
 
     assert result.exit_code != 0
-    assert "--best only accepts a single grid summary.report.json file." in result.output
+    assert "--best only accepts a single grid summary.json file." in result.output
 
 
-def test_report_best_accepts_grid_summary_report(tmp_path: Path) -> None:
-    report_path = tmp_path / "summary.report.json"
+def test_report_best_accepts_grid_summary(tmp_path: Path) -> None:
+    report_path = tmp_path / "summary.json"
     report_path.write_text(
         """
 {
@@ -91,7 +91,7 @@ def test_report_best_accepts_grid_summary_report(tmp_path: Path) -> None:
           "search_temperature": 0.2
         },
         "paths": {
-          "experiment_root": "/tmp/grid/runs/trial--turns-6--temp-0p2"
+          "experiment_root": "/tmp/grid/trials/trial--turns-6--temp-0p2"
         },
         "metrics": {
           "avg_file_recall": 0.6,
@@ -120,11 +120,11 @@ def test_report_best_accepts_grid_summary_report(tmp_path: Path) -> None:
         in result.output
     )
     assert "search_max_turns" in result.output
-    assert "/tmp/grid/runs/trial--turns-6--temp-0p2" in result.output
+    assert "/tmp/grid/trials/trial--turns-6--temp-0p2" in result.output
 
 
 def test_report_comparison_rejects_grid_parent_report(tmp_path: Path) -> None:
-    report_path = tmp_path / "summary.report.json"
+    report_path = tmp_path / "summary.json"
     report_path.write_text(
         '{"metadata": {"experiment": {"type": "grid", "name": "grid-a"}}, "grid": {"trials": []}}\n',
         encoding="utf-8",

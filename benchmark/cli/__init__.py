@@ -1,52 +1,67 @@
+import importlib
+
 import click
 
-from .analyze import main as _cmd_analyze
-from .build_locbench import main as _cmd_build_locbench
-from .case_map import main as _cmd_case_map
-from .curate import main as _cmd_curate
-from .grid import main as _cmd_grid
-from .report import main as _cmd_report
-from .run import main as _cmd_run
-from .trace import main as _cmd_trace
-from .validate import main as _cmd_validate
-from .web import main as _cmd_web
+
+class LazyGroup(click.Group):
+    def __init__(self, *args, lazy_subcommands: dict[str, str] | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lazy_subcommands = lazy_subcommands or {}
+
+    def list_commands(self, ctx: click.Context) -> list[str]:
+        commands = set(super().list_commands(ctx))
+        commands.update(self.lazy_subcommands)
+        return sorted(commands)
+
+    def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
+        command = super().get_command(ctx, cmd_name)
+        if command is not None:
+            return command
+        target = self.lazy_subcommands.get(cmd_name)
+        if not target:
+            return None
+        module_name, attr_name = target.split(":", 1)
+        module = importlib.import_module(module_name)
+        return getattr(module, attr_name)
 
 
-@click.group()
+@click.group(
+    cls=LazyGroup,
+    lazy_subcommands={
+        "run": "benchmark.cli.run:main",
+        "grid": "benchmark.cli.grid:main",
+        "migrate": "benchmark.cli.migrate:main",
+        "web": "benchmark.cli.web:main",
+    },
+)
 def bench():
     """Benchmark CLI for relace-mcp search evaluation."""
 
 
-# -- data sub-group: dataset preparation --
-
-
-@bench.group()
+@click.group(
+    cls=LazyGroup,
+    lazy_subcommands={
+        "build-locbench": "benchmark.cli.build_locbench:main",
+        "curate": "benchmark.cli.curate:main",
+        "validate": "benchmark.cli.validate:main",
+    },
+)
 def data():
     """Dataset build, curation, and validation."""
 
 
-data.add_command(_cmd_build_locbench, "build-locbench")
-data.add_command(_cmd_curate, "curate")
-data.add_command(_cmd_validate, "validate")
-
-# -- top-level: execution --
-
-bench.add_command(_cmd_run, "run")
-bench.add_command(_cmd_grid, "grid")
-
-# -- results sub-group: analysis --
-
-
-@bench.group()
+@click.group(
+    cls=LazyGroup,
+    lazy_subcommands={
+        "analyze": "benchmark.cli.analyze:main",
+        "report": "benchmark.cli.report:main",
+        "trace": "benchmark.cli.trace:main",
+        "case-map": "benchmark.cli.case_map:main",
+    },
+)
 def results():
     """Result analysis, reporting, and tracing."""
 
 
-results.add_command(_cmd_analyze, "analyze")
-results.add_command(_cmd_report, "report")
-results.add_command(_cmd_trace, "trace")
-results.add_command(_cmd_case_map, "case-map")
-
-# -- top-level: viewer --
-
-bench.add_command(_cmd_web, "web")
+bench.add_command(data)
+bench.add_command(results)

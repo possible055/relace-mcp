@@ -9,7 +9,7 @@ import click
 from ..analysis.function_scope import extract_function_scopes
 from ..config.paths import DEFAULT_LOCBENCH_PATH, get_benchmark_dir, get_repos_dir
 from ..datasets import DatasetCase, load_dataset
-from ..runner.git import ensure_repo
+from ..experiments.git import ensure_repo
 
 
 @dataclass

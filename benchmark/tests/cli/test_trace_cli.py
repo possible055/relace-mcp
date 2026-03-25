@@ -48,7 +48,7 @@ def test_trace_search_map_json_out_includes_semantic_hints(tmp_path: Path) -> No
     )
 
     assert result.exit_code == 0
-    output_path = tmp_path / "reports" / "search_map.json"
+    output_path = tmp_path / "analysis" / "search_map.json"
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["kind"] == "search_map_bundle"
     assert payload["summary"]["cases_with_semantic_hints"] == 1
@@ -87,7 +87,7 @@ def test_trace_search_map_json_out_includes_meta_only_case(tmp_path: Path) -> No
     )
 
     assert result.exit_code == 0
-    payload = json.loads((tmp_path / "reports" / "search_map.json").read_text(encoding="utf-8"))
+    payload = json.loads((tmp_path / "analysis" / "search_map.json").read_text(encoding="utf-8"))
     assert payload["summary"]["cases"] == 1
     assert payload["summary"]["cases_with_semantic_hints"] == 1
     assert payload["cases"][0]["case_id"] == "case_meta"
@@ -176,7 +176,7 @@ def test_trace_search_map_json_out_builds_exploration_tree_for_failed_and_empty_
     )
 
     assert result.exit_code == 0
-    payload = json.loads((tmp_path / "reports" / "search_map.json").read_text(encoding="utf-8"))
+    payload = json.loads((tmp_path / "analysis" / "search_map.json").read_text(encoding="utf-8"))
     tree = payload["cases"][0]["exploration_tree"]
     assert tree["status"] == "missing"
     assert tree["children"][0]["kind"] == "turn"
@@ -254,7 +254,7 @@ def test_trace_search_map_json_out_keeps_bash_children_attached_to_tool_nodes(
     )
 
     assert result.exit_code == 0
-    payload = json.loads((tmp_path / "reports" / "search_map.json").read_text(encoding="utf-8"))
+    payload = json.loads((tmp_path / "analysis" / "search_map.json").read_text(encoding="utf-8"))
     tree = payload["cases"][0]["exploration_tree"]
     tool_node = tree["children"][0]["children"][0]
     assert tool_node["kind"] == "tool"
@@ -265,11 +265,9 @@ def test_trace_search_map_json_out_keeps_bash_children_attached_to_tool_nodes(
 def test_trace_search_map_json_out_joins_dataset_and_results(tmp_path: Path) -> None:
     experiment_root = tmp_path
     traces_dir = experiment_root / "traces"
-    results_dir = experiment_root / "results"
-    reports_dir = experiment_root / "reports"
+    results_path = experiment_root / "results.jsonl"
+    summary_path = experiment_root / "summary.json"
     traces_dir.mkdir()
-    results_dir.mkdir()
-    reports_dir.mkdir()
 
     dataset_path = tmp_path / "dataset.jsonl"
     dataset_path.write_text(
@@ -301,7 +299,7 @@ def test_trace_search_map_json_out_joins_dataset_and_results(tmp_path: Path) -> 
         encoding="utf-8",
     )
 
-    (results_dir / "results.jsonl").write_text(
+    results_path.write_text(
         json.dumps(
             {
                 "case_id": "case_1",
@@ -326,7 +324,7 @@ def test_trace_search_map_json_out_joins_dataset_and_results(tmp_path: Path) -> 
         + "\n",
         encoding="utf-8",
     )
-    (reports_dir / "summary.report.json").write_text(
+    summary_path.write_text(
         json.dumps(
             {
                 "metadata": {
@@ -444,11 +442,13 @@ def test_trace_search_map_json_out_joins_dataset_and_results(tmp_path: Path) -> 
     runner = CliRunner()
     result = runner.invoke(
         trace_main,
-        [str(experiment_root), "--search-map", "--json-out", "-o", "search_map.bundle.json"],
+        [str(experiment_root), "--search-map", "--json-out", "-o", "search-map.bundle.json"],
     )
 
     assert result.exit_code == 0
-    payload = json.loads((reports_dir / "search_map.bundle.json").read_text(encoding="utf-8"))
+    payload = json.loads(
+        (experiment_root / "analysis" / "search-map.bundle.json").read_text(encoding="utf-8")
+    )
     assert payload["kind"] == "search_map_bundle"
     assert payload["experiment"]["search"]["model"] == "gpt-5-mini"
     assert payload["cases"][0]["query"] == "find handler"
@@ -489,7 +489,7 @@ def test_trace_validate_json_out_reports_metadata_only_case(tmp_path: Path) -> N
     )
 
     assert result.exit_code == 0
-    payload = json.loads((tmp_path / "reports" / "validate.json").read_text(encoding="utf-8"))
+    payload = json.loads((tmp_path / "analysis" / "validate.json").read_text(encoding="utf-8"))
     assert payload["total_cases"] == 1
     assert payload["valid_cases"] == 1
     assert payload["total_warnings"] >= 1

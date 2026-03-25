@@ -1,4 +1,4 @@
-from benchmark.metrics.ranges import (
+from benchmark.analysis.range_metrics import (
     intersection_length,
     normalize_line_ranges,
 )
@@ -25,7 +25,7 @@ class TestNormalizeLineRanges:
         result = normalize_line_ranges(
             [
                 (1, 5),
-                (0, 3),  # start must be > 0
+                (0, 3),
             ]
         )
         assert result == [(1, 5)]
@@ -34,7 +34,7 @@ class TestNormalizeLineRanges:
         result = normalize_line_ranges(
             [
                 (1, 5),
-                (5, 3),  # end < start
+                (5, 3),
             ]
         )
         assert result == [(1, 5)]
@@ -57,7 +57,6 @@ class TestIntersectionLength:
     def test_multiple_ranges(self) -> None:
         a = [(1, 5), (10, 15)]
         b = [(3, 12)]
-        # (3,5) = 3 lines, (10,12) = 3 lines
         assert intersection_length(a, b) == 6
 
     def test_empty_lists(self) -> None:

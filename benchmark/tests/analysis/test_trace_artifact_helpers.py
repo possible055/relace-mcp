@@ -1,4 +1,4 @@
-from benchmark.analysis.trace_artifacts import build_search_complete_event
+from benchmark.analysis.traces import build_search_complete_event
 
 
 def test_build_search_complete_event_defaults_missing_latency_to_zero() -> None:

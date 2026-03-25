@@ -4,13 +4,16 @@ from unittest.mock import patch
 
 import pytest
 
-from benchmark.runner.executor import BenchmarkRunner
+from benchmark.experiments.layout import results_path
+from benchmark.experiments.runner import BenchmarkRunner
 from relace_mcp.config import RelaceConfig
 
 
-def test_resume_checkpoint_old_schema_fails_fast(tmp_path: Path) -> None:
-    checkpoint_path = tmp_path / "checkpoint.jsonl"
-    checkpoint_path.write_text(
+def test_resume_results_old_schema_fails_fast(tmp_path: Path) -> None:
+    experiment_root = tmp_path / "exp-1"
+    experiment_root.mkdir(parents=True)
+    result_path = results_path(experiment_root)
+    result_path.write_text(
         json.dumps(
             {
                 "case_id": "case_1",
@@ -48,16 +51,16 @@ def test_resume_checkpoint_old_schema_fails_fast(tmp_path: Path) -> None:
 
     config = RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
 
-    with patch("benchmark.runner.executor.get_repos_dir", return_value=tmp_path / "repos"):
+    with patch("benchmark.experiments.runner.get_repos_dir", return_value=tmp_path / "repos"):
         runner = BenchmarkRunner(
             config,
             resume=True,
-            checkpoint_path=checkpoint_path,
             progress=False,
+            artifact_root=experiment_root,
         )
         with pytest.raises(RuntimeError) as excinfo:
             runner.run_benchmark([])
 
     message = str(excinfo.value)
-    assert "Unsupported checkpoint schema" in message
-    assert str(checkpoint_path) in message
+    assert "Unsupported result schema" in message
+    assert str(result_path) in message

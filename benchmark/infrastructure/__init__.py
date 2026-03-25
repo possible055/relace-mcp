@@ -1,13 +1,6 @@
-"""Infrastructure layer for benchmark architecture.
+"""Compatibility re-exports for experiment indexing helpers."""
 
-Contains I/O, caching, and external service adapters.
-Implements repository pattern for data persistence.
-
-Modules:
-    cache: ExperimentCache with SQLite + LRU memory cache
-"""
-
-from benchmark.infrastructure.cache import CachedExperiment, ExperimentCache
+from benchmark.experiments.index import CachedExperiment, ExperimentCache
 
 __all__ = [
     "CachedExperiment",

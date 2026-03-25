@@ -1,34 +1,11 @@
-"""Domain layer for benchmark architecture.
+"""Compatibility exports for domain-level analysis models and tools."""
 
-This module contains the core domain models and business logic,
-following Clean Architecture principles. Domain objects are pure
-Python with no I/O dependencies.
-
-Modules:
-    experiment: ExperimentMetadata, EnvironmentInfo, DatasetInfo
-    checkpoint: Checkpoint, CheckpointManager protocol
-    metrics/: LayeredMetrics, MetricsEngine
-    tools/: ToolRegistry, ToolDefinition
-"""
-
-from benchmark.domain.checkpoint import (
-    Checkpoint,
-    CheckpointManager,
-    CheckpointRepository,
-    FileCheckpointRepository,
-)
-from benchmark.domain.experiment import (
-    DatasetInfo,
-    EnvironmentInfo,
-    ExperimentMetadata,
-    ExperimentStatus,
-    SamplingConfig,
-    SearchConfig,
-)
 from benchmark.domain.metrics import (
     AggregateMetrics,
+    FileAccessWithMetrics,
     LayeredMetrics,
     MetricsEngine,
+    MetricStrategy,
     ToolContribution,
     TurnMetrics,
 )
@@ -40,18 +17,10 @@ from benchmark.domain.tools import (
 
 __all__ = [
     "AggregateMetrics",
-    "Checkpoint",
-    "CheckpointManager",
-    "CheckpointRepository",
-    "DatasetInfo",
-    "EnvironmentInfo",
-    "ExperimentMetadata",
-    "ExperimentStatus",
-    "FileCheckpointRepository",
+    "FileAccessWithMetrics",
     "LayeredMetrics",
+    "MetricStrategy",
     "MetricsEngine",
-    "SamplingConfig",
-    "SearchConfig",
     "ToolCategory",
     "ToolContribution",
     "ToolDefinition",

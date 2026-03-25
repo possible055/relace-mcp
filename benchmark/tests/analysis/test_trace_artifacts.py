@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from benchmark.analysis.trace_artifacts import (
+from benchmark.analysis.traces import (
     TRACE_ARTIFACT_SCHEMA_VERSION,
     _read_event_lines,
     collect_trace_artifacts,
@@ -9,7 +9,7 @@ from benchmark.analysis.trace_artifacts import (
     load_trace_turns,
     validate_trace_run,
 )
-from benchmark.runner.executor import BenchmarkRunner
+from benchmark.experiments.runner import BenchmarkRunner
 from relace_mcp.config import RelaceConfig
 
 
@@ -114,7 +114,7 @@ def test_run_benchmark_metadata_includes_trace_artifacts(tmp_path: Path) -> None
     assert artifacts["experiment_root"].endswith(f"/experiments/{artifacts['run_id']}")
     assert artifacts["traces_dir"].endswith(f"/experiments/{artifacts['run_id']}/traces")
     assert artifacts["events_path"].endswith(
-        f"/experiments/{artifacts['run_id']}/events/events.jsonl"
+        f"/experiments/{artifacts['run_id']}/traces/events.jsonl"
     )
     assert experiment["type"] == "run"
     assert experiment["root"] == artifacts["experiment_root"]

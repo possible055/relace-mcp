@@ -2,31 +2,28 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
-from benchmark.runner.experiment_paths import (
+from benchmark.experiments.layout import (
     build_experiment_name,
     build_trial_name,
     collect_trace_dirs,
-    experiment_events_path,
-    experiment_report_path,
-    experiment_results_path,
-    experiment_traces_dir,
+    events_path,
     find_latest_traces_dir,
-    grid_runs_dir,
     infer_experiment_root_from_traces,
+    results_path,
+    summary_path,
+    traces_dir,
+    trials_dir,
 )
 
 
-def test_experiment_paths_use_purpose_named_structure(tmp_path: Path) -> None:
+def test_experiment_paths_use_canonical_structure(tmp_path: Path) -> None:
     experiment_root = tmp_path / "experiments" / "run_locbench"
 
-    assert experiment_results_path(experiment_root) == experiment_root / "results" / "results.jsonl"
-    assert (
-        experiment_report_path(experiment_root)
-        == experiment_root / "reports" / "summary.report.json"
-    )
-    assert experiment_events_path(experiment_root) == experiment_root / "events" / "events.jsonl"
-    assert experiment_traces_dir(experiment_root) == experiment_root / "traces"
-    assert grid_runs_dir(experiment_root) == experiment_root / "runs"
+    assert results_path(experiment_root) == experiment_root / "results.jsonl"
+    assert summary_path(experiment_root) == experiment_root / "summary.json"
+    assert events_path(experiment_root) == experiment_root / "traces" / "events.jsonl"
+    assert traces_dir(experiment_root) == experiment_root / "traces"
+    assert trials_dir(experiment_root) == experiment_root / "trials"
 
 
 def test_experiment_names_follow_standard_template() -> None:
@@ -54,9 +51,9 @@ def test_experiment_names_follow_standard_template() -> None:
     assert trial_name == "trial--turns-6--temp-0p2"
 
 
-def test_collect_trace_dirs_finds_nested_grid_runs(tmp_path: Path) -> None:
+def test_collect_trace_dirs_finds_nested_trials(tmp_path: Path) -> None:
     traces_a = tmp_path / "experiments" / "run_a" / "traces"
-    traces_b = tmp_path / "experiments" / "grid_a" / "runs" / "t4__temp0" / "traces"
+    traces_b = tmp_path / "experiments" / "grid_a" / "trials" / "trial-a" / "traces"
     traces_a.mkdir(parents=True)
     traces_b.mkdir(parents=True)
 

@@ -58,9 +58,9 @@ def test_run_uses_utc_timestamp_for_default_experiment_name(tmp_path: Path, monk
     monkeypatch.setattr("benchmark.cli.run.get_benchmark_dir", lambda: tmp_path)
     monkeypatch.setattr("benchmark.cli.run.get_experiments_dir", lambda: experiments_dir)
     monkeypatch.setattr("benchmark.cli.run.build_experiment_name", fake_build_experiment_name)
-    fake_executor = types.ModuleType("benchmark.runner.executor")
+    fake_executor = types.ModuleType("benchmark.experiments.runner")
     fake_executor.BenchmarkRunner = _FakeRunner
-    monkeypatch.setitem(sys.modules, "benchmark.runner.executor", fake_executor)
+    monkeypatch.setitem(sys.modules, "benchmark.experiments.runner", fake_executor)
 
     runner = CliRunner()
     result = runner.invoke(run_main, [])

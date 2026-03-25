@@ -15,7 +15,7 @@ from ..config.paths import (
 )
 from ..config.settings import EXCLUDED_REPOS
 from ..datasets import load_dataset
-from ..runner.experiment_paths import (
+from ..experiments.layout import (
     build_experiment_name,
     experiment_report_path,
     experiment_results_path,
@@ -170,7 +170,7 @@ def main(
     if search_mode == "indexed":
         os.environ.setdefault("MCP_RETRIEVAL_BACKEND", "auto")
 
-    from ..runner.executor import BenchmarkRunner
+    from ..experiments.runner import BenchmarkRunner
 
     benchmark_dir = get_benchmark_dir()
     resolved_dataset_path = (
@@ -224,7 +224,6 @@ def main(
         sys.exit(1)
 
     experiments_dir = get_experiments_dir()
-    checkpoint_path = None
 
     # Generate experiment root once upfront to ensure all outputs land together.
     if output:
@@ -244,17 +243,13 @@ def main(
     results_path = experiment_results_path(experiment_root)
     report_path = experiment_report_path(experiment_root)
 
-    if resume or timeout or fail_fast:
-        checkpoint_path = results_path.with_name("checkpoint.jsonl")
-
-    if resume and checkpoint_path and not checkpoint_path.exists():
-        click.echo(f"Warning: --resume specified but checkpoint not found: {checkpoint_path}")
+    if resume and not results_path.exists():
+        click.echo(f"Warning: --resume specified but results not found: {results_path}")
 
     runner = BenchmarkRunner(
         config,
         verbose=verbose,
         progress=not quiet,
-        checkpoint_path=checkpoint_path,
         case_timeout=timeout,
         fail_fast=fail_fast,
         search_mode=search_mode,

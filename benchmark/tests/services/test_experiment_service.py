@@ -1,18 +1,14 @@
-"""Tests for ExperimentService."""
+"""Tests for ExperimentStore."""
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from benchmark.domain.experiment import (
-    ExperimentStatus,
-    SearchConfig,
-)
+from benchmark.experiments.models import BenchmarkResult, ExperimentManifest, ExperimentState
+from benchmark.experiments.store import ExperimentFilters, ExperimentService
 from benchmark.schemas import DatasetCase, GroundTruthEntry
-from benchmark.services.experiment_service import (
-    ExperimentFilters,
-    ExperimentService,
-)
+from relace_mcp.config import RelaceConfig
 
 
 @pytest.fixture
@@ -26,6 +22,11 @@ def service(experiments_dir: Path) -> ExperimentService:
 
 
 @pytest.fixture
+def config() -> RelaceConfig:
+    return RelaceConfig(api_key="rlc-test", base_dir=None)
+
+
+@pytest.fixture
 def sample_cases() -> list[DatasetCase]:
     return [
         DatasetCase(
@@ -33,283 +34,139 @@ def sample_cases() -> list[DatasetCase]:
             query="Find the login function",
             repo="test/repo",
             base_commit="abc123",
-            hard_gt=[
-                GroundTruthEntry(
-                    path="src/auth.py",
-                    function="login",
-                    range=(10, 30),
-                )
-            ],
+            hard_gt=[GroundTruthEntry(path="src/auth.py", function="login", range=(10, 30))],
         ),
         DatasetCase(
             id="case_002",
             query="Find the logout function",
             repo="test/repo",
             base_commit="abc123",
-            hard_gt=[
-                GroundTruthEntry(
-                    path="src/auth.py",
-                    function="logout",
-                    range=(35, 50),
-                )
-            ],
+            hard_gt=[GroundTruthEntry(path="src/auth.py", function="logout", range=(35, 50))],
         ),
     ]
 
 
-@pytest.fixture
-def sample_search_config() -> SearchConfig:
-    return SearchConfig(
-        provider="openai",
-        model="gpt-4",
-        max_turns=5,
-        temperature=0.7,
+def test_filters_match_manifest_and_state(experiments_dir: Path) -> None:
+    manifest = ExperimentManifest(
+        experiment_id="exp-1",
+        kind="run",
+        name="exp-1",
+        experiment_root=experiments_dir / "exp-1",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        dataset={"name": "locbench_v1"},
+        tags=["baseline", "fast"],
+    )
+    state = ExperimentState(status="completed", total_cases=2, completed_cases=2, failed_cases=0)
+
+    assert ExperimentFilters(status="completed").matches(manifest, state) is True
+    assert ExperimentFilters(status="failed").matches(manifest, state) is False
+    assert ExperimentFilters(dataset="locbench_v1").matches(manifest, state) is True
+    assert ExperimentFilters(kind="run").matches(manifest, state) is True
+    assert ExperimentFilters(tags=["baseline"]).matches(manifest, state) is True
+
+
+def test_create_and_get_experiment(
+    service: ExperimentService,
+    config: RelaceConfig,
+    sample_cases: list[DatasetCase],
+) -> None:
+    manifest = service.create(
+        experiment_root="run-a",
+        kind="run",
+        cases=sample_cases,
+        config=config,
+        run_config={"dataset": "test_dataset", "dataset_path": "/tmp/test_dataset.jsonl"},
     )
 
+    assert manifest.experiment_id == "run-a"
+    assert manifest.kind == "run"
+    assert manifest.dataset["name"] == "test_dataset"
+    assert manifest.dataset["case_count"] == 2
 
-class TestExperimentFilters:
-    def test_matches_status(self, experiments_dir: Path):
-        from benchmark.domain.experiment import (
-            DatasetInfo,
-            EnvironmentInfo,
-            ExperimentMetadata,
-        )
+    fetched = service.get("run-a")
+    assert fetched is not None
+    assert fetched.experiment_id == "run-a"
 
-        metadata = ExperimentMetadata(
-            experiment_id="test",
-            name="test",
-            status=ExperimentStatus.COMPLETED,
-            config_snapshot={},
-            dataset_info=DatasetInfo(name="test"),
-            search_config=SearchConfig(provider="openai", model="gpt-4"),
-            environment=EnvironmentInfo(python_version="3.12", platform="Linux"),
-            experiment_root=experiments_dir / "test",
-        )
-
-        filters = ExperimentFilters(status=ExperimentStatus.COMPLETED)
-        assert filters.matches(metadata) is True
-
-        filters = ExperimentFilters(status=ExperimentStatus.RUNNING)
-        assert filters.matches(metadata) is False
-
-    def test_matches_dataset(self, experiments_dir: Path):
-        from benchmark.domain.experiment import (
-            DatasetInfo,
-            EnvironmentInfo,
-            ExperimentMetadata,
-        )
-
-        metadata = ExperimentMetadata(
-            experiment_id="test",
-            name="test",
-            status=ExperimentStatus.COMPLETED,
-            config_snapshot={},
-            dataset_info=DatasetInfo(name="locbench_v1"),
-            search_config=SearchConfig(provider="openai", model="gpt-4"),
-            environment=EnvironmentInfo(python_version="3.12", platform="Linux"),
-            experiment_root=experiments_dir / "test",
-        )
-
-        filters = ExperimentFilters(dataset="locbench_v1")
-        assert filters.matches(metadata) is True
-
-        filters = ExperimentFilters(dataset="other_dataset")
-        assert filters.matches(metadata) is False
-
-    def test_matches_tags(self, experiments_dir: Path):
-        from benchmark.domain.experiment import (
-            DatasetInfo,
-            EnvironmentInfo,
-            ExperimentMetadata,
-        )
-
-        metadata = ExperimentMetadata(
-            experiment_id="test",
-            name="test",
-            status=ExperimentStatus.COMPLETED,
-            config_snapshot={},
-            dataset_info=DatasetInfo(name="test"),
-            search_config=SearchConfig(provider="openai", model="gpt-4"),
-            environment=EnvironmentInfo(python_version="3.12", platform="Linux"),
-            experiment_root=experiments_dir / "test",
-            tags=["baseline", "fast"],
-        )
-
-        filters = ExperimentFilters(tags=["baseline"])
-        assert filters.matches(metadata) is True
-
-        filters = ExperimentFilters(tags=["baseline", "fast"])
-        assert filters.matches(metadata) is True
-
-        filters = ExperimentFilters(tags=["slow"])
-        assert filters.matches(metadata) is False
+    state = service.get_state("run-a")
+    assert state is not None
+    assert state.status == "pending"
+    assert state.total_cases == 2
 
 
-class TestExperimentService:
-    def test_create_experiment(
-        self,
-        service: ExperimentService,
-        sample_cases: list[DatasetCase],
-        sample_search_config: SearchConfig,
-    ):
-        metadata = service.create(
-            cases=sample_cases,
-            search_config=sample_search_config,
-            dataset_name="test_dataset",
-            tags=["test"],
-        )
+def test_list_with_filters(
+    service: ExperimentService,
+    config: RelaceConfig,
+    sample_cases: list[DatasetCase],
+) -> None:
+    service.create(
+        experiment_root="run-a",
+        kind="run",
+        cases=sample_cases,
+        config=config,
+        run_config={"dataset": "locbench"},
+    )
+    service.create(
+        experiment_root="grid-a",
+        kind="grid",
+        cases=[],
+        config=config,
+        run_config={"dataset": "locbench"},
+    )
 
-        assert metadata.experiment_id is not None
-        assert metadata.status == ExperimentStatus.PENDING
-        assert metadata.dataset_info.name == "test_dataset"
-        assert metadata.dataset_info.case_count == 2
-        assert metadata.tags == ["test"]
-        assert metadata.experiment_root.exists()
+    runs = service.list(filters=ExperimentFilters(kind="run"))
+    assert len(runs) == 1
+    assert runs[0][0].experiment_id == "run-a"
 
-        checkpoint = service.get_checkpoint(metadata.experiment_id)
-        assert checkpoint is not None
-        assert len(checkpoint.pending_cases) == 2
 
-    def test_get_experiment(
-        self,
-        service: ExperimentService,
-        sample_cases: list[DatasetCase],
-        sample_search_config: SearchConfig,
-    ):
-        created = service.create(
-            cases=sample_cases,
-            search_config=sample_search_config,
-        )
+def test_append_result_refreshes_state(
+    service: ExperimentService,
+    config: RelaceConfig,
+    sample_cases: list[DatasetCase],
+) -> None:
+    manifest = service.create(
+        experiment_root="run-a",
+        kind="run",
+        cases=sample_cases,
+        config=config,
+        run_config={"dataset": "locbench"},
+    )
+    service.append_result(
+        manifest.experiment_id,
+        BenchmarkResult(
+            case_id="case_001",
+            repo="test/repo",
+            completed=True,
+            returned_files_count=1,
+            ground_truth_files_count=1,
+            file_recall=1.0,
+            file_precision=1.0,
+            line_coverage=1.0,
+            line_precision_matched=1.0,
+            context_line_coverage=1.0,
+            context_line_precision_matched=1.0,
+            function_hit_rate=1.0,
+            functions_hit=1,
+            functions_total=1,
+            turns_used=2,
+            latency_s=0.5,
+        ),
+    )
 
-        fetched = service.get(created.experiment_id)
-        assert fetched is not None
-        assert fetched.experiment_id == created.experiment_id
+    state = service.get_state(manifest.experiment_id)
+    assert state is not None
+    assert state.status == "running"
+    assert state.completed_cases == 1
 
-    def test_get_nonexistent(self, service: ExperimentService):
-        result = service.get("nonexistent_id")
-        assert result is None
 
-    def test_list_experiments(
-        self,
-        service: ExperimentService,
-        sample_cases: list[DatasetCase],
-        sample_search_config: SearchConfig,
-    ):
-        service.create(cases=sample_cases, search_config=sample_search_config, dataset_name="ds1")
-        service.create(cases=sample_cases, search_config=sample_search_config, dataset_name="ds2")
+def test_delete_experiment(service: ExperimentService, config: RelaceConfig) -> None:
+    manifest = service.create(
+        experiment_root="run-a",
+        kind="run",
+        cases=[],
+        config=config,
+        run_config={"dataset": "locbench"},
+    )
+    assert service.get(manifest.experiment_id) is not None
 
-        experiments = service.list()
-        assert len(experiments) == 2
-
-    def test_list_with_filters(
-        self,
-        service: ExperimentService,
-        sample_cases: list[DatasetCase],
-        sample_search_config: SearchConfig,
-    ):
-        exp1 = service.create(
-            cases=sample_cases,
-            search_config=sample_search_config,
-            dataset_name="locbench",
-        )
-        service.create(
-            cases=sample_cases,
-            search_config=sample_search_config,
-            dataset_name="other",
-        )
-
-        filters = ExperimentFilters(dataset="locbench")
-        experiments = service.list(filters=filters)
-        assert len(experiments) == 1
-        assert experiments[0].experiment_id == exp1.experiment_id
-
-    def test_update_status(
-        self,
-        service: ExperimentService,
-        sample_cases: list[DatasetCase],
-        sample_search_config: SearchConfig,
-    ):
-        created = service.create(cases=sample_cases, search_config=sample_search_config)
-        assert created.status == ExperimentStatus.PENDING
-
-        updated = service.update_status(created.experiment_id, ExperimentStatus.RUNNING)
-        assert updated is not None
-        assert updated.status == ExperimentStatus.RUNNING
-
-        fetched = service.get(created.experiment_id)
-        assert fetched.status == ExperimentStatus.RUNNING
-
-    def test_finalize_success(
-        self,
-        service: ExperimentService,
-        sample_cases: list[DatasetCase],
-        sample_search_config: SearchConfig,
-    ):
-        created = service.create(cases=sample_cases, search_config=sample_search_config)
-
-        finalized = service.finalize(created.experiment_id, success=True)
-        assert finalized is not None
-        assert finalized.status == ExperimentStatus.COMPLETED
-
-    def test_finalize_failure(
-        self,
-        service: ExperimentService,
-        sample_cases: list[DatasetCase],
-        sample_search_config: SearchConfig,
-    ):
-        created = service.create(cases=sample_cases, search_config=sample_search_config)
-
-        finalized = service.finalize(created.experiment_id, success=False)
-        assert finalized is not None
-        assert finalized.status == ExperimentStatus.FAILED
-
-    def test_can_resume(
-        self,
-        service: ExperimentService,
-        sample_cases: list[DatasetCase],
-        sample_search_config: SearchConfig,
-    ):
-        created = service.create(cases=sample_cases, search_config=sample_search_config)
-        assert service.can_resume(created.experiment_id) is True
-
-        service.finalize(created.experiment_id, success=True)
-        assert service.can_resume(created.experiment_id) is False
-
-    def test_delete_experiment(
-        self,
-        service: ExperimentService,
-        sample_cases: list[DatasetCase],
-        sample_search_config: SearchConfig,
-    ):
-        created = service.create(cases=sample_cases, search_config=sample_search_config)
-        assert service.get(created.experiment_id) is not None
-
-        result = service.delete(created.experiment_id)
-        assert result is True
-        assert service.get(created.experiment_id) is None
-
-    def test_delete_running_blocked(
-        self,
-        service: ExperimentService,
-        sample_cases: list[DatasetCase],
-        sample_search_config: SearchConfig,
-    ):
-        created = service.create(cases=sample_cases, search_config=sample_search_config)
-        service.update_status(created.experiment_id, ExperimentStatus.RUNNING)
-
-        result = service.delete(created.experiment_id, force=False)
-        assert result is False
-        assert service.get(created.experiment_id) is not None
-
-    def test_delete_running_forced(
-        self,
-        service: ExperimentService,
-        sample_cases: list[DatasetCase],
-        sample_search_config: SearchConfig,
-    ):
-        created = service.create(cases=sample_cases, search_config=sample_search_config)
-        service.update_status(created.experiment_id, ExperimentStatus.RUNNING)
-
-        result = service.delete(created.experiment_id, force=True)
-        assert result is True
-        assert service.get(created.experiment_id) is None
+    assert service.delete(manifest.experiment_id) is True
+    assert service.get(manifest.experiment_id) is None

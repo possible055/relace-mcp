@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from benchmark.runner.preflight import check_retrieval_backend
+from benchmark.experiments.preflight import check_retrieval_backend
 
 _GIT_HEAD = "abcdef1234567890abcdef1234567890abcdef12"
 
@@ -18,7 +18,7 @@ class _FakeSyncState:
 
 def _patch_git_head(head: str = _GIT_HEAD):
     return patch(
-        "benchmark.runner.preflight.get_git_head",
+        "benchmark.experiments.preflight.get_git_head",
         return_value=head,
     )
 
@@ -32,7 +32,7 @@ def _patch_current_git_info(head: str = _GIT_HEAD):
 
 def _patch_indexed_head(head: str | None):
     return patch(
-        "benchmark.runner.preflight._read_indexed_head",
+        "benchmark.experiments.preflight._read_indexed_head",
         return_value=head,
     )
 
@@ -57,7 +57,7 @@ def test_none_backend_returns_immediately():
 
 @pytest.mark.parametrize("backend", ["chunkhound", "codanna"])
 def test_local_cli_not_found(backend):
-    with patch("benchmark.runner.preflight.shutil.which", return_value=None):
+    with patch("benchmark.experiments.preflight.shutil.which", return_value=None):
         with pytest.raises(RuntimeError, match="CLI not found"):
             check_retrieval_backend(backend, "/tmp/repo")
 
@@ -65,7 +65,7 @@ def test_local_cli_not_found(backend):
 @pytest.mark.parametrize("backend", ["chunkhound", "codanna"])
 def test_local_index_missing(backend):
     with (
-        patch("benchmark.runner.preflight.shutil.which", return_value="/usr/bin/" + backend),
+        patch("benchmark.experiments.preflight.shutil.which", return_value="/usr/bin/" + backend),
         _patch_git_head(),
         _patch_indexed_head(None),
     ):
@@ -76,7 +76,7 @@ def test_local_index_missing(backend):
 @pytest.mark.parametrize("backend", ["chunkhound", "codanna"])
 def test_local_index_stale(backend):
     with (
-        patch("benchmark.runner.preflight.shutil.which", return_value="/usr/bin/" + backend),
+        patch("benchmark.experiments.preflight.shutil.which", return_value="/usr/bin/" + backend),
         _patch_git_head(_GIT_HEAD),
         _patch_indexed_head("0000000000000000000000000000000000000000"),
     ):
@@ -87,7 +87,7 @@ def test_local_index_stale(backend):
 @pytest.mark.parametrize("backend", ["chunkhound", "codanna"])
 def test_local_happy_path(backend):
     with (
-        patch("benchmark.runner.preflight.shutil.which", return_value="/usr/bin/" + backend),
+        patch("benchmark.experiments.preflight.shutil.which", return_value="/usr/bin/" + backend),
         _patch_git_head(_GIT_HEAD),
         _patch_indexed_head(_GIT_HEAD),
     ):
@@ -132,7 +132,7 @@ def test_auto_resolves_to_local_cli():
         return "/usr/bin/codanna" if name == "codanna" else None
 
     with (
-        patch("benchmark.runner.preflight.shutil.which", side_effect=fake_which),
+        patch("benchmark.experiments.preflight.shutil.which", side_effect=fake_which),
         _patch_git_head(_GIT_HEAD),
         _patch_indexed_head(_GIT_HEAD),
     ):
@@ -143,7 +143,7 @@ def test_auto_resolves_to_local_cli():
 def test_auto_falls_back_to_relace():
     state = _FakeSyncState(git_head_sha=_GIT_HEAD)
     with (
-        patch("benchmark.runner.preflight.shutil.which", return_value=None),
+        patch("benchmark.experiments.preflight.shutil.which", return_value=None),
         _patch_current_git_info(_GIT_HEAD),
         _patch_sync_state(state),
     ):

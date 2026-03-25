@@ -26,7 +26,7 @@ def main(experiments_root: str | None, host: str, port: int, no_open: bool) -> N
         ) from exc
 
     try:
-        from benchmark.viewer import create_app
+        from benchmark.web import create_app
     except ImportError as exc:
         raise click.ClickException(
             "benchmark web requires optional dependencies. Install with: uv sync --extra benchmark --extra benchmark-web"

@@ -10,7 +10,7 @@ import httpx
 from ..analysis.function_scope import FunctionScope, extract_function_scopes
 from ..config.paths import get_benchmark_dir, get_raw_data_dir, get_repos_dir
 from ..config.settings import EXCLUDED_REPOS
-from ..runner.git import ensure_repo
+from ..experiments.git import ensure_repo
 
 _HF_DATASETS_SERVER = "https://datasets-server.huggingface.co"
 _DEFAULT_DATASET = "czlll/Loc-Bench_V1"

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from benchmark.analysis.search_map_bundle import (
+from benchmark.analysis.bundle import (
     _build_exploration_tree,
     _build_exploration_tree_from_case_payload,
     _load_results_by_case,
@@ -51,7 +51,7 @@ def test_load_search_map_bundle_rebuilds_when_bundle_json_is_corrupt(tmp_path: P
     _write_trace_case(experiment_root)
     reports_dir = experiment_root / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
-    (reports_dir / "search_map.bundle.json").write_text("{\n", encoding="utf-8")
+    (reports_dir / "search-map.bundle.json").write_text("{\n", encoding="utf-8")
 
     payload = load_search_map_bundle(experiment_root)
 

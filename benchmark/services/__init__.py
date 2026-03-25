@@ -7,7 +7,7 @@ Modules:
     experiment_service: Experiment lifecycle management
 """
 
-from benchmark.services.experiment_service import ExperimentService
+from benchmark.experiments.store import ExperimentService
 
 __all__ = [
     "ExperimentService",

@@ -23,7 +23,7 @@ def _load_jsonl_results(path: Path) -> list[dict]:
 
 
 def _is_report_file(path: Path) -> bool:
-    return path.name.endswith(".report.json")
+    return path.name == "summary.json"
 
 
 def _is_results_jsonl(path: Path) -> bool:
@@ -56,8 +56,8 @@ def _report_label(path: Path, report: dict) -> str:
     name = _experiment_name(report)
     if name:
         return name
-    if path.name == "summary.report.json":
-        return path.parent.parent.name
+    if path.name == "summary.json":
+        return path.parent.name
     return path.stem
 
 
@@ -76,19 +76,17 @@ def _validate_mode_inputs(
 
     if best:
         if len(input_paths) != 1:
-            raise click.ClickException("--best requires exactly one grid summary.report.json file.")
+            raise click.ClickException("--best requires exactly one grid summary.json file.")
         if not _is_report_file(input_paths[0]):
-            raise click.ClickException(
-                "--best only accepts a single grid summary.report.json file."
-            )
+            raise click.ClickException("--best only accepts a single grid summary.json file.")
         return
 
     invalid_paths = [str(path) for path in input_paths if not _is_report_file(path)]
     if invalid_paths:
         invalid_display = ", ".join(invalid_paths)
         raise click.ClickException(
-            "Comparison mode only accepts .report.json inputs. "
-            "Use --best for grid summary.report.json or --failures for .jsonl. "
+            "Comparison mode only accepts summary.json inputs. "
+            "Use --best for grid summary.json or --failures for .jsonl. "
             f"Invalid inputs: {invalid_display}"
         )
 
@@ -146,7 +144,7 @@ def _generate_markdown_comparison(reports: list[tuple[str, dict]]) -> str:
 def _generate_markdown_grid_best(grid_path: Path, metric: str) -> str:
     report = _load_report(grid_path)
     if _experiment_type(report) != "grid":
-        raise click.ClickException("--best only accepts a single grid summary.report.json file.")
+        raise click.ClickException("--best only accepts a single grid summary.json file.")
 
     grid_payload = report.get("grid")
     if not isinstance(grid_payload, dict):
@@ -255,7 +253,7 @@ def _generate_failures_report(results_path: Path) -> str:
 @click.option(
     "--best",
     is_flag=True,
-    help="Find best configuration from a grid summary.report.json file",
+    help="Find best configuration from a grid summary.json file",
 )
 @click.option(
     "--failures",
@@ -278,16 +276,16 @@ def main(
     Examples:
 
       # Compare multiple runs
-      python -m benchmark.cli.report run1.report.json run2.report.json
+      python -m benchmark.cli.report run1/summary.json run2/summary.json
 
       # Find best config from grid search
-      python -m benchmark.cli.report --best path/to/grid/reports/summary.report.json
+      python -m benchmark.cli.report --best path/to/grid/summary.json
 
       # Analyze failures from result file
       python -m benchmark.cli.report --failures run.jsonl
 
       # Output to file
-      python -m benchmark.cli.report -o comparison.md *.report.json
+      python -m benchmark.cli.report -o comparison.md */summary.json
     """
     experiments_dir = get_experiments_dir()
     input_paths = []

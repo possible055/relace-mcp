@@ -69,10 +69,10 @@ uv run --extra benchmark python -m benchmark.cli.run \
 **Outputs**:
 - Experiment root: `benchmark/.data/experiments/<experiment_name>/`
 - Results: `benchmark/.data/experiments/<experiment_name>/results/results.jsonl`
-- Report: `benchmark/.data/experiments/<experiment_name>/reports/summary.report.json`
+- Report: `benchmark/.data/experiments/<experiment_name>/summary.json`
 - Traces (when `--trace`): `benchmark/.data/experiments/<experiment_name>/traces/<case_id>.jsonl`
 - Trace metadata (when `--trace`): `benchmark/.data/experiments/<experiment_name>/traces/<case_id>.meta.json`
-- Events (when `--trace`): `benchmark/.data/experiments/<experiment_name>/events/events.jsonl`
+- Events (when `--trace`): `benchmark/.data/experiments/<experiment_name>/traces/events.jsonl`
 
 Run reports also include `metadata.artifacts` with the trace `schema_version`, `experiment_root`, `traces_dir`, and `events_path`.
 
@@ -90,7 +90,7 @@ uv run --extra benchmark python -m benchmark.cli.run \
 
 # Export the derived search map as JSON
 uv run --extra benchmark python -m benchmark.cli.trace \
-  --latest --search-map --json-out -o search_map.bundle.json
+  --latest --search-map --json-out -o search-map.bundle.json
 
 # Validate trace/meta/events consistency for the latest run
 uv run --extra benchmark python -m benchmark.cli.trace \
@@ -149,7 +149,7 @@ uv run --extra benchmark python -m benchmark.cli.grid \
 | `--output` | | Grid experiment directory |
 | `--dry-run` | | Print planned runs without executing |
 
-**Output**: Grid parent summary saved to `benchmark/.data/experiments/<grid_name>/reports/summary.report.json`
+**Output**: Grid parent summary saved to `benchmark/.data/experiments/<grid_name>/summary.json`
 
 ## 4. Dataset Validation
 
@@ -186,16 +186,16 @@ uv run --extra benchmark python -m benchmark.cli.validate --output validation.js
 ```bash
 # Analyze single run (detailed stdout)
 uv run --extra benchmark python -m benchmark.cli.analyze \
-  path/to/experiment/reports/summary.report.json
+  path/to/experiment/summary.json
 
 # Compare multiple runs from report files (Markdown output)
 uv run --extra benchmark python -m benchmark.cli.report \
-  path/to/run-a/reports/summary.report.json \
-  path/to/run-b/reports/summary.report.json
+  path/to/run-a/summary.json \
+  path/to/run-b/summary.json
 
 # Find best config from a grid parent summary
 uv run --extra benchmark python -m benchmark.cli.report --best \
-  path/to/grid-experiment/reports/summary.report.json
+  path/to/grid-experiment/summary.json
 
 # Analyze incomplete / failed cases from a result file
 uv run --extra benchmark python -m benchmark.cli.report --failures \
@@ -206,7 +206,7 @@ uv run --extra benchmark python -m benchmark.cli.report -o comparison.md *.repor
 
 # Compare the code-space map for one case across grid trials
 uv run --extra benchmark python -m benchmark.cli.case_map \
-  path/to/grid-experiment/reports/summary.report.json \
+  path/to/grid-experiment/summary.json \
   --case-id case_1 -o case_1.compare.md
 
 # Start the local benchmark web analyzer
@@ -215,7 +215,7 @@ uv run --extra benchmark --extra benchmark-web python -m benchmark.cli.web
 
 **Accepted inputs by mode**:
 - Comparison mode: one or more non-grid `*.report.json`
-- `--best`: exactly one grid `summary.report.json`
+- `--best`: exactly one grid `summary.json`
 - `--failures`: exactly one `*.jsonl`
 
 ## 6. Interpret Metrics
@@ -228,7 +228,7 @@ uv run --extra benchmark --extra benchmark-web python -m benchmark.cli.web
 | Line Prec (Matched) | Correct lines / Returned lines (matched files only) |
 | Function Hit Rate | Functions with overlap / Total functions |
 
-Each `summary.report.json` includes metadata tracking for reproducibility. Grid parent reports also include `metadata.experiment.type = "grid"` plus a `grid` section with `search_space`, `trials`, and `best_trial`.
+Each `summary.json` includes metadata tracking for reproducibility. Grid parent reports also include `metadata.experiment.type = "grid"` plus a `grid` section with `search_space`, `trials`, and `best_trial`.
 
 ## 6.1 Web Analyzer
 
@@ -244,7 +244,7 @@ npm ci
 npm run dev
 ```
 
-The web app reads benchmark artifacts under `benchmark/.data/experiments/` and uses the derived `search_map.bundle.json` / `case_map_compare` payloads as its source of truth.
+The web app reads benchmark artifacts under `benchmark/.data/experiments/` and uses the derived `search-map.bundle.json` / `case comparison analysis` payloads as its source of truth.
 
 ## 7. Troubleshooting
 
@@ -291,23 +291,23 @@ benchmark/
 ├── frontend/            # Benchmark SPA frontend (repo-local only)
 ├── datasets/            # Dataset loaders
 ├── metrics/             # Metrics implementation
-├── runner/              # Execution pipeline
+├── experiments/              # Execution pipeline
 │   └── experiment_paths.py  # Experiment naming and artifact layout helpers
 ├── tests/
 │   ├── analysis/
 │   ├── cli/
 │   ├── datasets/
 │   ├── docs/
-│   └── runner/
+│   └── experiments/
 ├── schemas.py           # Data structure definitions
 └── artifacts/           # (runtime generated, not in version control)
     ├── data/            # Dataset files
     ├── experiments/     # Per-experiment archives
     │   └── <experiment_name>/
     │       ├── events/  # Run-level events (.jsonl)
-    │       ├── reports/ # Summary reports (summary.report.json)
+    │       ├── analysis/ # Derived analysis artifacts (search-map.bundle.json)
     │       ├── results/ # Run outputs (.jsonl)
-    │       ├── runs/    # Grid child trials only
+    │       ├── trials/    # Grid child trials only
     │       └── traces/  # Per-case traces (.jsonl + .meta.json)
     ├── repos/           # Cached repositories
 ```

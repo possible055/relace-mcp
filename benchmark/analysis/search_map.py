@@ -7,7 +7,7 @@ from typing import Any
 
 from ..config.paths import get_repos_dir
 from .function_scope import extract_function_scopes
-from .trace_artifacts import collect_trace_artifacts, load_trace_meta, load_trace_turns
+from .traces import collect_trace_artifacts, load_trace_meta, load_trace_turns
 
 _GREP_LINE_RE = re.compile(r"^(?P<path>.+?):(?P<line>\d+):")
 _LSP_SYMBOL_RE = re.compile(

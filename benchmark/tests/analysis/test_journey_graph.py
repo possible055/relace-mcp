@@ -1,4 +1,4 @@
-from benchmark.analysis.journey_graph import build_journey_graph
+from benchmark.analysis.journey import build_journey_graph
 
 
 def test_build_journey_graph_preserves_multi_range_report_back_and_causality() -> None:

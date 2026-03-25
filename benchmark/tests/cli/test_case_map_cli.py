@@ -17,8 +17,8 @@ def _write_bundle(
     temperature: float,
     cases: list[dict],
 ) -> None:
-    reports_dir = experiment_root / "reports"
-    reports_dir.mkdir(parents=True, exist_ok=True)
+    analysis_dir = experiment_root / "analysis"
+    analysis_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema_version": "1.0",
         "kind": "search_map_bundle",
@@ -44,8 +44,25 @@ def _write_bundle(
         },
         "cases": cases,
     }
-    (reports_dir / "search_map.bundle.json").write_text(
+    (analysis_dir / "search-map.bundle.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (experiment_root / "summary.json").write_text(
+        json.dumps(
+            {
+                "metadata": {
+                    "experiment": {
+                        "type": "run",
+                        "name": experiment_name,
+                        "root": str(experiment_root),
+                    },
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -194,8 +211,8 @@ def test_case_map_cli_compares_arbitrary_runs(tmp_path: Path) -> None:
 
 def test_case_map_cli_expands_grid_report_and_marks_missing_case(tmp_path: Path) -> None:
     grid_root = tmp_path / "grid"
-    run_a = grid_root / "runs" / "trial-a"
-    run_b = grid_root / "runs" / "trial-b"
+    run_a = grid_root / "trials" / "trial-a"
+    run_b = grid_root / "trials" / "trial-b"
     _write_bundle(
         run_a,
         experiment_name="trial-a",
@@ -235,9 +252,8 @@ def test_case_map_cli_expands_grid_report_and_marks_missing_case(tmp_path: Path)
         cases=[],
     )
 
-    reports_dir = grid_root / "reports"
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    (reports_dir / "summary.report.json").write_text(
+    grid_root.mkdir(parents=True, exist_ok=True)
+    (grid_root / "summary.json").write_text(
         json.dumps(
             {
                 "metadata": {
@@ -265,7 +281,7 @@ def test_case_map_cli_expands_grid_report_and_marks_missing_case(tmp_path: Path)
     result = runner.invoke(
         case_map_main,
         [
-            str(reports_dir / "summary.report.json"),
+            str(grid_root / "summary.json"),
             "--case-id",
             "case_1",
             "--json-out",

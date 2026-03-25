@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 
-from benchmark.runner.results import BenchmarkResult
-from benchmark.runner.trace_recorder import BenchmarkTraceRecorder
+from benchmark.experiments.models import BenchmarkResult
+from benchmark.experiments.trace_recorder import BenchmarkTraceRecorder
 
 
 def test_trace_recorder_start_run_sets_artifact_paths(tmp_path: Path) -> None:
@@ -21,12 +21,12 @@ def test_trace_recorder_start_run_sets_artifact_paths(tmp_path: Path) -> None:
         recorder.finish_run()
 
     assert recorder.traces_dir == experiment_root / "traces"
-    assert recorder.events_path == experiment_root / "events" / "events.jsonl"
+    assert recorder.events_path == experiment_root / "traces" / "events.jsonl"
     assert metadata["trace_enabled"] is True
     assert metadata["run_id"] == "run_1"
     assert metadata["experiment_root"] == str(experiment_root)
     assert metadata["traces_dir"] == str(experiment_root / "traces")
-    assert metadata["events_path"] == str(experiment_root / "events" / "events.jsonl")
+    assert metadata["events_path"] == str(experiment_root / "traces" / "events.jsonl")
 
 
 def test_trace_recorder_writes_trace_meta_and_events(tmp_path: Path) -> None:

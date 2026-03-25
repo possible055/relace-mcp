@@ -1,4 +1,4 @@
-from benchmark.runner.trace_recorder import ArtifactWriteResult
+from benchmark.experiments.trace_recorder import ArtifactWriteResult
 
 
 def test_artifact_write_result_is_hashable_with_immutable_warnings() -> None:

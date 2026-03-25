@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -7,7 +8,8 @@ pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient
 
-from benchmark.viewer import create_app
+from benchmark.experiments.models import ExperimentManifest, ExperimentState
+from benchmark.web import create_app
 
 
 def _write_bundle(
@@ -22,8 +24,8 @@ def _write_bundle(
     temperature: float = 0.2,
     cases: list[dict] | None = None,
 ) -> None:
-    reports_dir = experiment_root / "reports"
-    reports_dir.mkdir(parents=True, exist_ok=True)
+    analysis_dir = experiment_root / "analysis"
+    analysis_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema_version": "1.0",
         "kind": "search_map_bundle",
@@ -46,8 +48,83 @@ def _write_bundle(
         },
         "cases": cases or [],
     }
-    (reports_dir / "search_map.bundle.json").write_text(
+    (analysis_dir / "search-map.bundle.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_experiment_summary(
+    experiment_root: Path,
+    *,
+    experiment_name: str,
+    experiment_type: str,
+    provider: str,
+    model: str,
+    max_turns: int,
+    temperature: float,
+    search_mode: str,
+    case_count: int,
+) -> None:
+    manifest = ExperimentManifest(
+        experiment_id=experiment_root.name,
+        kind=experiment_type,
+        name=experiment_name,
+        experiment_root=experiment_root,
+        created_at=datetime.now(UTC),
+        dataset={"name": "locbench", "case_count": case_count},
+        search={
+            "provider": provider,
+            "model": model,
+            "max_turns": max_turns,
+            "temperature": temperature,
+            "search_mode": search_mode,
+        },
+    )
+    manifest.save()
+    ExperimentState(
+        status="completed",
+        total_cases=case_count,
+        completed_cases=case_count,
+        failed_cases=0,
+    ).save(experiment_root)
+    (experiment_root / "summary.json").write_text(
+        json.dumps(
+            {
+                "metadata": {
+                    "experiment": {
+                        "type": experiment_type,
+                        "name": experiment_name,
+                        "root": str(experiment_root),
+                    },
+                    "search": {
+                        "provider": provider,
+                        "model": model,
+                        "max_turns": max_turns,
+                        "temperature": temperature,
+                    },
+                    "run": {
+                        "search_mode": search_mode,
+                        "cases_loaded": case_count,
+                    },
+                },
+                "manifest": manifest.to_dict(),
+                "state": {
+                    "status": "completed",
+                    "total_cases": case_count,
+                    "completed_cases": case_count,
+                    "failed_cases": 0,
+                },
+                "stats": {
+                    "completion_rate": 1.0,
+                    "avg_file_recall": 0.5,
+                    "avg_file_precision": 0.5,
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -71,55 +148,27 @@ def test_experiments_endpoint_lists_runs_and_grid(tmp_path: Path) -> None:
     run_root = tmp_path / "run-a"
     grid_root = tmp_path / "grid-a"
     _write_bundle(run_root, experiment_name="run-a")
-    (run_root / "reports" / "summary.report.json").write_text(
-        json.dumps(
-            {
-                "metadata": {
-                    "experiment": {
-                        "type": "run",
-                        "name": "run-a",
-                        "root": str(run_root),
-                    },
-                    "search": {
-                        "provider": "openai",
-                        "model": "gpt-5-mini",
-                        "max_turns": 8,
-                        "temperature": 0.2,
-                    },
-                    "run": {
-                        "search_mode": "agentic",
-                        "cases_loaded": 2,
-                    },
-                }
-            }
-        )
-        + "\n",
-        encoding="utf-8",
+    _write_experiment_summary(
+        run_root,
+        experiment_name="run-a",
+        experiment_type="run",
+        provider="openai",
+        model="gpt-5-mini",
+        max_turns=8,
+        temperature=0.2,
+        search_mode="agentic",
+        case_count=2,
     )
-    (grid_root / "reports").mkdir(parents=True, exist_ok=True)
-    (grid_root / "reports" / "summary.report.json").write_text(
-        json.dumps(
-            {
-                "metadata": {
-                    "experiment": {
-                        "type": "grid",
-                        "name": "grid-a",
-                        "root": str(grid_root),
-                    },
-                    "search": {
-                        "provider": "openai",
-                        "model": "gpt-5.4",
-                        "max_turns": 12,
-                        "temperature": 0.0,
-                    },
-                    "run": {
-                        "search_mode": "agentic",
-                    },
-                }
-            }
-        )
-        + "\n",
-        encoding="utf-8",
+    _write_experiment_summary(
+        grid_root,
+        experiment_name="grid-a",
+        experiment_type="grid",
+        provider="openai",
+        model="gpt-5.4",
+        max_turns=12,
+        temperature=0.0,
+        search_mode="agentic",
+        case_count=0,
     )
 
     client = TestClient(create_app(tmp_path))
@@ -127,12 +176,11 @@ def test_experiments_endpoint_lists_runs_and_grid(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert len(payload) == 2
-    names = {item["name"] for item in payload}
+    assert payload["total"] == 2
+    names = {item["name"] for item in payload["items"]}
     assert names == {"run-a", "grid-a"}
-    run_item = next(item for item in payload if item["name"] == "run-a")
-    assert run_item["has_bundle"] is True
-    assert run_item["case_count"] == 0
+    run_item = next(item for item in payload["items"] if item["name"] == "run-a")
+    assert run_item["case_count"] == 2
 
 
 @pytest.mark.parametrize(

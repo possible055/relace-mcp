@@ -37,8 +37,8 @@ def test_web_cli_reports_combined_extra_when_web_import_fails(monkeypatch) -> No
     original_import = builtins.__import__
 
     def fake_import(name, *args, **kwargs):
-        if name == "benchmark.viewer":
-            raise ImportError("missing benchmark.viewer")
+        if name == "benchmark.web":
+            raise ImportError("missing benchmark.web")
         return original_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", fake_import)

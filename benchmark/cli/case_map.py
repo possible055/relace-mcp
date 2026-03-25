@@ -4,8 +4,8 @@ from typing import Any
 
 import click
 
-from ..analysis.case_map_compare import build_case_map_compare, format_case_map_compare_report
-from ..analysis.search_map_bundle import SEARCH_MAP_BUNDLE_FILENAME
+from ..analysis.bundle import SEARCH_MAP_BUNDLE_FILENAME
+from ..analysis.compare import build_case_map_compare, format_case_map_compare_report
 from ..config.paths import get_experiments_dir
 
 
@@ -33,7 +33,7 @@ def _experiment_root_from_report(path: Path, report: dict[str, Any]) -> Path:
             root = experiment.get("root")
             if isinstance(root, str) and root:
                 return Path(root)
-    return path.parent.parent
+    return path.parent
 
 
 def _grid_trial_roots_from_report(path: Path, report: dict[str, Any]) -> list[Path]:
@@ -53,7 +53,7 @@ def _grid_trial_roots_from_report(path: Path, report: dict[str, Any]) -> list[Pa
         return roots
 
     root = _experiment_root_from_report(path, report)
-    runs_dir = root / "runs"
+    runs_dir = root / "trials"
     if runs_dir.is_dir():
         return sorted(
             [child for child in runs_dir.iterdir() if child.is_dir()], key=lambda p: str(p)
@@ -65,7 +65,7 @@ def _expand_input_path(path: Path) -> list[Path]:
     if path.is_file():
         if path.name == SEARCH_MAP_BUNDLE_FILENAME:
             return [path.parent.parent]
-        if path.name.endswith(".report.json"):
+        if path.name == "summary.json":
             report = _load_json(path)
             if isinstance(report, dict) and _experiment_type(report) == "grid":
                 return _grid_trial_roots_from_report(path, report)
@@ -75,16 +75,16 @@ def _expand_input_path(path: Path) -> list[Path]:
     if path.is_dir():
         if path.name == "traces":
             return [path.parent]
-        bundle_path = path / "reports" / SEARCH_MAP_BUNDLE_FILENAME
+        bundle_path = path / "analysis" / SEARCH_MAP_BUNDLE_FILENAME
         if bundle_path.exists():
             return [path]
-        report_path = path / "reports" / "summary.report.json"
+        report_path = path / "summary.json"
         if report_path.exists():
             report = _load_json(report_path)
             if isinstance(report, dict) and _experiment_type(report) == "grid":
                 return _grid_trial_roots_from_report(report_path, report)
             return [path]
-        runs_dir = path / "runs"
+        runs_dir = path / "trials"
         if runs_dir.is_dir() and not (path / "traces").is_dir():
             return sorted(
                 [child for child in runs_dir.iterdir() if child.is_dir()], key=lambda p: str(p)
