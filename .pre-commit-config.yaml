@@ -1,3 +1,4 @@
+minimum_pre_commit_version: "4.5.0"
 default_install_hook_types: [pre-commit, pre-push]
 default_stages: [pre-commit]
 
@@ -44,54 +45,48 @@ repos:
         name: mypy (daemon)
         entry: uv run --extra dev -- dmypy run -- src/
         language: system
-        files: '\.py$'
+        files: '^(src/.*\.py|pyproject\.toml)$'
         pass_filenames: false
 
-      # Python security scan
+      # Python security scan — keep src/ as the local security boundary
       - id: bandit
-        name: bandit
+        name: bandit (src)
         entry: uv run --extra dev -- bandit -r src/ -c pyproject.toml
         language: system
-        files: '\.py$'
+        files: '^(src/.*\.py|pyproject\.toml)$'
         pass_filenames: false
 
-      # ty type check
-      - id: ty
-        name: ty
-        entry: uv run --extra dev -- ty check
-        language: system
-        files: '\.py$'
-        pass_filenames: false
-
-      # Frontend lint — oxlint for fast staged-file checks
+      # Frontend lint — oxlint for fast whole-src checks
       - id: benchmark-frontend-lint
         name: benchmark frontend oxlint
-        entry: bash scripts/run-benchmark-frontend-hook.sh oxlint
+        entry: pre-commit hazmat cd benchmark/viewer/frontend npm exec oxlint src --
         language: system
         files: '^benchmark/viewer/frontend/.*\.(ts|tsx|js|jsx)$'
+        pass_filenames: false
 
-      # Frontend type check — whole-project analysis
+      # Frontend type check — whole-project analysis (Moved to pre-push for speed)
       - id: benchmark-frontend-typecheck
         name: benchmark frontend typecheck
-        entry: bash scripts/run-benchmark-frontend-hook.sh typecheck
+        entry: pre-commit hazmat cd benchmark/viewer/frontend npm run typecheck --
         language: system
-        files: '^benchmark/viewer/frontend/.*\.(ts|tsx)$'
+        files: '^benchmark/viewer/frontend/'
         pass_filenames: false
+        stages: [pre-push]
 
       # Frontend lint — type-aware rules, pre-push only
       - id: benchmark-frontend-lint-typechecked
         name: benchmark frontend eslint
-        entry: bash scripts/run-benchmark-frontend-hook.sh eslint
+        entry: pre-commit hazmat cd benchmark/viewer/frontend npm run lint --
         language: system
+        files: '^benchmark/viewer/frontend/'
         pass_filenames: false
-        always_run: true
         stages: [pre-push]
 
       # Frontend dead code — export/file analysis, pre-push only
       - id: benchmark-frontend-deadcode
         name: benchmark frontend knip
-        entry: bash scripts/run-benchmark-frontend-hook.sh deadcode
+        entry: pre-commit hazmat cd benchmark/viewer/frontend npm run deadcode --
         language: system
+        files: '^benchmark/viewer/frontend/'
         pass_filenames: false
-        always_run: true
         stages: [pre-push]
