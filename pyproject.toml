@@ -92,10 +92,6 @@ where = ["src"]
 include = ["relace_mcp*", "relace_dashboard*"]
 exclude = ["tests*"]
 
-[tool.bandit.assert_used]
-# Allow assertions in testing environments
-skips = ["*/test_*.py", "*/*_test.py"]
-
 [tool.mypy]
 # Enforce strict type checking as the primary analyzer
 strict = true
