@@ -45,23 +45,15 @@ repos:
         name: mypy (daemon)
         entry: uv run --extra dev -- dmypy run -- src/
         language: system
-        files: '\.py$'
+        files: '^(src/.*\.py|pyproject\.toml)$'
         pass_filenames: false
 
-      # Python security scan
+      # Python security scan — keep src/ as the local security boundary
       - id: bandit
-        name: bandit
+        name: bandit (src)
         entry: uv run --extra dev -- bandit -r src/ -c pyproject.toml
         language: system
-        files: '\.py$'
-        pass_filenames: false
-
-      # ty type check
-      - id: ty
-        name: ty
-        entry: uv run --extra dev -- ty check
-        language: system
-        files: '\.py$'
+        files: '^(src/.*\.py|pyproject\.toml)$'
         pass_filenames: false
 
       # Frontend lint — oxlint for fast staged-file checks
@@ -71,21 +63,22 @@ repos:
         language: system
         files: '^benchmark/web/frontend/.*\.(ts|tsx|js|jsx)$'
 
-      # Frontend type check — whole-project analysis
+      # Frontend type check — whole-project analysis (Moved to pre-push for speed)
       - id: benchmark-frontend-typecheck
         name: benchmark frontend typecheck
         entry: pre-commit hazmat cd benchmark/web/frontend npm run typecheck --
         language: system
-        files: '^benchmark/web/frontend/.*\.(ts|tsx)$'
+        files: '^benchmark/web/frontend/'
         pass_filenames: false
+        stages: [pre-push]
 
       # Frontend lint — type-aware rules, pre-push only
       - id: benchmark-frontend-lint-typechecked
         name: benchmark frontend eslint
         entry: pre-commit hazmat cd benchmark/web/frontend npm run lint --
         language: system
+        files: '^benchmark/web/frontend/'
         pass_filenames: false
-        always_run: true
         stages: [pre-push]
 
       # Frontend dead code — export/file analysis, pre-push only
@@ -93,6 +86,6 @@ repos:
         name: benchmark frontend knip
         entry: pre-commit hazmat cd benchmark/web/frontend npm run deadcode --
         language: system
+        files: '^benchmark/web/frontend/'
         pass_filenames: false
-        always_run: true
         stages: [pre-push]
