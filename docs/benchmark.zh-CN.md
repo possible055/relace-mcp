@@ -239,7 +239,7 @@ benchmark web analyzer 是一个本地 SPA + Python API，用来浏览 experimen
 uv run --extra benchmark --extra benchmark-web python -m benchmark.cli.web
 
 # 终端 2: frontend dev server
-cd benchmark/viewer/frontend
+cd benchmark/web/frontend
 npm ci
 npm run dev
 ```

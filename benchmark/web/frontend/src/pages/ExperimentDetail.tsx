@@ -76,11 +76,14 @@ export default function ExperimentDetail() {
 
   const experiment = experimentQuery.data!
   const metrics = metricsQuery.data
-  const state = experiment.state as Record<string, unknown>
-  const manifest = experiment.manifest as Record<string, unknown>
-  const summary = experiment.summary as Record<string, unknown>
-  const summaryStats = (summary.stats as Record<string, number> | undefined) ?? {}
-  const totalCases = Number(state.total_cases ?? 0)
+  const state = experiment.state
+  const manifest = experiment.manifest
+  const summary = experiment.summary
+  const summaryStats =
+    typeof summary.stats === 'object' && summary.stats !== null ? summary.stats : {}
+  const totalCases =
+    typeof state.total_cases === 'number' ? state.total_cases : Number(state.total_cases ?? 0)
+  const statusText = typeof state.status === 'string' ? state.status : 'unknown'
 
   return (
     <div className="space-y-6 p-6">
@@ -94,7 +97,7 @@ export default function ExperimentDetail() {
         <div>
           <h1 className="type-heading-04 text-[var(--cds-text-primary)]">{experiment.name}</h1>
           <div className="type-body-compact-01 text-[var(--cds-text-helper)]">
-            {experiment.kind} • {String(state.status ?? 'unknown')} • {totalCases} cases
+            {experiment.kind} • {statusText} • {totalCases} cases
           </div>
         </div>
       </div>
