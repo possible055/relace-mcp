@@ -1,0 +1,31 @@
+.github/workflows/ci.yml
+  224bef14deb2c9da 94
+src/relace_mcp/server.py
+  224bef14deb2c9da 157
+src/relace_mcp/tools/mcp_status.py
+  224bef14deb2c9da 16
+tests/retrieval/test_background_index_monitor_unit.py
+  224bef14deb2c9da 11,26,67,88,113,150,186,254,296
+src/relace_mcp/repo/monitor.py
+  224bef14deb2c9da 1-314
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.21",
+  "base_commit_sha": "6f40a1e6638ec9439d5f756f44a0749c91266a06",
+  "prompts": {
+    "224bef14deb2c9da": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3598-dee7-7000-a993-7d4f0467965f",
+        "model": "unknown"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 326,
+      "total_deletions": 335,
+      "accepted_lines": 326,
+      "overriden_lines": 0
+    }
+  }
+}
