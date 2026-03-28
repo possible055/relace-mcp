@@ -5,11 +5,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-import relace_mcp.background_index_monitor as bgmon
 import relace_mcp.repo.backends.chunkhound as chunkhound_backend
 import relace_mcp.repo.backends.codanna_indexing as codanna_indexing
 import relace_mcp.repo.backends.locking as backend_locking
-from relace_mcp.background_index_monitor import BackgroundIndexMonitor
+import relace_mcp.repo.monitor as bgmon
 from relace_mcp.config import RelaceConfig
 from relace_mcp.repo.backends.locking import (
     BackendIndexLease,
@@ -24,6 +23,7 @@ from relace_mcp.repo.backends.registry import (
     is_bg_index_running,
 )
 from relace_mcp.repo.freshness import FreshnessStatus
+from relace_mcp.repo.monitor import BackgroundIndexMonitor
 
 
 def _configure_monitor_settings(
@@ -64,9 +64,7 @@ class TestBackgroundIndexMonitor:
     ) -> None:
         _configure_monitor_settings(monkeypatch, retrieval_backend="chunkhound")
 
-        with patch(
-            "relace_mcp.background_index_monitor.shutil.which", return_value="/usr/bin/fake"
-        ):
+        with patch("relace_mcp.repo.monitor.shutil.which", return_value="/usr/bin/fake"):
             monitor = BackgroundIndexMonitor(
                 RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
             )
@@ -87,7 +85,7 @@ class TestBackgroundIndexMonitor:
         monitor = BackgroundIndexMonitor(RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path)))
 
         with patch(
-            "relace_mcp.background_index_monitor.shutil.which",
+            "relace_mcp.repo.monitor.shutil.which",
             side_effect=lambda name: (
                 f"/usr/bin/{name}" if name in {"codanna", "chunkhound"} else None
             ),
@@ -112,7 +110,7 @@ class TestBackgroundIndexMonitor:
                     reason="git_head_changed",
                 ),
             ),
-            patch("relace_mcp.background_index_monitor.shutil.which", return_value="/usr/bin/fake"),
+            patch("relace_mcp.repo.monitor.shutil.which", return_value="/usr/bin/fake"),
             patch.object(bgmon, "schedule_bg_codanna_full_index") as mock_codanna,
             patch.object(bgmon, "schedule_bg_chunkhound_index") as mock_chunkhound,
             patch.object(bgmon, "get_bg_index_task", return_value=scheduled_task),
@@ -149,7 +147,7 @@ class TestBackgroundIndexMonitor:
 
         with (
             patch.object(monitor, "_with_jitter", side_effect=lambda seconds: seconds),
-            patch("relace_mcp.background_index_monitor.asyncio.sleep", side_effect=fake_sleep),
+            patch("relace_mcp.repo.monitor.asyncio.sleep", side_effect=fake_sleep),
             pytest.raises(asyncio.CancelledError),
         ):
             await monitor._run_loop()
@@ -185,7 +183,7 @@ class TestBackgroundIndexMonitor:
         caplog.set_level(logging.WARNING)
         with (
             patch.object(monitor, "_with_jitter", side_effect=lambda seconds: seconds),
-            patch("relace_mcp.background_index_monitor.asyncio.sleep", side_effect=fake_sleep),
+            patch("relace_mcp.repo.monitor.asyncio.sleep", side_effect=fake_sleep),
             pytest.raises(asyncio.CancelledError),
         ):
             await monitor._run_loop()
@@ -253,7 +251,7 @@ class TestBackgroundIndexMonitor:
                     ),
                 ),
                 patch(
-                    "relace_mcp.background_index_monitor.shutil.which",
+                    "relace_mcp.repo.monitor.shutil.which",
                     return_value="/usr/bin/fake",
                 ),
                 patch(
@@ -295,7 +293,7 @@ class TestBackgroundIndexMonitor:
         monitor._active_backend = "chunkhound"
 
         caplog.set_level(logging.WARNING)
-        with patch("relace_mcp.background_index_monitor.shutil.which", return_value=None):
+        with patch("relace_mcp.repo.monitor.shutil.which", return_value=None):
             first = await monitor._tick()
             second = await monitor._tick()
 
