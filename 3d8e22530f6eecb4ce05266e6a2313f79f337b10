@@ -1,0 +1,74 @@
+tests/search/test_harness_messages_unit.py
+  012cc25d88445d0c 120,124,129,132,135,159,171,193
+tests/retrieval/test_agentic_retrieval_integration.py
+  d043bdd6a5486460 245-246
+tests/search/test_harness_unit.py
+  012cc25d88445d0c 423,425
+  d043bdd6a5486460 372-383,385-422,424,426
+tests/retrieval/test_agentic_retrieval_unit.py
+  d043bdd6a5486460 141-145,151-152,230-232
+  afefff8df1bcb6c9 7,9,11,13-14,20,28,32,41
+src/relace_mcp/search/retrieval.py
+  afefff8df1bcb6c9 11,162,167,175-176,185,192,194,201,203,518-519,526
+  d043bdd6a5486460 8,26,107-140,142,149-152,164-166,172-174,177-184,186,193,195-197,199,205,521,523-525,545,552-553
+src/relace_mcp/prompts/retrieval_openai.yaml
+  d043bdd6a5486460 27-32
+  afefff8df1bcb6c9 50-51,65-66,74-111
+tests/search/test_tool_timeouts_unit.py
+  012cc25d88445d0c 8-36
+src/relace_mcp/search/harness/core.py
+  d043bdd6a5486460 116-120,157,187,219,252,466
+  afefff8df1bcb6c9 84,258,418-419,473,638-639
+  012cc25d88445d0c 265-268,296,480-483,514,529-533
+src/relace_mcp/prompts/retrieval_relace.yaml
+  d043bdd6a5486460 48-53
+  afefff8df1bcb6c9 68-69,83-84,92-129
+src/relace_mcp/search/harness/messages.py
+  012cc25d88445d0c 72,74,81-90,139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.21",
+  "base_commit_sha": "3d8e22530f6eecb4ce05266e6a2313f79f337b10",
+  "prompts": {
+    "012cc25d88445d0c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "58ac99a2-d823-4f1f-8af3-079bd97540ec",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 129,
+      "total_deletions": 121,
+      "accepted_lines": 80,
+      "overriden_lines": 0
+    },
+    "afefff8df1bcb6c9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d361e-e180-7c72-ae61-73cd9d2b9c14",
+        "model": "gpt-5.2"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 124,
+      "total_deletions": 98,
+      "accepted_lines": 114,
+      "overriden_lines": 4
+    },
+    "d043bdd6a5486460": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d35c6-8574-7af2-b300-4fe8541f81e8",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 211,
+      "total_deletions": 16,
+      "accepted_lines": 157,
+      "overriden_lines": 3
+    }
+  }
+}
