@@ -77,10 +77,11 @@ def all_mocks(mock_harness, mock_cloud_search, mock_is_backend_disabled, mock_ls
     }
 
 
+@pytest.mark.usefixtures("all_mocks")
 class TestRetrievalMCPContract:
     @pytest.mark.asyncio
     async def test_return_dict_has_required_keys(
-        self, mock_config, mock_repo_client, mock_search_client, all_mocks
+        self, mock_config, mock_repo_client, mock_search_client
     ):
         with patch(
             f"{_RETRIEVAL_MOD}.classify_cloud_index_freshness",
@@ -103,7 +104,7 @@ class TestRetrievalMCPContract:
 
     @pytest.mark.asyncio
     async def test_files_is_dict_of_str_to_list_of_pairs(
-        self, mock_config, mock_repo_client, mock_search_client, all_mocks
+        self, mock_config, mock_repo_client, mock_search_client
     ):
         with patch(
             f"{_RETRIEVAL_MOD}.classify_cloud_index_freshness",
@@ -123,7 +124,7 @@ class TestRetrievalMCPContract:
 
     @pytest.mark.asyncio
     async def test_trace_id_is_nonempty_string(
-        self, mock_config, mock_repo_client, mock_search_client, all_mocks
+        self, mock_config, mock_repo_client, mock_search_client
     ):
         with patch(
             f"{_RETRIEVAL_MOD}.classify_cloud_index_freshness",
@@ -137,7 +138,7 @@ class TestRetrievalMCPContract:
 
     @pytest.mark.asyncio
     async def test_semantic_hints_used_is_nonneg_int(
-        self, mock_config, mock_repo_client, mock_search_client, all_mocks
+        self, mock_config, mock_repo_client, mock_search_client
     ):
         with patch(
             f"{_RETRIEVAL_MOD}.classify_cloud_index_freshness",
@@ -156,12 +157,12 @@ class TestRetrievalOrchestration:
         self, mock_config, mock_repo_client, mock_search_client, all_mocks
     ):
         call_order: list[str] = []
-        all_mocks["cloud_search"].side_effect = lambda *a, **kw: (
+        all_mocks["cloud_search"].side_effect = lambda *_args, **_kwargs: (
             call_order.append("cloud_search") or {"results": list(SEMANTIC_RESULTS)}
         )
         harness_instance = all_mocks["harness_cls"].return_value
 
-        async def tracked_run(*a, **kw):
+        async def tracked_run(*_args, **_kwargs):
             call_order.append("harness_run")
             return {**HARNESS_RESULT}
 
@@ -241,7 +242,8 @@ class TestRetrievalOrchestration:
 
         harness_instance = all_mocks["harness_cls"].return_value
         run_kwargs = harness_instance.run_async.call_args.kwargs
-        assert "semantic_hints" in run_kwargs.get("semantic_hints_section", "")
+        assert "retrieval_guidance" in run_kwargs.get("first_turn_guidance", "")
+        assert "/repo/src/main.py" in run_kwargs.get("first_turn_guidance", "")
 
 
 class TestRetrievalBackendDispatch:
@@ -262,8 +264,9 @@ class TestRetrievalBackendDispatch:
         assert result["hints_index_freshness"] == "missing"
 
     @pytest.mark.asyncio
+    @pytest.mark.usefixtures("all_mocks")
     async def test_chunkhound_stale_prefer_stale_uses_hints_and_schedules_refresh(
-        self, mock_config, mock_repo_client, mock_search_client, all_mocks
+        self, mock_config, mock_repo_client, mock_search_client
     ):
         with (
             patch(f"{_SETTINGS_MOD}.RETRIEVAL_BACKEND", "chunkhound"),
@@ -291,8 +294,9 @@ class TestRetrievalBackendDispatch:
         assert result["hints_index_freshness"] == "stale"
 
     @pytest.mark.asyncio
+    @pytest.mark.usefixtures("all_mocks")
     async def test_codanna_missing_strict_skips_hints_but_schedules_refresh(
-        self, mock_config, mock_repo_client, mock_search_client, all_mocks
+        self, mock_config, mock_repo_client, mock_search_client
     ):
         with (
             patch(f"{_SETTINGS_MOD}.RETRIEVAL_BACKEND", "codanna"),

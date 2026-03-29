@@ -76,38 +76,37 @@ def test_lsp_section_removed_when_no_lsp(prompt_data: dict) -> None:
 # --- user_prompt_template tests ---
 
 
-def test_user_prompt_template_has_semantic_hints_placeholder(prompt_data: dict) -> None:
+def test_user_prompt_formats_query(prompt_data: dict) -> None:
     template = prompt_data["user_prompt_template"]
-    assert "{semantic_hints_section}" in template
-
-
-def test_user_prompt_formats_without_hints(prompt_data: dict) -> None:
-    template = prompt_data["user_prompt_template"]
-    result = template.format(query="test query", semantic_hints_section="")
+    result = template.format(query="test query")
     assert "test query" in result
-    assert "{semantic_hints_section}" not in result
-
-
-def test_user_prompt_formats_with_hints(prompt_data: dict) -> None:
-    template = prompt_data["user_prompt_template"]
-    hints = "<semantic_hints>\n- foo.py (score: 0.95)\n</semantic_hints>"
-    result = template.format(query="test query", semantic_hints_section=hints)
-    assert "test query" in result
-    assert "foo.py" in result
-    assert "semantic_hints" in result
+    assert "{query}" not in result
 
 
 # --- load_prompt_file tests ---
 
 
+_RETRIEVAL_NAMES = ["retrieval_relace", "retrieval_openai"]
+_ALL_NAMES = _PROMPT_NAMES
+
+
 def test_load_prompt_file_returns_all_keys() -> None:
-    for name in _PROMPT_NAMES:
+    for name in _ALL_NAMES:
         data = load_prompt_file(name)
         assert "system_prompt" in data
         assert "user_prompt_template" in data
         assert "turn_hint_template" in data
         assert "turn_instructions" in data
-        assert "lsp_section" in data
+        assert "mixed_report_back_hint" in data
+
+
+def test_retrieval_prompt_has_guidance_keys() -> None:
+    for name in _RETRIEVAL_NAMES:
+        data = load_prompt_file(name)
+        assert "first_turn_guidance_template" in data
+        assert "freshness_descriptions" in data
+        assert "semantic_hints_block_template" in data
+        assert "no_hints_fallback" in data
 
 
 def test_load_prompt_file_unknown_name_raises() -> None:

@@ -369,6 +369,61 @@ class TestFastAgenticSearchHarness:
         assert all(r[0] > 0 and r[1] >= r[0] for r in ranges)
         assert all(r[1] != -1 for r in ranges)
 
+    @pytest.mark.asyncio
+    async def test_first_turn_guidance_is_only_sent_on_first_async_turn(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """First-turn guidance should be visible only on the first async LLM call."""
+        (tmp_path / "test.py").write_text("def hello(): pass\n")
+        seen_messages: list[list[dict]] = []
+
+        async def _chat_async(messages, tools=None, trace_id=None):
+            del tools, trace_id
+            seen_messages.append([dict(msg) for msg in messages])
+            if len(seen_messages) == 1:
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "tool_calls": [_make_view_file_call("call_1", "/repo/test.py")]
+                            }
+                        }
+                    ]
+                }
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [
+                                _make_report_back_call("call_2", "Found it", {"test.py": [[1, 1]]})
+                            ]
+                        }
+                    }
+                ]
+            }
+
+        mock_client.chat_async.side_effect = _chat_async
+
+        harness = FastAgenticSearchHarness(mock_config, mock_client)
+        result = await harness.run_async(
+            "Find hello",
+            first_turn_guidance="<retrieval_guidance>turn-1 only</retrieval_guidance>",
+        )
+
+        assert result["turns_used"] == 2
+        first_call_contents = [
+            msg.get("content", "") for msg in seen_messages[0] if msg["role"] == "user"
+        ]
+        second_call_contents = [
+            msg.get("content", "") for msg in seen_messages[1] if msg["role"] == "user"
+        ]
+        # Guidance is present in both turns (accumulates in context for model awareness)
+        assert any("turn-1 only" in content for content in first_call_contents)
+        assert any("turn-1 only" in content for content in second_call_contents)
+
 
 class TestParallelToolCallsFix:
     """Test P0 fix: parallel tool calls with report_back not last."""

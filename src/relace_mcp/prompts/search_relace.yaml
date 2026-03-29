@@ -59,6 +59,8 @@ lsp_section: |
   - `search_symbol`: Search for symbol definitions by name across workspace. Input: symbol name or prefix. Output: `[kind] path:line:col name`. Zero dependencies — use in Turn 1.
   - `find_symbol`: Navigate to definition or find all references. Input: file + line + column (1-indexed). Output: `path:line:col`. Tip: get line/col from `search_symbol` or `grep_search` output.
 
+# --- User prompt (messages[1]) ---
+
 user_prompt_template: |
   <repository>/repo</repository>
 
@@ -66,16 +68,14 @@ user_prompt_template: |
   {query}
   </user_query>
 
-  {semantic_hints_section}
-
   <task>
   Follow critical_rules strictly.
   Use exactly 8 parallel tools on the first exploration turn, then 6-9 on subsequent turns.
   When confident, output ONLY the `report_back` tool_call with nothing else.
   </task>
 
-# Unified turn hint (replaces budget_hint + convergence_hint + strategies)
-# Injected as user message from turn 2 onwards
+# --- Turn status hint — injected as user message from turn 2 onwards ---
+
 turn_hint_template: |
   <status turn="{turn}/{max_turns}" context="{chars_pct}%">{instruction}</status>
 
@@ -83,3 +83,9 @@ turn_hint_template: |
 turn_instructions:
   normal: "Continue exploring — or call `report_back` now if you have sufficient coverage."
   final: "FINAL TURN. You MUST call `report_back` NOW with current findings. DO NOT call other tools!"
+
+# --- Guardrail correction hints ---
+
+# Mixed report_back correction — injected when model incorrectly combines
+# report_back with other tool calls in the same turn
+mixed_report_back_hint: "Your previous turn mixed report_back with other tools — report_back was discarded. If you are done exploring, call report_back ALONE as the ONLY tool in your next turn."

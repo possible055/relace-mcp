@@ -117,20 +117,22 @@ class TestTruncateMessages:
         result = self.mixin._truncate_messages(messages)
         assert result == messages
 
-    def test_long_history_truncated_keeps_system_and_user(self) -> None:
+    def test_long_history_truncated_keeps_prefix(self) -> None:
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": "sys"},
             {"role": "user", "content": "hi"},
+            {"role": "user", "content": "guidance"},  # optional guidance
         ]
         for i in range(10):
             messages.append(_make_assistant_tc(f"tc{i}"))
             messages.append(_make_tool_result(f"tc{i}"))
-        assert len(messages) == 22
+        assert len(messages) == 23
 
         result = self.mixin._truncate_messages(messages)
-        # Should keep system + user
+        # Should keep prefix (all messages before first assistant)
         assert result[0]["role"] == "system"
         assert result[1]["role"] == "user"
+        assert result[2]["role"] == "user"  # guidance
         # Should be shorter than original
         assert len(result) < len(messages)
         # Should keep recent blocks (last few tc)
@@ -154,7 +156,7 @@ class TestTruncateMessages:
             messages.append(_make_tool_result(f"tc0_{i}"))
 
         result = self.mixin._truncate_messages(messages)
-        # Must keep system + user + at least the block
+        # Must keep prefix + at least the block
         assert len(result) >= 3
 
     def test_orphan_tool_messages_discarded(self) -> None:
@@ -166,7 +168,7 @@ class TestTruncateMessages:
         for i in range(6):
             messages.append(_make_assistant_tc(f"tc{i}"))
             messages.append(_make_tool_result(f"tc{i}"))
-        # Insert orphan tool at position 2 (right after system+user)
+        # Insert orphan tool at position 2 (right after prefix: system+user)
         messages.insert(2, _make_tool_result("orphan"))
         assert len(messages) > 8
 
@@ -188,7 +190,7 @@ class TestTruncateMessages:
         assert len(messages) > 8
 
         result = self.mixin._truncate_messages(messages)
-        # System + user header must be preserved
+        # System + user prefix must be preserved
         assert result[0]["role"] == "system"
         assert result[1]["role"] == "user"
         # Should be truncated

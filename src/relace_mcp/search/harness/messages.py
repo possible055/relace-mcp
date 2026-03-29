@@ -69,17 +69,25 @@ class MessageHistoryMixin:
                 )
 
     def _truncate_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Truncate overly long message history, keep system + user + recent turn blocks.
+        """Truncate overly long message history, keep prefix + recent turn blocks.
 
+        Prefix: consecutive system/user messages at the start (before first assistant).
         Turn block definition: one assistant(tool_calls) + all its corresponding tool results.
         Truncates by complete blocks to avoid orphan tool messages.
         """
         if len(messages) <= 8:
             return messages
 
-        # Keep system (0) + user (1)
-        system_and_user = messages[:2]
-        conversation = messages[2:]
+        # Find prefix boundary: consecutive system/user messages at the start
+        prefix_end = 0
+        for i, m in enumerate(messages):
+            role = m.get("role", "")
+            if role in ("system", "user"):
+                prefix_end = i + 1
+            else:
+                break
+        prefix = messages[:prefix_end]
+        conversation = messages[prefix_end:]
 
         # Identify turn blocks
         blocks: list[list[dict[str, Any]]] = []
@@ -128,7 +136,7 @@ class MessageHistoryMixin:
                 break
 
         # Combine result
-        result = system_and_user[:]
+        result = prefix[:]
         for block in kept_blocks:
             result.extend(block)
 

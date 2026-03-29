@@ -4,18 +4,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from relace_mcp.clients import RelaceRepoClient, SearchLLMClient
-from relace_mcp.config import RelaceConfig
+from relace_mcp.config import RelaceConfig, load_prompt_file
 from relace_mcp.repo.freshness import FreshnessStatus
-from relace_mcp.search.retrieval import agentic_retrieval_logic, build_semantic_hints_section
+from relace_mcp.search.retrieval import _format_semantic_hints_block, agentic_retrieval_logic
+
+_BLOCK_TEMPLATE = load_prompt_file("retrieval_openai")["semantic_hints_block_template"]
 
 
-class TestBuildSemanticHintsSection:
+class TestFormatSemanticHintsBlock:
     def test_formats_results_correctly(self) -> None:
         results = [
             {"filename": "src/auth.py", "score": 0.85},
             {"filename": "src/login.py", "score": 0.72},
         ]
-        section = build_semantic_hints_section(results)
+        section = _format_semantic_hints_block(results, block_template=_BLOCK_TEMPLATE)
 
         assert "<semantic_hints>" in section
         assert "src/auth.py (score: 0.85)" in section
@@ -23,11 +25,11 @@ class TestBuildSemanticHintsSection:
         assert "</semantic_hints>" in section
 
     def test_empty_results_returns_empty(self) -> None:
-        assert build_semantic_hints_section([]) == ""
+        assert _format_semantic_hints_block([], block_template=_BLOCK_TEMPLATE) == ""
 
     def test_respects_max_hints(self) -> None:
         results = [{"filename": f"file{i}.py", "score": 0.9 - i * 0.1} for i in range(10)]
-        section = build_semantic_hints_section(results, max_hints=3)
+        section = _format_semantic_hints_block(results, max_hints=3, block_template=_BLOCK_TEMPLATE)
 
         assert "file0.py" in section
         assert "file1.py" in section
@@ -36,7 +38,7 @@ class TestBuildSemanticHintsSection:
 
     def test_handles_file_key_fallback(self) -> None:
         results = [{"file": "src/utils.py", "score": 0.65}]
-        section = build_semantic_hints_section(results)
+        section = _format_semantic_hints_block(results, block_template=_BLOCK_TEMPLATE)
 
         assert "src/utils.py (score: 0.65)" in section
 
@@ -136,16 +138,18 @@ class TestAgenticRetrievalLogic:
 
             mock_harness.run_async.assert_called_once()
             run_kwargs = mock_harness.run_async.call_args.kwargs
-            hints_section = run_kwargs.get("semantic_hints_section", "")
-            assert "<semantic_hints>" in hints_section
-            assert "src/auth.py" in hints_section
+            first_turn_guidance = run_kwargs.get("first_turn_guidance", "")
+            assert "<retrieval_guidance>" in first_turn_guidance
+            assert "<semantic_hints>" in first_turn_guidance
+            assert "/repo/src/auth.py" in first_turn_guidance
+            assert "Semantic index is fresh" in first_turn_guidance
 
             assert result["semantic_hints_used"] == 2
             assert result["hint_policy"] == "prefer-stale"
             assert result["hints_index_freshness"] == "fresh"
             assert result["semantic_hints"] == [
-                {"filename": "src/auth.py", "score": 0.85},
-                {"filename": "src/login.py", "score": 0.72},
+                {"filename": "/repo/src/auth.py", "score": 0.85},
+                {"filename": "/repo/src/login.py", "score": 0.72},
             ]
 
     @pytest.mark.asyncio
@@ -223,6 +227,9 @@ class TestAgenticRetrievalLogic:
             assert any(
                 "Using stale Relace semantic hints" in warning for warning in result["warnings"]
             )
+            first_turn_guidance = mock_harness.run_async.call_args.kwargs["first_turn_guidance"]
+            assert "Semantic index is stale" in first_turn_guidance
+            assert "/repo/src/core.py" in first_turn_guidance
 
     @pytest.mark.asyncio
     async def test_relace_stale_strict_skips_hints(

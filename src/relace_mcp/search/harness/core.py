@@ -81,6 +81,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         self._user_prompt_template = prompts["user_prompt_template"].strip()
         self._turn_hint_template = prompts["turn_hint_template"].strip()
         self._turn_instructions = prompts["turn_instructions"]
+        self._mixed_rb_hint = prompts.get("mixed_report_back_hint", "").strip()
 
         self._system_prompt = build_system_prompt(
             prompts["system_prompt"],
@@ -112,7 +113,11 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         )
 
     def run(
-        self, query: str, semantic_hints_section: str = "", *, trace_id: str | None = None
+        self,
+        query: str,
+        *,
+        first_turn_guidance: str = "",
+        trace_id: str | None = None,
     ) -> dict[str, Any]:
         """Execute one Fast Agentic Search.
 
@@ -149,7 +154,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 query,
                 tid,
                 start_time=start_time,
-                semantic_hints_section=semantic_hints_section,
+                first_turn_guidance=first_turn_guidance,
             )
             result["trace_id"] = tid
             total_ms = (time.perf_counter() - start_time) * 1000
@@ -178,8 +183,8 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
     async def run_async(
         self,
         query: str,
-        semantic_hints_section: str = "",
         *,
+        first_turn_guidance: str = "",
         trace_id: str | None = None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
     ) -> dict[str, Any]:
@@ -211,7 +216,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 query,
                 tid,
                 start_time=start_time,
-                semantic_hints_section=semantic_hints_section,
+                first_turn_guidance=first_turn_guidance,
                 on_progress=on_progress,
             )
             result["trace_id"] = tid
@@ -244,21 +249,22 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         trace_id: str,
         *,
         start_time: float,
-        semantic_hints_section: str = "",
+        first_turn_guidance: str = "",
     ) -> dict[str, Any]:
         """Internal method to execute the search loop."""
         user_content = (
             self._user_prompt_override
             if self._user_prompt_override
-            else self._user_prompt_template.format(
-                query=query,
-                semantic_hints_section=semantic_hints_section,
-            )
+            else self._user_prompt_template.format(query=query)
         )
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self._system_prompt},
             {"role": "user", "content": user_content},
         ]
+
+        # Inject first_turn_guidance once at initialization (stays in context)
+        if first_turn_guidance:
+            messages.append({"role": "user", "content": first_turn_guidance})
 
         turns_log: list[dict[str, Any]] = []
         result_dict: dict[str, Any]
@@ -287,7 +293,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 _settings.SEARCH_MAX_TURNS,
             )
 
-            # Inject unified turn hint (from turn 2 onwards)
+            # Append turn_hint from turn 2 onwards (accumulates in context)
             if turn > 0:
                 chars_for_hint = estimate_context_size(messages)
                 turn_hint = self._get_turn_hint(turn, _settings.SEARCH_MAX_TURNS, chars_for_hint)
@@ -409,17 +415,8 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 turns_log.append(trace_entry)
 
             # If we stripped report_back, inject a correction hint for next turn
-            if mixed_rb_ids:
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": (
-                            "Your previous turn mixed report_back with other tools — "
-                            "report_back was discarded. If you are done exploring, "
-                            "call report_back ALONE as the ONLY tool in your next turn."
-                        ),
-                    }
-                )
+            if mixed_rb_ids and self._mixed_rb_hint:
+                messages.append({"role": "user", "content": self._mixed_rb_hint})
 
             # After processing all tool calls, if report_back was called, return
             if report_back_result is not None:
@@ -466,22 +463,23 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         trace_id: str,
         *,
         start_time: float,
-        semantic_hints_section: str = "",
+        first_turn_guidance: str = "",
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
     ) -> dict[str, Any]:
         """Internal method to execute the search loop asynchronously."""
         user_content = (
             self._user_prompt_override
             if self._user_prompt_override
-            else self._user_prompt_template.format(
-                query=query,
-                semantic_hints_section=semantic_hints_section,
-            )
+            else self._user_prompt_template.format(query=query)
         )
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self._system_prompt},
             {"role": "user", "content": user_content},
         ]
+
+        # Inject first_turn_guidance once at initialization (stays in context)
+        if first_turn_guidance:
+            messages.append({"role": "user", "content": first_turn_guidance})
 
         turns_log: list[dict[str, Any]] = []
         result_dict: dict[str, Any]
@@ -513,13 +511,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                     _settings.SEARCH_MAX_TURNS,
                 )
 
-                if on_progress is not None:
-                    try:
-                        await on_progress(turn + 1, _settings.SEARCH_MAX_TURNS)
-                    except Exception:  # nosec B110 — progress is best-effort
-                        pass
-
-                # Inject unified turn hint (from turn 2 onwards)
+                # Append turn_hint from turn 2 onwards (accumulates in context)
                 if turn > 0:
                     chars_for_hint = estimate_context_size(messages)
                     turn_hint = self._get_turn_hint(
@@ -533,6 +525,12 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                         chars_for_hint,
                         MAX_CONTEXT_BUDGET_CHARS,
                     )
+
+                if on_progress is not None:
+                    try:
+                        await on_progress(turn + 1, _settings.SEARCH_MAX_TURNS)
+                    except Exception:  # nosec B110 — progress is best-effort
+                        pass
 
                 # Check context size AFTER all user messages are added
                 ctx_size = estimate_context_size(messages)
@@ -637,17 +635,8 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                     turns_log.append(trace_entry)
 
                 # If we stripped report_back, inject a correction hint for next turn
-                if mixed_rb_ids:
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": (
-                                "Your previous turn mixed report_back with other tools — "
-                                "report_back was discarded. If you are done exploring, "
-                                "call report_back ALONE as the ONLY tool in your next turn."
-                            ),
-                        }
-                    )
+                if mixed_rb_ids and self._mixed_rb_hint:
+                    messages.append({"role": "user", "content": self._mixed_rb_hint})
 
                 # After processing all tool calls, if report_back was called, return
                 if report_back_result is not None:

@@ -45,6 +45,12 @@ system_prompt: |
   3. When you have enough precise context → immediately switch to report_back turn (alone)
   </workflow>
 
+  <retrieval_rule>
+  If turn-1 retrieval guidance is provided, treat it as a starting point only.
+  Always verify hinted files with live reads before committing to them.
+  Do not spend all 8 first-turn calls only on hinted files; keep broad discovery coverage.
+  </retrieval_rule>
+
   <output_format>
   report_back files must be precise:
   - File paths: absolute `/repo/...` paths
@@ -59,6 +65,8 @@ lsp_section: |
   - `search_symbol`: Search for symbol definitions by name across workspace. Input: symbol name or prefix. Output: `[kind] path:line:col name`. Zero dependencies — use in Turn 1.
   - `find_symbol`: Navigate to definition or find all references. Input: file + line + column (1-indexed). Output: `path:line:col`. Tip: get line/col from `search_symbol` or `grep_search` output.
 
+# --- User prompt (messages[1]) ---
+
 user_prompt_template: |
   <repository>/repo</repository>
 
@@ -66,15 +74,14 @@ user_prompt_template: |
   {query}
   </user_query>
 
-  {semantic_hints_section}
-
   <task>
   Follow critical_rules strictly.
   Use exactly 8 parallel tools on the first exploration turn, then 6-9 on subsequent turns.
   When confident, output ONLY the `report_back` tool_call with nothing else.
   </task>
 
-# Unified turn hint — injected as user message from turn 2 onwards
+# --- Turn status hint — injected as user message from turn 2 onwards ---
+
 turn_hint_template: |
   <status turn="{turn}/{max_turns}" context="{chars_pct}%">{instruction}</status>
 
@@ -82,3 +89,41 @@ turn_hint_template: |
 turn_instructions:
   normal: "Continue exploring — or call `report_back` now if you have sufficient coverage."
   final: "FINAL TURN. You MUST call `report_back` NOW with current findings. DO NOT call other tools!"
+
+# --- First-turn retrieval guidance — injected as user message on turn 1 only ---
+# Provides semantic index freshness status and hinted files from retrieval backend
+
+first_turn_guidance_template: |
+  <retrieval_guidance>
+  {freshness_description}
+  {semantic_hints_block}
+  <turn_1_strategy>
+  - Use at most 4 tool calls on hinted files in turn 1.
+  - Reserve at least 4 tool calls for broad discovery (`view_directory`, `grep_search`, `search_symbol`, or `bash rg`).
+  - If a hinted file does not match the query after reading it, stop following the hint list and broaden exploration immediately.
+  </turn_1_strategy>
+  </retrieval_guidance>
+
+# Freshness status descriptions — maps index freshness classification to guidance text
+freshness_descriptions:
+  fresh: "Semantic index is fresh. Treat hints as likely starting points, but verify with live reads."
+  stale: "Semantic index is stale. Treat hints as approximate starting points only and pivot quickly if they do not match the query."
+  unknown: "Semantic index freshness is unknown. Validate hinted files before following them further."
+  missing: "Semantic hints are unavailable for this run. Start with broad discovery."
+
+# Semantic hints block — wraps hinted file list with relevance scores
+# Rendered into {semantic_hints_block} in first_turn_guidance_template
+semantic_hints_block_template: |
+  <semantic_hints>
+  Semantic hint files for turn 1:
+  {hints_list}
+  </semantic_hints>
+
+# Fallback text when no semantic hints are available
+no_hints_fallback: "No semantic hints available for turn 1."
+
+# --- Guardrail correction hints ---
+
+# Mixed report_back correction — injected when model incorrectly combines
+# report_back with other tool calls in the same turn
+mixed_report_back_hint: "Your previous turn mixed report_back with other tools — report_back was discarded. If you are done exploring, call report_back ALONE as the ONLY tool in your next turn."

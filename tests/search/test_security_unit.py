@@ -417,7 +417,7 @@ class TestSedCrossPipeFix:
         assert not blocked
 
     def test_sed_still_blocked_as_not_allowlisted(self) -> None:
-        blocked, reason = _is_blocked_command("sed -i 's/old/new/' file.txt", DEFAULT_BASE_DIR)
+        blocked, _reason = _is_blocked_command("sed -i 's/old/new/' file.txt", DEFAULT_BASE_DIR)
         assert blocked
 
 
