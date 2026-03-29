@@ -1,0 +1,63 @@
+tests/search/test_harness_unit.py
+  00a912c6deb65d13 8,414,420,453-456,458,467
+  d9d3322c3571b58f 261-286,290-301,471-530,532-596,598-600
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "fcddeace952d025524a451418782c21bc38e4b18",
+  "prompts": {
+    "00a912c6deb65d13": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3875-b61d-7d33-95d5-2c45b86e275f",
+        "model": "unknown"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 10,
+      "total_deletions": 8,
+      "accepted_lines": 9,
+      "overriden_lines": 0
+    },
+    "7d5277a432919171": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3af7-c6ea-73f3-9874-0576302fd241",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 1,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    },
+    "c9af7a94fbd28355": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3795-548f-7a83-8ce7-311c8e60807c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 3,
+      "total_deletions": 3,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    },
+    "d9d3322c3571b58f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d37b9-01fa-7871-8ade-afaa1835dd62",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 170,
+      "total_deletions": 0,
+      "accepted_lines": 167,
+      "overriden_lines": 5
+    }
+  }
+}
