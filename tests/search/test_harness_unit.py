@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from relace_mcp.clients import SearchLLMClient
-from relace_mcp.config import RelaceConfig
+from relace_mcp.config import RelaceConfig, load_prompt_file
 from relace_mcp.search import FastAgenticSearchHarness
 from relace_mcp.search.schemas import TOOL_SCHEMAS
 
@@ -258,6 +258,47 @@ class TestFastAgenticSearchHarness:
 
         assert len(result["files"]) == 2
 
+    def test_uses_explicit_prompt_bundle_without_loading_defaults(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Passing prompts should bypass default prompt file loading."""
+        import relace_mcp.search.harness.core as core_mod
+
+        monkeypatch.setattr(
+            core_mod,
+            "load_prompt_file",
+            lambda _name: (_ for _ in ()).throw(AssertionError("should not load default prompts")),
+        )
+        mock_client.chat.return_value = {
+            "choices": [
+                {
+                    "message": {
+                        "tool_calls": [_make_report_back_call("call_1", "Done", {})],
+                    }
+                }
+            ]
+        }
+        prompts = {
+            "system_message_template": "<role>Custom system</role>",
+            "user_message_template": "<user_query>{query}</user_query>",
+            "turn_status_messages": {
+                "normal": "**Turn {turn}/{max_turns}**\n\nkeep going",
+                "final": "**Turn {turn}/{max_turns}**\n\nfinish now",
+            },
+            "report_back_retry_message": "retry report_back alone",
+        }
+
+        harness = FastAgenticSearchHarness(mock_config, mock_client, prompts=prompts)
+        result = harness.run("Find hello")
+
+        assert result["explanation"] == "Done"
+        sent_messages = mock_client.chat.call_args.args[0]
+        assert sent_messages[0]["content"] == "<role>Custom system</role>"
+        assert sent_messages[1]["content"] == "<user_query>Find hello</user_query>"
+
     def test_turns_log_includes_tool_latency_without_mcp_logging(
         self,
         mock_config: RelaceConfig,
@@ -370,13 +411,13 @@ class TestFastAgenticSearchHarness:
         assert all(r[1] != -1 for r in ranges)
 
     @pytest.mark.asyncio
-    async def test_first_turn_guidance_is_only_sent_on_first_async_turn(
+    async def test_retrieval_guidance_in_user_message_across_async_turns(
         self,
         mock_config: RelaceConfig,
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """First-turn guidance should be visible only on the first async LLM call."""
+        """Retrieval guidance is embedded in user message and stays in context for all turns."""
         (tmp_path / "test.py").write_text("def hello(): pass\n")
         seen_messages: list[list[dict]] = []
 
@@ -407,11 +448,14 @@ class TestFastAgenticSearchHarness:
 
         mock_client.chat_async.side_effect = _chat_async
 
-        harness = FastAgenticSearchHarness(mock_config, mock_client)
-        result = await harness.run_async(
-            "Find hello",
-            first_turn_guidance="<retrieval_guidance>turn-1 only</retrieval_guidance>",
+        harness = FastAgenticSearchHarness(
+            mock_config,
+            mock_client,
+            prompts=load_prompt_file("retrieval_openai"),
+            freshness_message="turn-1 only",
+            hints_list="",
         )
+        result = await harness.run_async("Find hello")
 
         assert result["turns_used"] == 2
         first_call_contents = [
@@ -420,9 +464,140 @@ class TestFastAgenticSearchHarness:
         second_call_contents = [
             msg.get("content", "") for msg in seen_messages[1] if msg["role"] == "user"
         ]
-        # Guidance is present in both turns (accumulates in context for model awareness)
+        # Guidance is embedded in user message: present in both turn 1 and turn 2 context
         assert any("turn-1 only" in content for content in first_call_contents)
         assert any("turn-1 only" in content for content in second_call_contents)
+
+    @pytest.mark.parametrize(
+        ("mode", "expected_status_counts"),
+        [
+            ("always", [0, 1, 2]),
+            ("final-only", [0, 0, 1]),
+            ("off", [0, 0, 0]),
+        ],
+    )
+    def test_turn_status_mode_controls_sync_injection(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        mode: str,
+        expected_status_counts: list[int],
+    ) -> None:
+        """Turn-status policy should control sync message injection per turn."""
+        import relace_mcp.config.settings as test_settings
+
+        monkeypatch.setattr(test_settings, "SEARCH_MAX_TURNS", 3)
+        monkeypatch.setattr(test_settings, "SEARCH_TURN_STATUS_MODE", mode)
+        (tmp_path / "test.py").write_text("def hello(): pass\n")
+        seen_messages: list[list[dict]] = []
+
+        def _chat(messages, tools=None, trace_id=None):
+            del tools, trace_id
+            seen_messages.append([dict(msg) for msg in messages])
+            if len(seen_messages) < 3:
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "tool_calls": [_make_view_file_call("call_1", "/repo/test.py")]
+                            }
+                        }
+                    ]
+                }
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [
+                                _make_report_back_call("call_3", "Found it", {"test.py": [[1, 1]]})
+                            ]
+                        }
+                    }
+                ]
+            }
+
+        mock_client.chat.side_effect = _chat
+
+        harness = FastAgenticSearchHarness(mock_config, mock_client)
+        result = harness.run("Find hello")
+
+        assert result["turns_used"] == 3
+        assert [
+            sum(
+                1
+                for msg in turn_messages
+                if msg["role"] == "user" and msg.get("content", "").startswith("**Turn ")
+            )
+            for turn_messages in seen_messages
+        ] == expected_status_counts
+
+    @pytest.mark.parametrize(
+        ("mode", "expected_status_counts"),
+        [
+            ("always", [0, 1, 2]),
+            ("final-only", [0, 0, 1]),
+            ("off", [0, 0, 0]),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_turn_status_mode_controls_async_injection(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        mode: str,
+        expected_status_counts: list[int],
+    ) -> None:
+        """Turn-status policy should control async message injection per turn."""
+        import relace_mcp.config.settings as test_settings
+
+        monkeypatch.setattr(test_settings, "SEARCH_MAX_TURNS", 3)
+        monkeypatch.setattr(test_settings, "SEARCH_TURN_STATUS_MODE", mode)
+        (tmp_path / "test.py").write_text("def hello(): pass\n")
+        seen_messages: list[list[dict]] = []
+
+        async def _chat_async(messages, tools=None, trace_id=None):
+            del tools, trace_id
+            seen_messages.append([dict(msg) for msg in messages])
+            if len(seen_messages) < 3:
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "tool_calls": [_make_view_file_call("call_1", "/repo/test.py")]
+                            }
+                        }
+                    ]
+                }
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [
+                                _make_report_back_call("call_3", "Found it", {"test.py": [[1, 1]]})
+                            ]
+                        }
+                    }
+                ]
+            }
+
+        mock_client.chat_async.side_effect = _chat_async
+
+        harness = FastAgenticSearchHarness(mock_config, mock_client)
+        result = await harness.run_async("Find hello")
+
+        assert result["turns_used"] == 3
+        assert [
+            sum(
+                1
+                for msg in turn_messages
+                if msg["role"] == "user" and msg.get("content", "").startswith("**Turn ")
+            )
+            for turn_messages in seen_messages
+        ] == expected_status_counts
 
 
 class TestParallelToolCallsFix:

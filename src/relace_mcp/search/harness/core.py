@@ -19,6 +19,7 @@ from ..logging import (
     log_search_start,
     log_search_turn,
 )
+from ..prompt_messages import render_turn_status_message, should_append_turn_status
 from ..schemas import (
     build_system_prompt,
     get_tool_schemas,
@@ -33,12 +34,9 @@ from .tool_calls import ToolCallsMixin
 
 logger = logging.getLogger(__name__)
 
-# YAML file selection: (tool_kind, backend) -> file stem
 _PROMPT_FILES = {
-    ("search", "relace"): "search_relace",
-    ("search", "openai"): "search_openai",
-    ("retrieval", "relace"): "retrieval_relace",
-    ("retrieval", "openai"): "retrieval_openai",
+    "relace": "search_relace",
+    "openai": "search_openai",
 }
 
 
@@ -56,8 +54,10 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         *,
         lsp_languages: frozenset[str] | None = None,
         user_prompt_override: str | None = None,
-        retrieval: bool = False,
+        prompts: dict[str, Any] | None = None,
         trace: bool = False,
+        freshness_message: str = "",
+        hints_list: str = "",
     ) -> None:
         self._config = config
         self._trace = trace
@@ -66,57 +66,66 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         self._view_line_re = re.compile(r"^(\d+)\s")
         self._lsp_languages = lsp_languages if lsp_languages is not None else frozenset()
         self._user_prompt_override = user_prompt_override
+        self._format_kwargs: dict[str, str] = {
+            "freshness_message": freshness_message,
+            "hints_list": hints_list,
+            "max_turns": str(_settings.SEARCH_MAX_TURNS),
+        }
 
         # Resolve enabled tools first (runtime LSP detection happens here)
         enabled_tools = self._enabled_tool_names()
         _lsp_tool_names = {"find_symbol", "search_symbol"}
         has_lsp = bool(enabled_tools & _lsp_tool_names)
 
-        # Select prompt YAML: (tool_kind, backend) → file stem
-        tool_kind = "retrieval" if retrieval else "search"
+        # Default to search prompts unless the caller explicitly provided a bundle.
         backend = "relace" if client.api_compat == _settings.RELACE_PROVIDER else "openai"
-        prompt_name = _PROMPT_FILES[(tool_kind, backend)]
-        prompts = load_prompt_file(prompt_name)
+        prompt_bundle = prompts if prompts is not None else load_prompt_file(_PROMPT_FILES[backend])
 
-        self._user_prompt_template = prompts["user_prompt_template"].strip()
-        self._turn_hint_template = prompts["turn_hint_template"].strip()
-        self._turn_instructions = prompts["turn_instructions"]
-        self._mixed_rb_hint = prompts.get("mixed_report_back_hint", "").strip()
+        self._user_message_template = prompt_bundle["user_message_template"].strip()
+        self._turn_status_messages = {
+            key: value.strip() for key, value in prompt_bundle["turn_status_messages"].items()
+        }
+        self._report_back_retry_message = prompt_bundle.get("report_back_retry_message", "").strip()
 
-        self._system_prompt = build_system_prompt(
-            prompts["system_prompt"],
+        self._system_message = build_system_prompt(
+            prompt_bundle["system_message_template"],
             enabled_tools=enabled_tools,
             has_lsp=has_lsp,
-            lsp_section=prompts.get("lsp_section", ""),
+            lsp_section=prompt_bundle.get("lsp_section", ""),
+            step2_discovery=prompt_bundle.get("step2_discovery"),
+            step3_verification=prompt_bundle.get("step3_verification"),
         )
 
-    def _get_turn_hint(self, turn: int, max_turns: int, chars_used: int) -> str:
-        """Generate turn status hint.
+    def _append_turn_status_if_needed(
+        self, messages: list[dict[str, Any]], turn: int, trace_id: str
+    ) -> None:
+        """Append the configured turn-status message when policy allows it."""
+        max_turns = _settings.SEARCH_MAX_TURNS
+        mode = _settings.SEARCH_TURN_STATUS_MODE
+        if not should_append_turn_status(turn, mode, max_turns):
+            return
 
-        Only shows urgency instruction on final turn.
-
-        Args:
-            turn: Current turn number (0-indexed internally, displayed as 1-indexed).
-            max_turns: Maximum allowed turns.
-            chars_used: Total characters used in context so far.
-        """
-        remaining = max_turns - turn
-        mode = "final" if remaining == 1 else "normal"
-        instruction = self._turn_instructions[mode]
-        chars_pct = int((chars_used / MAX_CONTEXT_BUDGET_CHARS) * 100)
-
-        return str(self._turn_hint_template).format(
-            turn=turn + 1,
-            max_turns=max_turns,
-            chars_pct=chars_pct,
-            instruction=instruction,
+        chars_for_status = estimate_context_size(messages)
+        turn_status_message = render_turn_status_message(
+            turn,
+            max_turns,
+            chars_for_status,
+            self._turn_status_messages,
+        )
+        messages.append({"role": "user", "content": turn_status_message})
+        logger.debug(
+            "[%s] Injected turn status at turn %d (chars: %d/%d, mode=%s)",
+            trace_id,
+            turn + 1,
+            chars_for_status,
+            MAX_CONTEXT_BUDGET_CHARS,
+            mode,
         )
 
     def run(
         self,
         query: str,
         *,
-        first_turn_guidance: str = "",
         trace_id: str | None = None,
     ) -> dict[str, Any]:
         """Execute one Fast Agentic Search.
@@ -154,7 +163,6 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 query,
                 tid,
                 start_time=start_time,
-                first_turn_guidance=first_turn_guidance,
             )
             result["trace_id"] = tid
             total_ms = (time.perf_counter() - start_time) * 1000
@@ -184,7 +192,6 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         self,
         query: str,
         *,
-        first_turn_guidance: str = "",
         trace_id: str | None = None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
     ) -> dict[str, Any]:
@@ -216,7 +223,6 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 query,
                 tid,
                 start_time=start_time,
-                first_turn_guidance=first_turn_guidance,
                 on_progress=on_progress,
             )
             result["trace_id"] = tid
@@ -249,22 +255,17 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         trace_id: str,
         *,
         start_time: float,
-        first_turn_guidance: str = "",
     ) -> dict[str, Any]:
         """Internal method to execute the search loop."""
         user_content = (
             self._user_prompt_override
             if self._user_prompt_override
-            else self._user_prompt_template.format(query=query)
+            else self._user_message_template.format(query=query, **self._format_kwargs)
         )
         messages: list[dict[str, Any]] = [
-            {"role": "system", "content": self._system_prompt},
+            {"role": "system", "content": self._system_message},
             {"role": "user", "content": user_content},
         ]
-
-        # Inject first_turn_guidance once at initialization (stays in context)
-        if first_turn_guidance:
-            messages.append({"role": "user", "content": first_turn_guidance})
 
         turns_log: list[dict[str, Any]] = []
         result_dict: dict[str, Any]
@@ -293,18 +294,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 _settings.SEARCH_MAX_TURNS,
             )
 
-            # Append turn_hint from turn 2 onwards (accumulates in context)
-            if turn > 0:
-                chars_for_hint = estimate_context_size(messages)
-                turn_hint = self._get_turn_hint(turn, _settings.SEARCH_MAX_TURNS, chars_for_hint)
-                messages.append({"role": "user", "content": turn_hint})
-                logger.debug(
-                    "[%s] Injected turn hint at turn %d (chars: %d/%d)",
-                    trace_id,
-                    turn + 1,
-                    chars_for_hint,
-                    MAX_CONTEXT_BUDGET_CHARS,
-                )
+            self._append_turn_status_if_needed(messages, turn, trace_id)
 
             # Check context size AFTER all user messages are added
             ctx_size = estimate_context_size(messages)
@@ -415,8 +405,8 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 turns_log.append(trace_entry)
 
             # If we stripped report_back, inject a correction hint for next turn
-            if mixed_rb_ids and self._mixed_rb_hint:
-                messages.append({"role": "user", "content": self._mixed_rb_hint})
+            if mixed_rb_ids and self._report_back_retry_message:
+                messages.append({"role": "user", "content": self._report_back_retry_message})
 
             # After processing all tool calls, if report_back was called, return
             if report_back_result is not None:
@@ -463,23 +453,18 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         trace_id: str,
         *,
         start_time: float,
-        first_turn_guidance: str = "",
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
     ) -> dict[str, Any]:
         """Internal method to execute the search loop asynchronously."""
         user_content = (
             self._user_prompt_override
             if self._user_prompt_override
-            else self._user_prompt_template.format(query=query)
+            else self._user_message_template.format(query=query, **self._format_kwargs)
         )
         messages: list[dict[str, Any]] = [
-            {"role": "system", "content": self._system_prompt},
+            {"role": "system", "content": self._system_message},
             {"role": "user", "content": user_content},
         ]
-
-        # Inject first_turn_guidance once at initialization (stays in context)
-        if first_turn_guidance:
-            messages.append({"role": "user", "content": first_turn_guidance})
 
         turns_log: list[dict[str, Any]] = []
         result_dict: dict[str, Any]
@@ -511,20 +496,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                     _settings.SEARCH_MAX_TURNS,
                 )
 
-                # Append turn_hint from turn 2 onwards (accumulates in context)
-                if turn > 0:
-                    chars_for_hint = estimate_context_size(messages)
-                    turn_hint = self._get_turn_hint(
-                        turn, _settings.SEARCH_MAX_TURNS, chars_for_hint
-                    )
-                    messages.append({"role": "user", "content": turn_hint})
-                    logger.debug(
-                        "[%s] Injected turn hint at turn %d (chars: %d/%d)",
-                        trace_id,
-                        turn + 1,
-                        chars_for_hint,
-                        MAX_CONTEXT_BUDGET_CHARS,
-                    )
+                self._append_turn_status_if_needed(messages, turn, trace_id)
 
                 if on_progress is not None:
                     try:
@@ -635,8 +607,8 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                     turns_log.append(trace_entry)
 
                 # If we stripped report_back, inject a correction hint for next turn
-                if mixed_rb_ids and self._mixed_rb_hint:
-                    messages.append({"role": "user", "content": self._mixed_rb_hint})
+                if mixed_rb_ids and self._report_back_retry_message:
+                    messages.append({"role": "user", "content": self._report_back_retry_message})
 
                 # After processing all tool calls, if report_back was called, return
                 if report_back_result is not None:

@@ -1,6 +1,6 @@
 # Agentic Retrieval Prompts (OpenAI-compatible endpoint)
 
-system_prompt: |
+system_message_template: |
   <role>
   You are an expert code exploration agent. Your only goal is to thoroughly explore the codebase using the provided tools and locate exactly the files needed to solve the user query.
   </role>
@@ -28,6 +28,8 @@ system_prompt: |
   If turn-1 retrieval guidance is provided, treat it as a starting point only.
   Always verify hinted files with live reads before committing to them.
   Do not spend all 8 first-turn calls only on hinted files; keep broad discovery coverage.
+  Use at most 4 first-turn calls on hinted files; reserve the rest for broad discovery.
+  If a hinted file does not match the query after reading it, stop following the hint list and broaden exploration immediately.
   </retrieval_rule>
 
   <output_format>
@@ -49,12 +51,18 @@ lsp_section: |
 
 # --- User prompt (messages[1]) ---
 
-user_prompt_template: |
+user_message_template: |
   <repository>/repo</repository>
 
   <user_query>
   {query}
   </user_query>
+
+  <retrieval_guidance>
+  {freshness_message}
+  Semantic hint files for turn 1:
+  {hints_list}
+  </retrieval_guidance>
 
   <task>
   Follow critical_rules strictly.
@@ -62,50 +70,20 @@ user_prompt_template: |
   When confident, output ONLY the `report_back` tool_call with nothing else.
   </task>
 
-# --- Turn status hint — injected as user message from turn 2 onwards ---
+# --- Turn status messages — injected as user message from turn 2 onwards ---
 
-turn_hint_template: |
-  <status turn="{turn}/{max_turns}" context="{chars_pct}%">{instruction}</status>
+turn_status_messages:
+  normal: "**Turn {turn}/{max_turns}** · Context: {chars_pct}%\n\nContinue exploring — or call `report_back` now if you have sufficient coverage."
+  final: "**Turn {turn}/{max_turns}** · Context: {chars_pct}%\n\n**FINAL TURN**: You MUST call `report_back` NOW with current findings. DO NOT call other tools!"
 
-# Instructions by mode (final triggers on last turn only)
-turn_instructions:
-  normal: "Continue exploring — or call `report_back` now if you have sufficient coverage."
-  final: "FINAL TURN. You MUST call `report_back` NOW with current findings. DO NOT call other tools!"
-
-# --- First-turn retrieval guidance — injected as user message on turn 1 only ---
-# Provides semantic index freshness status and hinted files from retrieval backend
-
-first_turn_guidance_template: |
-  <retrieval_guidance>
-  {freshness_description}
-  {semantic_hints_block}
-  <turn_1_strategy>
-  - Use at most 4 tool calls on hinted files in turn 1.
-  - Reserve at least 4 tool calls for broad discovery (`view_directory`, `grep_search`, `search_symbol`, or `bash rg`).
-  - If a hinted file does not match the query after reading it, stop following the hint list and broaden exploration immediately.
-  </turn_1_strategy>
-  </retrieval_guidance>
-
-# Freshness status descriptions — maps index freshness classification to guidance text
-freshness_descriptions:
-  fresh: "Semantic index is fresh. Treat hints as likely starting points, but verify with live reads."
-  stale: "Semantic index is stale. Treat hints as approximate starting points only and pivot quickly if they do not match the query."
-  unknown: "Semantic index freshness is unknown. Validate hinted files before following them further."
+# Freshness status descriptions — maps to {freshness_message} in user_message_template
+freshness_messages:
+  available: "Semantic hints are available. Treat them as starting points only — verify with live reads."
   missing: "Semantic hints are unavailable for this run. Start with broad discovery."
 
-# Semantic hints block — wraps hinted file list with relevance scores
-# Rendered into {semantic_hints_block} in first_turn_guidance_template
-semantic_hints_block_template: |
-  <semantic_hints>
-  Semantic hint files for turn 1:
-  {hints_list}
-  </semantic_hints>
-
-# Fallback text when no semantic hints are available
-no_hints_fallback: "No semantic hints available for turn 1."
 
 # --- Guardrail correction hints ---
 
 # Mixed report_back correction — injected when model incorrectly combines
 # report_back with other tool calls in the same turn
-mixed_report_back_hint: "Your previous turn mixed report_back with other tools — report_back was discarded. If you are done exploring, call report_back ALONE as the ONLY tool in your next turn."
+report_back_retry_message: "Your previous turn mixed report_back with other tools — report_back was discarded. If you are done exploring, call report_back ALONE as the ONLY tool in your next turn."

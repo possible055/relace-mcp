@@ -238,12 +238,9 @@ class TestRetrievalOrchestration:
                 mock_repo_client, mock_search_client, mock_config, mock_config.base_dir, "find auth"
             )
         _, kwargs = all_mocks["harness_cls"].call_args
-        assert kwargs.get("retrieval") is True
-
-        harness_instance = all_mocks["harness_cls"].return_value
-        run_kwargs = harness_instance.run_async.call_args.kwargs
-        assert "retrieval_guidance" in run_kwargs.get("first_turn_guidance", "")
-        assert "/repo/src/main.py" in run_kwargs.get("first_turn_guidance", "")
+        assert "prompts" in kwargs
+        assert "Semantic hints are available" in kwargs.get("freshness_message", "")
+        assert "/repo/src/main.py" in kwargs.get("hints_list", "")
 
 
 class TestRetrievalBackendDispatch:

@@ -25,6 +25,7 @@ from ..repo.cloud.search import cloud_search_logic
 from ..repo.freshness import classify_cloud_index_freshness, classify_local_index_freshness
 from ..utils import resolve_repo_path
 from .harness import FastAgenticSearchHarness
+from .prompt_messages import format_hints_list
 
 if TYPE_CHECKING:
     from ..clients.repo import RelaceRepoClient
@@ -159,50 +160,23 @@ def _compact_semantic_hints(
     return hints
 
 
-def _format_semantic_hints_block(
-    semantic_results: list[dict[str, Any]],
-    max_hints: int = 8,
-    *,
-    base_dir: str | None = None,
-    block_template: str,
-) -> str:
-    if not semantic_results:
-        return ""
-
-    hints = _compact_semantic_hints(semantic_results, max_hints, base_dir=base_dir)
-    if not hints:
-        return ""
-    hints_list = "\n".join(f"- {h['filename']} (score: {h['score']:.2f})" for h in hints)
-    return block_template.strip().format(hints_list=hints_list)
-
-
-def _build_first_turn_retrieval_guidance(
+def _resolve_retrieval_format_kwargs(
     semantic_results: list[dict[str, Any]],
     *,
     freshness: str,
     max_hints: int,
     base_dir: str,
     prompts: dict[str, Any],
-) -> str:
-    freshness_descriptions = cast(dict[str, str], prompts["freshness_descriptions"])
-    freshness_description = freshness_descriptions.get(freshness, freshness_descriptions["missing"])
-    semantic_hints_block_template = cast(str, prompts["semantic_hints_block_template"])
-    no_hints_fallback = cast(str, prompts["no_hints_fallback"])
-    first_turn_guidance_template = cast(str, prompts["first_turn_guidance_template"])
-
+) -> dict[str, str]:
+    """Resolve freshness_message and hints_list for user_message_template."""
+    freshness_messages = cast(dict[str, str], prompts["freshness_messages"])
     hint_limit = _hint_limit_for_freshness(max_hints, freshness)
-    hints_block = _format_semantic_hints_block(
-        semantic_results,
-        hint_limit,
-        base_dir=base_dir,
-        block_template=semantic_hints_block_template,
-    )
-    semantic_hints_block = hints_block if hints_block else no_hints_fallback.strip()
-
-    return first_turn_guidance_template.strip().format(
-        freshness_description=freshness_description,
-        semantic_hints_block=semantic_hints_block,
-    )
+    hints = _compact_semantic_hints(semantic_results, hint_limit, base_dir=base_dir)
+    msg_key = "missing" if freshness == "missing" else "available"
+    return {
+        "freshness_message": freshness_messages[msg_key],
+        "hints_list": format_hints_list(hints),
+    }
 
 
 async def agentic_retrieval_logic(
@@ -518,7 +492,7 @@ async def agentic_retrieval_logic(
     backend_kind = "relace" if search_client.api_compat == _settings.RELACE_PROVIDER else "openai"
     prompts = load_prompt_file(f"retrieval_{backend_kind}")
 
-    first_turn_guidance = _build_first_turn_retrieval_guidance(
+    retrieval_kwargs = _resolve_retrieval_format_kwargs(
         semantic_results,
         freshness=hints_index_freshness,
         max_hints=max_hints,
@@ -537,12 +511,12 @@ async def agentic_retrieval_logic(
         effective_config,
         search_client,
         lsp_languages=lsp_languages,
-        retrieval=True,
+        prompts=prompts,
         trace=trace,
+        **retrieval_kwargs,
     )
     result = await harness.run_async(
         query=query,
-        first_turn_guidance=first_turn_guidance,
         trace_id=trace_id,
         on_progress=on_progress,
     )

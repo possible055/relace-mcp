@@ -37,6 +37,7 @@ _TOOL_RELOAD_KEYS = (
     "SEARCH_TOP_P",
     "SEARCH_LSP_TIMEOUT_SECONDS",
     "SEARCH_LSP_MAX_CLIENTS",
+    "SEARCH_TURN_STATUS_MODE",
     "MCP_BACKGROUND_INDEX_MONITOR",
     "MCP_BACKGROUND_INDEX_INTERVAL_SECONDS",
     "MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS",
@@ -154,6 +155,24 @@ class TestReloadToolSettings:
         reload_tool_settings()
 
         assert settings_mod.SEARCH_LSP_TOOLS is True
+
+    def test_search_turn_status_mode_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("MCP_SEARCH_TURN_STATUS_MODE", raising=False)
+        reload_tool_settings()
+
+        assert settings_mod.SEARCH_TURN_STATUS_MODE == "always"
+
+    def test_search_turn_status_mode_reloaded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_SEARCH_TURN_STATUS_MODE", "final-only")
+        reload_tool_settings()
+
+        assert settings_mod.SEARCH_TURN_STATUS_MODE == "final-only"
+
+    def test_search_turn_status_mode_invalid_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_SEARCH_TURN_STATUS_MODE", "sometimes")
+
+        with pytest.raises(RuntimeError, match="Invalid MCP_SEARCH_TURN_STATUS_MODE"):
+            reload_tool_settings()
 
     def test_background_index_monitor_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("MCP_BACKGROUND_INDEX_MONITOR", "true")
