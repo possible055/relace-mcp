@@ -124,7 +124,7 @@ def _normalize_hint_filename(filename: str, base_dir: str) -> str | None:
             base_dir,
             require_within_base_dir=True,
         )
-    except ValueError:
+    except (ValueError, OSError):
         return None
 
     base_path = Path(base_dir).resolve()
@@ -161,21 +161,17 @@ def _compact_semantic_hints(
 
 
 def _resolve_retrieval_format_kwargs(
-    semantic_results: list[dict[str, Any]],
+    compact_hints: list[dict[str, Any]],
     *,
     freshness: str,
-    max_hints: int,
-    base_dir: str,
     prompts: dict[str, Any],
 ) -> dict[str, str]:
     """Resolve freshness_message and hints_list for user_message_template."""
     freshness_messages = cast(dict[str, str], prompts["freshness_messages"])
-    hint_limit = _hint_limit_for_freshness(max_hints, freshness)
-    hints = _compact_semantic_hints(semantic_results, hint_limit, base_dir=base_dir)
     msg_key = "missing" if freshness == "missing" else "available"
     return {
         "freshness_message": freshness_messages[msg_key],
-        "hints_list": format_hints_list(hints),
+        "hints_list": format_hints_list(compact_hints),
     }
 
 
@@ -492,11 +488,15 @@ async def agentic_retrieval_logic(
     backend_kind = "relace" if search_client.api_compat == _settings.RELACE_PROVIDER else "openai"
     prompts = load_prompt_file(f"retrieval_{backend_kind}")
 
-    retrieval_kwargs = _resolve_retrieval_format_kwargs(
+    compact_semantic_hints = _compact_semantic_hints(
         semantic_results,
-        freshness=hints_index_freshness,
-        max_hints=max_hints,
+        _hint_limit_for_freshness(max_hints, hints_index_freshness),
         base_dir=base_dir,
+    )
+
+    retrieval_kwargs = _resolve_retrieval_format_kwargs(
+        compact_semantic_hints,
+        freshness=hints_index_freshness,
         prompts=prompts,
     )
 
@@ -519,12 +519,6 @@ async def agentic_retrieval_logic(
         query=query,
         trace_id=trace_id,
         on_progress=on_progress,
-    )
-
-    compact_semantic_hints = _compact_semantic_hints(
-        semantic_results,
-        _hint_limit_for_freshness(max_hints, hints_index_freshness),
-        base_dir=base_dir,
     )
 
     result["trace_id"] = trace_id

@@ -49,7 +49,9 @@ def render_turn_status_message(
     """Render the user-visible turn-status message."""
     remaining = max_turns - turn
     message_key = "final" if remaining == 1 else "normal"
-    template = turn_status_messages[message_key]
+    template = turn_status_messages.get(message_key, "")
+    if not template:
+        return ""
     chars_pct = int((chars_used / MAX_CONTEXT_BUDGET_CHARS) * 100)
 
     return template.format(

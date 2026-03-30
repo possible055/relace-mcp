@@ -86,6 +86,11 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             key: value.strip() for key, value in prompt_bundle["turn_status_messages"].items()
         }
         self._report_back_retry_message = prompt_bundle.get("report_back_retry_message", "").strip()
+        if not self._report_back_retry_message:
+            logger.warning(
+                "Prompt bundle is missing 'report_back_retry_message'; "
+                "mixed report_back corrections will be silently skipped."
+            )
 
         self._system_message = build_system_prompt(
             prompt_bundle["system_message_template"],
