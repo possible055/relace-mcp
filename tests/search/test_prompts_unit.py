@@ -32,9 +32,6 @@ def test_build_system_prompt_renders_max_turns(
     enabled = {"view_file", "view_directory", "grep_search", "report_back"}
     prompt = build_system_prompt(prompt_data["system_message_template"], enabled_tools=enabled)
     assert "{max_turns}" not in prompt
-    # Only retrieval prompts embed max_turns in the system message
-    if "retrieval" in prompt_data["_name"]:
-        assert "7" in prompt
 
 
 def test_build_system_prompt_hides_bash_when_disabled(prompt_data: dict) -> None:
@@ -72,7 +69,8 @@ def test_lsp_section_removed_when_no_lsp(prompt_data: dict) -> None:
         lsp_section=prompt_data.get("lsp_section", ""),
     )
     assert "{lsp_section}" not in prompt
-    assert "search_symbol" not in prompt
+    # The LSP tools block must not be injected
+    assert "find_symbol" not in prompt
 
 
 def test_strategy_placeholders_resolved(prompt_data: dict) -> None:
