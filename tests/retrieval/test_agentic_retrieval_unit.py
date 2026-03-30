@@ -6,39 +6,40 @@ import pytest
 from relace_mcp.clients import RelaceRepoClient, SearchLLMClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.repo.freshness import FreshnessStatus
-from relace_mcp.search.retrieval import agentic_retrieval_logic, build_semantic_hints_section
+from relace_mcp.search.prompt_messages import format_hints_list
+from relace_mcp.search.retrieval import _compact_semantic_hints, agentic_retrieval_logic
 
 
-class TestBuildSemanticHintsSection:
+class TestFormatHintsList:
     def test_formats_results_correctly(self) -> None:
-        results = [
+        hints = [
             {"filename": "src/auth.py", "score": 0.85},
             {"filename": "src/login.py", "score": 0.72},
         ]
-        section = build_semantic_hints_section(results)
+        result = format_hints_list(hints)
 
-        assert "<semantic_hints>" in section
-        assert "src/auth.py (score: 0.85)" in section
-        assert "src/login.py (score: 0.72)" in section
-        assert "</semantic_hints>" in section
+        assert "src/auth.py (score: 0.85)" in result
+        assert "src/login.py (score: 0.72)" in result
 
-    def test_empty_results_returns_empty(self) -> None:
-        assert build_semantic_hints_section([]) == ""
+    def test_empty_returns_empty(self) -> None:
+        assert format_hints_list([]) == ""
 
-    def test_respects_max_hints(self) -> None:
+    def test_respects_max_hints_via_compact(self) -> None:
         results = [{"filename": f"file{i}.py", "score": 0.9 - i * 0.1} for i in range(10)]
-        section = build_semantic_hints_section(results, max_hints=3)
+        hints = _compact_semantic_hints(results, 3)
+        result = format_hints_list(hints)
 
-        assert "file0.py" in section
-        assert "file1.py" in section
-        assert "file2.py" in section
-        assert "file3.py" not in section
+        assert "file0.py" in result
+        assert "file1.py" in result
+        assert "file2.py" in result
+        assert "file3.py" not in result
 
     def test_handles_file_key_fallback(self) -> None:
         results = [{"file": "src/utils.py", "score": 0.65}]
-        section = build_semantic_hints_section(results)
+        hints = _compact_semantic_hints(results, 8)
+        result = format_hints_list(hints)
 
-        assert "src/utils.py (score: 0.65)" in section
+        assert "src/utils.py (score: 0.65)" in result
 
 
 class TestAgenticRetrievalLogic:
@@ -132,20 +133,18 @@ class TestAgenticRetrievalLogic:
 
             mock_harness_cls.assert_called_once()
             call_kwargs = mock_harness_cls.call_args.kwargs
-            assert call_kwargs.get("retrieval") is True
-
+            assert "prompts" in call_kwargs
             mock_harness.run_async.assert_called_once()
-            run_kwargs = mock_harness.run_async.call_args.kwargs
-            hints_section = run_kwargs.get("semantic_hints_section", "")
-            assert "<semantic_hints>" in hints_section
-            assert "src/auth.py" in hints_section
+            ctor_kwargs = mock_harness_cls.call_args.kwargs
+            assert "Semantic hints are available" in ctor_kwargs.get("freshness_message", "")
+            assert "/repo/src/auth.py" in ctor_kwargs.get("hints_list", "")
 
             assert result["semantic_hints_used"] == 2
             assert result["hint_policy"] == "prefer-stale"
             assert result["hints_index_freshness"] == "fresh"
             assert result["semantic_hints"] == [
-                {"filename": "src/auth.py", "score": 0.85},
-                {"filename": "src/login.py", "score": 0.72},
+                {"filename": "/repo/src/auth.py", "score": 0.85},
+                {"filename": "/repo/src/login.py", "score": 0.72},
             ]
 
     @pytest.mark.asyncio
@@ -223,6 +222,9 @@ class TestAgenticRetrievalLogic:
             assert any(
                 "Using stale Relace semantic hints" in warning for warning in result["warnings"]
             )
+            ctor_kwargs = mock_harness_cls.call_args.kwargs
+            assert "Semantic hints are available" in ctor_kwargs.get("freshness_message", "")
+            assert "/repo/src/core.py" in ctor_kwargs.get("hints_list", "")
 
     @pytest.mark.asyncio
     async def test_relace_stale_strict_skips_hints(

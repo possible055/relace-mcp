@@ -6,7 +6,6 @@ from typing import Any
 from fastmcp import FastMCP
 from fastmcp.server.context import Context
 
-from ..background_index_monitor import get_background_index_monitor_summary
 from ..config import resolve_base_dir
 from ..config import settings as _settings
 from ..observability import get_trace_id, log_event, redact_value
@@ -14,6 +13,7 @@ from ..repo.backends import schedule_bg_chunkhound_index, schedule_bg_codanna_fu
 from ..repo.core import get_current_git_info, is_git_dirty
 from ..repo.core.state import load_sync_state
 from ..repo.freshness import classify_cloud_index_freshness, classify_local_index_freshness
+from ..repo.monitor import get_background_index_monitor_summary
 from ._registry import ToolRegistryDeps, read_text_safe
 
 

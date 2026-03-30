@@ -146,6 +146,7 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 | `MCP_BACKGROUND_INDEX_MONITOR` | ❌ | Opt-in periodic refresh monitor for local indexes; requires a pinned `MCP_BASE_DIR` and a local backend |
 | `MCP_BACKGROUND_INDEX_INTERVAL_SECONDS` | ❌ | Periodic local index monitor interval in seconds (default: `300`) |
 | `MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS` | ❌ | Initial delay before the first periodic local index check in seconds (default: `30`) |
+| `MCP_SEARCH_TURN_STATUS_MODE` | ❌ | Turn-status user message policy: `always` (default), `final-only`, or `off` |
 | `SEARCH_BASH_TOOLS` | ❌ | Enable the internal `bash` subtool used inside `agentic_search` / `agentic_retrieval`: `1` (on), `0` (off, default) |
 | `SEARCH_LSP_TOOLS` | ❌ | Enable the internal `find_symbol` / `search_symbol` subtools used inside `agentic_search` / `agentic_retrieval`: `1` (on), `0` (off, default) |
 | `MCP_BASE_DIR` | ❌ | Project root override (auto-detected via MCP Roots → Git → workspace storage → CWD) |

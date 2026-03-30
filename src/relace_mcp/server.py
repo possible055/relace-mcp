@@ -56,13 +56,6 @@ def _configure_logging_for_stdio() -> None:
     root.setLevel(level)
 
 
-def _load_dotenv_from_path() -> None:
-    """Compatibility wrapper for shared runtime bootstrap dotenv loading."""
-    from .config.bootstrap import load_dotenv_from_path
-
-    load_dotenv_from_path()
-
-
 def check_health(config: "RelaceConfig") -> dict[str, str]:
     from .config import settings as _settings
 
@@ -160,8 +153,8 @@ def build_server(
 
     from fastmcp import FastMCP
 
-    from .background_index_monitor import BackgroundIndexMonitor
     from .config.bootstrap import initialize_runtime_from_env
+    from .repo.monitor import BackgroundIndexMonitor
 
     if initialize_runtime:
         initialize_runtime_from_env()

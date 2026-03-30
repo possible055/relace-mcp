@@ -91,7 +91,7 @@ jobs:
         run: uv run mypy src/
 
       - name: Run security scan
-        run: uv run bandit -r src/ -c pyproject.toml
+        run: uv run bandit -r src/ -c pyproject.toml -q
 
   benchmark:
     name: Benchmark tests Ubuntu Python 3.13

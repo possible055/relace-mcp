@@ -146,6 +146,7 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 | `MCP_BACKGROUND_INDEX_MONITOR` | ❌ | 为 local index 启用可选的周期 refresh monitor；要求固定的 `MCP_BASE_DIR` 与 local backend |
 | `MCP_BACKGROUND_INDEX_INTERVAL_SECONDS` | ❌ | 周期 local index monitor 的检查间隔（秒，默认 `300`） |
 | `MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS` | ❌ | 首次周期 local index 检查前的初始延迟（秒，默认 `30`） |
+| `MCP_SEARCH_TURN_STATUS_MODE` | ❌ | turn-status user message 策略：`always`（默认）、`final-only` 或 `off` |
 | `SEARCH_BASH_TOOLS` | ❌ | 启用 `agentic_search` / `agentic_retrieval` 内部使用的 `bash` subtool：`1`（开）、`0`（关，默认） |
 | `SEARCH_LSP_TOOLS` | ❌ | 启用 `agentic_search` / `agentic_retrieval` 内部使用的 `find_symbol` / `search_symbol` subtools：`1`（开）、`0`（关，默认） |
 | `MCP_BASE_DIR` | ❌ | 项目根目录覆盖值（自动检测顺序：MCP Roots → Git → workspace storage → CWD） |

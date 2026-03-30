@@ -6,22 +6,22 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING, Any
 
-from .config import settings as _settings
-from .observability import log_event
-from .repo.backends.chunkhound import schedule_bg_chunkhound_index
-from .repo.backends.codanna import schedule_bg_codanna_full_index
-from .repo.backends.locking import BackendIndexRunResult, supports_backend_index_locking
-from .repo.backends.registry import (
+from ..config import settings as _settings
+from ..observability import log_event
+from .backends.chunkhound import schedule_bg_chunkhound_index
+from .backends.codanna import schedule_bg_codanna_full_index
+from .backends.locking import BackendIndexRunResult, supports_backend_index_locking
+from .backends.registry import (
     get_bg_index_task,
     is_backend_disabled,
     is_bg_index_running,
 )
-from .repo.freshness import classify_local_index_freshness
+from .freshness import classify_local_index_freshness
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
-    from .config import RelaceConfig
+    from ..config import RelaceConfig
 
 logger = logging.getLogger(__name__)
 

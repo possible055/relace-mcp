@@ -93,6 +93,7 @@ async def test_no_refresh_when_cli_missing(tmp_path) -> None:
             result = await client.call_tool("index_status", {})
 
     payload = result.structured_content
+    assert payload is not None
     assert payload["background_monitor"]["enabled"] is False
     assert payload["background_monitor"]["requested"] is False
     for backend in ("codanna", "chunkhound"):

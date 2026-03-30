@@ -5,9 +5,10 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, cast
 
-from ..config import RelaceConfig
+from ..config import RelaceConfig, load_prompt_file
 from ..config import settings as _settings
 from ..observability import get_trace_id, log_event, redact_value
 from ..observability import tool_name as tool_name_ctx
@@ -22,7 +23,9 @@ from ..repo.backends import (
 )
 from ..repo.cloud.search import cloud_search_logic
 from ..repo.freshness import classify_cloud_index_freshness, classify_local_index_freshness
+from ..utils import resolve_repo_path
 from .harness import FastAgenticSearchHarness
+from .prompt_messages import format_hints_list
 
 if TYPE_CHECKING:
     from ..clients.repo import RelaceRepoClient
@@ -102,14 +105,52 @@ def _schedule_local_refresh(base_dir: str, backend: str) -> bool:
     return False
 
 
+def _hint_limit_for_freshness(max_hints: int, freshness: str) -> int:
+    if freshness in {"stale", "unknown"}:
+        return min(max_hints, 4)
+    if freshness == "missing":
+        return 0
+    return max_hints
+
+
+def _normalize_hint_filename(filename: str, base_dir: str) -> str | None:
+    normalized = filename.strip()
+    if not normalized or any(ch in normalized for ch in ("\n", "\r", "<", ">")):
+        return None
+
+    try:
+        resolved = resolve_repo_path(
+            normalized,
+            base_dir,
+            require_within_base_dir=True,
+        )
+    except (ValueError, OSError):
+        return None
+
+    base_path = Path(base_dir).resolve()
+    resolved_path = Path(resolved)
+    try:
+        rel_path = resolved_path.relative_to(base_path).as_posix()
+    except ValueError:
+        return None
+
+    if not rel_path or rel_path == ".":
+        return None
+    return f"/repo/{rel_path}"
+
+
 def _compact_semantic_hints(
-    semantic_results: list[dict[str, Any]], max_hints: int
+    semantic_results: list[dict[str, Any]], max_hints: int, *, base_dir: str | None = None
 ) -> list[dict[str, Any]]:
     hints: list[dict[str, Any]] = []
     for result in semantic_results[:max_hints]:
         filename = result.get("filename") or result.get("file") or ""
         if not isinstance(filename, str) or not filename.strip():
             continue
+        if base_dir is not None:
+            filename = _normalize_hint_filename(filename, base_dir)
+            if filename is None:
+                continue
         raw_score = result.get("score", 0.0)
         try:
             score = float(raw_score)
@@ -119,26 +160,19 @@ def _compact_semantic_hints(
     return hints
 
 
-def build_semantic_hints_section(semantic_results: list[dict[str, Any]], max_hints: int = 8) -> str:
-    if not semantic_results:
-        return ""
-
-    hints = _compact_semantic_hints(semantic_results, max_hints)
-    lines = [
-        "<semantic_hints>",
-        "Files identified by semantic retrieval (prioritize these):",
-    ]
-    for result in hints:
-        file_path = result.get("filename") or result.get("file", "unknown")
-        raw_score = result.get("score", 0.0)
-        try:
-            score = float(raw_score)
-        except (TypeError, ValueError):
-            score = 0.0
-        lines.append(f"- {file_path} (score: {score:.2f})")
-    lines.append("Open these files FIRST (parallel view_file), then broaden exploration.")
-    lines.append("</semantic_hints>")
-    return "\n".join(lines)
+def _resolve_retrieval_format_kwargs(
+    compact_hints: list[dict[str, Any]],
+    *,
+    freshness: str,
+    prompts: dict[str, Any],
+) -> dict[str, str]:
+    """Resolve freshness_message and hints_list for user_message_template."""
+    freshness_messages = cast(dict[str, str], prompts["freshness_messages"])
+    msg_key = "missing" if freshness == "missing" else "available"
+    return {
+        "freshness_message": freshness_messages[msg_key],
+        "hints_list": format_hints_list(compact_hints),
+    }
 
 
 async def agentic_retrieval_logic(
@@ -451,10 +485,22 @@ async def agentic_retrieval_logic(
 
     retrieval_latency_s = round(time.perf_counter() - retrieval_t0, 3)
 
-    hints_section = build_semantic_hints_section(semantic_results, max_hints)
+    backend_kind = "relace" if search_client.api_compat == _settings.RELACE_PROVIDER else "openai"
+    prompts = load_prompt_file(f"retrieval_{backend_kind}")
+
+    compact_semantic_hints = _compact_semantic_hints(
+        semantic_results,
+        _hint_limit_for_freshness(max_hints, hints_index_freshness),
+        base_dir=base_dir,
+    )
+
+    retrieval_kwargs = _resolve_retrieval_format_kwargs(
+        compact_semantic_hints,
+        freshness=hints_index_freshness,
+        prompts=prompts,
+    )
 
     from dataclasses import replace
-    from pathlib import Path
 
     from ..lsp.languages import get_lsp_languages
 
@@ -465,17 +511,15 @@ async def agentic_retrieval_logic(
         effective_config,
         search_client,
         lsp_languages=lsp_languages,
-        retrieval=True,
+        prompts=prompts,
         trace=trace,
+        **retrieval_kwargs,
     )
     result = await harness.run_async(
         query=query,
-        semantic_hints_section=hints_section,
         trace_id=trace_id,
         on_progress=on_progress,
     )
-
-    compact_semantic_hints = _compact_semantic_hints(semantic_results, max_hints)
 
     result["trace_id"] = trace_id
     result["semantic_hints_used"] = len(compact_semantic_hints)

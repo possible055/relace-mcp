@@ -56,6 +56,7 @@ MAX_TRACE_LOG_SIZE_BYTES = 50 * 1024 * 1024
 
 _ALLOWED_RETRIEVAL_BACKENDS = {"relace", "codanna", "chunkhound", "none", "auto"}
 _ALLOWED_RETRIEVAL_HINT_POLICIES = {"prefer-stale", "strict"}
+_ALLOWED_SEARCH_TURN_STATUS_MODES = {"always", "final-only", "off"}
 
 _LINUX_DEFAULT_EXTRA_PATHS: tuple[str, ...] = (
     "~/.cursor/plans",
@@ -158,6 +159,16 @@ def _parse_retrieval_hint_policy() -> str:
     return raw
 
 
+def _parse_search_turn_status_mode() -> str:
+    raw = os.getenv("MCP_SEARCH_TURN_STATUS_MODE", "always").strip().lower()
+    if raw not in _ALLOWED_SEARCH_TURN_STATUS_MODES:
+        raise RuntimeError(
+            f"Invalid MCP_SEARCH_TURN_STATUS_MODE={raw!r}. "
+            f"Expected one of: {sorted(_ALLOWED_SEARCH_TURN_STATUS_MODES)}"
+        )
+    return raw
+
+
 def _parse_extra_paths() -> tuple[str, ...]:
     raw = os.getenv("MCP_EXTRA_PATHS", "").strip()
     user_paths: list[str] = []
@@ -222,6 +233,7 @@ SEARCH_BASH_TOOLS: bool
 SEARCH_LSP_TOOLS: bool
 SEARCH_LSP_TIMEOUT_SECONDS: float
 SEARCH_LSP_MAX_CLIENTS: int
+SEARCH_TURN_STATUS_MODE: str
 MCP_BACKGROUND_INDEX_MONITOR: bool
 MCP_BACKGROUND_INDEX_INTERVAL_SECONDS: int
 MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS: int
@@ -279,6 +291,7 @@ def reload_settings_from_env() -> None:
         "SEARCH_LSP_TOOLS": env_bool("SEARCH_LSP_TOOLS", default=False),
         "SEARCH_LSP_TIMEOUT_SECONDS": _parse_positive_float_env("SEARCH_LSP_TIMEOUT_SECONDS", 15.0),
         "SEARCH_LSP_MAX_CLIENTS": _parse_nonnegative_int_env("SEARCH_LSP_MAX_CLIENTS", 2),
+        "SEARCH_TURN_STATUS_MODE": _parse_search_turn_status_mode(),
         "MCP_BACKGROUND_INDEX_MONITOR": env_bool(
             "MCP_BACKGROUND_INDEX_MONITOR",
             default=False,
