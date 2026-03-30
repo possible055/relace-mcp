@@ -194,7 +194,7 @@ async def agentic_retrieval_logic(
         base_dir: Repository base directory.
         query: Natural language query.
         trace: If True, collect per-turn trace data (turns_log) in the result.
-        on_progress: Optional async callback receiving (current_turn, max_turns).
+        on_progress: Optional async callback receiving (completed_turns, max_turns).
 
     Returns:
         Dict with explanation, files, and metadata (same format as agentic_search).

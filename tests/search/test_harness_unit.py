@@ -170,9 +170,11 @@ class TestFastAgenticSearchHarness:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Even if the model hallucinates tool calls, disabled tools must not execute."""
-        # Ensure bash toggle remains disabled.
-        monkeypatch.delenv("SEARCH_BASH_TOOLS", raising=False)
-        monkeypatch.delenv("SEARCH_LSP_TOOLS", raising=False)
+        import relace_mcp.config.settings as settings
+
+        # Explicitly disable bash for this test; the project default is enabled.
+        monkeypatch.setattr(settings, "SEARCH_BASH_TOOLS", False)
+        monkeypatch.setattr(settings, "SEARCH_LSP_TOOLS", False)
 
         # If bash ever executes here, the handler would be called.
         from relace_mcp.search.harness import tool_calls as tc_mod
@@ -468,6 +470,55 @@ class TestFastAgenticSearchHarness:
         assert any("turn-1 only" in content for content in first_call_contents)
         assert any("turn-1 only" in content for content in second_call_contents)
 
+    @pytest.mark.asyncio
+    async def test_async_progress_reports_completed_turns(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Async progress should reflect completed turns, not the active turn."""
+        import relace_mcp.config.settings as test_settings
+
+        monkeypatch.setattr(test_settings, "SEARCH_MAX_TURNS", 2)
+        (tmp_path / "test.py").write_text("def hello(): pass\n")
+
+        progress_updates: list[tuple[int, int]] = []
+        responses = [
+            {
+                "choices": [
+                    {"message": {"tool_calls": [_make_view_file_call("call_1", "/repo/test.py")]}}
+                ]
+            },
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [
+                                _make_report_back_call("call_2", "Found it", {"test.py": [[1, 1]]})
+                            ]
+                        }
+                    }
+                ]
+            },
+        ]
+
+        async def _chat_async(messages, tools=None, trace_id=None):
+            del messages, tools, trace_id
+            return responses.pop(0)
+
+        async def _on_progress(completed_turns: int, total: int) -> None:
+            progress_updates.append((completed_turns, total))
+
+        mock_client.chat_async.side_effect = _chat_async
+
+        harness = FastAgenticSearchHarness(mock_config, mock_client)
+        result = await harness.run_async("Find hello", on_progress=_on_progress)
+
+        assert result["turns_used"] == 2
+        assert progress_updates == [(0, 2), (1, 2), (2, 2)]
+
     @pytest.mark.parametrize(
         ("mode", "expected_status_counts"),
         [
@@ -746,21 +797,31 @@ class TestParallelToolCallsFix:
 class TestToolSchemas:
     """Test tool schema definitions."""
 
-    def test_default_tools_exclude_bash(self) -> None:
-        """Default tool schemas should exclude bash (bash is opt-in)."""
-        names = {t["function"]["name"] for t in TOOL_SCHEMAS}
-        assert "bash" not in names
+    def test_default_tools_include_bash_when_available(self) -> None:
+        """Default runtime tool schemas should include bash when it is available."""
+        import shutil
+
+        import relace_mcp.search.schemas.tool_schemas as tool_schemas
+
+        names = {t["function"]["name"] for t in tool_schemas.get_tool_schemas()}
+        assert ("bash" in names) is (shutil.which("bash") is not None)
 
     def test_tool_names(self) -> None:
-        """Default tool schemas should include only basic exploration tools."""
-        names = {t["function"]["name"] for t in TOOL_SCHEMAS}
-        # Default set: basic tools only (LSP tools require opt-in, glob is disabled pending removal)
-        assert names == {
+        """Default runtime tool schemas should match the enabled default tool set."""
+        import shutil
+
+        import relace_mcp.search.schemas.tool_schemas as tool_schemas
+
+        names = {t["function"]["name"] for t in tool_schemas.get_tool_schemas()}
+        expected_names = {
             "view_file",
             "view_directory",
             "grep_search",
             "report_back",
         }
+        if shutil.which("bash") is not None:
+            expected_names.add("bash")
+        assert names == expected_names
 
     def test_bash_tool_opt_in(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """bash should be available when explicitly enabled."""

@@ -124,7 +124,7 @@ user_message_template: |
   Turn budget: {max_turns} turns maximum.
 
   Turn progression:
-  - Turn 1: exactly 8 parallel calls — broad discovery across high-value hypotheses; defer deep file reads
+  - Turn 1: aim for 8 parallel calls — broad discovery across distinct high-value hypotheses; defer deep file reads. Drop below 8 only when the query targets a single unambiguous identifier with no plausible secondary hypotheses.
   - Middle turns: 4-12 parallel calls — follow emerging evidence, trace call sites, check configuration and related modules
   - Late turns: verify remaining references, check call sites and configuration sources; expand if gaps are found
   - Do not stop exploring just because the primary implementation has been found — continue until call sites and related context are also covered

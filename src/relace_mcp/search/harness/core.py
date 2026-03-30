@@ -508,7 +508,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
 
                 if on_progress is not None:
                     try:
-                        await on_progress(turn + 1, _settings.SEARCH_MAX_TURNS)
+                        await on_progress(turn, _settings.SEARCH_MAX_TURNS)
                     except Exception:  # nosec B110 — progress is best-effort
                         pass
 
