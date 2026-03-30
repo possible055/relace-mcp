@@ -1,0 +1,42 @@
+src/relace_mcp/prompts/retrieval_openai.yaml
+  0591985355f794fc 5-24,27-48,50-51,53-62,64-66,69,72-75,77-79,83-114,123-124,126-127,131,135-138,145,148,150,152,154,156,164
+  a5abb27cb10f0600 4,63,67-68,70-71,128-130,132-134,146,149,151
+src/relace_mcp/prompts/retrieval_relace.yaml
+  0591985355f794fc 5-24,26-62,64-66,69,72-75,77-79,83-114,123-127,135-138,145,148,150,152,154,156,164
+  a5abb27cb10f0600 4,63,67-68,70-71,128-130,132-134,146,149,151
+tests/search/test_prompts_unit.py
+  0591985355f794fc 72-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "3b423b394a3e05e6d9187c84ac8dbdd86e0eac3c",
+  "prompts": {
+    "0591985355f794fc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3bd0-91cf-7de0-8293-8d5ccc2ad24b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 264,
+      "total_deletions": 134,
+      "accepted_lines": 236,
+      "overriden_lines": 0
+    },
+    "a5abb27cb10f0600": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3bc6-8097-7ff3-875f-1b8e82dc48a3",
+        "model": "gpt-5.2"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 30,
+      "total_deletions": 28,
+      "accepted_lines": 30,
+      "overriden_lines": 0
+    }
+  }
+}
