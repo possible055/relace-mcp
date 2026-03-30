@@ -528,7 +528,11 @@ class TestFastAgenticSearchHarness:
             sum(
                 1
                 for msg in turn_messages
-                if msg["role"] == "user" and msg.get("content", "").startswith("**Turn ")
+                if msg["role"] == "user"
+                and (
+                    msg.get("content", "").startswith("**Turn ")
+                    or "<turn_status>" in msg.get("content", "")
+                )
             )
             for turn_messages in seen_messages
         ] == expected_status_counts
@@ -594,7 +598,11 @@ class TestFastAgenticSearchHarness:
             sum(
                 1
                 for msg in turn_messages
-                if msg["role"] == "user" and msg.get("content", "").startswith("**Turn ")
+                if msg["role"] == "user"
+                and (
+                    msg.get("content", "").startswith("**Turn ")
+                    or "<turn_status>" in msg.get("content", "")
+                )
             )
             for turn_messages in seen_messages
         ] == expected_status_counts

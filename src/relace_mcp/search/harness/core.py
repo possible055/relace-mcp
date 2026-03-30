@@ -99,6 +99,9 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             lsp_section=prompt_bundle.get("lsp_section", ""),
             step2_discovery=prompt_bundle.get("step2_discovery"),
             step3_verification=prompt_bundle.get("step3_verification"),
+            lsp_routing_rules=prompt_bundle.get("lsp_routing_rules"),
+            lsp_tools_section=prompt_bundle.get("lsp_tools_section"),
+            lsp_followup_rules=prompt_bundle.get("lsp_followup_rules"),
         )
 
     def _append_turn_status_if_needed(
