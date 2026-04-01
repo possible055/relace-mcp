@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,css,md}\" \"package.json\" \"tsconfig*.json\" \"vite.config.ts\" \"eslint.config.js\" \"index.html\" \".prettierrc.json\"",
     "lint": "eslint .",
     "deadcode": "knip --include exports,files --no-progress",
     "typecheck": "tsc -b",
+    "spellcheck": "cspell \"src/**/*.{ts,tsx,js,jsx,md}\" \"*.js\" \"*.ts\" \"*.md\" --no-progress --no-summary --gitignore --no-must-find-files",
+    "pre-push-check": "npm run typecheck && npm run lint && npm run deadcode && npm run spellcheck",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -32,12 +35,14 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.4",
+    "cspell": "^9.7.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.0",
     "globals": "^17.3.0",
     "knip": "5.83.1",
     "oxlint": "^1.49.0",
+    "prettier": "^3.8.1",
     "tailwindcss": "^4.2.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.55.0",

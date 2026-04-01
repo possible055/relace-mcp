@@ -10,7 +10,10 @@ export async function fetchExperiments(): Promise<ExperimentSummary[]> {
   return data
 }
 
-export function apiErrorMessage(error: unknown, fallback = 'Request failed.'): string {
+export function apiErrorMessage(
+  error: unknown,
+  fallback = 'Request failed.',
+): string {
   if (axios.isAxiosError<{ detail?: unknown }>(error)) {
     const detail = error.response?.data?.detail
     if (typeof detail === 'string' && detail) {

@@ -15,9 +15,13 @@ function ExperimentRow({ experiment }: { experiment: ExperimentSummary }) {
         <div className="type-body-compact-01 font-semibold text-[var(--cds-text-primary)]">
           {experiment.name}
         </div>
-        <div className="type-label-01 text-[var(--cds-text-helper)]">{experiment.root}</div>
+        <div className="type-label-01 text-[var(--cds-text-helper)]">
+          {experiment.root}
+        </div>
       </td>
-      <td className="p-3 type-body-compact-01 text-[var(--cds-text-secondary)]">{experiment.type}</td>
+      <td className="p-3 type-body-compact-01 text-[var(--cds-text-secondary)]">
+        {experiment.type}
+      </td>
       <td className="p-3 type-body-compact-01 text-[var(--cds-text-secondary)]">
         {experiment.provider ?? '-'} / {experiment.model ?? '-'}
       </td>
@@ -156,7 +160,10 @@ export default function Experiments() {
                 Unable to load experiments.
               </div>
               <div className="type-label-01 text-[var(--cds-text-helper)]">
-                {apiErrorMessage(experimentsQuery.error, 'Experiments request failed.')}
+                {apiErrorMessage(
+                  experimentsQuery.error,
+                  'Experiments request failed.',
+                )}
               </div>
             </div>
           ) : filtered.length === 0 ? (
@@ -182,7 +189,10 @@ export default function Experiments() {
                 </thead>
                 <tbody>
                   {filtered.map((experiment) => (
-                    <ExperimentRow key={experiment.root} experiment={experiment} />
+                    <ExperimentRow
+                      key={experiment.root}
+                      experiment={experiment}
+                    />
                   ))}
                 </tbody>
               </table>

@@ -26,7 +26,10 @@ export default defineConfig({
           if (id.includes('/recharts/')) {
             return 'chart-vendor'
           }
-          if (id.includes('/@tanstack/react-query/') || id.includes('/axios/')) {
+          if (
+            id.includes('/@tanstack/react-query/') ||
+            id.includes('/axios/')
+          ) {
             return 'query-vendor'
           }
           if (

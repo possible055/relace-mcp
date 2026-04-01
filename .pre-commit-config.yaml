@@ -30,28 +30,27 @@ repos:
         args: ["--fix"]
         types: [python]
 
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.11.2
+    hooks:
+      - id: uv-lock
+        files: '(pyproject\.toml|uv\.lock)$'
+
   - repo: local
     hooks:
-      # uv lockfile sync — ensure uv.lock matches pyproject.toml
-      - id: uv-lock-check
-        name: uv lock check
-        entry: uv lock --locked
-        language: system
-        files: '(pyproject\.toml|uv\.lock)$'
-        pass_filenames: false
-
       # Python type check — dmypy daemon
       - id: mypy
         name: mypy (daemon)
-        entry: uv run --extra dev -- dmypy run -- src/
+        entry: uv run --locked --extra dev -- dmypy run -- src/
         language: system
         files: '^(src/.*\.py|pyproject\.toml)$'
         pass_filenames: false
+        require_serial: true
 
       # Python security scan — keep src/ as the local security boundary
       - id: bandit
         name: bandit (src)
-        entry: uv run --extra dev -- bandit -r src/ -c pyproject.toml
+        entry: uv run --locked --extra dev -- bandit -r src/ -c pyproject.toml
         language: system
         files: '^(src/.*\.py|pyproject\.toml)$'
         pass_filenames: false
@@ -64,28 +63,26 @@ repos:
         files: '^benchmark/viewer/frontend/.*\.(ts|tsx|js|jsx)$'
         pass_filenames: false
 
-      # Frontend type check — whole-project analysis (Moved to pre-push for speed)
-      - id: benchmark-frontend-typecheck
-        name: benchmark frontend typecheck
-        entry: pre-commit hazmat cd benchmark/viewer/frontend npm run typecheck --
+      # Frontend format — keep source and root config files consistent
+      - id: benchmark-frontend-format
+        name: benchmark frontend prettier
+        entry: pre-commit hazmat cd benchmark/viewer/frontend npm run format --
         language: system
         files: '^benchmark/viewer/frontend/'
         pass_filenames: false
-        stages: [pre-push]
 
-      # Frontend lint — type-aware rules, pre-push only
-      - id: benchmark-frontend-lint-typechecked
-        name: benchmark frontend eslint
-        entry: pre-commit hazmat cd benchmark/viewer/frontend npm run lint --
+      # Frontend spell check — catch obvious typos in source and config files
+      - id: benchmark-frontend-spellcheck
+        name: benchmark frontend cspell
+        entry: pre-commit hazmat cd benchmark/viewer/frontend npm run spellcheck --
         language: system
         files: '^benchmark/viewer/frontend/'
         pass_filenames: false
-        stages: [pre-push]
 
-      # Frontend dead code — export/file analysis, pre-push only
-      - id: benchmark-frontend-deadcode
-        name: benchmark frontend knip
-        entry: pre-commit hazmat cd benchmark/viewer/frontend npm run deadcode --
+      # Frontend full check — whole-project analysis, pre-push only
+      - id: benchmark-frontend-full-check
+        name: benchmark frontend full check
+        entry: pre-commit hazmat cd benchmark/viewer/frontend npm run pre-push-check --
         language: system
         files: '^benchmark/viewer/frontend/'
         pass_filenames: false

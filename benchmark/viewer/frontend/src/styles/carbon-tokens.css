@@ -65,25 +65,25 @@
   --cds-shadow-md: 0 2px 6px rgba(0, 0, 0, 0.12);
 
   /* ── Spacing (Carbon scale) ────────────────────────────────── */
-  --cds-spacing-01: 0.125rem;  /*  2px */
-  --cds-spacing-02: 0.25rem;   /*  4px */
-  --cds-spacing-03: 0.5rem;    /*  8px */
-  --cds-spacing-04: 0.75rem;   /* 12px */
-  --cds-spacing-05: 1rem;      /* 16px */
-  --cds-spacing-06: 1.5rem;    /* 24px */
-  --cds-spacing-07: 2rem;      /* 32px */
-  --cds-spacing-08: 2.5rem;    /* 40px */
-  --cds-spacing-09: 3rem;      /* 48px */
+  --cds-spacing-01: 0.125rem; /*  2px */
+  --cds-spacing-02: 0.25rem; /*  4px */
+  --cds-spacing-03: 0.5rem; /*  8px */
+  --cds-spacing-04: 0.75rem; /* 12px */
+  --cds-spacing-05: 1rem; /* 16px */
+  --cds-spacing-06: 1.5rem; /* 24px */
+  --cds-spacing-07: 2rem; /* 32px */
+  --cds-spacing-08: 2.5rem; /* 40px */
+  --cds-spacing-09: 3rem; /* 48px */
 
   /* ── Data Visualization — Categorical Palette ──────────────── */
-  --cds-chart-1: #6929c4;  /* Purple 70  */
-  --cds-chart-2: #1192e8;  /* Cyan 50    */
-  --cds-chart-3: #005d5d;  /* Teal 70    */
-  --cds-chart-4: #9f1853;  /* Magenta 70 */
-  --cds-chart-5: #fa4d56;  /* Red 50     */
-  --cds-chart-6: #570408;  /* Red 90     */
-  --cds-chart-7: #198038;  /* Green 60   */
-  --cds-chart-8: #002d9c;  /* Blue 80    */
+  --cds-chart-1: #6929c4; /* Purple 70  */
+  --cds-chart-2: #1192e8; /* Cyan 50    */
+  --cds-chart-3: #005d5d; /* Teal 70    */
+  --cds-chart-4: #9f1853; /* Magenta 70 */
+  --cds-chart-5: #fa4d56; /* Red 50     */
+  --cds-chart-6: #570408; /* Red 90     */
+  --cds-chart-7: #198038; /* Green 60   */
+  --cds-chart-8: #002d9c; /* Blue 80    */
   --cds-chart-other: #a8a8a8; /* Gray 40 */
 }
 

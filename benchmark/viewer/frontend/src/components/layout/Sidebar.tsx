@@ -6,7 +6,10 @@ const COLLAPSED_KEY = 'sidebar-collapsed'
 
 const links = [{ to: '/experiments', label: 'Experiments', icon: Layers3 }]
 
-function expandingLabelClass(collapsed: boolean, expandedWidthClass: string): string {
+function expandingLabelClass(
+  collapsed: boolean,
+  expandedWidthClass: string,
+): string {
   return `pointer-events-none overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 motion-reduce:transition-none ${
     collapsed ? 'max-w-0 opacity-0' : `${expandedWidthClass} opacity-100`
   }`
@@ -27,7 +30,9 @@ function primaryItemClassName(collapsed: boolean, isActive: boolean): string {
 }
 
 export default function Sidebar() {
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSED_KEY) === '1')
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem(COLLAPSED_KEY) === '1',
+  )
 
   const toggle = useCallback(() => {
     setCollapsed((prev) => {
@@ -49,29 +54,42 @@ export default function Sidebar() {
         }`}
       >
         <FlaskConical className="h-5 w-5 shrink-0 text-[var(--cds-icon-interactive)]" />
-        <span aria-hidden={collapsed} className={expandingLabelClass(collapsed, 'max-w-48')}>
+        <span
+          aria-hidden={collapsed}
+          className={expandingLabelClass(collapsed, 'max-w-48')}
+        >
           <span className="ml-3 block whitespace-nowrap type-heading-01 text-[var(--cds-text-primary)]">
             Benchmark Analyzer
           </span>
         </span>
       </div>
 
-      <nav aria-label="Primary" className="flex-1 space-y-0.5 overflow-y-auto py-2">
+      <nav
+        aria-label="Primary"
+        className="flex-1 space-y-0.5 overflow-y-auto py-2"
+      >
         {links.map((link) => (
           <NavLink
             key={link.to}
             to={link.to}
             aria-label={link.label}
             title={collapsed ? link.label : undefined}
-            className={({ isActive }) => primaryItemClassName(collapsed, isActive)}
+            className={({ isActive }) =>
+              primaryItemClassName(collapsed, isActive)
+            }
           >
             {({ isActive }) => (
               <>
                 <link.icon
                   className={`h-4 w-4 shrink-0 ${isActive ? 'text-[var(--cds-icon-interactive)]' : 'text-[var(--cds-icon-secondary)]'}`}
                 />
-                <span aria-hidden={collapsed} className={expandingLabelClass(collapsed, 'max-w-40')}>
-                  <span className="ml-3 block whitespace-nowrap type-body-compact-01">{link.label}</span>
+                <span
+                  aria-hidden={collapsed}
+                  className={expandingLabelClass(collapsed, 'max-w-40')}
+                >
+                  <span className="ml-3 block whitespace-nowrap type-body-compact-01">
+                    {link.label}
+                  </span>
                 </span>
               </>
             )}
@@ -94,8 +112,13 @@ export default function Sidebar() {
               collapsed ? 'rotate-180' : ''
             }`}
           />
-          <span aria-hidden={collapsed} className={expandingLabelClass(collapsed, 'max-w-40')}>
-            <span className="ml-3 block whitespace-nowrap type-label-01">Collapse</span>
+          <span
+            aria-hidden={collapsed}
+            className={expandingLabelClass(collapsed, 'max-w-40')}
+          >
+            <span className="ml-3 block whitespace-nowrap type-label-01">
+              Collapse
+            </span>
           </span>
         </button>
       </div>

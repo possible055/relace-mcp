@@ -34,7 +34,12 @@ export function CardHeader({ children, className }: CardProps) {
 
 export function CardTitle({ children, className }: CardProps) {
   return (
-    <h3 className={cn('type-heading-02 text-[var(--cds-text-primary)] truncate', className)}>
+    <h3
+      className={cn(
+        'type-heading-02 text-[var(--cds-text-primary)] truncate',
+        className,
+      )}
+    >
       {children}
     </h3>
   )
