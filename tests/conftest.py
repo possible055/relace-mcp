@@ -1,4 +1,7 @@
+import asyncio
+import gc
 from collections.abc import Generator
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -163,3 +166,22 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
             if stem.endswith(f"_{level}"):
                 item.add_marker(getattr(pytest.mark, level))
                 break
+
+
+@pytest.fixture(scope="session", autouse=True)
+def close_stray_event_loop_on_session_end() -> Generator[None, None, None]:
+    """Close any loop left attached to the default policy before pytest unconfigure."""
+    yield
+
+    loops = [
+        obj
+        for obj in gc.get_objects()
+        if isinstance(obj, asyncio.BaseEventLoop) and not obj.is_closed()
+    ]
+
+    for loop in loops:
+        if not loop.is_running():
+            loop.close()
+
+    with suppress(RuntimeError):
+        asyncio.set_event_loop(None)

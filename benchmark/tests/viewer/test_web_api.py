@@ -53,18 +53,17 @@ def _write_bundle(
 
 
 def test_health_and_static_fallback(tmp_path: Path) -> None:
-    client = TestClient(create_app(tmp_path))
+    with TestClient(create_app(tmp_path)) as client:
+        response = client.get("/api/health")
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
 
-    response = client.get("/api/health")
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
-
-    root_response = client.get("/")
-    assert root_response.status_code == 200
-    assert (
-        "Relace Benchmark Web" in root_response.text
-        or '<div id="root"></div>' in root_response.text
-    )
+        root_response = client.get("/")
+        assert root_response.status_code == 200
+        assert (
+            "Relace Benchmark Web" in root_response.text
+            or '<div id="root"></div>' in root_response.text
+        )
 
 
 def test_experiments_endpoint_lists_runs_and_grid(tmp_path: Path) -> None:
@@ -122,17 +121,17 @@ def test_experiments_endpoint_lists_runs_and_grid(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    client = TestClient(create_app(tmp_path))
-    response = client.get("/api/experiments")
+    with TestClient(create_app(tmp_path)) as client:
+        response = client.get("/api/experiments")
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert len(payload) == 2
-    names = {item["name"] for item in payload}
-    assert names == {"run-a", "grid-a"}
-    run_item = next(item for item in payload if item["name"] == "run-a")
-    assert run_item["has_bundle"] is True
-    assert run_item["case_count"] == 0
+        assert response.status_code == 200
+        payload = response.json()
+        assert len(payload) == 2
+        names = {item["name"] for item in payload}
+        assert names == {"run-a", "grid-a"}
+        run_item = next(item for item in payload if item["name"] == "run-a")
+        assert run_item["has_bundle"] is True
+        assert run_item["case_count"] == 0
 
 
 @pytest.mark.parametrize(
@@ -150,11 +149,11 @@ def test_removed_api_endpoints_return_not_found(
     method: str,
     path: str,
 ) -> None:
-    client = TestClient(create_app(tmp_path))
-    if method == "get":
-        response = client.get(path)
-    else:
-        response = getattr(client, method)(path, json={})
+    with TestClient(create_app(tmp_path)) as client:
+        if method == "get":
+            response = client.get(path)
+        else:
+            response = getattr(client, method)(path, json={})
 
-    assert response.status_code == 404
-    assert response.json() == {"detail": "Not found"}
+        assert response.status_code == 404
+        assert response.json() == {"detail": "Not found"}

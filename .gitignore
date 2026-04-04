@@ -26,6 +26,7 @@ dist/
 .vscode/
 .cursor/
 .claude/
+.codex/
 .codebuddy/
 .kilocode/
 .kiro/
