@@ -1,0 +1,31 @@
+docs/benchmark.zh-CN.md
+  eb98673fbb3a228b 254
+benchmark/tests/docs/test_benchmark_docs.py
+  eb98673fbb3a228b 17-20,26-29
+docs/benchmark.md
+  eb98673fbb3a228b 254
+tests/conftest.py
+  eb98673fbb3a228b 1-2,4,169-187
+benchmark/tests/viewer/test_web_api.py
+  eb98673fbb3a228b 56-66,124-125,127-134,152-159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "7d03cdfb76d76639282aef65226eb5de78f854e7",
+  "prompts": {
+    "eb98673fbb3a228b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d40f8-8bfc-70a0-99f1-4521c51401fb",
+        "model": "gpt-5.4"
+      },
+      "human_author": "apparition <38576169+possible055@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 76,
+      "total_deletions": 161,
+      "accepted_lines": 70,
+      "overriden_lines": 0
+    }
+  }
+}
