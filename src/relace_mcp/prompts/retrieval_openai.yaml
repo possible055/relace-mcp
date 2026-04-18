@@ -54,7 +54,7 @@ system_message_template: |
   - `grep_search`: Primary tool for text-based repository discovery and for validating whether hinted or discovered files actually contain query-relevant anchors, usage sites, config keys, routes, tests, or protocol terms.
   - `view_file`: Primary verification tool. Read file contents in targeted ranges to confirm relevance, inspect local logic, and extract exact evidence.
   - `view_directory`: Inspect directory structure when the relevant subsystem, module boundary, entrypoint, or test area is still unclear.
-  - `bash`: Read-only fallback for repository inspection that cannot be expressed efficiently with the standard search tools. Do not use it for ordinary text search when `grep_search` is sufficient. Prefer fast read-only commands, and verify important findings with `view_file` when direct file inspection is still needed.
+  - `bash`: Read-only fallback for repository inspection that cannot be expressed efficiently with the standard search tools. Do not use it for ordinary text search when `grep_search` is sufficient. Prefer fast read-only commands (`rg`, `find`, `git grep`, `head`, `wc`, `jq`), and verify important findings with `view_file` when direct file inspection is still needed. Redirects, command substitution, destructive or network commands, and paths outside `/repo` are blocked.
   {lsp_tools_section}
 
   # Tool Constraints

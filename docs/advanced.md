@@ -401,6 +401,8 @@ export SEARCH_PARALLEL_TOOL_CALLS=1
 
 `bash` is enabled by default on hosts that provide `bash`. Set `SEARCH_BASH_TOOLS=0` to disable it.
 
+> **Upgrade note (0.2.5):** the default flipped from `0` → `1`. If you upgraded from ≤ 0.2.4 and want to keep bash disabled, explicitly set `SEARCH_BASH_TOOLS=0` in your environment or `.env`.
+
 ---
 
 ## Remote Deployment (Streamable HTTP)

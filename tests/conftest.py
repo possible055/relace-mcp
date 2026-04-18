@@ -1,5 +1,5 @@
 import asyncio
-import gc
+import warnings
 from collections.abc import Generator
 from contextlib import suppress
 from pathlib import Path
@@ -173,14 +173,11 @@ def close_stray_event_loop_on_session_end() -> Generator[None, None, None]:
     """Close any loop left attached to the default policy before pytest unconfigure."""
     yield
 
-    loops = [
-        obj
-        for obj in gc.get_objects()
-        if isinstance(obj, asyncio.BaseEventLoop) and not obj.is_closed()
-    ]
-
-    for loop in loops:
-        if not loop.is_running():
+    policy = asyncio.get_event_loop_policy()
+    with suppress(RuntimeError), warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        loop = policy.get_event_loop()
+        if not loop.is_closed() and not loop.is_running():
             loop.close()
 
     with suppress(RuntimeError):

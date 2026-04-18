@@ -401,6 +401,8 @@ export SEARCH_PARALLEL_TOOL_CALLS=1
 
 在提供 `bash` 的宿主环境中，`bash` 默认启用。将 `SEARCH_BASH_TOOLS=0` 可关闭它。
 
+> **升级提示 (0.2.5):** 默认值从 `0` → `1`。若你从 ≤ 0.2.4 升级并希望保持 bash 关闭，请在环境变量或 `.env` 中显式设置 `SEARCH_BASH_TOOLS=0`。
+
 ---
 
 ## 远程部署 (Streamable HTTP)

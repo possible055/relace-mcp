@@ -98,8 +98,6 @@ def test_user_prompt_formats_query(prompt_data: dict) -> None:
     if "{freshness_message}" in template:
         format_kwargs["freshness_message"] = ""
         format_kwargs["hints_list"] = ""
-    if "{lsp_capability_note}" in template:
-        format_kwargs["lsp_capability_note"] = ""
     result = template.format(**format_kwargs)
     assert "test query" in result
     assert "{query}" not in result
