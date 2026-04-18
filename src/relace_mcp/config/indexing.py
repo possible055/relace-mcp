@@ -1,13 +1,15 @@
 from dataclasses import dataclass
+from typing import Literal
 
 from . import settings as _settings
 
 LOCAL_INDEX_BACKENDS = frozenset({"codanna", "chunkhound"})
+RetrievalBackend = Literal["relace", "codanna", "chunkhound", "none"]
 
 
 @dataclass(frozen=True, slots=True)
 class IndexRuntime:
-    active_backend: str
+    active_backend: RetrievalBackend
     cloud_tools_enabled: bool
     index_status_enabled: bool
     local_backend_enabled: bool

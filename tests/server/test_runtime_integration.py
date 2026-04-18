@@ -216,6 +216,35 @@ class TestMain:
             mock_server.run.assert_called_once_with(show_banner=False)
 
     @pytest.mark.usefixtures("clean_env")
+    def test_main_logs_runtime_from_built_server(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        import sys
+
+        from relace_mcp.server import main
+
+        monkeypatch.setenv("RELACE_API_KEY", "rlc-test")
+        monkeypatch.setenv("MCP_BASE_DIR", str(tmp_path))
+        monkeypatch.setattr(sys, "argv", ["relace-mcp"])
+
+        with (
+            patch("relace_mcp.server.build_server") as mock_build,
+            patch("relace_mcp.observability.log_event") as mock_log_event,
+        ):
+            mock_server = MagicMock()
+            mock_server._relace_index_runtime = MagicMock(
+                cloud_tools_enabled=False,
+                active_backend="chunkhound",
+            )
+            mock_build.return_value = mock_server
+
+            main()
+
+        event = mock_log_event.call_args.args[0]
+        assert event["cloud_tools_enabled"] is False
+        assert event["mcp_retrieval_backend"] == "chunkhound"
+
+    @pytest.mark.usefixtures("clean_env")
     def test_main_http_mode(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """HTTP mode calls server.run() with correct arguments via CLI."""
         import sys

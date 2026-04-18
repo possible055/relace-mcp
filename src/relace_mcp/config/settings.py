@@ -3,6 +3,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal, cast
 
 from platformdirs import user_state_dir
 
@@ -63,6 +64,8 @@ _LINUX_DEFAULT_EXTRA_PATHS: tuple[str, ...] = (
     "~/.gemini/antigravity/brain",
     "~/.kiro/steering",
 )
+
+RetrievalBackend = Literal["relace", "codanna", "chunkhound", "none"]
 
 
 def _parse_positive_int_env(name: str, default: int) -> int:
@@ -138,7 +141,7 @@ def _parse_log_level() -> str:
     return (os.getenv("MCP_LOG_LEVEL", "WARNING").strip() or "WARNING").upper()
 
 
-def _parse_retrieval_backend() -> str:
+def _parse_retrieval_backend() -> RetrievalBackend:
     raw = os.getenv("MCP_RETRIEVAL_BACKEND", "relace").strip().lower()
     if raw == "auto":
         raise RuntimeError(
@@ -150,7 +153,7 @@ def _parse_retrieval_backend() -> str:
             f"Invalid MCP_RETRIEVAL_BACKEND={raw!r}. "
             f"Expected one of: {sorted(_ALLOWED_RETRIEVAL_BACKENDS)}"
         )
-    return raw
+    return cast(RetrievalBackend, raw)
 
 
 def _parse_retrieval_hint_policy() -> str:
@@ -228,7 +231,7 @@ MCP_LOGGING_MODE: str
 MCP_LOGGING: bool
 MCP_LOG_REDACT: bool
 MCP_TRACE_LOGGING: bool
-RETRIEVAL_BACKEND: str
+RETRIEVAL_BACKEND: RetrievalBackend
 RETRIEVAL_HINT_POLICY: str
 AGENTIC_RETRIEVAL_ENABLED: bool
 SEARCH_TOOL_STRICT: bool

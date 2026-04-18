@@ -150,7 +150,7 @@ def build_server(
     from fastmcp import FastMCP
 
     from .config.bootstrap import initialize_runtime_from_env
-    from .config.indexing import resolve_index_runtime, validate_index_settings
+    from .config.indexing import resolve_index_runtime
     from .repo.monitor import BackgroundIndexMonitor
 
     if initialize_runtime:
@@ -166,8 +166,6 @@ def build_server(
 
     if config is None:
         config = RelaceConfig.from_env()
-
-    validate_index_settings(api_key=config.api_key)
     index_runtime = resolve_index_runtime(base_dir=config.base_dir)
 
     if run_health_check:
@@ -226,7 +224,6 @@ def main() -> None:
     from .config import RelaceConfig
     from .config import settings as _settings
     from .config.bootstrap import initialize_runtime_from_env
-    from .config.indexing import resolve_index_runtime
     from .observability import log_event
 
     initialize_runtime_from_env()
@@ -251,7 +248,8 @@ def main() -> None:
         )
 
     config = RelaceConfig.from_env()
-    index_runtime = resolve_index_runtime(base_dir=config.base_dir)
+    server = build_server(config, initialize_runtime=False)
+    index_runtime = server._relace_index_runtime  # type: ignore[attr-defined]
     try:
         server_start_event: dict[str, object] = {
             "kind": "server_start",
@@ -272,7 +270,6 @@ def main() -> None:
     except Exception:
         # Startup logging must never break MCP stdio transport.
         logger.debug("Failed to write server_start event", exc_info=True)
-    server = build_server(config, initialize_runtime=False)
 
     if args.transport in ("http", "streamable-http"):
         logger.debug(

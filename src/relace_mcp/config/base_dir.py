@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 _MAX_CACHE_SIZE = 100
 _roots_cache: dict[str, tuple[str, str]] = {}
-_BLOCKED_MCP_ROOTS = (Path.home() / ".codeium" / "windsurf",)
+_BLOCKED_MCP_ROOTS = ((Path.home() / ".codeium" / "windsurf").resolve(),)
 
 
 def _roots_cache_key(ctx: "Context | None") -> str | None:

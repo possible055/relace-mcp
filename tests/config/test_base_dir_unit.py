@@ -1,3 +1,4 @@
+import importlib
 import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -202,6 +203,21 @@ class TestSelectBestRoot:
 
 
 class TestResolveBaseDir:
+    def test_blocked_mcp_roots_are_resolved(self, tmp_path: Path, monkeypatch) -> None:
+        import relace_mcp.config.base_dir as base_dir_module
+
+        real_home = tmp_path / "real-home"
+        real_home.mkdir()
+        symlink_home = tmp_path / "symlink-home"
+        symlink_home.symlink_to(real_home, target_is_directory=True)
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(Path, "home", classmethod(lambda cls: symlink_home))
+            reloaded = importlib.reload(base_dir_module)
+            assert reloaded._BLOCKED_MCP_ROOTS == ((real_home / ".codeium" / "windsurf").resolve(),)
+
+        importlib.reload(base_dir_module)
+
     @pytest.mark.asyncio
     async def test_uses_config_base_dir_when_set(self) -> None:
         """Explicit config takes highest priority."""

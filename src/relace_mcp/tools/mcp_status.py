@@ -1,6 +1,6 @@
 # pyright: reportUnusedFunction=false
 import shutil
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 from fastmcp import FastMCP
 from fastmcp.server.context import Context
@@ -231,7 +231,9 @@ def register_status_tools(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
                 "error": str(exc),
             }
 
-        active_backend = cast(ActiveBackend, deps.index_runtime.active_backend)
+        active_backend = deps.index_runtime.active_backend
+        if active_backend == "none":
+            raise RuntimeError("index_status is unavailable when MCP_RETRIEVAL_BACKEND=none")
         background_monitor = BackgroundMonitorSummary.model_validate(
             get_background_index_monitor_summary(mcp)
         )
