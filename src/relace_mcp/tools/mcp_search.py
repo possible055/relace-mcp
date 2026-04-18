@@ -16,6 +16,19 @@ from ..search.retrieval import agentic_retrieval_logic
 from ._registry import ToolRegistryDeps
 
 
+def _format_turn_progress_message(
+    tool_name: str,
+    completed_turns: int,
+    total_turns: int,
+) -> str:
+    """Render a user-facing progress message from completed-turn counts."""
+    if total_turns <= 0:
+        return f"{tool_name} in progress"
+    if completed_turns >= total_turns:
+        return f"{tool_name} complete"
+    return f"{tool_name} turn {completed_turns + 1}/{total_turns}"
+
+
 def register_search_tools(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
     @mcp.tool(
         timeout=600.0,
@@ -56,9 +69,15 @@ def register_search_tools(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
         lsp_languages = get_lsp_languages(Path(base_dir))
         effective_config = replace(deps.config, base_dir=base_dir)
 
-        async def _on_progress(turn: int, total: int) -> None:
+        async def _on_progress(completed_turns: int, total: int) -> None:
             await ctx.report_progress(
-                progress=turn, total=total, message=f"agentic_search turn {turn}/{total}"
+                progress=completed_turns,
+                total=total,
+                message=_format_turn_progress_message(
+                    "agentic_search",
+                    completed_turns,
+                    total,
+                ),
             )
 
         result = await FastAgenticSearchHarness(
@@ -112,12 +131,16 @@ def register_search_tools(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
             base_dir, _ = await resolve_base_dir(deps.config.base_dir, ctx)
             await deps.ensure_encoding(ctx, base_dir)
 
-            async def _on_progress(turn: int, total: int) -> None:
+            async def _on_progress(completed_turns: int, total: int) -> None:
                 if ctx is not None:
                     await ctx.report_progress(
-                        progress=turn,
+                        progress=completed_turns,
                         total=total,
-                        message=f"agentic_retrieval turn {turn}/{total}",
+                        message=_format_turn_progress_message(
+                            "agentic_retrieval",
+                            completed_turns,
+                            total,
+                        ),
                     )
 
             result = await agentic_retrieval_logic(

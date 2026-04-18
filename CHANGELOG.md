@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`MCP_LOGGING` unified** — Now accepts `off` (default), `safe` (with redaction), or `full` (no redaction). Replaces separate `MCP_LOGGING` and `MCP_LOG_REDACT` variables.
 - **`MCP_SEARCH_MODE` → `MCP_SEARCH_RETRIEVAL`** — Simplified boolean flag (`1` to enable `agentic_retrieval` tool).
-- **Search tool toggles simplified** — `SEARCH_LSP_TOOLS` is now boolean-only (`1`/`0`), and `SEARCH_BASH_TOOLS` was added for `bash` enablement.
+- **Search tool toggles simplified** — `SEARCH_LSP_TOOLS` is now boolean-only (`1`/`0`), and `SEARCH_BASH_TOOLS` was added for `bash` enablement. **Upgrade note:** the default is now `1` (previously `0`); set `SEARCH_BASH_TOOLS=0` to preserve the previous opt-in posture.
 - **`agentic_retrieval` parameter simplification** — Removed `branch`, `score_threshold`, and `max_hints` parameters; only `query` is required.
 - **Tool descriptions enhanced** — Improved consistency and clarity across all MCP tools.
 

@@ -1365,7 +1365,6 @@ class TestApplyResponseFormat:
         assert result["status"] == "ok"
         assert result["path"] == str(test_file)
         assert result["trace_id"] is not None
-        assert result["timing_ms"] >= 0
 
     @pytest.mark.asyncio
     async def test_noop_response_includes_path(
@@ -1394,3 +1393,28 @@ class TestApplyResponseFormat:
         assert result["status"] == "ok"
         assert result["path"] == str(test_file)
         assert result["trace_id"] is not None
+        assert result["timing_ms"] >= 0
+
+
+class TestSearchProgressMessages:
+    """Test user-facing progress messages for search tools."""
+
+    @pytest.mark.parametrize(
+        ("tool_name", "completed_turns", "total_turns", "expected"),
+        [
+            ("agentic_search", 0, 5, "agentic_search turn 1/5"),
+            ("agentic_search", 4, 5, "agentic_search turn 5/5"),
+            ("agentic_search", 5, 5, "agentic_search complete"),
+            ("agentic_retrieval", 0, 0, "agentic_retrieval in progress"),
+        ],
+    )
+    def test_format_turn_progress_message(
+        self,
+        tool_name: str,
+        completed_turns: int,
+        total_turns: int,
+        expected: str,
+    ) -> None:
+        from relace_mcp.tools.mcp_search import _format_turn_progress_message
+
+        assert _format_turn_progress_message(tool_name, completed_turns, total_turns) == expected

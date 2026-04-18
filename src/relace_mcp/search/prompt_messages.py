@@ -13,17 +13,28 @@ def render_system_message(
     lsp_section: str = "",
     step2_discovery: str = "",
     step3_verification: str = "",
+    # Modular LSP fragments (used by openai backend).
+    lsp_routing_rules: str = "",
+    lsp_tools_section: str = "",
+    lsp_followup_rules: str = "",
 ) -> str:
     """Render a system message template into final text."""
     message = template.replace("{max_turns}", str(max_turns))
 
+    # Legacy monolithic LSP block (relace backend).
     if has_lsp and lsp_section:
         message = message.replace("{lsp_section}", lsp_section.strip())
     else:
         message = message.replace("{lsp_section}", "")
 
+    # Legacy step-based strategy blocks (relace backend).
     message = message.replace("{step2_discovery}", step2_discovery.strip())
     message = message.replace("{step3_verification}", step3_verification.strip())
+
+    # Modular LSP capability fragments (openai backend).
+    message = message.replace("{lsp_routing_rules}", lsp_routing_rules.strip())
+    message = message.replace("{lsp_tools_section}", lsp_tools_section.strip())
+    message = message.replace("{lsp_followup_rules}", lsp_followup_rules.strip())
 
     if enabled_tools is not None and "bash" not in enabled_tools:
         message = "\n".join(line for line in message.splitlines() if "`bash`" not in line)
@@ -46,9 +57,20 @@ def render_turn_status_message(
     chars_used: int,
     turn_status_messages: dict[str, str],
 ) -> str:
-    """Render the user-visible turn-status message."""
+    """Render the user-visible turn-status message.
+
+    Message key selection (0-indexed *turn*):
+      - remaining == 1  → "final"
+      - remaining == 2  → "penultimate" (falls back to "normal" if absent)
+      - otherwise       → "normal"
+    """
     remaining = max_turns - turn
-    message_key = "final" if remaining == 1 else "normal"
+    if remaining == 1:
+        message_key = "final"
+    elif remaining == 2 and "penultimate" in turn_status_messages:
+        message_key = "penultimate"
+    else:
+        message_key = "normal"
     template = turn_status_messages.get(message_key, "")
     if not template:
         return ""

@@ -287,7 +287,7 @@ def reload_settings_from_env() -> None:
         "RETRIEVAL_HINT_POLICY": _parse_retrieval_hint_policy(),
         "AGENTIC_RETRIEVAL_ENABLED": env_bool("MCP_SEARCH_RETRIEVAL", default=False),
         "SEARCH_TOOL_STRICT": env_bool("SEARCH_TOOL_STRICT", default=True),
-        "SEARCH_BASH_TOOLS": env_bool("SEARCH_BASH_TOOLS", default=False),
+        "SEARCH_BASH_TOOLS": env_bool("SEARCH_BASH_TOOLS", default=True),
         "SEARCH_LSP_TOOLS": env_bool("SEARCH_LSP_TOOLS", default=False),
         "SEARCH_LSP_TIMEOUT_SECONDS": _parse_positive_float_env("SEARCH_LSP_TIMEOUT_SECONDS", 15.0),
         "SEARCH_LSP_MAX_CLIENTS": _parse_nonnegative_int_env("SEARCH_LSP_MAX_CLIENTS", 2),

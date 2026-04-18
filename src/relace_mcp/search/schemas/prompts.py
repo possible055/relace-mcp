@@ -33,6 +33,10 @@ def build_system_prompt(
     lsp_section: str = "",
     step2_discovery: str | dict[str, str] | None = None,
     step3_verification: str | dict[str, str] | None = None,
+    # Modular LSP fragments (openai backend).
+    lsp_routing_rules: str | dict[str, str] | None = None,
+    lsp_tools_section: str | dict[str, str] | None = None,
+    lsp_followup_rules: str | dict[str, str] | None = None,
 ) -> str:
     """Render a system message template into final text.
 
@@ -47,7 +51,12 @@ def build_system_prompt(
             mode mapping with keys: lsp_on, lsp_off, default.
         step3_verification: Step 3 prompt block. Supports plain string or
             mode mapping with keys: lsp_on, lsp_off, default.
+        lsp_routing_rules: Modular LSP routing rules fragment. Supports
+            plain string or mode mapping with keys: lsp_on, lsp_off, default.
+        lsp_tools_section: Modular LSP tool definitions fragment. Same format.
+        lsp_followup_rules: Modular LSP follow-up rules fragment. Same format.
     """
+    # Legacy step-based blocks (relace backend).
     resolved_step2 = _resolve_lsp_variant_block(
         step2_discovery,
         has_lsp=has_lsp,
@@ -59,6 +68,23 @@ def build_system_prompt(
         field_name="step3_verification",
     )
 
+    # Modular LSP capability fragments (openai backend).
+    resolved_routing = _resolve_lsp_variant_block(
+        lsp_routing_rules,
+        has_lsp=has_lsp,
+        field_name="lsp_routing_rules",
+    )
+    resolved_tools = _resolve_lsp_variant_block(
+        lsp_tools_section,
+        has_lsp=has_lsp,
+        field_name="lsp_tools_section",
+    )
+    resolved_followup = _resolve_lsp_variant_block(
+        lsp_followup_rules,
+        has_lsp=has_lsp,
+        field_name="lsp_followup_rules",
+    )
+
     return render_system_message(
         template,
         max_turns=_settings.SEARCH_MAX_TURNS,
@@ -67,4 +93,7 @@ def build_system_prompt(
         lsp_section=lsp_section,
         step2_discovery=resolved_step2,
         step3_verification=resolved_step3,
+        lsp_routing_rules=resolved_routing,
+        lsp_tools_section=resolved_tools,
+        lsp_followup_rules=resolved_followup,
     )

@@ -25,8 +25,6 @@ SEARCH_API_KEY=your-provider-key
 
 对于非 Relace 提供商，benchmark 命令读取的是 `SEARCH_API_KEY`。`OPENAI_API_KEY`、`OPENROUTER_API_KEY` 这类提供商专用变量不会被自动加载。
 
-`benchmark.cli.run` 和 `benchmark.cli.grid` 现在与 MCP server 共用同一套 runtime bootstrap。若设置了 `MCP_DOTENV_PATH`，会优先加载该文件；否则回退到默认的 dotenv 搜索路径。之后再应用 CLI 覆盖并刷新集中式 settings。实际优先级固定为：CLI flags > process env > dotenv values。
-
 当 benchmark CLI 的路径参数不是绝对路径时，会按 `benchmark/` 作为基准目录解析。下面示例中的 `artifacts/...`，在磁盘上的实际位置就是 `benchmark/.data/...`。
 
 **数据集**:
@@ -74,13 +72,6 @@ uv run --extra benchmark python -m benchmark.cli.run \
 - Trace metadata (启用 `--trace`): `benchmark/.data/experiments/<experiment_name>/traces/<case_id>.meta.json`
 - Events (启用 `--trace`): `benchmark/.data/experiments/<experiment_name>/events/events.jsonl`
 
-Run report 的 `metadata.artifacts` 也会写入 trace `schema_version`、`experiment_root`、`traces_dir` 与 `events_path`，方便机器消费这些 artifact。
-
-默认 experiment 命名模板如下:
-- `run--<dataset>--<search-mode>--<provider>--<timestamp>`
-- `grid--<dataset>--<search-mode>--<provider>--avg-file-recall--<timestamp>`
-- `trial--turns-<n>--temp-<value>`
-
 **Trace 工作流**:
 ```bash
 # 采集 raw trace 与 indexed retrieval hint metadata
@@ -102,8 +93,6 @@ uv run --extra benchmark python -m benchmark.cli.case_map \
   benchmark/.data/experiments/run-b \
   --case-id case_1 --json-out -o case_1.compare.json
 ```
-
-现在单次 run 的所有输出都会归档在同一个 experiment 目录下。`<case_id>.meta.json` 会保存该 case 的 retrieval metadata，包括外部索引 backend 返回的 `semantic_hints` 文件列表。Trace metadata 与 run-level events 都会带上 `schema_version` 字段，方便 consumer 做兼容性检查。
 
 **常用参数**:
 | 参数 | 默认值 | 说明 |
@@ -228,8 +217,6 @@ uv run --extra benchmark --extra benchmark-web python -m benchmark.cli.web
 | Line Prec(M) | 仅统计匹配文件：正确行 / 返回行总数 |
 | Function Hit Rate | 有重叠的函数 / 函数总数 |
 
-每个 `summary.report.json` 都包含可复现所需的 metadata。Grid parent report 另外会带 `metadata.experiment.type = "grid"`，以及包含 `search_space`、`trials`、`best_trial` 的 `grid` 区块。
-
 ## 6.1 Web Analyzer
 
 benchmark web analyzer 是一个本地 SPA + Python API，用来浏览 experiments，并对比同一个 `case_id` 在不同 runs 之间的代码空间搜索轨迹。
@@ -243,8 +230,6 @@ cd benchmark/viewer/frontend
 npm ci
 npm run dev
 ```
-
-Web app 默认读取 `benchmark/.data/experiments/` 下的 benchmark artifacts，并以派生后的 `search_map.bundle.json` / `case_map_compare` 作为唯一分析数据源。
 
 ## 7. 故障排除
 
@@ -266,48 +251,5 @@ uv run --extra dev --extra benchmark pytest benchmark/tests -q
 Web analyzer backend 测试:
 
 ```bash
-uv run --extra dev --extra benchmark --extra benchmark-web pytest benchmark/tests/web -q
-```
-
-这组测试只覆盖 benchmark 子系统，不包含在仓库默认 `pytest` testpaths 里。CI 会用单独的 Ubuntu / Python 3.13 benchmark job 持续执行它们。
-
-## 目录结构
-
-```
-benchmark/
-├── config/             # benchmark 内部配置
-│   ├── paths.py         # 目录/路径 helper 与默认数据集路径
-│   └── settings.py      # benchmark 内部设置（如 EXCLUDED_REPOS）
-├── cli/
-│   ├── run.py           # 单次运行 CLI
-│   ├── grid.py          # 网格搜索 CLI
-│   ├── report.py        # 报告生成
-│   ├── analyze.py       # 详细分析
-│   ├── curate.py        # 数据集筛选
-│   ├── validate.py      # 数据集验证
-│   └── build_locbench.py  # Loc-Bench 构建
-├── analysis/            # 分析工具 (function scope 等)
-├── viewer/             # Benchmark 结果查看器（FastAPI + React SPA）
-├── frontend/            # benchmark SPA 前端（仅 repo-local）
-├── datasets/            # 数据集加载器
-├── metrics/             # 指标实现
-├── runner/              # 执行流程
-│   └── experiment_paths.py  # experiment 命名与产物布局 helper
-├── tests/
-│   ├── analysis/
-│   ├── cli/
-│   ├── datasets/
-│   ├── docs/
-│   └── runner/
-├── schemas.py           # 数据结构定义
-└── artifacts/           # (运行时生成，不在版控中)
-    ├── data/            # 数据集文件
-    ├── experiments/     # 按 experiment 归档的输出
-    │   └── <experiment_name>/
-    │       ├── events/  # Run 级别 events (.jsonl)
-    │       ├── reports/ # 汇总报告 (summary.report.json)
-    │       ├── results/ # 运行输出 (.jsonl)
-    │       ├── runs/    # 仅 grid child trial 使用
-    │       └── traces/  # 逐 case traces (.jsonl + .meta.json)
-    ├── repos/           # 缓存仓库
+uv run --extra dev --extra benchmark --extra benchmark-web pytest benchmark/tests/viewer -q
 ```

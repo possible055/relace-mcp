@@ -25,8 +25,6 @@ SEARCH_API_KEY=your-provider-key
 
 For non-Relace providers, benchmark commands read `SEARCH_API_KEY`. Provider-specific variables such as `OPENAI_API_KEY` or `OPENROUTER_API_KEY` are not loaded automatically.
 
-`benchmark.cli.run` and `benchmark.cli.grid` now share the same runtime bootstrap as the MCP server. They load `MCP_DOTENV_PATH` when set, otherwise fall back to the default dotenv search, then apply CLI overrides and refresh centralized settings. Effective precedence is: CLI flags > process env > dotenv values.
-
 When a benchmark CLI path is not absolute, it is resolved relative to `benchmark/`. In the examples below, `artifacts/...` maps to `benchmark/.data/...` on disk.
 
 **Dataset**:
@@ -74,13 +72,6 @@ uv run --extra benchmark python -m benchmark.cli.run \
 - Trace metadata (when `--trace`): `benchmark/.data/experiments/<experiment_name>/traces/<case_id>.meta.json`
 - Events (when `--trace`): `benchmark/.data/experiments/<experiment_name>/events/events.jsonl`
 
-Run reports also include `metadata.artifacts` with the trace `schema_version`, `experiment_root`, `traces_dir`, and `events_path`.
-
-Default experiment names use these templates:
-- `run--<dataset>--<search-mode>--<provider>--<timestamp>`
-- `grid--<dataset>--<search-mode>--<provider>--avg-file-recall--<timestamp>`
-- `trial--turns-<n>--temp-<value>`
-
 **Trace workflow**:
 ```bash
 # Collect raw traces plus indexed retrieval hint metadata
@@ -102,8 +93,6 @@ uv run --extra benchmark python -m benchmark.cli.case_map \
   benchmark/.data/experiments/run-b \
   --case-id case_1 --json-out -o case_1.compare.json
 ```
-
-Each run now archives all outputs under one experiment directory. `<case_id>.meta.json` stores retrieval-side metadata for the case, including `semantic_hints` file lists from external index backends. Both trace metadata and run-level events include a `schema_version` field so consumers can validate artifact compatibility.
 
 **Key options**:
 | Option | Default | Description |
@@ -228,8 +217,6 @@ uv run --extra benchmark --extra benchmark-web python -m benchmark.cli.web
 | Line Prec (Matched) | Correct lines / Returned lines (matched files only) |
 | Function Hit Rate | Functions with overlap / Total functions |
 
-Each `summary.report.json` includes metadata tracking for reproducibility. Grid parent reports also include `metadata.experiment.type = "grid"` plus a `grid` section with `search_space`, `trials`, and `best_trial`.
-
 ## 6.1 Web Analyzer
 
 The benchmark web analyzer is a local SPA plus Python API for browsing experiments and comparing the same `case_id` across runs.
@@ -243,8 +230,6 @@ cd benchmark/viewer/frontend
 npm ci
 npm run dev
 ```
-
-The web app reads benchmark artifacts under `benchmark/.data/experiments/` and uses the derived `search_map.bundle.json` / `case_map_compare` payloads as its source of truth.
 
 ## 7. Troubleshooting
 
@@ -266,48 +251,5 @@ uv run --extra dev --extra benchmark pytest benchmark/tests -q
 Web analyzer backend tests:
 
 ```bash
-uv run --extra dev --extra benchmark --extra benchmark-web pytest benchmark/tests/web -q
-```
-
-These tests are benchmark-specific and are not included in the repository's default `pytest` testpaths. CI runs them in a dedicated Ubuntu / Python 3.13 benchmark job.
-
-## Directory Structure
-
-```
-benchmark/
-├── config/             # Internal benchmark configuration
-│   ├── paths.py         # Directory/path helpers and dataset defaults
-│   └── settings.py      # Internal benchmark settings (e.g. EXCLUDED_REPOS)
-├── cli/
-│   ├── run.py           # Single run CLI
-│   ├── grid.py          # Grid search CLI
-│   ├── report.py        # Report generation
-│   ├── analyze.py       # Detailed analysis
-│   ├── curate.py        # Dataset curation
-│   ├── validate.py      # Dataset validation
-│   └── build_locbench.py  # Loc-Bench builder
-├── analysis/            # Analysis tools (function scope, etc.)
-├── viewer/             # Benchmark result viewer (FastAPI backend + React SPA)
-├── frontend/            # Benchmark SPA frontend (repo-local only)
-├── datasets/            # Dataset loaders
-├── metrics/             # Metrics implementation
-├── runner/              # Execution pipeline
-│   └── experiment_paths.py  # Experiment naming and artifact layout helpers
-├── tests/
-│   ├── analysis/
-│   ├── cli/
-│   ├── datasets/
-│   ├── docs/
-│   └── runner/
-├── schemas.py           # Data structure definitions
-└── artifacts/           # (runtime generated, not in version control)
-    ├── data/            # Dataset files
-    ├── experiments/     # Per-experiment archives
-    │   └── <experiment_name>/
-    │       ├── events/  # Run-level events (.jsonl)
-    │       ├── reports/ # Summary reports (summary.report.json)
-    │       ├── results/ # Run outputs (.jsonl)
-    │       ├── runs/    # Grid child trials only
-    │       └── traces/  # Per-case traces (.jsonl + .meta.json)
-    ├── repos/           # Cached repositories
+uv run --extra dev --extra benchmark --extra benchmark-web pytest benchmark/tests/viewer -q
 ```

@@ -67,10 +67,10 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `SEARCH_TEMPERATURE` | `1.0` | LLM sampling temperature (0.0-2.0) |
 | `SEARCH_TOP_P` | — | Optional top_p sampling (e.g., set to `1` for providers requiring explicit top_p like Mistral) |
 | `SEARCH_MAX_TURNS` | `6` | Maximum agent loop turns |
-| `SEARCH_BASH_TOOLS` | `0` | Bash tool toggle (`1` enabled, `0` disabled) |
-| `SEARCH_LSP_TOOLS` | `0` | LSP tools toggle (`1` enabled, `0` disabled) |
+| `SEARCH_BASH_TOOLS` | `1` | Enable `bash` during search runs |
+| `SEARCH_LSP_TOOLS` | `0` | Enable LSP-assisted search |
 | `SEARCH_PARALLEL_TOOL_CALLS` | `1` | Enable parallel tool calls |
-| `SEARCH_TOOL_STRICT` | `1` | Include `strict` field in tool schemas |
+| `SEARCH_TOOL_STRICT` | `1` | Compatibility toggle for providers that reject strict tool schemas |
 | `SEARCH_LSP_TIMEOUT_SECONDS` | `15.0` | LSP startup/request timeout |
 | `SEARCH_LSP_MAX_CLIENTS` | `2` | Maximum concurrent LSP clients |
 
@@ -130,9 +130,7 @@ Then point `MCP_DOTENV_PATH` to the file in your MCP client config:
 }
 ```
 
-> **Note:** Variables set directly in `env` take precedence over values in the `.env` file.
-
-The shared runtime bootstrap now applies the same dotenv flow everywhere: the `relace-mcp` CLI, programmatic `build_server()`, `benchmark.cli.run`, and `benchmark.cli.grid` all load `MCP_DOTENV_PATH` first, then re-resolve centralized settings from the current process environment.
+> **Note:** Precedence is: CLI flags > process env > dotenv values.
 
 ---
 
@@ -178,7 +176,7 @@ MCP_SEARCH_RETRIEVAL=1
 MCP_RETRIEVAL_BACKEND=codanna
 ```
 
-On first use the server may proceed without hints if the index is missing, while scheduling a background refresh. `index_status` can also schedule a refresh when the local index is stale or missing. The current implementation does not trigger Codanna reindexing after every `fast_apply` edit. During retrieval, stale Codanna hints can still be used when `MCP_RETRIEVAL_HINT_POLICY=prefer-stale`; `strict` skips them. Refer to the [Codanna project](https://pypi.org/project/codanna/) for configuration and model setup.
+If the index is missing or stale, the server may continue without hints while scheduling a background refresh. With `MCP_RETRIEVAL_HINT_POLICY=prefer-stale`, retrieval can still use stale Codanna hints; `strict` skips them. Refer to the [Codanna project](https://pypi.org/project/codanna/) for configuration and model setup.
 
 ### ChunkHound
 
@@ -193,7 +191,7 @@ MCP_SEARCH_RETRIEVAL=1
 MCP_RETRIEVAL_BACKEND=chunkhound
 ```
 
-On first use the server may proceed without hints if the index is missing, while scheduling a background refresh. `index_status` can also schedule a refresh when the local index is stale or missing. The current implementation does not trigger ChunkHound scans after every `fast_apply` edit. During retrieval, stale ChunkHound hints can still be used when `MCP_RETRIEVAL_HINT_POLICY=prefer-stale`; `strict` skips them. Refer to the [ChunkHound project](https://pypi.org/project/chunkhound/) for configuration and embedding model setup.
+If the index is missing or stale, the server may continue without hints while scheduling a background refresh. With `MCP_RETRIEVAL_HINT_POLICY=prefer-stale`, retrieval can still use stale ChunkHound hints; `strict` skips them. Refer to the [ChunkHound project](https://pypi.org/project/chunkhound/) for configuration and embedding model setup.
 
 ### Auto Mode
 
@@ -379,22 +377,18 @@ export SEARCH_MODEL=gpt-4o
 1. `APPLY_API_KEY` / `SEARCH_API_KEY` (explicit; required for non-Relace providers)
 2. `RELACE_API_KEY` (only for `relace` provider)
 
-### LSP Tool
+### LSP-Assisted Search
 
-LSP tools (`find_symbol`, `search_symbol`) are disabled by default.
+LSP-assisted search is disabled by default.
 
 - **Enable LSP tools:** `SEARCH_LSP_TOOLS=1`
 - **Disable LSP tools:** `SEARCH_LSP_TOOLS=0` (default)
 
-Available tools:
-- `find_symbol`: jump to a definition or list references for a symbol at a file/line/column
-- `search_symbol`: search workspace symbols by name or prefix
-
-> **Note:** LSP tools are exposed only when `SEARCH_LSP_TOOLS=1` and the current project has a supported language. Python uses bundled `basedpyright`; other languages use the system language servers described in the README.
+> **Note:** LSP-assisted search is available only when `SEARCH_LSP_TOOLS=1` and the current project has a supported language. Python uses bundled `basedpyright`; other languages use the system language servers described in the README.
 
 ### OpenAI Structured Outputs
 
-Some OpenAI-compatible providers reject requests that include `strict` tool fields or `parallel_tool_calls`. When that happens, the client retries with a compatibility payload that removes those fields and remembers that fallback for later requests.
+Some OpenAI-compatible providers reject requests that include `strict` tool fields or `parallel_tool_calls`.
 
 If your provider works better without the non-standard `strict` field from the start:
 
@@ -403,26 +397,11 @@ export SEARCH_TOOL_STRICT=0
 export SEARCH_PARALLEL_TOOL_CALLS=1
 ```
 
-### Bash Tool
+### Bash in Search
 
-The `bash` tool is disabled by default. To enable on Unix:
+`bash` is enabled by default on hosts that provide `bash`. Set `SEARCH_BASH_TOOLS=0` to disable it.
 
-```json
-{
-  "mcpServers": {
-    "relace": {
-      "env": {
-        "SEARCH_BASH_TOOLS": "1"
-      }
-    }
-  }
-}
-```
-
-When enabled, `bash` stays on the current minimum-security model:
-- Allowed commands: `cat`, `diff`, `echo`, `file`, `find`, `git` (`blame`, `diff`, `grep`, `log`, `ls-files`, `show`, `status`), `grep`, `head`, `jq`, `ls`, `rg`, `tail`, `true`, `wc`
-- Pipes are allowed
-- Redirects, command substitution, destructive/network/privileged commands, and paths outside `/repo` are blocked
+> **Upgrade note (0.2.5):** the default flipped from `0` → `1`. If you upgraded from ≤ 0.2.4 and want to keep bash disabled, explicitly set `SEARCH_BASH_TOOLS=0` in your environment or `.env`.
 
 ---
 

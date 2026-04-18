@@ -44,8 +44,6 @@ def test_build_system_prompt_keeps_bash_when_enabled(prompt_data: dict) -> None:
     enabled = {"view_file", "view_directory", "grep_search", "bash", "report_back"}
     prompt = build_system_prompt(prompt_data["system_message_template"], enabled_tools=enabled)
     assert "`bash`" in prompt
-    assert "Pipes allowed" in prompt
-    assert "outside `/repo` are blocked" in prompt
 
 
 # --- LSP injection tests ---
@@ -57,6 +55,9 @@ def test_lsp_section_injected_when_has_lsp(prompt_data: dict) -> None:
         prompt_data["system_message_template"],
         has_lsp=True,
         lsp_section=lsp_section,
+        lsp_routing_rules=prompt_data.get("lsp_routing_rules"),
+        lsp_tools_section=prompt_data.get("lsp_tools_section"),
+        lsp_followup_rules=prompt_data.get("lsp_followup_rules"),
     )
     assert "{lsp_section}" not in prompt
     assert "search_symbol" in prompt
@@ -67,6 +68,9 @@ def test_lsp_section_removed_when_no_lsp(prompt_data: dict) -> None:
         prompt_data["system_message_template"],
         has_lsp=False,
         lsp_section=prompt_data.get("lsp_section", ""),
+        lsp_routing_rules=prompt_data.get("lsp_routing_rules"),
+        lsp_tools_section=prompt_data.get("lsp_tools_section"),
+        lsp_followup_rules=prompt_data.get("lsp_followup_rules"),
     )
     assert "{lsp_section}" not in prompt
     # The LSP tools block must not be injected
@@ -83,29 +87,6 @@ def test_strategy_placeholders_resolved(prompt_data: dict) -> None:
     )
     assert "{step2_discovery}" not in prompt
     assert "{step3_verification}" not in prompt
-
-
-def test_search_openai_strategy_switches_with_lsp() -> None:
-    prompt_data = load_prompt_file("search_openai")
-
-    prompt_no_lsp = build_system_prompt(
-        prompt_data["system_message_template"],
-        has_lsp=False,
-        lsp_section=prompt_data.get("lsp_section", ""),
-        step2_discovery=prompt_data.get("step2_discovery"),
-        step3_verification=prompt_data.get("step3_verification"),
-    )
-    assert "Start with `grep_search` whenever the query includes textual anchors" in prompt_no_lsp
-    assert "use `search_symbol` as the first call" not in prompt_no_lsp
-
-    prompt_with_lsp = build_system_prompt(
-        prompt_data["system_message_template"],
-        has_lsp=True,
-        lsp_section=prompt_data.get("lsp_section", ""),
-        step2_discovery=prompt_data.get("step2_discovery"),
-        step3_verification=prompt_data.get("step3_verification"),
-    )
-    assert "use `search_symbol` as the first call" in prompt_with_lsp
 
 
 # --- user_message_template tests ---

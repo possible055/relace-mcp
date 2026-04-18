@@ -67,10 +67,10 @@
 | `SEARCH_TEMPERATURE` | `1.0` | 采样温度（0.0-2.0） |
 | `SEARCH_TOP_P` | — | 可选的 top_p 采样（如需显式设置 top_p 的提供商如 Mistral，可设为 `1`） |
 | `SEARCH_MAX_TURNS` | `6` | 最大 agent 循环轮数 |
-| `SEARCH_BASH_TOOLS` | `0` | Bash 工具开关（`1` 启用，`0` 禁用） |
-| `SEARCH_LSP_TOOLS` | `0` | LSP 工具开关（`1` 启用，`0` 禁用） |
+| `SEARCH_BASH_TOOLS` | `1` | 在搜索过程中启用 `bash` |
+| `SEARCH_LSP_TOOLS` | `0` | 启用基于 LSP 的搜索辅助 |
 | `SEARCH_PARALLEL_TOOL_CALLS` | `1` | 启用并行工具调用 |
-| `SEARCH_TOOL_STRICT` | `1` | 在 tool schema 中包含 `strict` 字段 |
+| `SEARCH_TOOL_STRICT` | `1` | 兼容某些不接受 strict tool schema 的 provider |
 | `SEARCH_LSP_TIMEOUT_SECONDS` | `15.0` | LSP 启动/请求超时 |
 | `SEARCH_LSP_MAX_CLIENTS` | `2` | 最大并发 LSP 客户端数 |
 
@@ -130,9 +130,7 @@ SEARCH_MAX_TURNS=6
 }
 ```
 
-> **注意：** 直接在 `env` 中设置的变量优先于 `.env` 文件中的变量。
-
-现在所有入口都复用同一套 runtime bootstrap：`relace-mcp` CLI、程序化 `build_server()`、`benchmark.cli.run` 和 `benchmark.cli.grid` 都会先加载 `MCP_DOTENV_PATH`，再根据当前进程环境统一刷新集中式 settings。
+> **注意：** 优先级为：CLI flags > process env > dotenv values。
 
 ---
 
@@ -178,7 +176,7 @@ MCP_SEARCH_RETRIEVAL=1
 MCP_RETRIEVAL_BACKEND=codanna
 ```
 
-首次使用时，如果 index 缺失，server 可能会先在没有 hints 的情况下继续查询，同时排程 background refresh。`index_status` 也可以在本地 index 处于 stale 或 missing 状态时排程 refresh。当前实现不会在每次 `fast_apply` 编辑后自动触发 Codanna reindex。retrieval 过程中，当 `MCP_RETRIEVAL_HINT_POLICY=prefer-stale` 时可以继续使用 stale Codanna hints；`strict` 会跳过它们。更多配置请参阅 [Codanna 项目](https://pypi.org/project/codanna/)。
+如果 index 缺失或过期，server 可能会先在没有 hints 的情况下继续查询，同时排程 background refresh。使用 `MCP_RETRIEVAL_HINT_POLICY=prefer-stale` 时，retrieval 仍可使用 stale Codanna hints；`strict` 会跳过它们。更多配置请参阅 [Codanna 项目](https://pypi.org/project/codanna/)。
 
 ### ChunkHound
 
@@ -193,7 +191,7 @@ MCP_SEARCH_RETRIEVAL=1
 MCP_RETRIEVAL_BACKEND=chunkhound
 ```
 
-首次使用时，如果 index 缺失，server 可能会先在没有 hints 的情况下继续查询，同时排程 background refresh。`index_status` 也可以在本地 index 处于 stale 或 missing 状态时排程 refresh。当前实现不会在每次 `fast_apply` 编辑后自动触发 ChunkHound scan。retrieval 过程中，当 `MCP_RETRIEVAL_HINT_POLICY=prefer-stale` 时可以继续使用 stale ChunkHound hints；`strict` 会跳过它们。更多配置请参阅 [ChunkHound 项目](https://pypi.org/project/chunkhound/)。
+如果 index 缺失或过期，server 可能会先在没有 hints 的情况下继续查询，同时排程 background refresh。使用 `MCP_RETRIEVAL_HINT_POLICY=prefer-stale` 时，retrieval 仍可使用 stale ChunkHound hints；`strict` 会跳过它们。更多配置请参阅 [ChunkHound 项目](https://pypi.org/project/chunkhound/)。
 
 ### 自动模式
 
@@ -379,22 +377,18 @@ export SEARCH_MODEL=gpt-4o
 1. `APPLY_API_KEY` / `SEARCH_API_KEY`（显式；非 Relace 提供商必须设置）
 2. `RELACE_API_KEY`（仅限 `relace` 提供商）
 
-### LSP 工具
+### 基于 LSP 的搜索辅助
 
-LSP 工具（`find_symbol`、`search_symbol`）默认禁用。
+基于 LSP 的搜索辅助默认禁用。
 
 - **启用 LSP 工具：** `SEARCH_LSP_TOOLS=1`
 - **禁用 LSP 工具：** `SEARCH_LSP_TOOLS=0`（默认）
 
-当前可用工具：
-- `find_symbol`：根据文件、行列位置跳转到定义，或列出该符号的引用
-- `search_symbol`：按符号名称或前缀搜索 workspace symbols
-
-> **注意：** 只有在 `SEARCH_LSP_TOOLS=1` 且当前项目存在受支持语言时，LSP 工具才会暴露。Python 使用内置的 `basedpyright`；其他语言使用 README 中列出的系统 language server。
+> **注意：** 只有在 `SEARCH_LSP_TOOLS=1` 且当前项目存在受支持语言时，基于 LSP 的搜索辅助才可用。Python 使用内置的 `basedpyright`；其他语言使用 README 中列出的系统 language server。
 
 ### OpenAI Structured Outputs
 
-部分 OpenAI 兼容 provider 会拒绝包含 `strict` tool fields 或 `parallel_tool_calls` 的请求。遇到这种情况时，client 会自动重试一个 compatibility payload，并在后续请求中沿用该 fallback。
+部分 OpenAI 兼容 provider 会拒绝包含 `strict` tool fields 或 `parallel_tool_calls` 的请求。
 
 如果你的 provider 从一开始就更适合不带这个非标准 `strict` 字段：
 
@@ -403,26 +397,11 @@ export SEARCH_TOOL_STRICT=0
 export SEARCH_PARALLEL_TOOL_CALLS=1
 ```
 
-### Bash 工具
+### 搜索中的 Bash
 
-`bash` 工具默认禁用。在 Unix 上启用：
+在提供 `bash` 的宿主环境中，`bash` 默认启用。将 `SEARCH_BASH_TOOLS=0` 可关闭它。
 
-```json
-{
-  "mcpServers": {
-    "relace": {
-      "env": {
-        "SEARCH_BASH_TOOLS": "1"
-      }
-    }
-  }
-}
-```
-
-启用后，`bash` 仍遵循当前的最小安全原则：
-- 允许的命令：`cat`、`diff`、`echo`、`file`、`find`、`git`（`blame`、`diff`、`grep`、`log`、`ls-files`、`show`、`status`）、`grep`、`head`、`jq`、`ls`、`rg`、`tail`、`true`、`wc`
-- 允许使用 pipe
-- 禁止 redirects、command substitution、destructive/network/privileged commands，以及 `/repo` 之外的路径
+> **升级提示 (0.2.5):** 默认值从 `0` → `1`。若你从 ≤ 0.2.4 升级并希望保持 bash 关闭，请在环境变量或 `.env` 中显式设置 `SEARCH_BASH_TOOLS=0`。
 
 ---
 

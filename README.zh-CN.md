@@ -147,8 +147,8 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 | `MCP_BACKGROUND_INDEX_INTERVAL_SECONDS` | ❌ | 周期 local index monitor 的检查间隔（秒，默认 `300`） |
 | `MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS` | ❌ | 首次周期 local index 检查前的初始延迟（秒，默认 `30`） |
 | `MCP_SEARCH_TURN_STATUS_MODE` | ❌ | turn-status user message 策略：`always`（默认）、`final-only` 或 `off` |
-| `SEARCH_BASH_TOOLS` | ❌ | 启用 `agentic_search` / `agentic_retrieval` 内部使用的 `bash` subtool：`1`（开）、`0`（关，默认） |
-| `SEARCH_LSP_TOOLS` | ❌ | 启用 `agentic_search` / `agentic_retrieval` 内部使用的 `find_symbol` / `search_symbol` subtools：`1`（开）、`0`（关，默认） |
+| `SEARCH_BASH_TOOLS` | ❌ | 在搜索过程中启用 `bash`：`1`（开，默认）、`0`（关） |
+| `SEARCH_LSP_TOOLS` | ❌ | 启用基于 LSP 的搜索辅助：`1`（开）、`0`（关，默认） |
 | `MCP_BASE_DIR` | ❌ | 项目根目录覆盖值（自动检测顺序：MCP Roots → Git → workspace storage → CWD） |
 | `MCP_LOGGING` | ❌ | 文件日志：`off`（默认）、`safe`、`full` |
 | `MCP_DOTENV_PATH` | ❌ | `.env` 文件路径，用于集中配置 |
@@ -159,17 +159,9 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 
 ## 工具
 
-始终可用的 top-level tools 有：`fast_apply`、`agentic_search`。`index_status` 只会在 `RELACE_CLOUD_TOOLS=1`，或 `PATH` 中可找到本地 index CLI（`codanna` / `chunkhound`）时暴露。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`agentic_retrieval` 需设置 `MCP_SEARCH_RETRIEVAL=1`，其 semantic backend 由 `MCP_RETRIEVAL_BACKEND` 选择。
+始终可用的工具有：`fast_apply`、`agentic_search`。`agentic_retrieval` 需设置 `MCP_SEARCH_RETRIEVAL=1`。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`index_status` 会在启用云端工具，或 `PATH` 中可找到本地 index CLI（`codanna` / `chunkhound`）时可用。
 
 可用性发现请使用 MCP 原生接口：tools 用 `list_tools()`，resources 用 `list_resources()`。
-
-`index_status` 现在还会返回 `background_monitor` 摘要，用于显示可选的 local index monitor 是否处于活动状态。这个 monitor 只面向单进程、固定 `MCP_BASE_DIR` 的部署；如果你使用 multi-worker 或 multi-pod HTTP 部署，建议关闭它，改用 backend 自带的 watch/daemon 或外部 scheduler。
-
-`SEARCH_BASH_TOOLS` 与 `SEARCH_LSP_TOOLS` 不会给 `list_tools()` 新增 top-level 条目。它们只会扩展 `agentic_search` / `agentic_retrieval` 在探索代码库时可使用的内部工具集。
-
-`agentic_retrieval` 可以先使用 stale semantic hints，再回到 live code 做确认；它不会隐式执行 `cloud_sync`。如果你要主动刷新 cloud index，请显式调用 `cloud_sync`。
-
-本地 live exploration 会持续保留 `.gitignore` 过滤；当查询不需要 regex 特性时，exact-text probes 会自动走更快的 literal search path。
 
 详细参数请参见 [docs/tools.zh-CN.md](docs/tools.zh-CN.md)。
 
