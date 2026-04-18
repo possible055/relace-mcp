@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",
-    "axios": "^1.13.5",
+    "axios": "^1.15.0",
     "clsx": "^2.1.1",
     "cytoscape": "^3.33.1",
     "cytoscape-dagre": "^2.5.0",
@@ -41,6 +41,6 @@
     "tailwindcss": "^4.2.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.55.0",
-    "vite": "^7.2.4"
+    "vite": "^7.3.2"
   }
 }
