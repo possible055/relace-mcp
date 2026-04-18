@@ -10,13 +10,13 @@ README_DOCS = [
 TOOLS_DOCS = [
     (
         Path("docs/tools.md"),
-        "Available only when `RELACE_CLOUD_TOOLS=1`.",
+        "Available only when `MCP_RETRIEVAL_BACKEND=relace`.",
         "Available only when `MCP_SEARCH_RETRIEVAL=1`.",
         "Search-Only Subtools",
     ),
     (
         Path("docs/tools.zh-CN.md"),
-        "仅在 `RELACE_CLOUD_TOOLS=1` 时可用。",
+        "仅在 `MCP_RETRIEVAL_BACKEND=relace` 时可用。",
         "仅在 `MCP_SEARCH_RETRIEVAL=1` 时可用。",
         "Search-Only Subtools",
     ),

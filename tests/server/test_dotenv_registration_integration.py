@@ -22,7 +22,6 @@ def test_dotenv_path_enables_cloud_and_retrieval_tools(tmp_path: Path) -> None:
     env_file.write_text(
         "\n".join(
             [
-                "RELACE_CLOUD_TOOLS=1",
                 "MCP_SEARCH_RETRIEVAL=1",
                 "MCP_RETRIEVAL_BACKEND=relace",
                 "RELACE_API_KEY=rlc_dummy",
@@ -97,7 +96,10 @@ asyncio.run(_run())
 @pytest.mark.usefixtures("clean_env")
 def test_build_server_loads_dotenv_before_tool_imports(tmp_path: Path) -> None:
     env_file = tmp_path / ".test.env"
-    env_file.write_text("APPLY_SEMANTIC_CHECK=1\n", encoding="utf-8")
+    env_file.write_text(
+        "APPLY_SEMANTIC_CHECK=1\nMCP_RETRIEVAL_BACKEND=none\n",
+        encoding="utf-8",
+    )
 
     repo_root = Path(__file__).resolve().parents[2]
 

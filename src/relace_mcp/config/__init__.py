@@ -6,6 +6,12 @@ import yaml
 
 from . import settings as _settings
 from .base_dir import invalidate_roots_cache, resolve_base_dir
+from .indexing import (
+    LOCAL_INDEX_BACKENDS,
+    IndexRuntime,
+    resolve_index_runtime,
+    validate_index_settings,
+)
 from .provider import ProviderConfig, create_provider_config
 from .settings import RelaceConfig
 
@@ -82,9 +88,13 @@ def load_apply_system_prompt() -> str:
 __all__ = [
     "RelaceConfig",
     "ProviderConfig",
+    "IndexRuntime",
+    "LOCAL_INDEX_BACKENDS",
     "create_provider_config",
     "resolve_base_dir",
+    "resolve_index_runtime",
     "invalidate_roots_cache",
     "load_prompt_file",
     "load_apply_system_prompt",
+    "validate_index_settings",
 ]

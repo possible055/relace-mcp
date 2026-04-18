@@ -77,19 +77,23 @@
 
 ## `index_status`
 
-仅在 `RELACE_CLOUD_TOOLS=1`，或 `PATH` 中可发现本地 index CLI（`codanna` / `chunkhound`）时可用。
+仅在 `MCP_RETRIEVAL_BACKEND` 为 `relace`、`codanna` 或 `chunkhound` 时可用。
 
-检查 cloud/local 索引就绪状态。
+以只读方式检查当前唯一 active backend 的索引状态。
 
 此工具不接受参数。
 
-返回 `relace`、`codanna`、`chunkhound` 的就绪信息，以及需要时的下一步建议。
+适合在 retrieval 前先判断当前 backend 是否够新，以及 semantic hints 是否可用。
+
+返回 `active_backend`、单一的 `backend` 状态对象（包含 `freshness`、`hints_usable`），以及 `background_monitor` 摘要（`state`、`reason`）。
+
+此工具不会主动刷新 index。若 `active_backend` 是 `relace` 且 `backend.status.needs_sync` 为 `true`，请运行 `cloud_sync()`。
 
 ---
 
 ## `cloud_sync`
 
-仅在 `RELACE_CLOUD_TOOLS=1` 时可用。
+仅在 `MCP_RETRIEVAL_BACKEND=relace` 时可用。
 
 将本地代码库同步到 Relace Cloud 以进行语义搜索。
 
@@ -106,7 +110,7 @@
 
 ## `cloud_search`
 
-仅在 `RELACE_CLOUD_TOOLS=1` 时可用。
+仅在 `MCP_RETRIEVAL_BACKEND=relace` 时可用。
 
 对云端同步的仓库进行语义代码搜索。需要先运行 `cloud_sync`。
 
@@ -121,7 +125,7 @@
 
 ## `cloud_list`
 
-仅在 `RELACE_CLOUD_TOOLS=1` 时可用。
+仅在 `MCP_RETRIEVAL_BACKEND=relace` 时可用。
 
 列出 Relace Cloud 账户中的仓库。可用它获取 `cloud_clear` 所需的 `repo_id`。
 
@@ -131,7 +135,7 @@
 
 ## `cloud_clear`
 
-仅在 `RELACE_CLOUD_TOOLS=1` 时可用。
+仅在 `MCP_RETRIEVAL_BACKEND=relace` 时可用。
 
 删除云端仓库和本地同步状态。
 
@@ -169,7 +173,6 @@
 
 | 值 | 依赖 | 说明 |
 |----|------|------|
-| `auto` | — | 自动检测：优先 Codanna -> ChunkHound -> Relace |
 | `codanna` | `codanna` CLI | 符号级语义搜索（本地） |
 | `chunkhound` | `chunkhound` CLI + embedding API key | 代码块级语义搜索（本地） |
 | `relace` | `RELACE_API_KEY` | 云端语义搜索 |

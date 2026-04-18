@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Single active index mode** — The server now exposes exactly one active indexing backend at a time: `relace`, `codanna`, `chunkhound`, or `none`.
+- **`index_status` contract** — Now reports only the active backend and is strictly read-only; it no longer schedules background refreshes.
+- **Cloud tool visibility** — `cloud_sync`, `cloud_search`, `cloud_list`, `cloud_clear`, and `relace://cloud/status` are exposed only when `MCP_RETRIEVAL_BACKEND=relace`.
+
+### Removed
+
+- **`MCP_RETRIEVAL_BACKEND=auto`** — Auto backend selection is no longer supported. Pick an explicit backend.
+- **`RELACE_CLOUD_TOOLS`** — Legacy cloud-tool compatibility flag removed. Use `MCP_RETRIEVAL_BACKEND=relace`.
+
 ## [0.2.5] - TBD
 
 ### Added

@@ -77,19 +77,23 @@ Search the codebase and return relevant files and line ranges.
 
 ## `index_status`
 
-Available when `RELACE_CLOUD_TOOLS=1` or a local index CLI (`codanna` / `chunkhound`) is discoverable in `PATH`.
+Available when `MCP_RETRIEVAL_BACKEND` is `relace`, `codanna`, or `chunkhound`.
 
-Inspect cloud/local indexing readiness.
+Inspect the single active indexing backend in read-only mode.
 
 This tool takes no parameters.
 
-Returns readiness information for `relace`, `codanna`, and `chunkhound`, plus suggested next actions when needed.
+Use this before retrieval when you need to know whether the active backend is fresh and whether semantic hints are usable.
+
+Returns `active_backend`, a single `backend` status object with `freshness` and `hints_usable`, and `background_monitor` (`state`, `reason`).
+
+This tool never refreshes indexes. If `active_backend` is `relace` and `backend.status.needs_sync` is `true`, run `cloud_sync()`.
 
 ---
 
 ## `cloud_sync`
 
-Available only when `RELACE_CLOUD_TOOLS=1`.
+Available only when `MCP_RETRIEVAL_BACKEND=relace`.
 
 Synchronize the local codebase to Relace Cloud for semantic search.
 
@@ -106,7 +110,7 @@ Synchronize the local codebase to Relace Cloud for semantic search.
 
 ## `cloud_search`
 
-Available only when `RELACE_CLOUD_TOOLS=1`.
+Available only when `MCP_RETRIEVAL_BACKEND=relace`.
 
 Semantic code search over the cloud-synced repository. Requires running `cloud_sync` first.
 
@@ -121,7 +125,7 @@ Semantic code search over the cloud-synced repository. Requires running `cloud_s
 
 ## `cloud_list`
 
-Available only when `RELACE_CLOUD_TOOLS=1`.
+Available only when `MCP_RETRIEVAL_BACKEND=relace`.
 
 List repositories in your Relace Cloud account. Use this to find `repo_id` for `cloud_clear`.
 
@@ -131,7 +135,7 @@ This tool takes no parameters.
 
 ## `cloud_clear`
 
-Available only when `RELACE_CLOUD_TOOLS=1`.
+Available only when `MCP_RETRIEVAL_BACKEND=relace`.
 
 Delete the cloud repository and local sync state.
 
@@ -169,7 +173,6 @@ Set `MCP_RETRIEVAL_BACKEND` to choose a backend. Default: `relace`.
 
 | Value | Requires | Description |
 |-------|----------|-------------|
-| `auto` | — | Auto-detect: prefers Codanna -> ChunkHound -> Relace |
 | `codanna` | `codanna` CLI | Symbol-level semantic search (local) |
 | `chunkhound` | `chunkhound` CLI + embedding API key | Chunk-level semantic search (local) |
 | `relace` | `RELACE_API_KEY` | Cloud-based semantic search |

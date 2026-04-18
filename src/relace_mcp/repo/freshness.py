@@ -22,6 +22,14 @@ class FreshnessStatus:
     reason: str | None = None
 
 
+def semantic_hints_usable_for_policy(freshness: str, policy: str) -> bool:
+    if freshness == "missing":
+        return False
+    if policy == "strict":
+        return freshness == "fresh"
+    return freshness in {"fresh", "stale", "unknown"}
+
+
 def _has_local_index_artifacts(base_dir: str, backend: str) -> bool:
     if backend == "codanna":
         artifact_root = os.path.join(base_dir, ".codanna", "index")

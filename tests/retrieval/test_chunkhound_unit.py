@@ -211,6 +211,19 @@ class TestChunkhoundSearch:
         assert len(results) == 2
 
 
+class TestEnsureChunkhoundIndex:
+    @patch("relace_mcp.repo.backends.chunkhound._mark_chunkhound_index_fresh")
+    @patch("relace_mcp.repo.backends.chunkhound.subprocess.run")
+    def test_marks_index_fresh_after_success(
+        self, mock_run: MagicMock, mock_mark: MagicMock, tmp_path: Path
+    ) -> None:
+        from relace_mcp.repo.backends.chunkhound import _ensure_chunkhound_index
+
+        mock_run.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
+        _ensure_chunkhound_index(str(tmp_path), {"LANG": "C.UTF-8"})
+        mock_mark.assert_called_once_with(str(tmp_path))
+
+
 class TestChunkhoundHealthCheck:
     @patch("relace_mcp.repo.backends.chunkhound._run_cli_text")
     @patch("relace_mcp.repo.backends.health.shutil.which")

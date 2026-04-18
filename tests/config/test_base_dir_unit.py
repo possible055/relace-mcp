@@ -1,3 +1,4 @@
+import importlib
 import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -202,6 +203,21 @@ class TestSelectBestRoot:
 
 
 class TestResolveBaseDir:
+    def test_blocked_mcp_roots_are_resolved(self, tmp_path: Path, monkeypatch) -> None:
+        import relace_mcp.config.base_dir as base_dir_module
+
+        real_home = tmp_path / "real-home"
+        real_home.mkdir()
+        symlink_home = tmp_path / "symlink-home"
+        symlink_home.symlink_to(real_home, target_is_directory=True)
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(Path, "home", classmethod(lambda cls: symlink_home))
+            reloaded = importlib.reload(base_dir_module)
+            assert reloaded._BLOCKED_MCP_ROOTS == ((real_home / ".codeium" / "windsurf").resolve(),)
+
+        importlib.reload(base_dir_module)
+
     @pytest.mark.asyncio
     async def test_uses_config_base_dir_when_set(self) -> None:
         """Explicit config takes highest priority."""
@@ -354,6 +370,54 @@ class TestResolveBaseDir:
         ctx.list_roots = AsyncMock(
             return_value=[MagicMock(uri=f"file://{invalid_root}", name="Invalid Root")]
         )
+
+        base_dir, source = await resolve_base_dir(None, ctx)
+        assert base_dir == str(tmp_path)
+        assert "Git root" in source
+
+    @pytest.mark.asyncio
+    async def test_single_blacklisted_mcp_root_falls_back_to_git_root(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Blacklisted MCP Root should be ignored."""
+        import relace_mcp.config.base_dir as base_dir_module
+
+        monkeypatch.setattr(base_dir_module, "resolve_workspace_from_storage", lambda: None)
+
+        (tmp_path / ".git").mkdir()
+        cwd = tmp_path / "src"
+        cwd.mkdir()
+        monkeypatch.chdir(cwd)
+
+        blocked_root = Path.home() / ".codeium" / "windsurf"
+        ctx = MagicMock()
+        ctx.list_roots = AsyncMock(
+            return_value=[MagicMock(uri=blocked_root.as_uri(), name="windsurf")]
+        )
+
+        base_dir, source = await resolve_base_dir(None, ctx)
+        assert base_dir == str(tmp_path)
+        assert "Git root" in source
+
+    @pytest.mark.asyncio
+    async def test_blacklisted_cached_mcp_root_falls_back_to_git_root(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Blacklisted cached MCP Root should be ignored."""
+        import relace_mcp.config.base_dir as base_dir_module
+
+        monkeypatch.setattr(base_dir_module, "resolve_workspace_from_storage", lambda: None)
+
+        (tmp_path / ".git").mkdir()
+        cwd = tmp_path / "src"
+        cwd.mkdir()
+        monkeypatch.chdir(cwd)
+
+        blocked_root = str(Path.home() / ".codeium" / "windsurf")
+        base_dir_module._roots_cache = {"session-1": (blocked_root, "MCP Root (windsurf)")}
+
+        ctx = MagicMock(session_id="session-1")
+        ctx.list_roots = AsyncMock(return_value=[])
 
         base_dir, source = await resolve_base_dir(None, ctx)
         assert base_dir == str(tmp_path)

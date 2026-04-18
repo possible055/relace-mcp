@@ -16,7 +16,6 @@ def _neutralize_repo_dotenv(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RELACE_API_KEY", "")
     monkeypatch.setenv("MCP_BASE_DIR", "")
     monkeypatch.setenv("MCP_LOGGING", "off")
-    monkeypatch.setenv("RELACE_CLOUD_TOOLS", "0")
     monkeypatch.setenv("MCP_SEARCH_RETRIEVAL", "0")
     monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "relace")
 
@@ -42,10 +41,10 @@ class TestBuildServer:
 
     @pytest.mark.usefixtures("clean_env")
     def test_build_succeeds_without_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Server builds without RELACE_API_KEY; error deferred to first tool call."""
+        """Server builds without RELACE_API_KEY when relace backend is disabled."""
         monkeypatch.setenv("RELACE_API_KEY", "")
         monkeypatch.setenv("MCP_BASE_DIR", "")
-        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "0")
+        monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "none")
         monkeypatch.setenv("MCP_LOGGING", "off")
         server = build_server()
         assert server is not None
@@ -87,10 +86,7 @@ class TestServerToolExecution:
     @pytest.mark.asyncio
     async def test_index_status_success(self, mock_config: RelaceConfig) -> None:
         """Should execute index_status tool successfully."""
-        with (
-            patch("relace_mcp.tools.register._should_register_index_status", return_value=True),
-            patch("relace_mcp.tools.mcp_status.shutil.which", return_value=None),
-        ):
+        with patch("relace_mcp.tools.mcp_status.shutil.which", return_value=None):
             server = build_server(config=mock_config)
 
             async with Client(server) as client:
@@ -101,12 +97,12 @@ class TestServerToolExecution:
 
                 assert result.structured_content is not None
                 payload = result.structured_content
-                for key in ("trace_id", "base_dir", "relace", "codanna", "chunkhound"):
+                for key in ("trace_id", "base_dir", "base_dir_source", "active_backend", "backend"):
                     assert key in payload
-                assert "freshness" in payload["relace"]
-                assert "hints_usable" in payload["relace"]
-                assert "freshness" in payload["codanna"]
-                assert "hints_usable" in payload["codanna"]
+                assert payload["active_backend"] == "relace"
+                assert "freshness" in payload["backend"]
+                assert "hints_usable" in payload["backend"]
+                assert "background_monitor" in payload
 
     @pytest.mark.asyncio
     async def test_fast_apply_creates_new_file(
@@ -218,6 +214,35 @@ class TestMain:
             mock_build.assert_called_once()
             assert mock_build.call_args.kwargs["initialize_runtime"] is False
             mock_server.run.assert_called_once_with(show_banner=False)
+
+    @pytest.mark.usefixtures("clean_env")
+    def test_main_logs_runtime_from_built_server(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        import sys
+
+        from relace_mcp.server import main
+
+        monkeypatch.setenv("RELACE_API_KEY", "rlc-test")
+        monkeypatch.setenv("MCP_BASE_DIR", str(tmp_path))
+        monkeypatch.setattr(sys, "argv", ["relace-mcp"])
+
+        with (
+            patch("relace_mcp.server.build_server") as mock_build,
+            patch("relace_mcp.observability.log_event") as mock_log_event,
+        ):
+            mock_server = MagicMock()
+            mock_server._relace_index_runtime = MagicMock(
+                cloud_tools_enabled=False,
+                active_backend="chunkhound",
+            )
+            mock_build.return_value = mock_server
+
+            main()
+
+        event = mock_log_event.call_args.args[0]
+        assert event["cloud_tools_enabled"] is False
+        assert event["mcp_retrieval_backend"] == "chunkhound"
 
     @pytest.mark.usefixtures("clean_env")
     def test_main_http_mode(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

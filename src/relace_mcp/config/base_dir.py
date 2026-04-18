@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 _MAX_CACHE_SIZE = 100
 _roots_cache: dict[str, tuple[str, str]] = {}
+_BLOCKED_MCP_ROOTS = ((Path.home() / ".codeium" / "windsurf").resolve(),)
 
 
 def _roots_cache_key(ctx: "Context | None") -> str | None:
@@ -58,6 +59,14 @@ def _cache_roots(key: str, resolved: str, source: str) -> None:
     if len(_roots_cache) >= _MAX_CACHE_SIZE:
         _roots_cache.clear()
     _roots_cache[key] = (resolved, source)
+
+
+def _is_blocked_mcp_root(path: str) -> bool:
+    try:
+        resolved = Path(path).resolve()
+    except OSError:
+        return False
+    return resolved in _BLOCKED_MCP_ROOTS
 
 
 PROJECT_MARKERS = (".git", "pyproject.toml", "package.json", "Cargo.toml", "go.mod", ".project")
@@ -133,7 +142,7 @@ def _select_best_root(roots: "Sequence[Root]") -> str:
     for r in roots:
         try:
             p = str(Path(uri_to_path(str(r.uri))).resolve())
-            if _is_accessible_directory(p):
+            if _is_accessible_directory(p) and not _is_blocked_mcp_root(p):
                 root_paths.append(p)
         except Exception:  # nosec B112
             continue
@@ -189,7 +198,7 @@ async def resolve_base_dir(
     # 2. Cached MCP Roots
     cache_key = _roots_cache_key(ctx)
     if cache_key and (cached := _roots_cache.get(cache_key)):
-        if _is_accessible_directory(cached[0]):
+        if _is_accessible_directory(cached[0]) and not _is_blocked_mcp_root(cached[0]):
             logger.debug("[base_dir] resolved=%s source=%s (cached)", cached[0], cached[1])
             return cached
         _roots_cache.pop(cache_key, None)
@@ -209,7 +218,7 @@ async def resolve_base_dir(
                     path = _select_best_root(roots)
                     source = f"MCP Root (selected from {len(roots)} roots)"
                 resolved = str(Path(path).resolve())
-                if _is_accessible_directory(resolved):
+                if _is_accessible_directory(resolved) and not _is_blocked_mcp_root(resolved):
                     if cache_key:
                         _cache_roots(cache_key, resolved, source)
                     logger.debug("[base_dir] resolved=%s source=%s", resolved, source)

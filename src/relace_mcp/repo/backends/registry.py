@@ -10,7 +10,6 @@ _disabled_backends: set[str] = set()
 
 _bg_index_tasks: dict[tuple[str, str], asyncio.Task[Any]] = {}
 _bg_index_rerun: dict[tuple[str, str], bool] = {}
-_bg_codanna_pending: dict[tuple[str, str], set[str]] = {}
 
 
 def is_backend_disabled(name: str) -> bool:

@@ -3,6 +3,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal, cast
 
 from platformdirs import user_state_dir
 
@@ -11,7 +12,6 @@ from .compat import env_bool
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "RELACE_CLOUD_TOOLS",
     "RETRIEVAL_BACKEND",
     "SEARCH_BASH_TOOLS",
     "SEARCH_LSP_TOOLS",
@@ -54,7 +54,7 @@ TRACE_DIR = LOG_DIR / "traces"
 TRACE_PATH = TRACE_DIR / "relace.trace.jsonl"
 MAX_TRACE_LOG_SIZE_BYTES = 50 * 1024 * 1024
 
-_ALLOWED_RETRIEVAL_BACKENDS = {"relace", "codanna", "chunkhound", "none", "auto"}
+_ALLOWED_RETRIEVAL_BACKENDS = {"relace", "codanna", "chunkhound", "none"}
 _ALLOWED_RETRIEVAL_HINT_POLICIES = {"prefer-stale", "strict"}
 _ALLOWED_SEARCH_TURN_STATUS_MODES = {"always", "final-only", "off"}
 
@@ -64,6 +64,8 @@ _LINUX_DEFAULT_EXTRA_PATHS: tuple[str, ...] = (
     "~/.gemini/antigravity/brain",
     "~/.kiro/steering",
 )
+
+RetrievalBackend = Literal["relace", "codanna", "chunkhound", "none"]
 
 
 def _parse_positive_int_env(name: str, default: int) -> int:
@@ -139,14 +141,19 @@ def _parse_log_level() -> str:
     return (os.getenv("MCP_LOG_LEVEL", "WARNING").strip() or "WARNING").upper()
 
 
-def _parse_retrieval_backend() -> str:
+def _parse_retrieval_backend() -> RetrievalBackend:
     raw = os.getenv("MCP_RETRIEVAL_BACKEND", "relace").strip().lower()
+    if raw == "auto":
+        raise RuntimeError(
+            "MCP_RETRIEVAL_BACKEND=auto is no longer supported. "
+            "Set MCP_RETRIEVAL_BACKEND to one of: relace, codanna, chunkhound, none."
+        )
     if raw not in _ALLOWED_RETRIEVAL_BACKENDS:
         raise RuntimeError(
             f"Invalid MCP_RETRIEVAL_BACKEND={raw!r}. "
             f"Expected one of: {sorted(_ALLOWED_RETRIEVAL_BACKENDS)}"
         )
-    return raw
+    return cast(RetrievalBackend, raw)
 
 
 def _parse_retrieval_hint_policy() -> str:
@@ -224,8 +231,7 @@ MCP_LOGGING_MODE: str
 MCP_LOGGING: bool
 MCP_LOG_REDACT: bool
 MCP_TRACE_LOGGING: bool
-RELACE_CLOUD_TOOLS: bool
-RETRIEVAL_BACKEND: str
+RETRIEVAL_BACKEND: RetrievalBackend
 RETRIEVAL_HINT_POLICY: str
 AGENTIC_RETRIEVAL_ENABLED: bool
 SEARCH_TOOL_STRICT: bool
@@ -242,7 +248,6 @@ RELACE_API_KEY: str | None
 MCP_BASE_DIR: str | None
 MCP_EXTRA_PATHS: tuple[str, ...]
 
-RELACE_CLOUD_TOOLS = False
 RELACE_API_KEY = None
 MCP_BASE_DIR = None
 RELACE_DEFAULT_ENCODING = None
@@ -282,7 +287,6 @@ def reload_settings_from_env() -> None:
         "APPLY_SEMANTIC_CHECK": env_bool("APPLY_SEMANTIC_CHECK", default=False),
         "MCP_LOG_LEVEL": _parse_log_level(),
         "MCP_LOGGING_MODE": _parse_logging_mode(),
-        "RELACE_CLOUD_TOOLS": env_bool("RELACE_CLOUD_TOOLS", default=False),
         "RETRIEVAL_BACKEND": _parse_retrieval_backend(),
         "RETRIEVAL_HINT_POLICY": _parse_retrieval_hint_policy(),
         "AGENTIC_RETRIEVAL_ENABLED": env_bool("MCP_SEARCH_RETRIEVAL", default=False),
@@ -338,11 +342,9 @@ class RelaceConfig:
         reload_settings_from_env()
         api_key = RELACE_API_KEY
 
-        if RELACE_CLOUD_TOOLS and not api_key:
-            raise RuntimeError(
-                "RELACE_API_KEY is required when RELACE_CLOUD_TOOLS=true. "
-                "Set RELACE_CLOUD_TOOLS=false or provide RELACE_API_KEY."
-            )
+        from .indexing import validate_index_settings
+
+        validate_index_settings(api_key=api_key)
 
         base_dir = MCP_BASE_DIR
         if base_dir:

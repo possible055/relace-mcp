@@ -22,7 +22,11 @@ from ..repo.backends import (
     schedule_bg_codanna_full_index,
 )
 from ..repo.cloud.search import cloud_search_logic
-from ..repo.freshness import classify_cloud_index_freshness, classify_local_index_freshness
+from ..repo.freshness import (
+    classify_cloud_index_freshness,
+    classify_local_index_freshness,
+    semantic_hints_usable_for_policy,
+)
 from ..utils import resolve_repo_path
 from .harness import FastAgenticSearchHarness
 from .prompt_messages import format_hints_list
@@ -32,8 +36,6 @@ if TYPE_CHECKING:
     from ..clients.search import SearchLLMClient
 
 logger = logging.getLogger(__name__)
-
-_auto_backend_cache: dict[str, str] = {}
 
 
 async def _run_blocking_retrieval_call(
@@ -56,22 +58,6 @@ async def _run_blocking_retrieval_call(
         return await loop.run_in_executor(executor, _call)
 
 
-def _resolve_auto_backend(base_dir: str) -> str:
-    cached = _auto_backend_cache.get(base_dir)
-    if cached and not is_backend_disabled(cached):
-        return cached
-
-    for name in ("codanna", "chunkhound"):
-        if shutil.which(name) and not is_backend_disabled(name):
-            logger.info("Auto-detected retrieval backend: %s", name)
-            _auto_backend_cache[base_dir] = name
-            return name
-
-    logger.info("No usable local retrieval backend found, using relace")
-    _auto_backend_cache[base_dir] = "relace"
-    return "relace"
-
-
 def _backend_display_name(backend: str) -> str:
     if backend == "chunkhound":
         return "ChunkHound"
@@ -85,14 +71,6 @@ def _backend_display_name(backend: str) -> str:
 def _append_warning(warnings_list: list[str], message: str) -> None:
     if message not in warnings_list:
         warnings_list.append(message)
-
-
-def _should_use_semantic_hints(policy: str, freshness: str) -> bool:
-    if freshness == "missing":
-        return False
-    if policy == "strict":
-        return freshness == "fresh"
-    return freshness in {"fresh", "stale", "unknown"}
 
 
 def _schedule_local_refresh(base_dir: str, backend: str) -> bool:
@@ -207,11 +185,7 @@ async def agentic_retrieval_logic(
     trace_id = get_trace_id() if tool_name_ctx.get() else str(uuid.uuid4())[:8]
     logger.debug("[%s] Starting agentic retrieval", trace_id)
 
-    backend = (
-        _resolve_auto_backend(base_dir)
-        if _settings.RETRIEVAL_BACKEND == "auto"
-        else _settings.RETRIEVAL_BACKEND
-    )
+    backend = _settings.RETRIEVAL_BACKEND
     hint_policy = _settings.RETRIEVAL_HINT_POLICY
 
     log_event(
@@ -270,7 +244,7 @@ async def agentic_retrieval_logic(
                 background_refresh_scheduled = True
                 reindex_action = "scheduled_background_refresh"
 
-            if not _should_use_semantic_hints(hint_policy, freshness.freshness):
+            if not semantic_hints_usable_for_policy(freshness.freshness, hint_policy):
                 if freshness.freshness == "missing":
                     message = (
                         f"{backend_name} index missing. Proceeding without hints"
@@ -386,13 +360,13 @@ async def agentic_retrieval_logic(
             hints_index_freshness = "missing"
             _append_warning(
                 warnings_list,
-                "Relace semantic retrieval unavailable (RELACE_CLOUD_TOOLS=false). Proceeding without hints.",
+                "Relace semantic retrieval unavailable. Proceeding without hints.",
             )
         else:
             freshness = classify_cloud_index_freshness(base_dir)
             hints_index_freshness = freshness.freshness
 
-            if not _should_use_semantic_hints(hint_policy, freshness.freshness):
+            if not semantic_hints_usable_for_policy(freshness.freshness, hint_policy):
                 if freshness.freshness == "missing":
                     message = (
                         "No synced Relace index found. Proceeding without hints. "

@@ -9,7 +9,7 @@ import relace_mcp.repo.backends.chunkhound as chunkhound_backend
 import relace_mcp.repo.backends.codanna_indexing as codanna_indexing
 import relace_mcp.repo.backends.locking as backend_locking
 import relace_mcp.repo.monitor as bgmon
-from relace_mcp.config import RelaceConfig
+from relace_mcp.config import RelaceConfig, resolve_index_runtime
 from relace_mcp.repo.backends.locking import (
     BackendIndexLease,
     BackendIndexRunResult,
@@ -17,7 +17,6 @@ from relace_mcp.repo.backends.locking import (
     try_acquire_backend_index_lock,
 )
 from relace_mcp.repo.backends.registry import (
-    _bg_codanna_pending,
     _bg_index_rerun,
     _bg_index_tasks,
     is_bg_index_running,
@@ -46,16 +45,24 @@ def _configure_monitor_settings(
     )
 
 
+def _make_monitor(base_dir: str | None) -> BackgroundIndexMonitor:
+    config = RelaceConfig(api_key="rlc-test", base_dir=base_dir)
+    return BackgroundIndexMonitor(
+        config,
+        index_runtime=resolve_index_runtime(base_dir=base_dir),
+    )
+
+
 class TestBackgroundIndexMonitor:
     @pytest.mark.asyncio
     async def test_start_requires_pinned_base_dir(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _configure_monitor_settings(monkeypatch)
 
-        monitor = BackgroundIndexMonitor(RelaceConfig(api_key="rlc-test", base_dir=None))
+        monitor = _make_monitor(None)
         await monitor.start()
 
         summary = monitor.summary()
-        assert summary["enabled"] is False
+        assert summary["state"] == "blocked"
         assert summary["reason"] == "base_dir_not_pinned"
 
     @pytest.mark.asyncio
@@ -65,9 +72,7 @@ class TestBackgroundIndexMonitor:
         _configure_monitor_settings(monkeypatch, retrieval_backend="chunkhound")
 
         with patch("relace_mcp.repo.monitor.shutil.which", return_value="/usr/bin/fake"):
-            monitor = BackgroundIndexMonitor(
-                RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
-            )
+            monitor = _make_monitor(str(tmp_path))
             await monitor.start()
             first_task = monitor._task
             await monitor.start()
@@ -78,24 +83,25 @@ class TestBackgroundIndexMonitor:
         assert first_task is second_task
 
     @pytest.mark.asyncio
-    async def test_auto_mode_prefers_codanna_and_runs_only_active_backend(
+    async def test_non_local_backend_stays_disabled(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _configure_monitor_settings(monkeypatch, retrieval_backend="auto")
-        monitor = BackgroundIndexMonitor(RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path)))
+        _configure_monitor_settings(monkeypatch, retrieval_backend="relace")
+        monitor = _make_monitor(str(tmp_path))
+        await monitor.start()
 
-        with patch(
-            "relace_mcp.repo.monitor.shutil.which",
-            side_effect=lambda name: (
-                f"/usr/bin/{name}" if name in {"codanna", "chunkhound"} else None
-            ),
-        ):
-            backend, reason = monitor._resolve_startup_state()
+        summary = monitor.summary()
+        assert summary["state"] == "blocked"
+        assert summary["reason"] == "backend_not_local"
 
-        assert backend == "codanna"
-        assert reason == "ok"
+    @pytest.mark.asyncio
+    async def test_tick_schedules_only_active_backend(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _configure_monitor_settings(monkeypatch, retrieval_backend="codanna")
+        monitor = _make_monitor(str(tmp_path))
+        monitor._active_backend = "codanna"
 
-        monitor._active_backend = backend
         scheduled_task = asyncio.create_task(
             asyncio.sleep(0, result=BackendIndexRunResult(status="completed"))
         )
@@ -132,7 +138,7 @@ class TestBackgroundIndexMonitor:
             interval_seconds=300,
             initial_delay_seconds=1,
         )
-        monitor = BackgroundIndexMonitor(RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path)))
+        monitor = _make_monitor(str(tmp_path))
 
         delays: list[float] = []
 
@@ -164,7 +170,7 @@ class TestBackgroundIndexMonitor:
             interval_seconds=300,
             initial_delay_seconds=1,
         )
-        monitor = BackgroundIndexMonitor(RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path)))
+        monitor = _make_monitor(str(tmp_path))
 
         delays: list[float] = []
 
@@ -202,7 +208,7 @@ class TestBackgroundIndexMonitor:
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         _configure_monitor_settings(monkeypatch)
-        monitor = BackgroundIndexMonitor(RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path)))
+        monitor = _make_monitor(str(tmp_path))
         monitor._running = True
         monitor._reason = "ok"
 
@@ -211,7 +217,7 @@ class TestBackgroundIndexMonitor:
         monitor._task = finished_task
 
         summary = monitor.summary()
-        assert summary["enabled"] is False
+        assert summary["state"] == "blocked"
 
     @pytest.mark.asyncio
     async def test_tick_registers_monitor_triggered_run_in_bg_registry(
@@ -220,12 +226,11 @@ class TestBackgroundIndexMonitor:
         _configure_monitor_settings(monkeypatch, retrieval_backend="codanna")
         base_dir = str(tmp_path)
         key = (base_dir, "codanna")
-        monitor = BackgroundIndexMonitor(RelaceConfig(api_key="rlc-test", base_dir=base_dir))
+        monitor = _make_monitor(base_dir)
         monitor._active_backend = "codanna"
 
         _bg_index_tasks.pop(key, None)
         _bg_index_rerun.pop(key, None)
-        _bg_codanna_pending.pop(key, None)
 
         started = asyncio.Event()
         release = asyncio.Event()
@@ -282,14 +287,13 @@ class TestBackgroundIndexMonitor:
         finally:
             _bg_index_tasks.pop(key, None)
             _bg_index_rerun.pop(key, None)
-            _bg_codanna_pending.pop(key, None)
 
     @pytest.mark.asyncio
     async def test_cli_missing_logs_warning_once(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
         _configure_monitor_settings(monkeypatch, retrieval_backend="chunkhound")
-        monitor = BackgroundIndexMonitor(RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path)))
+        monitor = _make_monitor(str(tmp_path))
         monitor._active_backend = "chunkhound"
 
         caplog.set_level(logging.WARNING)
@@ -307,7 +311,7 @@ class TestBackgroundIndexMonitor:
 
 class TestBackendIndexLock:
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("target", ["chunkhound", "codanna_index", "codanna_full"])
+    @pytest.mark.parametrize("target", ["chunkhound", "codanna_full"])
     async def test_lock_error_status_is_normalized(self, tmp_path, target: str) -> None:
         base_dir = str(tmp_path)
         lease = BackendIndexLease(
@@ -324,15 +328,6 @@ class TestBackendIndexLock:
                 return_value=lease,
             ):
                 result = await chunkhound_backend._async_run_chunkhound_index(base_dir)
-        elif target == "codanna_index":
-            with patch(
-                "relace_mcp.repo.backends.codanna_indexing.try_acquire_backend_index_lock",
-                return_value=lease,
-            ):
-                result = await codanna_indexing._async_run_codanna_index(
-                    f"{base_dir}/sample.py",
-                    base_dir,
-                )
         else:
             with patch(
                 "relace_mcp.repo.backends.codanna_indexing.try_acquire_backend_index_lock",

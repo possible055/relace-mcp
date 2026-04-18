@@ -7,6 +7,7 @@ from relace_mcp.repo.backends.codanna import (
     _codanna_health_probe,
     _ensure_codanna_index,
     codanna_auto_reindex,
+    codanna_index_file,
     codanna_search,
 )
 
@@ -69,16 +70,14 @@ class TestCodannaAutoReindex:
         result = codanna_auto_reindex("/tmp/repo")
         assert result == {"action": "skipped", "reason": "index up to date"}
 
-    @patch("relace_mcp.repo.backends.codanna_indexing._write_indexed_head")
     @patch("relace_mcp.repo.backends.codanna_indexing._ensure_codanna_index")
     @patch("relace_mcp.repo.backends.codanna_indexing._read_indexed_head")
     @patch("relace_mcp.repo.backends.codanna_indexing.get_git_head")
-    def test_reindexed_stale_head(self, mock_head, mock_read, mock_ensure, mock_write):
+    def test_reindexed_stale_head(self, mock_head, mock_read, mock_ensure):
         mock_head.return_value = "newhead"
         mock_read.return_value = "oldhead"
         result = codanna_auto_reindex("/tmp/repo")
         mock_ensure.assert_called_once()
-        mock_write.assert_called_once_with("/tmp/repo", "newhead", ".codanna/last_indexed_head")
         assert result == {"action": "reindexed", "old_head": "oldhead", "new_head": "newhead"}
 
     @patch("relace_mcp.repo.backends.codanna_indexing._ensure_codanna_index")
@@ -155,6 +154,21 @@ class TestEnsureCodannaIndex:
         env = {}
         with pytest.raises(RuntimeError, match="codanna CLI not found"):
             _ensure_codanna_index(str(tmp_path), env)
+
+    @patch("relace_mcp.repo.backends.codanna_indexing._mark_codanna_index_fresh")
+    @patch("relace_mcp.repo.backends.codanna_indexing.subprocess.run")
+    def test_marks_index_fresh_after_success(self, mock_run: MagicMock, mock_mark, tmp_path):
+        (tmp_path / ".codanna").mkdir()
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        _ensure_codanna_index(str(tmp_path), {})
+        mock_mark.assert_called_once_with(str(tmp_path))
+
+
+class TestCodannaIndexFile:
+    @patch("relace_mcp.repo.backends.codanna_indexing._ensure_codanna_index")
+    def test_file_edit_triggers_full_refresh(self, mock_ensure: MagicMock, tmp_path) -> None:
+        codanna_index_file("/tmp/repo/src/main.py", str(tmp_path))
+        mock_ensure.assert_called_once()
 
 
 class TestCodannaSearchAutoRetry:

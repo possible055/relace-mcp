@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING, Any
 
+from ..config import IndexRuntime
 from ..config import settings as _settings
 from ..observability import log_event
 from .backends.chunkhound import schedule_bg_chunkhound_index
@@ -29,9 +30,25 @@ _BACKOFF_BASE_SECONDS = 60.0
 _BACKOFF_MAX_SECONDS = 900.0
 
 
+def _monitor_state(*, enabled: bool, requested: bool, reason: str | None) -> str:
+    if enabled:
+        return "active"
+    if not requested:
+        return "disabled"
+    if reason == "uninitialized":
+        return "uninitialized"
+    return "blocked"
+
+
 class BackgroundIndexMonitor:
-    def __init__(self, config: "RelaceConfig") -> None:
+    def __init__(
+        self,
+        config: "RelaceConfig",
+        *,
+        index_runtime: IndexRuntime,
+    ) -> None:
         self._config = config
+        self._index_runtime = index_runtime
         self._requested = _settings.MCP_BACKGROUND_INDEX_MONITOR
         # Settings are captured at construction time. The monitor does not re-read them
         # after start(); restart the server to apply changes to interval/delay.
@@ -57,15 +74,14 @@ class BackgroundIndexMonitor:
     def summary(self) -> dict[str, Any]:
         enabled = self._is_task_running()
         return {
-            "enabled": enabled,
-            "requested": self._requested,
+            "state": _monitor_state(
+                enabled=enabled,
+                requested=self._requested,
+                reason=None if enabled else self._reason,
+            ),
             "reason": None if enabled else self._reason,
-            "active_backend": self._active_backend,
             "interval_seconds": self._interval_seconds if self._requested else None,
             "initial_delay_seconds": self._initial_delay_seconds if self._requested else None,
-            "base_dir": self._config.base_dir,
-            "last_status": self._last_status,
-            "last_error": self._last_error,
         }
 
     @asynccontextmanager
@@ -94,7 +110,7 @@ class BackgroundIndexMonitor:
             {
                 "kind": "background_index_monitor_started",
                 "level": "info",
-                "backend": self._active_backend,
+                "active_backend": self._active_backend,
                 "base_dir": self._config.base_dir,
                 "interval_seconds": self._interval_seconds,
                 "initial_delay_seconds": self._initial_delay_seconds,
@@ -119,21 +135,12 @@ class BackgroundIndexMonitor:
             return None, "agentic_retrieval_disabled"
         if not self._config.base_dir:
             return None, "base_dir_not_pinned"
+        if not self._index_runtime.local_backend_enabled:
+            return None, "backend_not_local"
         if not supports_backend_index_locking():
             return None, "locking_unavailable"
 
-        backend = _settings.RETRIEVAL_BACKEND
-        if backend in ("relace", "none"):
-            return None, "backend_not_local"
-
-        if backend == "auto":
-            for candidate in ("codanna", "chunkhound"):
-                if is_backend_disabled(candidate):
-                    continue
-                if shutil.which(candidate):
-                    return candidate, "ok"
-            return None, "no_local_backend_available"
-
+        backend = self._index_runtime.active_backend
         if is_backend_disabled(backend):
             return None, "backend_disabled"
         if not shutil.which(backend):
@@ -162,10 +169,6 @@ class BackgroundIndexMonitor:
             "backend_not_local": (
                 logging.INFO,
                 "Background index monitor requested but the configured retrieval backend is not local.",
-            ),
-            "no_local_backend_available": (
-                logging.WARNING,
-                "Background index monitor requested but no local retrieval backend CLI is installed.",
             ),
             "backend_disabled": (
                 logging.WARNING,
@@ -262,7 +265,7 @@ class BackgroundIndexMonitor:
             {
                 "kind": "background_index_monitor_tick",
                 "level": "info",
-                "backend": backend,
+                "active_backend": backend,
                 "base_dir": base_dir,
                 "freshness": freshness.freshness,
                 "reason": freshness.reason,
@@ -302,13 +305,8 @@ def get_background_index_monitor_summary(mcp: Any) -> dict[str, Any]:
     if isinstance(monitor, BackgroundIndexMonitor):
         return monitor.summary()
     return {
-        "enabled": False,
-        "requested": False,
+        "state": "uninitialized",
         "reason": "uninitialized",
-        "active_backend": None,
         "interval_seconds": None,
         "initial_delay_seconds": None,
-        "base_dir": None,
-        "last_status": None,
-        "last_error": None,
     }

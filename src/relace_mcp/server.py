@@ -58,9 +58,11 @@ def _configure_logging_for_stdio() -> None:
 
 def check_health(config: "RelaceConfig") -> dict[str, str]:
     from .config import settings as _settings
+    from .config.indexing import resolve_index_runtime
 
     results: dict[str, str] = {}
     errors: list[str] = []
+    index_runtime = resolve_index_runtime(base_dir=config.base_dir)
 
     # base_dir is optional; if not set, it will be resolved from MCP Roots at runtime
     if config.base_dir:
@@ -115,27 +117,21 @@ def check_health(config: "RelaceConfig") -> dict[str, str]:
             errors.append(f"cannot create trace directory: {exc}")
 
     # Retrieval backend health check (passive only: do NOT run expensive CLI probes on startup)
-    if _settings.AGENTIC_RETRIEVAL_ENABLED and _settings.RETRIEVAL_BACKEND in (
-        "chunkhound",
-        "codanna",
-    ):
-        cli_path = shutil.which(_settings.RETRIEVAL_BACKEND)
+    if _settings.AGENTIC_RETRIEVAL_ENABLED and index_runtime.local_backend_enabled:
+        backend = index_runtime.active_backend
+        cli_path = shutil.which(backend)
         if not cli_path:
             logger.warning(
                 "%s backend: CLI not found in PATH — retrieval will be unavailable until installed",
-                _settings.RETRIEVAL_BACKEND,
+                backend,
             )
-            results["retrieval_backend"] = f"{_settings.RETRIEVAL_BACKEND}: cli_not_found"
+            results["retrieval_backend"] = f"{backend}: cli_not_found"
         elif not config.base_dir:
-            results["retrieval_backend"] = (
-                f"{_settings.RETRIEVAL_BACKEND}: deferred (base_dir not set)"
-            )
+            results["retrieval_backend"] = f"{backend}: deferred (base_dir not set)"
         else:
-            results["retrieval_backend"] = f"{_settings.RETRIEVAL_BACKEND}: cli_found"
-    elif _settings.AGENTIC_RETRIEVAL_ENABLED and _settings.RETRIEVAL_BACKEND == "auto":
-        results["retrieval_backend"] = "auto: deferred (resolved at query time)"
+            results["retrieval_backend"] = f"{backend}: cli_found"
     else:
-        results["retrieval_backend"] = f"{_settings.RETRIEVAL_BACKEND}: ok"
+        results["retrieval_backend"] = f"{index_runtime.active_backend}: ok"
 
     if errors:
         raise RuntimeError("; ".join(errors))
@@ -154,6 +150,7 @@ def build_server(
     from fastmcp import FastMCP
 
     from .config.bootstrap import initialize_runtime_from_env
+    from .config.indexing import resolve_index_runtime
     from .repo.monitor import BackgroundIndexMonitor
 
     if initialize_runtime:
@@ -169,6 +166,7 @@ def build_server(
 
     if config is None:
         config = RelaceConfig.from_env()
+    index_runtime = resolve_index_runtime(base_dir=config.base_dir)
 
     if run_health_check:
         try:
@@ -178,16 +176,17 @@ def build_server(
             logger.error("Health check failed: %s", exc)
             raise
 
-    background_index_monitor = BackgroundIndexMonitor(config)
+    background_index_monitor = BackgroundIndexMonitor(config, index_runtime=index_runtime)
     mcp = FastMCP("Relace Fast Apply MCP", lifespan=background_index_monitor.lifespan)
     mcp._relace_background_index_monitor = background_index_monitor  # type: ignore[attr-defined]
+    mcp._relace_index_runtime = index_runtime  # type: ignore[attr-defined]
 
     # Register middleware to handle MCP notifications (e.g., roots/list_changed)
     mcp.add_middleware(RootsMiddleware())
     mcp.add_middleware(ProgressHeartbeatMiddleware())
     mcp.add_middleware(ToolTracingMiddleware())
 
-    register_tools(mcp, config)
+    register_tools(mcp, config, index_runtime)
     return mcp
 
 
@@ -249,6 +248,8 @@ def main() -> None:
         )
 
     config = RelaceConfig.from_env()
+    server = build_server(config, initialize_runtime=False)
+    index_runtime = server._relace_index_runtime  # type: ignore[attr-defined]
     try:
         server_start_event: dict[str, object] = {
             "kind": "server_start",
@@ -259,11 +260,9 @@ def main() -> None:
             "mcp_trace_enabled": _settings.MCP_TRACE_LOGGING,
             "log_path": str(_settings.LOG_PATH),
             "trace_path": str(_settings.TRACE_PATH),
-            "relace_cloud_tools": _settings.RELACE_CLOUD_TOOLS,
+            "cloud_tools_enabled": index_runtime.cloud_tools_enabled,
             "mcp_search_retrieval": _settings.AGENTIC_RETRIEVAL_ENABLED,
-            "mcp_retrieval_backend": _settings.RETRIEVAL_BACKEND,
-            "codanna_cli_found": bool(shutil.which("codanna")),
-            "chunkhound_cli_found": bool(shutil.which("chunkhound")),
+            "mcp_retrieval_backend": index_runtime.active_backend,
             "base_dir": config.base_dir,
         }
 
@@ -271,7 +270,6 @@ def main() -> None:
     except Exception:
         # Startup logging must never break MCP stdio transport.
         logger.debug("Failed to write server_start event", exc_info=True)
-    server = build_server(config, initialize_runtime=False)
 
     if args.transport in ("http", "streamable-http"):
         logger.debug(

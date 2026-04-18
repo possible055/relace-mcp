@@ -8,7 +8,7 @@ from ._setup import EncodingState, ensure_encoding_detected
 if TYPE_CHECKING:
     from fastmcp.server.context import Context
 
-    from ..config import RelaceConfig
+    from ..config import IndexRuntime, RelaceConfig
 
 
 def read_text_safe(path: Path) -> str | None:
@@ -27,6 +27,7 @@ def read_text_safe(path: Path) -> str | None:
 @dataclass(slots=True)
 class ToolRegistryDeps:
     config: "RelaceConfig"
+    index_runtime: "IndexRuntime"
     clients: ToolClients
     encoding_state: EncodingState
 

@@ -87,16 +87,17 @@ def register_search_tools(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
         await ctx.debug(f"Search found {files_found} files")
         return result
 
+    retrieval_read_only = deps.index_runtime.active_backend in ("relace", "none")
+
     if _settings.AGENTIC_RETRIEVAL_ENABLED:
 
         @mcp.tool(
             timeout=900.0,
             annotations={
-                "readOnlyHint": False,
+                "readOnlyHint": retrieval_read_only,
                 "destructiveHint": False,
                 "idempotentHint": True,
-                "openWorldHint": _settings.RETRIEVAL_BACKEND in ("relace", "auto")
-                and _settings.RELACE_CLOUD_TOOLS,
+                "openWorldHint": deps.index_runtime.cloud_tools_enabled,
             },
         )
         async def agentic_retrieval(
