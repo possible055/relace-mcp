@@ -111,9 +111,6 @@ def chunkhound_auto_reindex(base_dir: str) -> dict[str, Any]:
 
     try:
         _ensure_chunkhound_index(base_dir, env)
-        _write_indexed_head(base_dir, head, _CHUNKHOUND_HEAD_FILE)
-        if is_git_dirty(base_dir):
-            _write_dirty_ts(base_dir, _CHUNKHOUND_DIRTY_TS_FILE)
         logger.info("ChunkHound auto-reindex completed")
         return {"action": "reindexed", "old_head": last_head, "new_head": head}
     except (RuntimeError, OSError) as exc:
@@ -315,6 +312,7 @@ def _ensure_chunkhound_index(base_dir: str, env: dict[str, str]) -> None:
             "stderr_len": len(result.stderr or ""),
         }
     )
+    _mark_chunkhound_index_fresh(base_dir)
     logger.debug("ChunkHound index created successfully")
 
 
@@ -482,7 +480,7 @@ def chunkhound_index_file(file_path: str, base_dir: str) -> None:
     env["LC_ALL"] = "C.UTF-8"
     try:
         _ensure_chunkhound_index(base_dir, env)
-        logger.debug("ChunkHound incremental reindex triggered by edit: %s", file_path)
+        logger.debug("ChunkHound full reindex triggered by edit: %s", file_path)
     except RuntimeError as exc:
         kind = "cli_not_found" if isinstance(exc.__cause__, FileNotFoundError) else "nonzero_exit"
         raise ExternalCLIError(

@@ -472,68 +472,29 @@ class TestScheduleBgDedup:
         _bg_index_rerun.pop(key, None)
 
 
-class TestScheduleBgCodannaQueue:
+class TestScheduleBgCodannaRefresh:
     @pytest.mark.asyncio
-    async def test_queues_pending_paths_instead_of_last_write_wins(self) -> None:
+    async def test_running_task_sets_rerun_flag(self) -> None:
         import asyncio
 
         from relace_mcp.repo.backends import schedule_bg_codanna_index
-        from relace_mcp.repo.backends.registry import (
-            _bg_codanna_pending,
-            _bg_index_rerun,
-            _bg_index_tasks,
-        )
+        from relace_mcp.repo.backends.registry import _bg_index_rerun, _bg_index_tasks
 
         base_dir = "/fake/repo/codanna"
         key = (base_dir, "codanna")
         _bg_index_tasks.pop(key, None)
         _bg_index_rerun.pop(key, None)
-        _bg_codanna_pending.pop(key, None)
 
-        first_path = f"{base_dir}/a.py"
-        second_path = f"{base_dir}/b.py"
-        third_path = f"{base_dir}/c.py"
+        async def _never_done() -> None:
+            await asyncio.sleep(10)
 
-        started: list[str] = []
-        unblock = asyncio.Event()
+        running_task = asyncio.create_task(_never_done())
+        _bg_index_tasks[key] = running_task
 
-        async def _fake_index(fp: str, _bd: str) -> None:
-            started.append(fp)
-            if fp == first_path:
-                await unblock.wait()
-
-        with patch(
-            "relace_mcp.repo.backends.codanna_indexing._async_run_codanna_index",
-            side_effect=_fake_index,
-        ):
-            try:
-                schedule_bg_codanna_index(first_path, base_dir)
-                await asyncio.sleep(0)
-                schedule_bg_codanna_index(second_path, base_dir)
-                schedule_bg_codanna_index(third_path, base_dir)
-
-                unblock.set()
-
-                async def _wait_for_all() -> None:
-                    while len(set(started)) < 3:
-                        await asyncio.sleep(0)
-
-                await asyncio.wait_for(_wait_for_all(), timeout=2)
-
-                last_task = _bg_index_tasks.get(key)
-                if last_task is not None:
-                    await last_task
-                    await asyncio.sleep(0)
-            finally:
-                task = _bg_index_tasks.get(key)
-                if task is not None and not task.done():
-                    task.cancel()
-                    try:
-                        await task
-                    except asyncio.CancelledError:
-                        pass
-                _bg_index_tasks.pop(key, None)
-                _bg_index_rerun.pop(key, None)
-                _bg_codanna_pending.pop(key, None)
-
-        assert set(started) == {first_path, second_path, third_path}
+        try:
+            schedule_bg_codanna_index(f"{base_dir}/a.py", base_dir)
+            assert _bg_index_rerun.get(key) is True
+        finally:
+            running_task.cancel()
+            _bg_index_tasks.pop(key, None)
+            _bg_index_rerun.pop(key, None)

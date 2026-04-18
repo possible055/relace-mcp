@@ -17,7 +17,6 @@ from relace_mcp.repo.backends.locking import (
     try_acquire_backend_index_lock,
 )
 from relace_mcp.repo.backends.registry import (
-    _bg_codanna_pending,
     _bg_index_rerun,
     _bg_index_tasks,
     is_bg_index_running,
@@ -232,7 +231,6 @@ class TestBackgroundIndexMonitor:
 
         _bg_index_tasks.pop(key, None)
         _bg_index_rerun.pop(key, None)
-        _bg_codanna_pending.pop(key, None)
 
         started = asyncio.Event()
         release = asyncio.Event()
@@ -289,7 +287,6 @@ class TestBackgroundIndexMonitor:
         finally:
             _bg_index_tasks.pop(key, None)
             _bg_index_rerun.pop(key, None)
-            _bg_codanna_pending.pop(key, None)
 
     @pytest.mark.asyncio
     async def test_cli_missing_logs_warning_once(
@@ -314,7 +311,7 @@ class TestBackgroundIndexMonitor:
 
 class TestBackendIndexLock:
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("target", ["chunkhound", "codanna_index", "codanna_full"])
+    @pytest.mark.parametrize("target", ["chunkhound", "codanna_full"])
     async def test_lock_error_status_is_normalized(self, tmp_path, target: str) -> None:
         base_dir = str(tmp_path)
         lease = BackendIndexLease(
@@ -331,15 +328,6 @@ class TestBackendIndexLock:
                 return_value=lease,
             ):
                 result = await chunkhound_backend._async_run_chunkhound_index(base_dir)
-        elif target == "codanna_index":
-            with patch(
-                "relace_mcp.repo.backends.codanna_indexing.try_acquire_backend_index_lock",
-                return_value=lease,
-            ):
-                result = await codanna_indexing._async_run_codanna_index(
-                    f"{base_dir}/sample.py",
-                    base_dir,
-                )
         else:
             with patch(
                 "relace_mcp.repo.backends.codanna_indexing.try_acquire_backend_index_lock",

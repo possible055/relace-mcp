@@ -1,6 +1,5 @@
 from .codanna_indexing import (
     _async_run_codanna_full_index,
-    _async_run_codanna_index,
     _build_codanna_env,
     _ensure_codanna_index,
     codanna_auto_reindex,
@@ -17,7 +16,6 @@ from .codanna_search import (
 
 __all__ = [
     "_async_run_codanna_full_index",
-    "_async_run_codanna_index",
     "_build_codanna_env",
     "_codanna_health_probe",
     "_ensure_codanna_index",

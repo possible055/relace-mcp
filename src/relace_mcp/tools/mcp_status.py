@@ -7,10 +7,16 @@ from fastmcp.server.context import Context
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..config import resolve_base_dir
+from ..config import settings as _settings
 from ..observability import get_trace_id, log_event, redact_value
+from ..repo.backends import is_backend_disabled
 from ..repo.core import get_current_git_info, is_git_dirty
 from ..repo.core.state import load_sync_state
-from ..repo.freshness import classify_cloud_index_freshness, classify_local_index_freshness
+from ..repo.freshness import (
+    classify_cloud_index_freshness,
+    classify_local_index_freshness,
+    semantic_hints_usable_for_policy,
+)
 from ..repo.monitor import get_background_index_monitor_summary
 from ._registry import ToolRegistryDeps
 
@@ -124,7 +130,10 @@ def _build_relace_status(base_dir: str) -> RelaceBackendStatus:
             git_dirty=git_dirty,
         ),
         freshness=relace_freshness.freshness,
-        hints_usable=relace_freshness.hints_usable,
+        hints_usable=semantic_hints_usable_for_policy(
+            relace_freshness.freshness,
+            _settings.RETRIEVAL_HINT_POLICY,
+        ),
         sync_state=None,
         status=None,
     )
@@ -180,11 +189,19 @@ def _build_relace_status(base_dir: str) -> RelaceBackendStatus:
 def _build_local_backend_status(base_dir: str, backend_name: str) -> LocalBackendStatus:
     cli_path = shutil.which(backend_name)
     freshness = classify_local_index_freshness(base_dir, backend_name)
+    hints_usable = bool(
+        cli_path
+        and not is_backend_disabled(backend_name)
+        and semantic_hints_usable_for_policy(
+            freshness.freshness,
+            _settings.RETRIEVAL_HINT_POLICY,
+        )
+    )
 
     return LocalBackendStatus(
         cli_path=cli_path,
         freshness=freshness.freshness,
-        hints_usable=freshness.hints_usable if cli_path else False,
+        hints_usable=hints_usable,
     )
 
 

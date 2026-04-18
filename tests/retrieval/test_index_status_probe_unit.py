@@ -91,6 +91,63 @@ async def test_index_status_local_backend_with_missing_cli_is_read_only(
 
 
 @pytest.mark.asyncio
+async def test_index_status_local_backend_strict_policy_disables_stale_hints(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "codanna")
+    monkeypatch.setenv("MCP_RETRIEVAL_HINT_POLICY", "strict")
+    config = _make_config(tmp_path)
+
+    with (
+        patch(f"{_TOOLS_MOD}.shutil.which", return_value="/usr/local/bin/codanna"),
+        patch(
+            f"{_TOOLS_MOD}.classify_local_index_freshness",
+            return_value=type("Freshness", (), {"freshness": "stale"})(),
+        ),
+        patch(f"{_TOOLS_MOD}.is_backend_disabled", return_value=False),
+    ):
+        server = build_server(config=config, run_health_check=False)
+
+        from fastmcp import Client
+
+        async with Client(server) as client:
+            result = await client.call_tool("index_status", {})
+
+    payload = result.structured_content
+    assert payload is not None
+    assert payload["backend"]["freshness"] == "stale"
+    assert payload["backend"]["hints_usable"] is False
+
+
+@pytest.mark.asyncio
+async def test_index_status_local_backend_disabled_session_disables_hints(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "chunkhound")
+    config = _make_config(tmp_path)
+
+    with (
+        patch(f"{_TOOLS_MOD}.shutil.which", return_value="/usr/local/bin/chunkhound"),
+        patch(
+            f"{_TOOLS_MOD}.classify_local_index_freshness",
+            return_value=type("Freshness", (), {"freshness": "fresh"})(),
+        ),
+        patch(f"{_TOOLS_MOD}.is_backend_disabled", return_value=True),
+    ):
+        server = build_server(config=config, run_health_check=False)
+
+        from fastmcp import Client
+
+        async with Client(server) as client:
+            result = await client.call_tool("index_status", {})
+
+    payload = result.structured_content
+    assert payload is not None
+    assert payload["backend"]["freshness"] == "fresh"
+    assert payload["backend"]["hints_usable"] is False
+
+
+@pytest.mark.asyncio
 async def test_index_status_hidden_when_backend_is_none(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "none")
     config = _make_config(tmp_path)

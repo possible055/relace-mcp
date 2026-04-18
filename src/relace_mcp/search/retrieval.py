@@ -22,7 +22,11 @@ from ..repo.backends import (
     schedule_bg_codanna_full_index,
 )
 from ..repo.cloud.search import cloud_search_logic
-from ..repo.freshness import classify_cloud_index_freshness, classify_local_index_freshness
+from ..repo.freshness import (
+    classify_cloud_index_freshness,
+    classify_local_index_freshness,
+    semantic_hints_usable_for_policy,
+)
 from ..utils import resolve_repo_path
 from .harness import FastAgenticSearchHarness
 from .prompt_messages import format_hints_list
@@ -67,14 +71,6 @@ def _backend_display_name(backend: str) -> str:
 def _append_warning(warnings_list: list[str], message: str) -> None:
     if message not in warnings_list:
         warnings_list.append(message)
-
-
-def _should_use_semantic_hints(policy: str, freshness: str) -> bool:
-    if freshness == "missing":
-        return False
-    if policy == "strict":
-        return freshness == "fresh"
-    return freshness in {"fresh", "stale", "unknown"}
 
 
 def _schedule_local_refresh(base_dir: str, backend: str) -> bool:
@@ -248,7 +244,7 @@ async def agentic_retrieval_logic(
                 background_refresh_scheduled = True
                 reindex_action = "scheduled_background_refresh"
 
-            if not _should_use_semantic_hints(hint_policy, freshness.freshness):
+            if not semantic_hints_usable_for_policy(freshness.freshness, hint_policy):
                 if freshness.freshness == "missing":
                     message = (
                         f"{backend_name} index missing. Proceeding without hints"
@@ -370,7 +366,7 @@ async def agentic_retrieval_logic(
             freshness = classify_cloud_index_freshness(base_dir)
             hints_index_freshness = freshness.freshness
 
-            if not _should_use_semantic_hints(hint_policy, freshness.freshness):
+            if not semantic_hints_usable_for_policy(freshness.freshness, hint_policy):
                 if freshness.freshness == "missing":
                     message = (
                         "No synced Relace index found. Proceeding without hints. "
