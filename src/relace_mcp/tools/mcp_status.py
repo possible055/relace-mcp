@@ -34,6 +34,21 @@ class BackgroundMonitorSummary(_StatusModel):
     initial_delay_seconds: float | None = Field(
         description="Configured startup delay in seconds when the monitor is requested."
     )
+    last_status: str | None = Field(
+        default=None,
+        description=(
+            "Status of the last monitor tick (e.g. fresh, lock_held, nonzero_exit). "
+            "Null until the monitor has run at least once."
+        ),
+    )
+    last_error: str | None = Field(
+        default=None,
+        description="Error or reason string from the last monitor tick, if any.",
+    )
+    failure_count: int = Field(
+        default=0,
+        description="Consecutive failure count; non-zero indicates active exponential backoff.",
+    )
 
 
 class LocalGitStatus(_StatusModel):
@@ -289,6 +304,8 @@ def register_status_tools(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
                 "backend_hints_usable": backend_status.hints_usable,
                 "background_monitor_enabled": background_monitor.state == "active",
                 "background_monitor_reason": background_monitor.reason,
+                "background_monitor_last_status": background_monitor.last_status,
+                "background_monitor_failure_count": background_monitor.failure_count,
             }
         )
 

@@ -58,6 +58,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
         trace: bool = False,
         freshness_message: str = "",
         hints_list: str = "",
+        runtime_user_messages_provider: Callable[[int], list[str]] | None = None,
     ) -> None:
         self._config = config
         self._trace = trace
@@ -71,6 +72,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             "hints_list": hints_list,
             "max_turns": str(_settings.SEARCH_MAX_TURNS),
         }
+        self._runtime_user_messages_provider = runtime_user_messages_provider
 
         # Resolve enabled tools first (runtime LSP detection happens here)
         enabled_tools = self._enabled_tool_names()
@@ -129,6 +131,40 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
             MAX_CONTEXT_BUDGET_CHARS,
             mode,
         )
+
+    def _append_runtime_user_messages_if_needed(
+        self, messages: list[dict[str, Any]], turn: int, trace_id: str
+    ) -> None:
+        """Append runtime user guidance messages before the LLM request."""
+        provider = self._runtime_user_messages_provider
+        if provider is None:
+            return
+
+        try:
+            runtime_messages = provider(turn)
+        except Exception as exc:
+            logger.warning(
+                "[%s] Runtime user message provider failed at turn %d: %s",
+                trace_id,
+                turn + 1,
+                exc,
+            )
+            return
+
+        appended = 0
+        for content in runtime_messages:
+            if not content:
+                continue
+            messages.append({"role": "user", "content": content})
+            appended += 1
+
+        if appended:
+            logger.debug(
+                "[%s] Injected %d runtime user message(s) at turn %d",
+                trace_id,
+                appended,
+                turn + 1,
+            )
 
     def run(
         self,
@@ -302,6 +338,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                 _settings.SEARCH_MAX_TURNS,
             )
 
+            self._append_runtime_user_messages_if_needed(messages, turn, trace_id)
             self._append_turn_status_if_needed(messages, turn, trace_id)
 
             # Check context size AFTER all user messages are added
@@ -504,6 +541,7 @@ class FastAgenticSearchHarness(ObservedFilesMixin, MessageHistoryMixin, ToolCall
                     _settings.SEARCH_MAX_TURNS,
                 )
 
+                self._append_runtime_user_messages_if_needed(messages, turn, trace_id)
                 self._append_turn_status_if_needed(messages, turn, trace_id)
 
                 if on_progress is not None:

@@ -1,3 +1,5 @@
+import asyncio
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -7,8 +9,36 @@ from relace_mcp.clients import RelaceRepoClient, SearchLLMClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.config import settings as settings_mod
 from relace_mcp.repo.freshness import FreshnessStatus
+from relace_mcp.search import retrieval as _retrieval_mod
 from relace_mcp.search.prompt_messages import format_hints_list
 from relace_mcp.search.retrieval import _compact_semantic_hints, agentic_retrieval_logic
+
+
+async def _wait_for_guidance(
+    provider: Callable[[int], list[str]],
+    turn: int,
+    *,
+    timeout: float = 2.0,
+) -> list[str]:
+    """Poll `provider(turn)` until it returns a non-empty list or timeout elapses."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while loop.time() < deadline:
+        messages = provider(turn)
+        if messages:
+            return messages
+        await asyncio.sleep(0.01)
+    return provider(turn)
+
+
+async def _drain_retrieval_tasks(*, timeout: float = 2.0) -> None:
+    """Await all currently tracked background retrieval tasks to completion."""
+    tasks = [t for t in _retrieval_mod._background_retrieval_tasks if not t.done()]
+    if tasks:
+        await asyncio.wait_for(
+            asyncio.gather(*tasks, return_exceptions=True),
+            timeout=timeout,
+        )
 
 
 @pytest.fixture(autouse=True)
@@ -78,19 +108,28 @@ class TestAgenticRetrievalLogic:
         mock_config: RelaceConfig,
         mock_repo_client: MagicMock,
         mock_search_client: MagicMock,
-        mock_harness: MagicMock,
         tmp_path: Path,
     ) -> None:
+        class PollingHarness:
+            def __init__(self, *_args, **kwargs) -> None:
+                self._provider = kwargs.get("runtime_user_messages_provider")
+
+            async def run_async(self, **_kwargs) -> dict[str, object]:
+                assert callable(self._provider)
+                assert self._provider(0) == []
+                await _drain_retrieval_tasks()
+                assert self._provider(1) == []
+                return {"explanation": "Found files", "files": {}, "turns_used": 2}
+
         with (
             patch(
                 "relace_mcp.search.retrieval.classify_cloud_index_freshness",
                 return_value=FreshnessStatus("fresh", True, False, "up_to_date"),
             ),
             patch("relace_mcp.search.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.search.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.search.retrieval.FastAgenticSearchHarness", PollingHarness),
         ):
             mock_cloud.return_value = {"error": "Network error", "results": []}
-            mock_harness_cls.return_value = mock_harness
 
             result = await agentic_retrieval_logic(
                 mock_repo_client,
@@ -111,16 +150,28 @@ class TestAgenticRetrievalLogic:
         mock_config: RelaceConfig,
         mock_repo_client: MagicMock,
         mock_search_client: MagicMock,
-        mock_harness: MagicMock,
         tmp_path: Path,
     ) -> None:
+        captured_kwargs: dict[str, object] = {}
+
+        class PollingHarness:
+            def __init__(self, *_args, **kwargs) -> None:
+                captured_kwargs.update(kwargs)
+                self._provider = kwargs.get("runtime_user_messages_provider")
+
+            async def run_async(self, **_kwargs) -> dict[str, object]:
+                assert callable(self._provider)
+                assert self._provider(0) == []
+                assert await _wait_for_guidance(self._provider, 1)
+                return {"explanation": "Found files", "files": {}, "turns_used": 2}
+
         with (
             patch(
                 "relace_mcp.search.retrieval.classify_cloud_index_freshness",
                 return_value=FreshnessStatus("fresh", True, False, "up_to_date"),
             ),
             patch("relace_mcp.search.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.search.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.search.retrieval.FastAgenticSearchHarness", PollingHarness),
         ):
             mock_cloud.return_value = {
                 "results": [
@@ -128,7 +179,6 @@ class TestAgenticRetrievalLogic:
                     {"filename": "src/login.py", "score": 0.72},
                 ]
             }
-            mock_harness_cls.return_value = mock_harness
 
             result = await agentic_retrieval_logic(
                 mock_repo_client,
@@ -138,13 +188,8 @@ class TestAgenticRetrievalLogic:
                 "find authentication",
             )
 
-            mock_harness_cls.assert_called_once()
-            call_kwargs = mock_harness_cls.call_args.kwargs
-            assert "prompts" in call_kwargs
-            mock_harness.run_async.assert_called_once()
-            ctor_kwargs = mock_harness_cls.call_args.kwargs
-            assert "Semantic hints are available" in ctor_kwargs.get("freshness_message", "")
-            assert "/repo/src/auth.py" in ctor_kwargs.get("hints_list", "")
+            assert "prompts" in captured_kwargs
+            assert callable(captured_kwargs.get("runtime_user_messages_provider"))
 
             assert result["semantic_hints_used"] == 2
             assert result["hint_policy"] == "prefer-stale"
@@ -162,24 +207,29 @@ class TestAgenticRetrievalLogic:
         mock_search_client: MagicMock,
         tmp_path: Path,
     ) -> None:
+        class PollingHarness:
+            def __init__(self, *_args, **kwargs) -> None:
+                self._provider = kwargs.get("runtime_user_messages_provider")
+
+            async def run_async(self, **_kwargs) -> dict[str, object]:
+                assert callable(self._provider)
+                assert self._provider(0) == []
+                assert await _wait_for_guidance(self._provider, 1)
+                return {
+                    "explanation": "Result",
+                    "files": {"src/core.py": [[1, 10]]},
+                    "turns_used": 2,
+                }
+
         with (
             patch(
                 "relace_mcp.search.retrieval.classify_cloud_index_freshness",
                 return_value=FreshnessStatus("fresh", True, False, "up_to_date"),
             ),
             patch("relace_mcp.search.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.search.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.search.retrieval.FastAgenticSearchHarness", PollingHarness),
         ):
             mock_cloud.return_value = {"results": [{"filename": "src/core.py", "score": 0.9}]}
-            mock_harness = MagicMock()
-            mock_harness.run_async = AsyncMock(
-                return_value={
-                    "explanation": "Result",
-                    "files": {"src/core.py": [[1, 10]]},
-                    "turns_used": 1,
-                }
-            )
-            mock_harness_cls.return_value = mock_harness
 
             result = await agentic_retrieval_logic(
                 mock_repo_client,
@@ -201,19 +251,30 @@ class TestAgenticRetrievalLogic:
         mock_config: RelaceConfig,
         mock_repo_client: MagicMock,
         mock_search_client: MagicMock,
-        mock_harness: MagicMock,
         tmp_path: Path,
     ) -> None:
+        captured_kwargs: dict[str, object] = {}
+
+        class PollingHarness:
+            def __init__(self, *_args, **kwargs) -> None:
+                captured_kwargs.update(kwargs)
+                self._provider = kwargs.get("runtime_user_messages_provider")
+
+            async def run_async(self, **_kwargs) -> dict[str, object]:
+                assert callable(self._provider)
+                assert self._provider(0) == []
+                assert await _wait_for_guidance(self._provider, 1)
+                return {"explanation": "Found files", "files": {}, "turns_used": 2}
+
         with (
             patch(
                 "relace_mcp.search.retrieval.classify_cloud_index_freshness",
                 return_value=FreshnessStatus("stale", True, True, "git_head_changed"),
             ),
             patch("relace_mcp.search.retrieval.cloud_search_logic") as mock_cloud,
-            patch("relace_mcp.search.retrieval.FastAgenticSearchHarness") as mock_harness_cls,
+            patch("relace_mcp.search.retrieval.FastAgenticSearchHarness", PollingHarness),
         ):
             mock_cloud.return_value = {"results": [{"filename": "src/core.py", "score": 0.9}]}
-            mock_harness_cls.return_value = mock_harness
 
             result = await agentic_retrieval_logic(
                 mock_repo_client,
@@ -229,9 +290,7 @@ class TestAgenticRetrievalLogic:
             assert any(
                 "Using stale Relace semantic hints" in warning for warning in result["warnings"]
             )
-            ctor_kwargs = mock_harness_cls.call_args.kwargs
-            assert "Semantic hints are available" in ctor_kwargs.get("freshness_message", "")
-            assert "/repo/src/core.py" in ctor_kwargs.get("hints_list", "")
+            assert callable(captured_kwargs.get("runtime_user_messages_provider"))
 
     @pytest.mark.asyncio
     async def test_relace_stale_strict_skips_hints(

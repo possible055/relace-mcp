@@ -74,8 +74,8 @@ system_message_template: |
 
   If semantic hints are provided in the user message, treat them as a starting point only.
   Always verify hinted files with live reads before committing to them.
-  Do not spend all Turn 1 calls only on hinted files; keep broad discovery coverage.
-  Use at most 4 Turn 1 calls on hinted files; reserve the rest for broad discovery.
+  Do not spend an entire follow-up round only on hinted files; keep broad discovery coverage.
+  In the first round after hints arrive, use at most 4 calls on hinted files; reserve the rest for broader verification and discovery.
   If a hinted file does not match the query after reading, stop following the hint list and broaden exploration immediately.
 
 # LSP tools fragment — injected into {lsp_section} when LSP is available
@@ -136,12 +136,6 @@ user_message_template: |
   `report_back` MUST be the ONLY tool call in its turn. Do not combine it with any other tool. If you still need exploration, do those calls first, then call `report_back` alone in the next turn.
   </execution_directives>
 
-  <retrieval_guidance>
-  {freshness_message}
-  Semantic hint files for turn 1:
-  {hints_list}
-  </retrieval_guidance>
-
   <output_spec>
   Return the complete verified file set that covers the question's scope. List primary implementation files first, then call sites, configuration, and supporting context. For each item, provide a one-line justification explaining its relevance.
 
@@ -151,12 +145,19 @@ user_message_template: |
   - Exclude only files that are clearly unrelated or purely speculative
   </output_spec>
 
+retrieval_guidance_message_template: |
+  <retrieval_guidance>
+  {freshness_message}
+  Semantic hint files for follow-up exploration:
+  {hints_list}
+  </retrieval_guidance>
+
 # Turn status messages — injected as user messages from turn 2 onward.
 turn_status_messages:
   normal: "**Turn {turn}/{max_turns}** · Context: {chars_pct}%"
   final: "**Turn {turn}/{max_turns}** · Context: {chars_pct}%\n\n**FINAL TURN**: You MUST call `report_back` NOW with current findings. DO NOT call other tools!"
 
-# Freshness status descriptions — maps to {freshness_message} in user_message_template
+# Freshness status descriptions — maps to {freshness_message} in retrieval_guidance_message_template
 freshness_messages:
   available: "Semantic hints are available. Treat them as starting points only — verify with live reads."
   missing: "Semantic hints are unavailable for this run. Start with broad discovery."

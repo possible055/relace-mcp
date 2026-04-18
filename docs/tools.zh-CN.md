@@ -85,7 +85,7 @@
 
 适合在 retrieval 前先判断当前 backend 是否够新，以及 semantic hints 是否可用。
 
-返回 `active_backend`、单一的 `backend` 状态对象（包含 `freshness`、`hints_usable`），以及 `background_monitor` 摘要（`state`、`reason`）。
+返回 `active_backend`、单一的 `backend` 状态对象（包含 `freshness`、`hints_usable`），以及 `background_monitor` 摘要（`state`、`reason`，以及 `last_status` / `last_error` / `failure_count` — `failure_count` 非零表示 monitor 已进入指数退避）。
 
 此工具不会主动刷新 index。若 `active_backend` 是 `relace` 且 `backend.status.needs_sync` 为 `true`，请运行 `cloud_sync()`。
 

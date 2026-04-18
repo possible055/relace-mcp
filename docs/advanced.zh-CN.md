@@ -211,7 +211,14 @@ MCP_BACKGROUND_INDEX_MONITOR=1
 - 会使用 host-local file lock，避免多个本地 MCP process 意外指向同一 repo 时重复启动 index CLI。
 - 设计目标是单进程部署。若是 multi-worker 或 multi-pod HTTP 部署，请关闭它，改用 backend 自带的 watch/daemon 或外部 scheduler。
 
-`index_status` 会返回精简后的 `background_monitor` 摘要，方便确认 monitor 当前状态，以及阻塞原因。
+`index_status` 会返回精简后的 `background_monitor` 摘要，方便确认 monitor 当前状态、阻塞原因，以及最近一次 tick 的结果。摘要字段：
+
+- `state` — `active` / `blocked` / `disabled` / `uninitialized`
+- `reason` — 当 `state` 不是 `active` 时给出的原因
+- `interval_seconds` / `initial_delay_seconds` — 当前配置的周期
+- `last_status` — 最近一次 tick 的状态（`fresh`、`stale`、`lock_held`、`nonzero_exit` …）
+- `last_error` — 最近一次 tick 的 reason 或 exception 字串（若有）
+- `failure_count` — 连续失败计数；非零表示 monitor 已进入指数退避，即使 `state` 仍是 `active`
 
 ---
 
@@ -384,6 +391,12 @@ export SEARCH_MODEL=gpt-4o
 export SEARCH_TOOL_STRICT=0
 export SEARCH_PARALLEL_TOOL_CALLS=1
 ```
+
+#### 自动相容降级
+
+若 client 仍然送出 provider 不支援的字段，第一次 `400 BadRequest` / `422 Unprocessable Entity` 会触发一次 retry，并送出精简 payload（去掉 Relace sampling params、`parallel_tool_calls`、`strict`）。retry 成功后，被拒绝的字段会在**当前 process 剩余生命周期内永久停用** — provider 能力被视为稳定特征，client 不会再次探测。首次停用时会 emit 一条 `WARNING` 日志。
+
+若已知 provider 不支援这些字段，建议直接设定 `SEARCH_PARALLEL_TOOL_CALLS=0` / `SEARCH_TOOL_STRICT=0`，可避免首次呼叫的 retry 延迟。
 
 ### 搜索中的 Bash
 

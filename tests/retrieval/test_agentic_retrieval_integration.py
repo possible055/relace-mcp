@@ -1,3 +1,6 @@
+import asyncio
+import threading
+from collections.abc import Callable
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,6 +13,24 @@ from relace_mcp.search.retrieval import agentic_retrieval_logic
 
 _RETRIEVAL_MOD = "relace_mcp.search.retrieval"
 _SETTINGS_MOD = "relace_mcp.config.settings"
+
+
+async def _wait_for_guidance(
+    provider: Callable[[int], list[str]],
+    turn: int,
+    *,
+    timeout: float = 2.0,
+) -> list[str]:
+    """Poll `provider(turn)` until it returns a non-empty list or timeout elapses."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while loop.time() < deadline:
+        messages = provider(turn)
+        if messages:
+            return messages
+        await asyncio.sleep(0.01)
+    return provider(turn)
+
 
 HARNESS_RESULT = {
     "explanation": "test",
@@ -160,29 +181,45 @@ class TestRetrievalMCPContract:
 
 class TestRetrievalOrchestration:
     @pytest.mark.asyncio
-    async def test_cloud_search_called_before_harness(
+    async def test_search_starts_before_cloud_search_finishes_and_second_turn_gets_hints(
         self, mock_config, mock_repo_client, mock_search_client, all_mocks
     ):
         call_order: list[str] = []
-        all_mocks["cloud_search"].side_effect = lambda *_args, **_kwargs: (
-            call_order.append("cloud_search") or {"results": list(SEMANTIC_RESULTS)}
-        )
-        harness_instance = all_mocks["harness_cls"].return_value
+        release_retrieval = threading.Event()
 
-        async def tracked_run(*_args, **_kwargs):
-            call_order.append("harness_run")
-            return {**HARNESS_RESULT}
+        def blocking_cloud_search(*_args, **_kwargs):
+            call_order.append("cloud_search_start")
+            assert release_retrieval.wait(timeout=2)
+            call_order.append("cloud_search_finish")
+            return {"results": list(SEMANTIC_RESULTS)}
 
-        harness_instance.run_async = AsyncMock(side_effect=tracked_run)
+        class TrackingHarness:
+            def __init__(self, *_args, **kwargs) -> None:
+                self._provider = kwargs.get("runtime_user_messages_provider")
 
-        with patch(
-            f"{_RETRIEVAL_MOD}.classify_cloud_index_freshness",
-            return_value=FreshnessStatus("fresh", True, False, "up_to_date"),
+            async def run_async(self, **_kwargs) -> dict[str, object]:
+                call_order.append("harness_run_start")
+                assert callable(self._provider)
+                assert self._provider(0) == []
+                release_retrieval.set()
+                assert await _wait_for_guidance(self._provider, 1)
+                call_order.append("turn2_guidance")
+                return {**HARNESS_RESULT}
+
+        with (
+            patch(
+                f"{_RETRIEVAL_MOD}.classify_cloud_index_freshness",
+                return_value=FreshnessStatus("fresh", True, False, "up_to_date"),
+            ),
+            patch(f"{_RETRIEVAL_MOD}.cloud_search_logic", side_effect=blocking_cloud_search),
+            patch(f"{_RETRIEVAL_MOD}.FastAgenticSearchHarness", TrackingHarness),
         ):
-            await agentic_retrieval_logic(
+            result = await agentic_retrieval_logic(
                 mock_repo_client, mock_search_client, mock_config, mock_config.base_dir, "find auth"
             )
-        assert call_order.index("cloud_search") < call_order.index("harness_run")
+        assert call_order.index("harness_run_start") < call_order.index("cloud_search_finish")
+        assert "turn2_guidance" in call_order
+        assert result["semantic_hints_used"] == len(SEMANTIC_RESULTS)
 
     @pytest.mark.asyncio
     async def test_relace_stale_prefer_stale_uses_hints_without_sync(
@@ -200,9 +237,10 @@ class TestRetrievalOrchestration:
             )
 
         all_mocks["cloud_search"].assert_called_once()
-        assert result["semantic_hints_used"] == len(SEMANTIC_RESULTS)
         assert result["hints_index_freshness"] == "stale"
         assert any("Using stale Relace semantic hints" in warning for warning in result["warnings"])
+        _, kwargs = all_mocks["harness_cls"].call_args
+        assert callable(kwargs.get("runtime_user_messages_provider"))
 
     @pytest.mark.asyncio
     async def test_relace_stale_strict_skips_hints(
@@ -234,7 +272,7 @@ class TestRetrievalOrchestration:
         all_mocks["cloud_search"].assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_harness_prompt_contains_semantic_hints_when_results(
+    async def test_harness_receives_runtime_guidance_provider_when_results(
         self, mock_config, mock_repo_client, mock_search_client, all_mocks
     ):
         with patch(
@@ -246,8 +284,9 @@ class TestRetrievalOrchestration:
             )
         _, kwargs = all_mocks["harness_cls"].call_args
         assert "prompts" in kwargs
-        assert "Semantic hints are available" in kwargs.get("freshness_message", "")
-        assert "/repo/src/main.py" in kwargs.get("hints_list", "")
+        assert callable(kwargs.get("runtime_user_messages_provider"))
+        assert "freshness_message" not in kwargs
+        assert "hints_list" not in kwargs
 
 
 class TestRetrievalBackendDispatch:
@@ -270,7 +309,7 @@ class TestRetrievalBackendDispatch:
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("all_mocks")
     async def test_chunkhound_stale_prefer_stale_uses_hints_and_schedules_refresh(
-        self, mock_config, mock_repo_client, mock_search_client
+        self, mock_config, mock_repo_client, mock_search_client, all_mocks
     ):
         with (
             patch(f"{_SETTINGS_MOD}.RETRIEVAL_BACKEND", "chunkhound"),
@@ -293,9 +332,10 @@ class TestRetrievalBackendDispatch:
             )
         m_ch.assert_called_once()
         mock_schedule.assert_called_once_with(mock_config.base_dir)
-        assert result["semantic_hints_used"] == len(SEMANTIC_RESULTS)
         assert result["background_refresh_scheduled"] is True
         assert result["hints_index_freshness"] == "stale"
+        _, kwargs = all_mocks["harness_cls"].call_args
+        assert callable(kwargs.get("runtime_user_messages_provider"))
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("all_mocks")

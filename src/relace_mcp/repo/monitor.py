@@ -82,6 +82,9 @@ class BackgroundIndexMonitor:
             "reason": None if enabled else self._reason,
             "interval_seconds": self._interval_seconds if self._requested else None,
             "initial_delay_seconds": self._initial_delay_seconds if self._requested else None,
+            "last_status": self._last_status,
+            "last_error": self._last_error,
+            "failure_count": self._failure_count,
         }
 
     @asynccontextmanager
@@ -309,4 +312,7 @@ def get_background_index_monitor_summary(mcp: Any) -> dict[str, Any]:
         "reason": "uninitialized",
         "interval_seconds": None,
         "initial_delay_seconds": None,
+        "last_status": None,
+        "last_error": None,
+        "failure_count": 0,
     }

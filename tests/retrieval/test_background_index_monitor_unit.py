@@ -159,6 +159,9 @@ class TestBackgroundIndexMonitor:
             await monitor._run_loop()
 
         assert delays == [1, 60.0]
+        summary = monitor.summary()
+        assert summary["last_status"] == status
+        assert summary["failure_count"] == 1
 
     @pytest.mark.asyncio
     async def test_run_loop_recovers_after_unexpected_tick_exception(
@@ -198,6 +201,10 @@ class TestBackgroundIndexMonitor:
         assert monitor._tick.await_count == 2  # type: ignore[attr-defined]
         assert monitor._last_status == "fresh"
         assert monitor._last_error == "up_to_date"
+        summary = monitor.summary()
+        assert summary["last_status"] == "fresh"
+        assert summary["last_error"] == "up_to_date"
+        assert summary["failure_count"] == 0
         assert any(
             "Background index monitor unexpected error" in record.message
             for record in caplog.records
@@ -287,6 +294,42 @@ class TestBackgroundIndexMonitor:
         finally:
             _bg_index_tasks.pop(key, None)
             _bg_index_rerun.pop(key, None)
+
+    @pytest.mark.asyncio
+    async def test_summary_exposes_failure_diagnostics(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _configure_monitor_settings(monkeypatch, retrieval_backend="chunkhound")
+        monitor = _make_monitor(str(tmp_path))
+
+        initial = monitor.summary()
+        assert initial["last_status"] is None
+        assert initial["last_error"] is None
+        assert initial["failure_count"] == 0
+
+        monitor._last_status = "nonzero_exit"
+        monitor._last_error = "chunkhound exited with code 2"
+        monitor._failure_count = 3
+
+        summary = monitor.summary()
+        assert summary["last_status"] == "nonzero_exit"
+        assert summary["last_error"] == "chunkhound exited with code 2"
+        assert summary["failure_count"] == 3
+
+    def test_get_summary_fallback_shape(self) -> None:
+        class _Empty:
+            pass
+
+        fallback = bgmon.get_background_index_monitor_summary(_Empty())
+        assert fallback == {
+            "state": "uninitialized",
+            "reason": "uninitialized",
+            "interval_seconds": None,
+            "initial_delay_seconds": None,
+            "last_status": None,
+            "last_error": None,
+            "failure_count": 0,
+        }
 
     @pytest.mark.asyncio
     async def test_cli_missing_logs_warning_once(

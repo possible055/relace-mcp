@@ -413,13 +413,82 @@ class TestFastAgenticSearchHarness:
         assert all(r[1] != -1 for r in ranges)
 
     @pytest.mark.asyncio
-    async def test_retrieval_guidance_in_user_message_across_async_turns(
+    async def test_runtime_guidance_injected_before_first_async_turn_and_persists(
         self,
         mock_config: RelaceConfig,
         mock_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """Retrieval guidance is embedded in user message and stays in context for all turns."""
+        """Runtime guidance can be injected before turn 1 and remains in later context."""
+        (tmp_path / "test.py").write_text("def hello(): pass\n")
+        seen_messages: list[list[dict]] = []
+        injected = False
+
+        async def _chat_async(messages, tools=None, trace_id=None):
+            del tools, trace_id
+            seen_messages.append([dict(msg) for msg in messages])
+            if len(seen_messages) == 1:
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "tool_calls": [_make_view_file_call("call_1", "/repo/test.py")]
+                            }
+                        }
+                    ]
+                }
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [
+                                _make_report_back_call("call_2", "Found it", {"test.py": [[1, 1]]})
+                            ]
+                        }
+                    }
+                ]
+            }
+
+        mock_client.chat_async.side_effect = _chat_async
+
+        def _provider(turn: int) -> list[str]:
+            nonlocal injected
+            if turn == 0 and not injected:
+                injected = True
+                return ["turn-1 only"]
+            return []
+
+        harness = FastAgenticSearchHarness(
+            mock_config,
+            mock_client,
+            prompts=load_prompt_file("retrieval_openai"),
+            runtime_user_messages_provider=_provider,
+        )
+        result = await harness.run_async("Find hello")
+
+        assert result["turns_used"] == 2
+        first_call_contents = [
+            msg.get("content", "") for msg in seen_messages[0] if msg["role"] == "user"
+        ]
+        second_call_contents = [
+            msg.get("content", "") for msg in seen_messages[1] if msg["role"] == "user"
+        ]
+        assert any("turn-1 only" in content for content in first_call_contents)
+        assert any("turn-1 only" in content for content in second_call_contents)
+
+    @pytest.mark.asyncio
+    async def test_runtime_guidance_injected_on_second_turn_before_turn_status(
+        self,
+        mock_config: RelaceConfig,
+        mock_client: MagicMock,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Late runtime guidance should land on turn 2 before the turn-status message."""
+        import relace_mcp.config.settings as test_settings
+
+        monkeypatch.setattr(test_settings, "SEARCH_MAX_TURNS", 2)
+        monkeypatch.setattr(test_settings, "SEARCH_TURN_STATUS_MODE", "always")
         (tmp_path / "test.py").write_text("def hello(): pass\n")
         seen_messages: list[list[dict]] = []
 
@@ -450,25 +519,41 @@ class TestFastAgenticSearchHarness:
 
         mock_client.chat_async.side_effect = _chat_async
 
+        injected = False
+
+        def _provider(turn: int) -> list[str]:
+            nonlocal injected
+            if turn == 1 and not injected:
+                injected = True
+                return ["late guidance"]
+            return []
+
         harness = FastAgenticSearchHarness(
             mock_config,
             mock_client,
             prompts=load_prompt_file("retrieval_openai"),
-            freshness_message="turn-1 only",
-            hints_list="",
+            runtime_user_messages_provider=_provider,
         )
         result = await harness.run_async("Find hello")
 
         assert result["turns_used"] == 2
-        first_call_contents = [
+        first_turn_user_contents = [
             msg.get("content", "") for msg in seen_messages[0] if msg["role"] == "user"
         ]
-        second_call_contents = [
+        second_turn_user_contents = [
             msg.get("content", "") for msg in seen_messages[1] if msg["role"] == "user"
         ]
-        # Guidance is embedded in user message: present in both turn 1 and turn 2 context
-        assert any("turn-1 only" in content for content in first_call_contents)
-        assert any("turn-1 only" in content for content in second_call_contents)
+        assert not any("late guidance" in content for content in first_turn_user_contents)
+        assert any("late guidance" in content for content in second_turn_user_contents)
+        late_guidance_idx = next(
+            i for i, content in enumerate(second_turn_user_contents) if "late guidance" in content
+        )
+        turn_status_idx = next(
+            i
+            for i, content in enumerate(second_turn_user_contents)
+            if content.startswith("**Turn ") or "<turn_status>" in content
+        )
+        assert late_guidance_idx < turn_status_idx
 
     @pytest.mark.asyncio
     async def test_async_progress_reports_completed_turns(

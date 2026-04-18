@@ -211,7 +211,14 @@ When enabled, the server runs a periodic local-only freshness check and triggers
 - It uses a host-local file lock to avoid duplicate index CLI runs when multiple local MCP processes happen to point at the same repo.
 - It is intended for single-process deployments. For multi-worker or multi-pod HTTP deployments, disable it and use backend-native watch/daemon flows or an external scheduler.
 
-`index_status` includes a compact `background_monitor` summary so you can verify the monitor state and, when needed, the blocking reason.
+`index_status` includes a compact `background_monitor` summary so you can verify the monitor state, the blocking reason when it is disabled, and the last tick's outcome when it is running. Summary fields:
+
+- `state` — `active` / `blocked` / `disabled` / `uninitialized`
+- `reason` — reason string when `state` is not `active`
+- `interval_seconds` / `initial_delay_seconds` — configured cadence
+- `last_status` — status of the most recent tick (`fresh`, `stale`, `lock_held`, `nonzero_exit`, …)
+- `last_error` — reason or exception string from the last tick, if any
+- `failure_count` — consecutive failure count; non-zero indicates the monitor is in exponential backoff even though `state` is still `active`
 
 ---
 
@@ -384,6 +391,12 @@ If your provider works better without the non-standard `strict` field from the s
 export SEARCH_TOOL_STRICT=0
 export SEARCH_PARALLEL_TOOL_CALLS=1
 ```
+
+#### Automatic Compatibility Fallback
+
+If the client still sends an unsupported field, the first `400 BadRequest` / `422 Unprocessable Entity` from the search provider triggers a one-shot retry with a stripped payload (no Relace sampling params, no `parallel_tool_calls`, no `strict`). On retry success, the offending fields are disabled **permanently for the remainder of the process** — provider capability is treated as stable, so the client does not re-probe. A single `WARNING` log is emitted when a flag is first flipped.
+
+If you know your provider does not support these fields, prefer setting `SEARCH_PARALLEL_TOOL_CALLS=0` / `SEARCH_TOOL_STRICT=0` up front to avoid paying the first-call retry latency.
 
 ### Bash in Search
 

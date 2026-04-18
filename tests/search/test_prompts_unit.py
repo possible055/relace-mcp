@@ -95,9 +95,6 @@ def test_strategy_placeholders_resolved(prompt_data: dict) -> None:
 def test_user_prompt_formats_query(prompt_data: dict) -> None:
     template = prompt_data["user_message_template"]
     format_kwargs: dict[str, str] = {"query": "test query", "max_turns": "5"}
-    if "{freshness_message}" in template:
-        format_kwargs["freshness_message"] = ""
-        format_kwargs["hints_list"] = ""
     result = template.format(**format_kwargs)
     assert "test query" in result
     assert "{query}" not in result
@@ -123,8 +120,20 @@ def test_retrieval_prompt_has_guidance_keys() -> None:
     for name in _RETRIEVAL_NAMES:
         data = load_prompt_file(name)
         assert "freshness_messages" in data
-        assert "{freshness_message}" in data["user_message_template"]
-        assert "{hints_list}" in data["user_message_template"]
+        assert "retrieval_guidance_message_template" in data
+        assert "{freshness_message}" in data["retrieval_guidance_message_template"]
+        assert "{hints_list}" in data["retrieval_guidance_message_template"]
+
+
+def test_retrieval_guidance_template_formats() -> None:
+    for name in _RETRIEVAL_NAMES:
+        data = load_prompt_file(name)
+        rendered = data["retrieval_guidance_message_template"].format(
+            freshness_message="fresh",
+            hints_list="- /repo/src/main.py (score: 0.99)",
+        )
+        assert "fresh" in rendered
+        assert "/repo/src/main.py" in rendered
 
 
 def test_load_prompt_file_unknown_name_raises() -> None:

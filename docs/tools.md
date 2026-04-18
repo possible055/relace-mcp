@@ -85,7 +85,7 @@ This tool takes no parameters.
 
 Use this before retrieval when you need to know whether the active backend is fresh and whether semantic hints are usable.
 
-Returns `active_backend`, a single `backend` status object with `freshness` and `hints_usable`, and `background_monitor` (`state`, `reason`).
+Returns `active_backend`, a single `backend` status object with `freshness` and `hints_usable`, and `background_monitor` (`state`, `reason`, plus `last_status` / `last_error` / `failure_count` — non-zero `failure_count` indicates the monitor is in exponential backoff after consecutive failures).
 
 This tool never refreshes indexes. If `active_backend` is `relace` and `backend.status.needs_sync` is `true`, run `cloud_sync()`.
 

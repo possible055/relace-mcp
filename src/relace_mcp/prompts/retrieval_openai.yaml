@@ -9,6 +9,8 @@
 # Injection points in user_message_template:
 #   {query}               ← user query (runtime)
 #   {max_turns}           ← SEARCH_MAX_TURNS setting (runtime)
+#
+# Injection points in retrieval_guidance_message_template:
 #   {freshness_message}   ← from freshness_messages (runtime)
 #   {hints_list}          ← ranked semantic hint file list (runtime)
 #
@@ -39,7 +41,7 @@ system_message_template: |
 
   - Use semantic hints to seed exploration, not to replace verification.
   - Do not spend all early-round calls only on hinted files. Use hints to complement broad discovery.
-  - In Turn 1, use at most 2-4 calls on hinted files or hint-adjacent modules; reserve the remaining calls for independent discovery and validation.
+  - In the first round after hints arrive, use at most 2-4 calls on hinted files or hint-adjacent modules; reserve the remaining calls for independent discovery and validation.
   - Prefer hinted files that are likely to expose implementation boundaries, orchestration logic, call sites, adapters, or configuration roots, rather than following the top scores blindly.
   - If a hinted file does not validate quickly, or cannot be connected into a meaningful relationship chain, deprioritize it immediately and broaden exploration.
 
@@ -103,8 +105,8 @@ user_message_template: |
   Turn budget: {max_turns} turns maximum.
 
   Turn progression:
-  - Turn 1: aim for 8 parallel calls — broad discovery across distinct independent hypotheses, plus a limited sample of high-value hinted files; defer deep file reads. Drop below 8 only when the query targets a single unambiguous identifier with no plausible secondary hypotheses.
-  - Middle turns: 4-12 parallel calls — trace call sites, inspect configuration, verify hinted candidates, and expand into related modules.
+  - Turn 1: aim for 8 parallel calls — broad discovery across distinct independent hypotheses; defer deep file reads. Drop below 8 only when the query targets a single unambiguous identifier with no plausible secondary hypotheses.
+  - Middle turns: 4-12 parallel calls — trace call sites, inspect configuration, verify hinted candidates when hints are available, and expand into related modules.
   - Late turns: resolve remaining gaps, verify references, and confirm that supporting context is complete before termination.
   - Scale parallel calls to the number of independent unresolved hypotheses; do not leave tool budget unused while important gaps remain.
   - Do not stop after finding only the primary implementation; continue until call sites, configuration sources, and closely related context are also covered.
@@ -114,17 +116,6 @@ user_message_template: |
   - `report_back` must be the ONLY tool call in its turn. Never combine it with other tools.
   </execution_directives>
 
-  <retrieval_guidance>
-  {freshness_message}
-
-  Semantic hint files (candidate priors, not evidence):
-  {hints_list}
-
-  Use semantic hints only to seed exploration.
-  Keep a hinted file in focus only if live inspection or follow-up search can connect it to the answer through implementation logic, call sites, symbol references, configuration ownership, imports, or execution flow.
-  If a hinted file does not validate quickly, deprioritize it and continue broad discovery.
-  </retrieval_guidance>
-
   <output_spec>
   Return the verified file set covering the question's scope. Primary implementation first, then call sites, configuration, and supporting context. One-line justification per item.
 
@@ -132,6 +123,18 @@ user_message_template: |
   - Exact line ranges (e.g. `[[54,67],[100,115]]`); only return an entire file if a smaller range would omit essential logic
   - Exclude clearly unrelated or speculative files
   </output_spec>
+
+retrieval_guidance_message_template: |
+  <retrieval_guidance>
+  {freshness_message}
+
+  Semantic hint files for follow-up exploration (candidate priors, not evidence):
+  {hints_list}
+
+  Use semantic hints only to seed follow-up exploration.
+  Keep a hinted file in focus only if live inspection or follow-up search can connect it to the answer through implementation logic, call sites, symbol references, configuration ownership, imports, or execution flow.
+  If a hinted file does not validate quickly, deprioritize it and continue broad discovery.
+  </retrieval_guidance>
 
 # ---------------------------------------------------------------------------
 # Turn status messages
@@ -154,7 +157,7 @@ turn_status_messages:
     </turn_status>
 
 # ---------------------------------------------------------------------------
-# Freshness / retrieval status descriptions
+# Freshness / retrieval status descriptions for retrieval_guidance_message_template
 # ---------------------------------------------------------------------------
 freshness_messages:
   available: "Semantic hints are available. Treat them as candidate priors only — verify them with live reads and relationship tracing before relying on them."

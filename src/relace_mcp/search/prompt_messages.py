@@ -86,3 +86,16 @@ def render_turn_status_message(
 def format_hints_list(hints: list[dict[str, Any]]) -> str:
     """Format semantic hints as a bullet list for {hints_list} placeholder."""
     return "\n".join(f"- {h['filename']} (score: {h['score']:.2f})" for h in hints)
+
+
+def render_retrieval_guidance_message(
+    template: str,
+    *,
+    freshness_message: str,
+    hints_list: str,
+) -> str:
+    """Render the standalone retrieval guidance user message."""
+    return template.format(
+        freshness_message=freshness_message,
+        hints_list=hints_list,
+    ).strip()
