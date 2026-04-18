@@ -360,6 +360,54 @@ class TestResolveBaseDir:
         assert "Git root" in source
 
     @pytest.mark.asyncio
+    async def test_single_blacklisted_mcp_root_falls_back_to_git_root(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Blacklisted MCP Root should be ignored."""
+        import relace_mcp.config.base_dir as base_dir_module
+
+        monkeypatch.setattr(base_dir_module, "resolve_workspace_from_storage", lambda: None)
+
+        (tmp_path / ".git").mkdir()
+        cwd = tmp_path / "src"
+        cwd.mkdir()
+        monkeypatch.chdir(cwd)
+
+        blocked_root = Path.home() / ".codeium" / "windsurf"
+        ctx = MagicMock()
+        ctx.list_roots = AsyncMock(
+            return_value=[MagicMock(uri=blocked_root.as_uri(), name="windsurf")]
+        )
+
+        base_dir, source = await resolve_base_dir(None, ctx)
+        assert base_dir == str(tmp_path)
+        assert "Git root" in source
+
+    @pytest.mark.asyncio
+    async def test_blacklisted_cached_mcp_root_falls_back_to_git_root(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Blacklisted cached MCP Root should be ignored."""
+        import relace_mcp.config.base_dir as base_dir_module
+
+        monkeypatch.setattr(base_dir_module, "resolve_workspace_from_storage", lambda: None)
+
+        (tmp_path / ".git").mkdir()
+        cwd = tmp_path / "src"
+        cwd.mkdir()
+        monkeypatch.chdir(cwd)
+
+        blocked_root = str(Path.home() / ".codeium" / "windsurf")
+        base_dir_module._roots_cache = {"session-1": (blocked_root, "MCP Root (windsurf)")}
+
+        ctx = MagicMock(session_id="session-1")
+        ctx.list_roots = AsyncMock(return_value=[])
+
+        base_dir, source = await resolve_base_dir(None, ctx)
+        assert base_dir == str(tmp_path)
+        assert "Git root" in source
+
+    @pytest.mark.asyncio
     async def test_multiple_invalid_mcp_roots_falls_back_to_git_root(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
