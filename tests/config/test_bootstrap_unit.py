@@ -7,7 +7,7 @@ import relace_mcp.config.settings as settings_mod
 from relace_mcp.config.bootstrap import initialize_runtime_from_env
 
 _SNAPSHOT_KEYS = (
-    "RELACE_CLOUD_TOOLS",
+    "RETRIEVAL_BACKEND",
     "SEARCH_MAX_TURNS",
     "MCP_LOG_LEVEL",
     "SEARCH_PROVIDER",
@@ -31,7 +31,7 @@ def test_initialize_runtime_from_env_loads_explicit_dotenv(
     env_file.write_text(
         "\n".join(
             [
-                "RELACE_CLOUD_TOOLS=1",
+                "MCP_RETRIEVAL_BACKEND=chunkhound",
                 "SEARCH_MAX_TURNS=9",
                 "MCP_LOG_LEVEL=debug",
             ]
@@ -40,14 +40,14 @@ def test_initialize_runtime_from_env_loads_explicit_dotenv(
         encoding="utf-8",
     )
 
-    monkeypatch.delenv("RELACE_CLOUD_TOOLS", raising=False)
+    monkeypatch.delenv("MCP_RETRIEVAL_BACKEND", raising=False)
     monkeypatch.delenv("SEARCH_MAX_TURNS", raising=False)
     monkeypatch.delenv("MCP_LOG_LEVEL", raising=False)
     monkeypatch.setenv("MCP_DOTENV_PATH", str(env_file))
 
     initialize_runtime_from_env()
 
-    assert settings_mod.RELACE_CLOUD_TOOLS is True
+    assert settings_mod.RETRIEVAL_BACKEND == "chunkhound"
     assert settings_mod.SEARCH_MAX_TURNS == 9
     assert settings_mod.MCP_LOG_LEVEL == "DEBUG"
 

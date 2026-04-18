@@ -29,14 +29,13 @@
 | `RELACE_DEFAULT_ENCODING` | — | 强制项目文件编码（如 `gbk`、`big5`） |
 | `MCP_LOGGING` | `off` | 文件日志：`off`、`safe`（启用并遮蔽）、`full`（启用不遮蔽） |
 | `MCP_LOG_LEVEL` | `WARNING` | stderr 日志级别：`DEBUG`、`INFO`、`WARNING`、`ERROR` |
-| `RELACE_CLOUD_TOOLS` | `0` | 设为 `1` 启用云工具（cloud_sync、cloud_search 等） |
 | `MCP_SEARCH_RETRIEVAL` | `0` | 设为 `1` 注册 `agentic_retrieval` 工具 |
-| `MCP_RETRIEVAL_BACKEND` | `relace` | semantic retrieval backend：`relace`、`codanna`、`chunkhound`、`auto`、`none` |
+| `MCP_RETRIEVAL_BACKEND` | `relace` | semantic retrieval backend：`relace`、`codanna`、`chunkhound`、`none` |
 | `MCP_BACKGROUND_INDEX_MONITOR` | `0` | 为 local index 启用可选的周期 refresh monitor；要求 `MCP_BASE_DIR` 与 local backend |
 | `MCP_BACKGROUND_INDEX_INTERVAL_SECONDS` | `300` | 周期 local index 检查间隔 |
 | `MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS` | `30` | server 启动后首次周期 local index 检查前的延迟 |
 
-> **注意：** 仅当**同时满足**以下条件时可省略 `RELACE_API_KEY`：(1) `APPLY_PROVIDER` 和 `SEARCH_PROVIDER` 均使用非 Relace 提供商，且 (2) `RELACE_CLOUD_TOOLS=false`。否则必须设置。
+> **注意：** 仅当**同时满足**以下条件时可省略 `RELACE_API_KEY`：(1) `APPLY_PROVIDER` 和 `SEARCH_PROVIDER` 均使用非 Relace 提供商，且 (2) `MCP_RETRIEVAL_BACKEND` 为 `codanna`、`chunkhound` 或 `none`。否则必须设置。
 
 > **警告：** `MCP_LOGGING=full` 会将**所有**内容以明文写入磁盘，包括源码片段、LLM 指令、工具参数、搜索查询、命令输出及含堆栈追踪的错误信息。请仅在可信环境调试时使用 `full` 模式。`safe` 模式会将敏感字段值替换为 `[REDACTED len=<N> sha256=<HEX12>]` 占位符——sha256 前缀可在不暴露内容的情况下跨事件关联被遮蔽的值。
 
@@ -150,7 +149,7 @@ SEARCH_MAX_TURNS=6
 
 ## 本地检索后端
 
-`agentic_retrieval` 会先用语义检索对文件做预排序，再回到 live code 进行确认。默认使用 Relace 云端索引（`relace` 后端，需要 `RELACE_CLOUD_TOOLS=1` 并已完成 sync）。如需离线使用，可切换为本地后端。
+`agentic_retrieval` 会先用语义检索对文件做预排序，再回到 live code 进行确认。默认使用 Relace 云端索引（`relace` 后端，需要 `RELACE_API_KEY` 且已完成 sync）。如需离线使用，可切换为本地后端。
 
 ### Hint Freshness Policy
 
@@ -193,17 +192,6 @@ MCP_RETRIEVAL_BACKEND=chunkhound
 
 如果 index 缺失或过期，server 可能会先在没有 hints 的情况下继续查询，同时排程 background refresh。使用 `MCP_RETRIEVAL_HINT_POLICY=prefer-stale` 时，retrieval 仍可使用 stale ChunkHound hints；`strict` 会跳过它们。更多配置请参阅 [ChunkHound 项目](https://pypi.org/project/chunkhound/)。
 
-### 自动模式
-
-```bash
-MCP_SEARCH_RETRIEVAL=1
-MCP_RETRIEVAL_BACKEND=auto
-```
-
-Server 按优先级自动选择当前 session 可用的后端：`codanna` → `chunkhound` → `relace`（云端兜底）。
-
-当选中的本地后端处于 stale 或 missing 状态时，retrieval 可以排程 background refresh；query path 不会等待 rebuild 完成。
-
 ### Background Index Monitor
 
 ```bash
@@ -213,17 +201,17 @@ MCP_BASE_DIR=/absolute/path/to/repo
 MCP_BACKGROUND_INDEX_MONITOR=1
 ```
 
-`index_status` 只会在 `RELACE_CLOUD_TOOLS=1`，或 `PATH` 中可发现本地 index CLI（`codanna` / `chunkhound`）时暴露。
+`index_status` 只会在 `MCP_RETRIEVAL_BACKEND` 为 `relace`、`codanna` 或 `chunkhound` 时暴露。
 
 启用后，server 会定期检查当前 local backend 的 freshness，并在需要时触发 background refresh。
 
 - 默认关闭。
 - 只有在 `MCP_BASE_DIR` 固定到单一 repo 时才会启动。
-- 只监控当前生效的 local backend（`codanna`、`chunkhound`，或 `auto` 选中的 local backend）。
+- 只监控当前生效的 local backend（`codanna` 或 `chunkhound`）。
 - 会使用 host-local file lock，避免多个本地 MCP process 意外指向同一 repo 时重复启动 index CLI。
 - 设计目标是单进程部署。若是 multi-worker 或 multi-pod HTTP 部署，请关闭它，改用 backend 自带的 watch/daemon 或外部 scheduler。
 
-`index_status` 会返回 `background_monitor` 摘要，方便确认 monitor 是否真的在运行，以及为何没有运行。
+`index_status` 会返回精简后的 `background_monitor` 摘要，方便确认 monitor 当前状态，以及阻塞原因。
 
 ---
 
@@ -293,13 +281,13 @@ Trace 日志也是 JSONL 格式，每行一个事件。
 | `tool_call` | 工具调用（含计时） |
 | `search_complete` | 搜索完成 |
 | `search_error` | 搜索失败 |
-| `index_status` | 索引后端汇总（relace/codanna/chunkhound） |
+| `index_status` | 当前 active 索引后端摘要 |
 | `index_status_error` | 索引状态错误（如 base_dir 解析失败） |
 | `backend_index_start` | Codanna/ChunkHound 索引开始 |
 | `backend_index_complete` | Codanna/ChunkHound 索引完成 |
 | `backend_index_error` | Codanna/ChunkHound 索引失败 |
 | `backend_disabled` | 后端已禁用（如 CLI 缺失） |
-| `retrieval_backend_selected` | 检索后端选择（含 auto） |
+| `retrieval_backend_selected` | 检索后端选择 |
 | `retrieval_hints_skipped` | 因 policy 或 backend freshness 不允许而跳过 retrieval hints |
 | `retrieval_hints_complete` | 检索提示完成 |
 | `retrieval_hints_error` | 检索提示失败（兜底继续） |

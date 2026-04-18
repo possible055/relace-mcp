@@ -4,6 +4,7 @@ import pytest
 
 from relace_mcp.clients import RelaceRepoClient, SearchLLMClient
 from relace_mcp.config import RelaceConfig
+from relace_mcp.config import settings as settings_mod
 from relace_mcp.repo.freshness import FreshnessStatus
 from relace_mcp.search.retrieval import agentic_retrieval_logic
 
@@ -20,6 +21,12 @@ SEMANTIC_RESULTS = [
     {"filename": "src/main.py", "score": 0.95},
     {"filename": "src/utils.py", "score": 0.80},
 ]
+
+
+@pytest.fixture(autouse=True)
+def _default_retrieval_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings_mod, "RETRIEVAL_BACKEND", "relace")
+    monkeypatch.setattr(settings_mod, "RETRIEVAL_HINT_POLICY", "prefer-stale")
 
 
 @pytest.fixture

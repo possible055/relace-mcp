@@ -1,9 +1,3 @@
-"""Regression tests for index_status auto-refresh scheduling (P2).
-
-Verifies that index_status always schedules background refresh for stale/missing local
-backends regardless of MCP_RETRIEVAL_BACKEND value.
-"""
-
 from unittest.mock import patch
 
 import pytest
@@ -12,46 +6,25 @@ from relace_mcp.config import RelaceConfig
 from relace_mcp.server import build_server
 
 _TOOLS_MOD = "relace_mcp.tools.mcp_status"
-_REGISTER_MOD = "relace_mcp.tools.register"
+
+
+pytestmark = pytest.mark.usefixtures("clean_env")
 
 
 def _make_config(tmp_path) -> RelaceConfig:
     return RelaceConfig(api_key="rlc-test", base_dir=str(tmp_path))
 
 
-@pytest.mark.parametrize(
-    "retrieval_backend",
-    ["auto", "relace", "none", "codanna", "chunkhound"],
-)
 @pytest.mark.asyncio
-async def test_refresh_scheduled_when_stale_on_any_retrieval_backend(
-    tmp_path, retrieval_backend: str
+@pytest.mark.parametrize("backend", ["relace", "codanna", "chunkhound"])
+async def test_index_status_returns_only_active_backend(
+    tmp_path, monkeypatch, backend: str
 ) -> None:
-    """index_status should schedule background refresh for stale local backends,
-    regardless of MCP_RETRIEVAL_BACKEND.
-    """
+    monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", backend)
     config = _make_config(tmp_path)
 
-    # Create stale local indexes with artifacts present but marker absent.
-    codanna_index_dir = tmp_path / ".codanna" / "index" / "semantic"
-    codanna_index_dir.mkdir(parents=True)
-    (codanna_index_dir / "metadata.json").write_text("{}")
-    chunkhound_dir = tmp_path / ".chunkhound"
-    chunkhound_dir.mkdir()
-    (chunkhound_dir / "db").write_bytes(b"index")
-
-    with (
-        patch(f"{_REGISTER_MOD}._should_register_index_status", return_value=True),
-        patch(f"{_TOOLS_MOD}._settings") as mock_settings,
-        patch(f"{_TOOLS_MOD}.shutil.which", return_value="/usr/local/bin/fake"),
-        patch(f"{_TOOLS_MOD}.schedule_bg_codanna_full_index") as mock_codanna_refresh,
-        patch(f"{_TOOLS_MOD}.schedule_bg_chunkhound_index") as mock_chunkhound_refresh,
-    ):
-        mock_settings.RETRIEVAL_BACKEND = retrieval_backend
-        mock_settings.RELACE_CLOUD_TOOLS = False
-        mock_settings.AGENTIC_RETRIEVAL_ENABLED = False
-
-        server = build_server(config=config)
+    with patch(f"{_TOOLS_MOD}.shutil.which", return_value="/usr/local/bin/fake"):
+        server = build_server(config=config, run_health_check=False)
 
         from fastmcp import Client
 
@@ -60,47 +33,73 @@ async def test_refresh_scheduled_when_stale_on_any_retrieval_backend(
 
     payload = result.structured_content
     assert payload is not None
-    assert payload["background_monitor"]["enabled"] is False
-    assert payload["background_monitor"]["requested"] is False
+    assert payload["active_backend"] == backend
+    assert set(payload) == {
+        "trace_id",
+        "base_dir",
+        "base_dir_source",
+        "active_backend",
+        "backend",
+        "background_monitor",
+    }
+    assert "relace" not in payload
+    assert "codanna" not in payload
+    assert "chunkhound" not in payload
 
-    for backend in ("codanna", "chunkhound"):
-        scheduled = payload[backend]["background_refresh_scheduled"]
-        assert scheduled is True, f"{backend}.background_refresh_scheduled must be True"
+    backend_payload = payload["backend"]
+    assert "freshness" in backend_payload
+    assert "hints_usable" in backend_payload
+    if backend == "relace":
+        assert "sync_state" in backend_payload
+        assert "status" in backend_payload
+    else:
+        assert "cli_path" in backend_payload
+        assert set(backend_payload) == {"cli_path", "freshness", "hints_usable"}
 
-    mock_codanna_refresh.assert_called_once_with(str(tmp_path))
-    mock_chunkhound_refresh.assert_called_once_with(str(tmp_path))
+    background_monitor = payload["background_monitor"]
+    assert "state" in background_monitor
+    assert "reason" in background_monitor
+    assert "interval_seconds" in background_monitor
+    assert "initial_delay_seconds" in background_monitor
 
 
 @pytest.mark.asyncio
-async def test_no_refresh_when_cli_missing(tmp_path) -> None:
-    """When CLI is not found, background_refresh_scheduled must be False."""
+async def test_index_status_local_backend_with_missing_cli_is_read_only(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "codanna")
     config = _make_config(tmp_path)
 
-    with (
-        patch(f"{_REGISTER_MOD}._should_register_index_status", return_value=True),
-        patch(f"{_TOOLS_MOD}._settings") as mock_settings,
-        patch(f"{_TOOLS_MOD}.shutil.which", return_value=None),
-    ):
-        mock_settings.RETRIEVAL_BACKEND = "auto"
-        mock_settings.RELACE_CLOUD_TOOLS = False
-        mock_settings.AGENTIC_RETRIEVAL_ENABLED = False
-
-        server = build_server(config=config)
+    with patch(f"{_TOOLS_MOD}.shutil.which", return_value=None):
+        server = build_server(config=config, run_health_check=False)
 
         from fastmcp import Client
 
         async with Client(server) as client:
             result = await client.call_tool("index_status", {})
+            tools = await client.list_tools()
 
     payload = result.structured_content
     assert payload is not None
-    assert payload["background_monitor"]["enabled"] is False
-    assert payload["background_monitor"]["requested"] is False
-    for backend in ("codanna", "chunkhound"):
-        assert payload[backend]["background_refresh_scheduled"] is False, (
-            f"{backend}: expected False when CLI missing, got "
-            f"{payload[backend]['background_refresh_scheduled']!r}"
-        )
-        assert payload[backend]["hints_usable"] is False, (
-            f"{backend}: hints_usable must be False when CLI missing"
-        )
+    assert payload["active_backend"] == "codanna"
+    assert payload["backend"]["cli_path"] is None
+    assert payload["backend"]["hints_usable"] is False
+
+    status_tool = next(tool for tool in tools if tool.name == "index_status")
+    assert status_tool.annotations is not None
+    assert status_tool.annotations.readOnlyHint is True
+
+
+@pytest.mark.asyncio
+async def test_index_status_hidden_when_backend_is_none(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "none")
+    config = _make_config(tmp_path)
+    server = build_server(config=config, run_health_check=False)
+
+    from fastmcp import Client
+
+    async with Client(server) as client:
+        tools = await client.list_tools()
+        tool_names = {tool.name for tool in tools}
+
+    assert "index_status" not in tool_names

@@ -34,7 +34,7 @@ MCP server providing AI-powered code editing and intelligent codebase exploratio
 
 **Prerequisites:** [uv](https://docs.astral.sh/uv/), [git](https://git-scm.com/), [ripgrep](https://github.com/BurntSushi/ripgrep) (recommended)
 
-Using Relace (default) or `RELACE_CLOUD_TOOLS=1`: get your API key from [Relace Dashboard](https://app.relace.ai/settings/billing), then add to your MCP client:
+Using the `relace` backend (default): get your API key from [Relace Dashboard](https://app.relace.ai/settings/billing), then add to your MCP client:
 
 <details>
 <summary><strong>Cursor</strong></summary>
@@ -139,9 +139,8 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `RELACE_API_KEY` | ✅* | API key from [Relace Dashboard](https://app.relace.ai/settings/billing); required for Relace providers and cloud tools |
-| `RELACE_CLOUD_TOOLS` | ❌ | Set to `1` to enable cloud tools |
 | `MCP_SEARCH_RETRIEVAL` | ❌ | Set to `1` to register the `agentic_retrieval` tool |
-| `MCP_RETRIEVAL_BACKEND` | ❌ | Semantic retrieval backend: `relace` (default), `codanna`, `chunkhound`, `auto`, or `none` |
+| `MCP_RETRIEVAL_BACKEND` | ❌ | Semantic retrieval backend: `relace` (default), `codanna`, `chunkhound`, or `none` |
 | `MCP_RETRIEVAL_HINT_POLICY` | ❌ | Retrieval hint policy: `prefer-stale` (default) or `strict` |
 | `MCP_BACKGROUND_INDEX_MONITOR` | ❌ | Opt-in periodic refresh monitor for local indexes; requires a pinned `MCP_BASE_DIR` and a local backend |
 | `MCP_BACKGROUND_INDEX_INTERVAL_SECONDS` | ❌ | Periodic local index monitor interval in seconds (default: `300`) |
@@ -153,13 +152,13 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 | `MCP_LOGGING` | ❌ | File logging: `off` (default), `safe`, `full` |
 | `MCP_DOTENV_PATH` | ❌ | Path to `.env` file for centralized config |
 
-`*` Optional if **both**: (1) `APPLY_PROVIDER` and `SEARCH_PROVIDER` are non-Relace providers, and (2) `RELACE_CLOUD_TOOLS=false`.
+`*` Optional if **both**: (1) `APPLY_PROVIDER` and `SEARCH_PROVIDER` are non-Relace providers, and (2) `MCP_RETRIEVAL_BACKEND` is `codanna`, `chunkhound`, or `none`.
 
 For `.env` usage, encoding settings, custom LLM providers, and more, see [docs/advanced.md](docs/advanced.md).
 
 ## Tools
 
-Always available: `fast_apply`, `agentic_search`. `agentic_retrieval` requires `MCP_SEARCH_RETRIEVAL=1`. Cloud tools require `RELACE_CLOUD_TOOLS=1`. `index_status` is available when cloud tools are enabled or a local index CLI (`codanna` / `chunkhound`) is available in `PATH`.
+Always available: `fast_apply`, `agentic_search`. `agentic_retrieval` requires `MCP_SEARCH_RETRIEVAL=1`. Cloud tools are available only when `MCP_RETRIEVAL_BACKEND=relace`. `index_status` is available for `relace`, `codanna`, and `chunkhound`, and hidden when `MCP_RETRIEVAL_BACKEND=none`.
 
 Use MCP-native discovery surfaces: `list_tools()` for tools and `list_resources()` for resources.
 

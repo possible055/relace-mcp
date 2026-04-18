@@ -17,7 +17,6 @@ _RELOAD_KEYS = (
 )
 
 _TOOL_RELOAD_KEYS = (
-    "RELACE_CLOUD_TOOLS",
     "RETRIEVAL_BACKEND",
     "RETRIEVAL_HINT_POLICY",
     "AGENTIC_RETRIEVAL_ENABLED",
@@ -108,29 +107,16 @@ class TestReloadLoggingSettings:
 
 
 class TestReloadToolSettings:
-    def test_cloud_tools_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "true")
-        reload_tool_settings()
-
-        assert settings_mod.RELACE_CLOUD_TOOLS is True
-
-    def test_cloud_tools_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "false")
-        reload_tool_settings()
-
-        assert settings_mod.RELACE_CLOUD_TOOLS is False
-
     def test_retrieval_backend_codanna(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "codanna")
         reload_tool_settings()
 
         assert settings_mod.RETRIEVAL_BACKEND == "codanna"
 
-    def test_retrieval_backend_auto(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_retrieval_backend_auto_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "auto")
-        reload_tool_settings()
-
-        assert settings_mod.RETRIEVAL_BACKEND == "auto"
+        with pytest.raises(RuntimeError, match="auto is no longer supported"):
+            reload_tool_settings()
 
     def test_agentic_retrieval_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("MCP_SEARCH_RETRIEVAL", "true")
@@ -238,11 +224,9 @@ class TestReloadToolSettings:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Accessing settings via module reference must see reloaded values."""
-        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "true")
         monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "chunkhound")
         reload_tool_settings()
 
         from relace_mcp.config import settings as _settings
 
-        assert _settings.RELACE_CLOUD_TOOLS is True
         assert _settings.RETRIEVAL_BACKEND == "chunkhound"

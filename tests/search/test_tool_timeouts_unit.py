@@ -10,7 +10,7 @@ async def test_tool_timeouts(tmp_path, monkeypatch) -> None:
     from relace_mcp.config.settings import reload_settings_from_env
 
     with monkeypatch.context() as m:
-        m.setenv("RELACE_CLOUD_TOOLS", "1")
+        m.setenv("MCP_RETRIEVAL_BACKEND", "relace")
         reload_settings_from_env()
 
         server = build_server(

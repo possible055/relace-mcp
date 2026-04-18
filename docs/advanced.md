@@ -29,14 +29,13 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `RELACE_DEFAULT_ENCODING` | — | Force default encoding for project files (e.g., `gbk`, `big5`) |
 | `MCP_LOGGING` | `off` | File logging: `off`, `safe` (with redaction), `full` (no redaction) |
 | `MCP_LOG_LEVEL` | `WARNING` | Stderr log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
-| `RELACE_CLOUD_TOOLS` | `0` | Set to `1` to enable cloud tools (cloud_sync, cloud_search, etc.) |
 | `MCP_SEARCH_RETRIEVAL` | `0` | Set to `1` to register the `agentic_retrieval` tool |
-| `MCP_RETRIEVAL_BACKEND` | `relace` | Semantic retrieval backend: `relace`, `codanna`, `chunkhound`, `auto`, `none` |
+| `MCP_RETRIEVAL_BACKEND` | `relace` | Semantic retrieval backend: `relace`, `codanna`, `chunkhound`, `none` |
 | `MCP_BACKGROUND_INDEX_MONITOR` | `0` | Opt-in periodic refresh monitor for local indexes; requires `MCP_BASE_DIR` and a local backend |
 | `MCP_BACKGROUND_INDEX_INTERVAL_SECONDS` | `300` | Interval between periodic local index checks |
 | `MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS` | `30` | Startup delay before the first periodic local index check |
 
-> **Note:** `RELACE_API_KEY` can be omitted if **both**: (1) using non-Relace providers for `APPLY_PROVIDER` and `SEARCH_PROVIDER`, and (2) `RELACE_CLOUD_TOOLS=false`. Otherwise it is required.
+> **Note:** `RELACE_API_KEY` can be omitted if **both**: (1) using non-Relace providers for `APPLY_PROVIDER` and `SEARCH_PROVIDER`, and (2) `MCP_RETRIEVAL_BACKEND` is `codanna`, `chunkhound`, or `none`. Otherwise it is required.
 
 > **Warning:** `MCP_LOGGING=full` writes **all** content to disk unredacted, including source code snippets, LLM instructions, tool arguments, search queries, command output, and error messages with stack traces. Use `full` only for debugging in trusted environments. `safe` mode replaces sensitive field values with `[REDACTED len=<N> sha256=<HEX12>]` placeholders — the sha256 prefix allows correlating redacted values across events without revealing content.
 
@@ -150,7 +149,7 @@ When git HEAD changes since last sync (e.g., branch switch, rebase), Safe Full m
 
 ## Local Retrieval Backends
 
-`agentic_retrieval` uses semantic search to pre-rank files before the agentic pass, then verifies those hints against live code. By default it uses the Relace cloud index (`relace` backend, requires `RELACE_CLOUD_TOOLS=1` and a synced repo). To run without cloud dependency, use a local backend.
+`agentic_retrieval` uses semantic search to pre-rank files before the agentic pass, then verifies those hints against live code. By default it uses the Relace cloud index (`relace` backend, requires `RELACE_API_KEY` and a synced repo). To run without cloud dependency, use a local backend.
 
 ### Hint Freshness Policy
 
@@ -193,17 +192,6 @@ MCP_RETRIEVAL_BACKEND=chunkhound
 
 If the index is missing or stale, the server may continue without hints while scheduling a background refresh. With `MCP_RETRIEVAL_HINT_POLICY=prefer-stale`, retrieval can still use stale ChunkHound hints; `strict` skips them. Refer to the [ChunkHound project](https://pypi.org/project/chunkhound/) for configuration and embedding model setup.
 
-### Auto Mode
-
-```bash
-MCP_SEARCH_RETRIEVAL=1
-MCP_RETRIEVAL_BACKEND=auto
-```
-
-The server picks the first available backend per session: `codanna` → `chunkhound` → `relace` (cloud fallback).
-
-When the selected local backend is stale or missing, retrieval can schedule a background refresh. The query path does not block on rebuild completion.
-
 ### Background Index Monitor
 
 ```bash
@@ -213,17 +201,17 @@ MCP_BASE_DIR=/absolute/path/to/repo
 MCP_BACKGROUND_INDEX_MONITOR=1
 ```
 
-`index_status` is exposed only when `RELACE_CLOUD_TOOLS=1` or a local index CLI (`codanna` / `chunkhound`) is discoverable in `PATH`.
+`index_status` is exposed only when `MCP_RETRIEVAL_BACKEND` is `relace`, `codanna`, or `chunkhound`.
 
 When enabled, the server runs a periodic local-only freshness check and triggers a background refresh for the selected local backend when needed.
 
 - It is `off` by default.
 - It only starts when `MCP_BASE_DIR` is pinned to a single repository.
-- It only monitors the active local backend (`codanna`, `chunkhound`, or the local choice from `auto`).
+- It only monitors the active local backend (`codanna` or `chunkhound`).
 - It uses a host-local file lock to avoid duplicate index CLI runs when multiple local MCP processes happen to point at the same repo.
 - It is intended for single-process deployments. For multi-worker or multi-pod HTTP deployments, disable it and use backend-native watch/daemon flows or an external scheduler.
 
-`index_status` includes a `background_monitor` summary so you can verify whether the monitor is active and why it may be disabled.
+`index_status` includes a compact `background_monitor` summary so you can verify the monitor state and, when needed, the blocking reason.
 
 ---
 
@@ -293,13 +281,13 @@ Trace logs are also JSONL. Each line is one event.
 | `tool_call` | Tool call with timing |
 | `search_complete` | Search completed |
 | `search_error` | Search failed |
-| `index_status` | Indexing backends summary (relace/codanna/chunkhound) |
+| `index_status` | Active indexing backend summary |
 | `index_status_error` | Indexing status error (e.g., base_dir resolution failure) |
 | `backend_index_start` | Codanna/ChunkHound indexing started |
 | `backend_index_complete` | Codanna/ChunkHound indexing completed |
 | `backend_index_error` | Codanna/ChunkHound indexing failed |
 | `backend_disabled` | Backend disabled for session (e.g., CLI missing) |
-| `retrieval_backend_selected` | Retrieval backend selection (including auto) |
+| `retrieval_backend_selected` | Retrieval backend selection |
 | `retrieval_hints_skipped` | Retrieval hints skipped because policy/backend freshness did not allow them |
 | `retrieval_hints_complete` | Retrieval hints completed |
 | `retrieval_hints_error` | Retrieval hints failed (fallback continues) |

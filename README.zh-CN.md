@@ -34,7 +34,7 @@
 
 **前置需求：** [uv](https://docs.astral.sh/uv/)、[git](https://git-scm.com/)、[ripgrep](https://github.com/BurntSushi/ripgrep)（推荐）
 
-使用 Relace（默认）或 `RELACE_CLOUD_TOOLS=1`：从 [Relace Dashboard](https://app.relace.ai/settings/billing) 获取 API 密钥，然后添加到你的 MCP 客户端：
+使用 `relace` backend（默认）：从 [Relace Dashboard](https://app.relace.ai/settings/billing) 获取 API 密钥，然后添加到你的 MCP 客户端：
 
 <details>
 <summary><strong>Cursor</strong></summary>
@@ -139,9 +139,8 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 | 变量 | 必需 | 说明 |
 |------|------|------|
 | `RELACE_API_KEY` | ✅* | 来自 [Relace Dashboard](https://app.relace.ai/settings/billing) 的 API 密钥；在使用 Relace provider 或云端工具时必需 |
-| `RELACE_CLOUD_TOOLS` | ❌ | 设为 `1` 启用云端工具 |
 | `MCP_SEARCH_RETRIEVAL` | ❌ | 设为 `1` 注册 `agentic_retrieval` 工具 |
-| `MCP_RETRIEVAL_BACKEND` | ❌ | semantic retrieval backend：`relace`（默认）、`codanna`、`chunkhound`、`auto` 或 `none` |
+| `MCP_RETRIEVAL_BACKEND` | ❌ | semantic retrieval backend：`relace`（默认）、`codanna`、`chunkhound` 或 `none` |
 | `MCP_RETRIEVAL_HINT_POLICY` | ❌ | retrieval hint policy：`prefer-stale`（默认）或 `strict` |
 | `MCP_BACKGROUND_INDEX_MONITOR` | ❌ | 为 local index 启用可选的周期 refresh monitor；要求固定的 `MCP_BASE_DIR` 与 local backend |
 | `MCP_BACKGROUND_INDEX_INTERVAL_SECONDS` | ❌ | 周期 local index monitor 的检查间隔（秒，默认 `300`） |
@@ -153,13 +152,13 @@ MCP_BASE_DIR = "/absolute/path/to/your/project"
 | `MCP_LOGGING` | ❌ | 文件日志：`off`（默认）、`safe`、`full` |
 | `MCP_DOTENV_PATH` | ❌ | `.env` 文件路径，用于集中配置 |
 
-`*` 仅当**同时满足**：(1) `APPLY_PROVIDER` 与 `SEARCH_PROVIDER` 均为非 Relace 提供商，且 (2) `RELACE_CLOUD_TOOLS=false` 时可省略。
+`*` 仅当**同时满足**：(1) `APPLY_PROVIDER` 与 `SEARCH_PROVIDER` 均为非 Relace 提供商，且 (2) `MCP_RETRIEVAL_BACKEND` 为 `codanna`、`chunkhound` 或 `none` 时可省略。
 
 `.env` 使用方法、编码设置、自定义 LLM 等进阶设置，请参见 [docs/advanced.zh-CN.md](docs/advanced.zh-CN.md)。
 
 ## 工具
 
-始终可用的工具有：`fast_apply`、`agentic_search`。`agentic_retrieval` 需设置 `MCP_SEARCH_RETRIEVAL=1`。云端工具需设置 `RELACE_CLOUD_TOOLS=1`。`index_status` 会在启用云端工具，或 `PATH` 中可找到本地 index CLI（`codanna` / `chunkhound`）时可用。
+始终可用的工具有：`fast_apply`、`agentic_search`。`agentic_retrieval` 需设置 `MCP_SEARCH_RETRIEVAL=1`。云端工具只会在 `MCP_RETRIEVAL_BACKEND=relace` 时可用。`index_status` 会在 `relace`、`codanna`、`chunkhound` backend 下可用，在 `MCP_RETRIEVAL_BACKEND=none` 时隐藏。
 
 可用性发现请使用 MCP 原生接口：tools 用 `list_tools()`，resources 用 `list_resources()`。
 

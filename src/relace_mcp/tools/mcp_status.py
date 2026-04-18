@@ -1,20 +1,17 @@
 # pyright: reportUnusedFunction=false
 import shutil
-from pathlib import Path
 from typing import Any
 
 from fastmcp import FastMCP
 from fastmcp.server.context import Context
 
 from ..config import resolve_base_dir
-from ..config import settings as _settings
 from ..observability import get_trace_id, log_event, redact_value
-from ..repo.backends import schedule_bg_chunkhound_index, schedule_bg_codanna_full_index
 from ..repo.core import get_current_git_info, is_git_dirty
 from ..repo.core.state import load_sync_state
 from ..repo.freshness import classify_cloud_index_freshness, classify_local_index_freshness
 from ..repo.monitor import get_background_index_monitor_summary
-from ._registry import ToolRegistryDeps, read_text_safe
+from ._registry import ToolRegistryDeps
 
 
 def _build_relace_status(base_dir: str) -> dict[str, Any]:
@@ -24,7 +21,6 @@ def _build_relace_status(base_dir: str) -> dict[str, Any]:
 
     relace_freshness = classify_cloud_index_freshness(base_dir)
     relace_status: dict[str, Any] = {
-        "cloud_tools_enabled": _settings.RELACE_CLOUD_TOOLS,
         "local_git": {
             "git_branch": current_branch,
             "git_head": current_head[:8] if current_head else "",
@@ -84,75 +80,23 @@ def _build_relace_status(base_dir: str) -> dict[str, Any]:
     return relace_status
 
 
-def _build_local_backend_status(base_dir: str, backend_name: str) -> tuple[dict[str, Any], Any]:
-    base_path = Path(base_dir)
+def _build_local_backend_status(base_dir: str, backend_name: str) -> dict[str, Any]:
     cli_path = shutil.which(backend_name)
     freshness = classify_local_index_freshness(base_dir, backend_name)
-    head_path = base_path / f".{backend_name}" / "last_indexed_head"
-    if backend_name == "codanna":
-        index_dir_exists = (base_path / ".codanna").is_dir()
-    else:
-        index_dir_exists = (base_path / ".chunkhound").is_dir()
 
     status_obj: dict[str, Any] = {
-        "cli_found": bool(cli_path),
         "cli_path": cli_path,
-        "index_dir_exists": index_dir_exists,
-        "last_indexed_head": read_text_safe(head_path),
         "freshness": freshness.freshness,
-        "hints_usable": freshness.hints_usable,
-        "background_refresh_scheduled": False,
+        "hints_usable": freshness.hints_usable if cli_path else False,
     }
-    return status_obj, freshness
-
-
-def collect_index_status_payload(
-    base_dir: str,
-    base_dir_source: str,
-    *,
-    retrieval_backend: str,
-    schedule_local_refresh: bool,
-    background_monitor: dict[str, Any],
-) -> dict[str, Any]:
-    relace_status = _build_relace_status(base_dir)
-    codanna_status, codanna_freshness = _build_local_backend_status(base_dir, "codanna")
-    chunkhound_status, chunkhound_freshness = _build_local_backend_status(base_dir, "chunkhound")
-
-    if schedule_local_refresh:
-        for backend_name, status_obj, freshness_obj in (
-            ("codanna", codanna_status, codanna_freshness),
-            ("chunkhound", chunkhound_status, chunkhound_freshness),
-        ):
-            if not status_obj["cli_found"]:
-                status_obj["hints_usable"] = False
-                continue
-            if freshness_obj.refresh_recommended:
-                if backend_name == "codanna":
-                    schedule_bg_codanna_full_index(base_dir)
-                else:
-                    schedule_bg_chunkhound_index(base_dir)
-                status_obj["background_refresh_scheduled"] = True
-    else:
-        for status_obj in (codanna_status, chunkhound_status):
-            if not status_obj["cli_found"]:
-                status_obj["hints_usable"] = False
-
-    return {
-        "base_dir": base_dir,
-        "base_dir_source": base_dir_source,
-        "retrieval_backend": retrieval_backend,
-        "background_monitor": background_monitor,
-        "relace": relace_status,
-        "codanna": codanna_status,
-        "chunkhound": chunkhound_status,
-    }
+    return status_obj
 
 
 def register_status_tools(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
     @mcp.tool(
         timeout=120.0,
         annotations={
-            "readOnlyHint": False,
+            "readOnlyHint": True,
             "destructiveHint": False,
             "idempotentHint": True,
             "openWorldHint": False,
@@ -161,22 +105,10 @@ def register_status_tools(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
     async def index_status(
         ctx: Context | None = None,
     ) -> dict[str, Any]:
-        """Inspect indexing services status. Call before retrieval when hints seem stale or missing,
-        or after index errors to check backend health.
+        """Inspect the active indexing backend status without mutating index state.
 
-        Single status entry point for all backends (Relace cloud, Codanna, ChunkHound).
-        Reports freshness, hints_usable, and recommended_action for each backend.
-
-        Side-effect: for local backends (Codanna/ChunkHound), automatically schedules
-        a background reindex if the index is stale or missing AND the CLI is available,
-        setting background_refresh_scheduled=true in the response.
-
-        Return structure (top-level keys):
-          relace     → {freshness, hints_usable, status.recommended_action, ...}
-          codanna    → {freshness, hints_usable, background_refresh_scheduled, ...}
-          chunkhound → {freshness, hints_usable, background_refresh_scheduled, ...}
-
-        For Relace cloud: read-only; if stale, call cloud_sync().
+        Returns a single active backend summary plus background monitor state when applicable.
+        For Relace cloud, use cloud_sync() to refresh the index when stale.
         """
         trace_id = get_trace_id()
 
@@ -188,79 +120,44 @@ def register_status_tools(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
                     "kind": "index_status_error",
                     "level": "error",
                     "trace_id": trace_id,
+                    "active_backend": deps.index_runtime.active_backend,
                     "error": redact_value(str(exc), 500),
                 }
             )
             return {
                 "trace_id": trace_id,
+                "active_backend": deps.index_runtime.active_backend,
                 "base_dir": None,
                 "error": str(exc),
             }
 
-        status_payload: dict[str, Any] = collect_index_status_payload(
-            base_dir,
-            base_dir_source,
-            retrieval_backend=_settings.RETRIEVAL_BACKEND,
-            schedule_local_refresh=True,
-            background_monitor=get_background_index_monitor_summary(mcp),
-        )
+        active_backend = deps.index_runtime.active_backend
+        if active_backend == "relace":
+            backend_status = _build_relace_status(base_dir)
+        else:
+            backend_status = _build_local_backend_status(base_dir, active_backend)
+
         payload: dict[str, Any] = {
             "trace_id": trace_id,
-            **status_payload,
+            "base_dir": base_dir,
+            "base_dir_source": base_dir_source,
+            "active_backend": active_backend,
+            "backend": backend_status,
+            "background_monitor": get_background_index_monitor_summary(mcp),
         }
-
-        relace_status = status_payload["relace"]
-        codanna_status = status_payload["codanna"]
-        chunkhound_status = status_payload["chunkhound"]
-
-        if not isinstance(relace_status, dict):
-            relace_status = {}
-        if not isinstance(codanna_status, dict):
-            codanna_status = {}
-        if not isinstance(chunkhound_status, dict):
-            chunkhound_status = {}
-
-        relace_needs_sync = None
-        relace_recommended_action = None
-        relace_status_detail = relace_status.get("status")
-        if isinstance(relace_status_detail, dict):
-            relace_needs_sync = relace_status_detail.get("needs_sync")
-            relace_recommended_action = relace_status_detail.get("recommended_action")
 
         log_event(
             {
                 "kind": "index_status",
                 "level": "info",
                 "trace_id": trace_id,
+                "active_backend": active_backend,
                 "base_dir": base_dir,
                 "base_dir_source": base_dir_source,
-                "retrieval_backend": _settings.RETRIEVAL_BACKEND,
-                "relace_cloud_tools_enabled": bool(relace_status.get("cloud_tools_enabled")),
-                "relace_freshness": relace_status.get("freshness"),
-                "relace_hints_usable": relace_status.get("hints_usable"),
-                "relace_needs_sync": relace_needs_sync,
-                "relace_recommended_action": redact_value(
-                    str(relace_recommended_action),
-                    500,
-                )
-                if relace_recommended_action
-                else None,
-                "codanna_cli_found": bool(codanna_status.get("cli_found")),
-                "codanna_index_dir_exists": bool(codanna_status.get("index_dir_exists")),
-                "codanna_last_indexed_head": codanna_status.get("last_indexed_head"),
-                "codanna_freshness": codanna_status.get("freshness"),
-                "codanna_hints_usable": codanna_status.get("hints_usable"),
-                "codanna_background_refresh_scheduled": codanna_status.get(
-                    "background_refresh_scheduled"
-                ),
-                "chunkhound_cli_found": bool(chunkhound_status.get("cli_found")),
-                "chunkhound_index_dir_exists": bool(chunkhound_status.get("index_dir_exists")),
-                "chunkhound_last_indexed_head": chunkhound_status.get("last_indexed_head"),
-                "chunkhound_freshness": chunkhound_status.get("freshness"),
-                "chunkhound_hints_usable": chunkhound_status.get("hints_usable"),
-                "chunkhound_background_refresh_scheduled": chunkhound_status.get(
-                    "background_refresh_scheduled"
-                ),
+                "backend_freshness": backend_status.get("freshness"),
+                "backend_hints_usable": backend_status.get("hints_usable"),
+                "background_monitor_enabled": payload["background_monitor"].get("enabled"),
+                "background_monitor_reason": payload["background_monitor"].get("reason"),
             }
         )
 

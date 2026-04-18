@@ -5,9 +5,16 @@ import pytest
 
 from relace_mcp.clients import RelaceRepoClient, SearchLLMClient
 from relace_mcp.config import RelaceConfig
+from relace_mcp.config import settings as settings_mod
 from relace_mcp.repo.freshness import FreshnessStatus
 from relace_mcp.search.prompt_messages import format_hints_list
 from relace_mcp.search.retrieval import _compact_semantic_hints, agentic_retrieval_logic
+
+
+@pytest.fixture(autouse=True)
+def _default_retrieval_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings_mod, "RETRIEVAL_BACKEND", "relace")
+    monkeypatch.setattr(settings_mod, "RETRIEVAL_HINT_POLICY", "prefer-stale")
 
 
 class TestFormatHintsList:
@@ -343,37 +350,6 @@ class TestAgenticRetrievalLogic:
             assert "explanation" in result
             assert result["semantic_hints_used"] == 0
             assert result["hints_index_freshness"] == "missing"
-
-
-class TestResolveAutoBackendNoHealthProbe:
-    """_resolve_auto_backend must not block via health probes."""
-
-    def test_no_check_backend_health_called(self, tmp_path: Path) -> None:
-        from relace_mcp.search.retrieval import _auto_backend_cache, _resolve_auto_backend
-
-        _auto_backend_cache.clear()
-        with (
-            patch("relace_mcp.search.retrieval.shutil.which", return_value=None),
-            patch("relace_mcp.search.retrieval.is_backend_disabled", return_value=False),
-            patch("relace_mcp.repo.backends.check_backend_health") as mock_health,
-        ):
-            result = _resolve_auto_backend(str(tmp_path))
-        assert result == "relace"
-        mock_health.assert_not_called()
-
-    def test_returns_first_available_cli(self, tmp_path: Path) -> None:
-        from relace_mcp.search.retrieval import _auto_backend_cache, _resolve_auto_backend
-
-        _auto_backend_cache.clear()
-        with (
-            patch(
-                "relace_mcp.search.retrieval.shutil.which",
-                side_effect=lambda name: "/usr/bin/" + name if name == "chunkhound" else None,
-            ),
-            patch("relace_mcp.search.retrieval.is_backend_disabled", return_value=False),
-        ):
-            result = _resolve_auto_backend(str(tmp_path))
-        assert result == "chunkhound"
 
 
 class TestChunkHoundIndexFileBug1:

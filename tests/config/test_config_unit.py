@@ -7,16 +7,31 @@ from relace_mcp.config import RelaceConfig
 
 class TestRelaceConfigFromEnv:
     @pytest.mark.usefixtures("clean_env")
-    def test_missing_api_key_allowed_by_default(self) -> None:
-        """When RELACE_CLOUD_TOOLS is off (default), API key is optional."""
+    def test_missing_api_key_raises_for_default_relace_backend(self) -> None:
+        """Default relace backend requires RELACE_API_KEY."""
+        with pytest.raises(RuntimeError, match="RELACE_API_KEY is required"):
+            RelaceConfig.from_env()
+
+    @pytest.mark.usefixtures("clean_env")
+    def test_missing_api_key_allowed_for_none_backend(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "none")
         config = RelaceConfig.from_env()
         assert config.api_key is None
 
     @pytest.mark.usefixtures("clean_env")
-    def test_missing_api_key_raises_with_cloud_tools(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """When RELACE_CLOUD_TOOLS is on, API key is required."""
-        monkeypatch.setenv("RELACE_CLOUD_TOOLS", "1")
-        with pytest.raises(RuntimeError, match="RELACE_API_KEY is required"):
+    def test_missing_api_key_allowed_for_local_backend(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "codanna")
+        config = RelaceConfig.from_env()
+        assert config.api_key is None
+
+    @pytest.mark.usefixtures("clean_env")
+    def test_auto_backend_raises_migration_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "auto")
+        with pytest.raises(RuntimeError, match="auto is no longer supported"):
             RelaceConfig.from_env()
 
     @pytest.mark.usefixtures("clean_env")
@@ -31,7 +46,7 @@ class TestRelaceConfigBaseDir:
     @pytest.mark.usefixtures("clean_env")
     def test_missing_base_dir_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When MCP_BASE_DIR is not set, base_dir should be None (resolved at runtime)."""
-        monkeypatch.setenv("RELACE_API_KEY", "test-key")
+        monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "none")
         config = RelaceConfig.from_env()
         assert config.base_dir is None
 
