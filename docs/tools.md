@@ -79,11 +79,15 @@ Search the codebase and return relevant files and line ranges.
 
 Available when `MCP_RETRIEVAL_BACKEND` is `relace`, `codanna`, or `chunkhound`.
 
-Inspect the single active indexing backend without mutating index state.
+Inspect the single active indexing backend in read-only mode.
 
 This tool takes no parameters.
 
-Returns `active_backend`, a single `backend` status object, and a compact `background_monitor` summary (`state`, `reason`).
+Use this before retrieval when you need to know whether the active backend is fresh and whether semantic hints are usable.
+
+Returns `active_backend`, a single `backend` status object with `freshness` and `hints_usable`, and `background_monitor` (`state`, `reason`).
+
+This tool never refreshes indexes. If `active_backend` is `relace` and `backend.status.needs_sync` is `true`, run `cloud_sync()`.
 
 ---
 

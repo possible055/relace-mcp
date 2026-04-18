@@ -79,11 +79,15 @@
 
 仅在 `MCP_RETRIEVAL_BACKEND` 为 `relace`、`codanna` 或 `chunkhound` 时可用。
 
-检查当前唯一 active backend 的索引状态，不会修改 index。
+以只读方式检查当前唯一 active backend 的索引状态。
 
 此工具不接受参数。
 
-返回 `active_backend`、单一的 `backend` 状态对象，以及精简后的 `background_monitor` 摘要（`state`、`reason`）。
+适合在 retrieval 前先判断当前 backend 是否够新，以及 semantic hints 是否可用。
+
+返回 `active_backend`、单一的 `backend` 状态对象（包含 `freshness`、`hints_usable`），以及 `background_monitor` 摘要（`state`、`reason`）。
+
+此工具不会主动刷新 index。若 `active_backend` 是 `relace` 且 `backend.status.needs_sync` 为 `true`，请运行 `cloud_sync()`。
 
 ---
 

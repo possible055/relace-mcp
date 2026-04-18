@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -197,6 +198,41 @@ class TestMCPToolAnnotations:
         assert annotations is not None
         assert annotations.readOnlyHint is True
         assert annotations.destructiveHint is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("clean_env")
+    async def test_index_status_description_guides_refresh_flow(
+        self, mock_config: RelaceConfig
+    ) -> None:
+        server = build_server(config=mock_config, run_health_check=False)
+
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            status_tool = next((tool for tool in tools if tool.name == STATUS_TOOL), None)
+
+        assert status_tool is not None
+        assert status_tool.description is not None
+        assert "Use this before retrieval" in status_tool.description
+        assert "never refreshes indexes" in status_tool.description
+        assert "cloud_sync()" in status_tool.description
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("clean_env")
+    async def test_index_status_has_specific_output_schema(self, mock_config: RelaceConfig) -> None:
+        server = build_server(config=mock_config, run_health_check=False)
+
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            status_tool = next((tool for tool in tools if tool.name == STATUS_TOOL), None)
+
+        assert status_tool is not None
+        schema = getattr(status_tool, "outputSchema", None)
+        assert isinstance(schema, dict)
+        schema_json = json.dumps(schema)
+        assert '"background_monitor"' in schema_json
+        assert '"freshness"' in schema_json
+        assert '"hints_usable"' in schema_json
+        assert '"recommended_action"' in schema_json
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("clean_env")
