@@ -12,6 +12,14 @@ from ..repo.core.state import get_repo_identity, load_sync_state
 from ._registry import ToolRegistryDeps
 
 
+def _cloud_config_error_payload(message: str) -> dict[str, Any]:
+    return {
+        "error": message,
+        "recommended_action": "Set RELACE_API_KEY and retry.",
+        "retryable": False,
+    }
+
+
 def register_cloud_components(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
     @mcp.tool(
         tags={"cloud"},
@@ -50,10 +58,15 @@ def register_cloud_components(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
         """
         from ..repo.cloud.sync import cloud_sync_logic
 
+        try:
+            repo_client = deps.clients.get_repo()
+        except RuntimeError as exc:
+            return _cloud_config_error_payload(str(exc))
+
         base_dir, _ = await resolve_base_dir(deps.config.base_dir, ctx)
         return await asyncio.to_thread(
             cloud_sync_logic,
-            deps.clients.get_repo(),
+            repo_client,
             base_dir,
             force=force,
             mirror=mirror,
@@ -102,10 +115,15 @@ def register_cloud_components(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
         score_threshold = 0.3
         token_limit = 30000
 
+        try:
+            repo_client = deps.clients.get_repo()
+        except RuntimeError as exc:
+            return _cloud_config_error_payload(str(exc))
+
         base_dir, _ = await resolve_base_dir(deps.config.base_dir, ctx)
         return await asyncio.to_thread(
             cloud_search_logic,
-            deps.clients.get_repo(),
+            repo_client,
             base_dir,
             query,
             branch=branch or "",
@@ -140,10 +158,15 @@ def register_cloud_components(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
         """
         from ..repo.cloud.clear import cloud_clear_logic
 
+        try:
+            repo_client = deps.clients.get_repo()
+        except RuntimeError as exc:
+            return _cloud_config_error_payload(str(exc))
+
         base_dir, _ = await resolve_base_dir(deps.config.base_dir, ctx)
         return await asyncio.to_thread(
             cloud_clear_logic,
-            deps.clients.get_repo(),
+            repo_client,
             base_dir,
             confirm=confirm,
             repo_id=repo_id,
@@ -167,7 +190,11 @@ def register_cloud_components(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
         """
         from ..repo.cloud.list import cloud_list_logic
 
-        return cloud_list_logic(deps.clients.get_repo())
+        try:
+            repo_client = deps.clients.get_repo()
+        except RuntimeError as exc:
+            return _cloud_config_error_payload(str(exc))
+        return cloud_list_logic(repo_client)
 
     @mcp.resource(
         "relace://cloud/status",

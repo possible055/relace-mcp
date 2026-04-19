@@ -16,6 +16,21 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _register_roots_notification_handler(mcp: "FastMCP") -> None:
+    import mcp.types as mt
+
+    from .config.base_dir import invalidate_roots_cache
+
+    async def _handle_roots_list_changed(_notification: mt.RootsListChangedNotification) -> None:
+        # FastMCP 3.2.4 routes client notifications through low-level handlers
+        # instead of middleware, so roots/list_changed needs an explicit handler.
+        invalidate_roots_cache()
+
+    mcp._mcp_server.notification_handlers[mt.RootsListChangedNotification] = (  # type: ignore[attr-defined]
+        _handle_roots_list_changed
+    )
+
+
 def _ensure_fastmcp_log_level() -> None:
     # Suppress FastMCP's Rich console output for stdio transport.
     # This MUST be set BEFORE fastmcp is imported.
@@ -117,7 +132,13 @@ def check_health(config: "RelaceConfig") -> dict[str, str]:
             errors.append(f"cannot create trace directory: {exc}")
 
     # Retrieval backend health check (passive only: do NOT run expensive CLI probes on startup)
-    if _settings.AGENTIC_RETRIEVAL_ENABLED and index_runtime.local_backend_enabled:
+    if index_runtime.active_backend == "relace" and not config.api_key:
+        logger.warning(
+            "relace backend selected without RELACE_API_KEY - cloud tools and semantic hints "
+            "will be unavailable until configured"
+        )
+        results["retrieval_backend"] = "relace: api_key_missing"
+    elif _settings.AGENTIC_RETRIEVAL_ENABLED and index_runtime.local_backend_enabled:
         backend = index_runtime.active_backend
         cli_path = shutil.which(backend)
         if not cli_path:
@@ -185,6 +206,7 @@ def build_server(
     mcp.add_middleware(RootsMiddleware())
     mcp.add_middleware(ProgressHeartbeatMiddleware())
     mcp.add_middleware(ToolTracingMiddleware())
+    _register_roots_notification_handler(mcp)
 
     register_tools(mcp, config, index_runtime)
     return mcp

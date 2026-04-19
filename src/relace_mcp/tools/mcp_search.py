@@ -148,7 +148,7 @@ def register_search_tools(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
                     )
 
             result = await agentic_retrieval_logic(
-                deps.clients.get_repo(),
+                deps.clients.get_repo_optional(),
                 deps.clients.get_search(),
                 deps.config,
                 base_dir,

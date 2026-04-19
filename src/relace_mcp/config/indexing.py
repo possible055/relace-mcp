@@ -17,13 +17,7 @@ class IndexRuntime:
 
 
 def validate_index_settings(*, api_key: str | None) -> None:
-    backend = _settings.RETRIEVAL_BACKEND
-
-    if backend == "relace" and not api_key:
-        raise RuntimeError(
-            "RELACE_API_KEY is required when MCP_RETRIEVAL_BACKEND=relace. "
-            "Set RELACE_API_KEY or choose MCP_RETRIEVAL_BACKEND=codanna, chunkhound, or none."
-        )
+    _ = api_key
 
 
 def resolve_index_runtime(

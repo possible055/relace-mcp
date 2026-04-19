@@ -475,6 +475,9 @@ class TestAgenticRetrievalLogic:
             assert "explanation" in result
             assert result["semantic_hints_used"] == 0
             assert result["hints_index_freshness"] == "missing"
+            assert any(
+                "Relace semantic retrieval unavailable" in warning for warning in result["warnings"]
+            )
 
 
 class TestChunkHoundIndexFileBug1:

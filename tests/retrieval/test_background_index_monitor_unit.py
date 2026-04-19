@@ -95,6 +95,21 @@ class TestBackgroundIndexMonitor:
         assert summary["reason"] == "backend_not_local"
 
     @pytest.mark.asyncio
+    async def test_start_does_not_block_on_missing_cli(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _configure_monitor_settings(monkeypatch, retrieval_backend="chunkhound")
+
+        with patch("relace_mcp.repo.monitor.shutil.which", return_value=None):
+            monitor = _make_monitor(str(tmp_path))
+            await monitor.start()
+            summary = monitor.summary()
+            await monitor.stop()
+
+        assert summary["state"] == "active"
+        assert summary["reason"] is None
+
+    @pytest.mark.asyncio
     async def test_tick_schedules_only_active_backend(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -350,6 +365,36 @@ class TestBackgroundIndexMonitor:
             record.message for record in caplog.records if "CLI is not installed" in record.message
         ]
         assert len(messages) == 1
+
+    @pytest.mark.asyncio
+    async def test_cli_missing_is_reprobed_on_later_ticks(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _configure_monitor_settings(monkeypatch, retrieval_backend="chunkhound")
+        monitor = _make_monitor(str(tmp_path))
+        monitor._active_backend = "chunkhound"
+
+        with (
+            patch(
+                "relace_mcp.repo.monitor.shutil.which",
+                side_effect=[None, "/usr/bin/chunkhound"],
+            ),
+            patch.object(
+                bgmon,
+                "classify_local_index_freshness",
+                return_value=FreshnessStatus(
+                    freshness="fresh",
+                    hints_usable=True,
+                    refresh_recommended=False,
+                    reason="up_to_date",
+                ),
+            ),
+        ):
+            first = await monitor._tick()
+            second = await monitor._tick()
+
+        assert first.status == "cli_not_found"
+        assert second.status == "fresh"
 
 
 class TestBackendIndexLock:

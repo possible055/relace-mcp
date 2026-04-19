@@ -132,7 +132,27 @@ class IndexStatusToolOutput(_StatusModel):
     )
 
 
-def _build_relace_status(base_dir: str) -> RelaceBackendStatus:
+def _finalize_relace_status(
+    relace_status: RelaceBackendStatus, *, api_key_present: bool
+) -> RelaceBackendStatus:
+    if api_key_present:
+        return relace_status
+
+    relace_status.hints_usable = False
+    if relace_status.status is None:
+        relace_status.status = RelaceSyncStatus(
+            ref_changed=False,
+            needs_sync=False,
+            recommended_action="Set RELACE_API_KEY to enable Relace semantic hints and cloud tools.",
+        )
+    else:
+        relace_status.status.recommended_action = (
+            "Set RELACE_API_KEY to enable Relace semantic hints and cloud tools."
+        )
+    return relace_status
+
+
+def _build_relace_status(base_dir: str, *, api_key_present: bool) -> RelaceBackendStatus:
     current_branch, current_head = get_current_git_info(base_dir)
     git_dirty = is_git_dirty(base_dir)
     sync_state = load_sync_state(base_dir)
@@ -159,7 +179,7 @@ def _build_relace_status(base_dir: str) -> RelaceBackendStatus:
             needs_sync=True,
             recommended_action="No sync state found. Run cloud_sync().",
         )
-        return relace_status
+        return _finalize_relace_status(relace_status, api_key_present=api_key_present)
 
     relace_status.sync_state = RelaceSyncState(
         repo_id=sync_state.repo_id,
@@ -198,7 +218,7 @@ def _build_relace_status(base_dir: str) -> RelaceBackendStatus:
         needs_sync=needs_sync,
         recommended_action=recommended_action,
     )
-    return relace_status
+    return _finalize_relace_status(relace_status, api_key_present=api_key_present)
 
 
 def _build_local_backend_status(base_dir: str, backend_name: str) -> LocalBackendStatus:
@@ -271,7 +291,10 @@ def register_status_tools(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
         )
         backend_status: RelaceBackendStatus | LocalBackendStatus
         if active_backend == "relace":
-            backend_status = _build_relace_status(base_dir)
+            backend_status = _build_relace_status(
+                base_dir,
+                api_key_present=bool(deps.config.api_key),
+            )
             payload = IndexStatusToolOutput(
                 trace_id=trace_id,
                 base_dir=base_dir,

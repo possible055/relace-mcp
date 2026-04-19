@@ -146,8 +146,6 @@ class BackgroundIndexMonitor:
         backend = self._index_runtime.active_backend
         if is_backend_disabled(backend):
             return None, "backend_disabled"
-        if not shutil.which(backend):
-            return None, "cli_not_found"
         return backend, "ok"
 
     def _maybe_log_startup_reason(self) -> None:

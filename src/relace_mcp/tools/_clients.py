@@ -43,7 +43,19 @@ class ToolClients:
                     self._search_inst = SearchLLMClient(self._config)
         return self._search_inst
 
+    def has_repo_credentials(self) -> bool:
+        return bool(self._config.api_key)
+
+    def get_repo_optional(self) -> "RelaceRepoClient | None":
+        if not self.has_repo_credentials():
+            return None
+        return self.get_repo()
+
     def get_repo(self) -> "RelaceRepoClient":
+        if not self.has_repo_credentials():
+            raise RuntimeError(
+                "RELACE_API_KEY is required for Relace cloud tools. Set RELACE_API_KEY and retry."
+            )
         if self._repo_inst is None:
             with self._repo_lock:
                 if self._repo_inst is None:

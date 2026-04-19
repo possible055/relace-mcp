@@ -70,7 +70,13 @@ async def test_index_status_local_backend_with_missing_cli_is_read_only(
     monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "codanna")
     config = _make_config(tmp_path)
 
-    with patch(f"{_TOOLS_MOD}.shutil.which", return_value=None):
+    with (
+        patch(f"{_TOOLS_MOD}.shutil.which", return_value=None),
+        patch(
+            f"{_TOOLS_MOD}.classify_local_index_freshness",
+            return_value=type("Freshness", (), {"freshness": "missing"})(),
+        ),
+    ):
         server = build_server(config=config, run_health_check=False)
 
         from fastmcp import Client
@@ -83,6 +89,7 @@ async def test_index_status_local_backend_with_missing_cli_is_read_only(
     assert payload is not None
     assert payload["active_backend"] == "codanna"
     assert payload["backend"]["cli_path"] is None
+    assert payload["backend"]["freshness"] == "missing"
     assert payload["backend"]["hints_usable"] is False
 
     status_tool = next(tool for tool in tools if tool.name == "index_status")
@@ -145,6 +152,34 @@ async def test_index_status_local_backend_disabled_session_disables_hints(
     assert payload is not None
     assert payload["backend"]["freshness"] == "fresh"
     assert payload["backend"]["hints_usable"] is False
+
+
+@pytest.mark.asyncio
+async def test_index_status_relace_without_api_key_disables_hints_and_sets_action(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "relace")
+    config = RelaceConfig(api_key=None, base_dir=str(tmp_path))
+
+    with patch(
+        f"{_TOOLS_MOD}.classify_cloud_index_freshness",
+        return_value=type("Freshness", (), {"freshness": "fresh"})(),
+    ):
+        server = build_server(config=config, run_health_check=False)
+
+        from fastmcp import Client
+
+        async with Client(server) as client:
+            result = await client.call_tool("index_status", {})
+
+    payload = result.structured_content
+    assert payload is not None
+    assert payload["active_backend"] == "relace"
+    assert payload["backend"]["freshness"] == "fresh"
+    assert payload["backend"]["hints_usable"] is False
+    assert payload["backend"]["status"]["recommended_action"] == (
+        "Set RELACE_API_KEY to enable Relace semantic hints and cloud tools."
+    )
 
 
 @pytest.mark.asyncio

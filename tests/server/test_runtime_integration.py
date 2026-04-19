@@ -8,7 +8,7 @@ from mcp.types import TextContent
 
 from relace_mcp.clients.apply import ApplyResponse
 from relace_mcp.config import RelaceConfig
-from relace_mcp.server import build_server
+from relace_mcp.server import build_server, check_health
 
 
 @pytest.fixture(autouse=True)
@@ -41,13 +41,27 @@ class TestBuildServer:
 
     @pytest.mark.usefixtures("clean_env")
     def test_build_succeeds_without_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Server builds without RELACE_API_KEY when relace backend is disabled."""
+        """Server builds without RELACE_API_KEY on the default relace backend."""
         monkeypatch.setenv("RELACE_API_KEY", "")
         monkeypatch.setenv("MCP_BASE_DIR", "")
-        monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "none")
+        monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "relace")
         monkeypatch.setenv("MCP_LOGGING", "off")
         server = build_server()
         assert server is not None
+
+    @pytest.mark.usefixtures("clean_env")
+    def test_health_reports_missing_relace_api_key_nonfatally(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("RELACE_API_KEY", "")
+        monkeypatch.setenv("MCP_BASE_DIR", "")
+        monkeypatch.setenv("MCP_RETRIEVAL_BACKEND", "relace")
+        monkeypatch.setenv("MCP_LOGGING", "off")
+
+        config = RelaceConfig.from_env()
+        results = check_health(config)
+
+        assert results["retrieval_backend"] == "relace: api_key_missing"
 
 
 class TestServerToolExecution:
@@ -103,6 +117,65 @@ class TestServerToolExecution:
                 assert "freshness" in payload["backend"]
                 assert "hints_usable" in payload["backend"]
                 assert "background_monitor" in payload
+
+    @pytest.mark.asyncio
+    async def test_cloud_list_fails_fast_without_api_key(self, tmp_path: Path) -> None:
+        config = RelaceConfig(api_key=None, base_dir=str(tmp_path))
+
+        with patch("relace_mcp.clients.repo.RelaceRepoClient") as mock_repo_cls:
+            server = build_server(config=config, run_health_check=False)
+
+            async with Client(server) as client:
+                result = await client.call_tool("cloud_list", {})
+
+        payload = result.structured_content
+        assert payload is not None
+        assert payload["error"] == (
+            "RELACE_API_KEY is required for Relace cloud tools. Set RELACE_API_KEY and retry."
+        )
+        assert payload["recommended_action"] == "Set RELACE_API_KEY and retry."
+        assert payload["retryable"] is False
+        mock_repo_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_agentic_retrieval_uses_optional_repo_client_when_api_key_missing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("MCP_SEARCH_RETRIEVAL", "1")
+        config = RelaceConfig(api_key=None, base_dir=str(tmp_path))
+        expected_result = {
+            "explanation": "ok",
+            "files": {},
+            "turns_used": 1,
+            "trace_id": "trace",
+            "semantic_hints_used": 0,
+            "hint_policy": "prefer-stale",
+            "hints_index_freshness": "missing",
+            "background_refresh_scheduled": False,
+            "retrieval_task_completed": True,
+            "retrieval_guidance_available": False,
+            "retrieval_guidance_injected": False,
+            "retrieval_guidance_turn": None,
+            "warnings": ["Relace semantic retrieval unavailable. Proceeding without hints."],
+        }
+
+        with (
+            patch("relace_mcp.tools._clients.ToolClients.get_search", return_value=MagicMock()),
+            patch("relace_mcp.tools._clients.ToolClients.get_repo") as mock_get_repo,
+            patch(
+                "relace_mcp.tools.mcp_search.agentic_retrieval_logic",
+                AsyncMock(return_value=expected_result),
+            ) as mock_logic,
+        ):
+            server = build_server(config=config, run_health_check=False)
+
+            async with Client(server) as client:
+                result = await client.call_tool("agentic_retrieval", {"query": "find auth"})
+
+        payload = result.structured_content
+        assert payload == expected_result
+        mock_get_repo.assert_not_called()
+        assert mock_logic.await_args.args[0] is None
 
     @pytest.mark.asyncio
     async def test_fast_apply_creates_new_file(

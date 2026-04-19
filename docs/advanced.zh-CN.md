@@ -22,7 +22,7 @@
 
 | 变量 | 默认值 | 描述 |
 |------|--------|------|
-| `RELACE_API_KEY` | — | 在使用 Relace provider 或云端工具时必需 |
+| `RELACE_API_KEY` | — | Relace provider 需要；Relace 云端工具在调用时也需要 |
 | `MCP_BASE_DIR` | auto | 仅当你想覆盖自动解析结果时，用它限制文件访问范围 |
 | `MCP_EXTRA_PATHS` | — | 文件操作额外允许路径（逗号分隔，支持绝对路径与 `~`） |
 | `MCP_DOTENV_PATH` | — | 启动时加载的 `.env` 文件路径（集中配置） |
@@ -35,7 +35,7 @@
 | `MCP_BACKGROUND_INDEX_INTERVAL_SECONDS` | `300` | 周期 local index 检查间隔 |
 | `MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS` | `30` | server 启动后首次周期 local index 检查前的延迟 |
 
-> **注意：** 仅当**同时满足**以下条件时可省略 `RELACE_API_KEY`：(1) `APPLY_PROVIDER` 和 `SEARCH_PROVIDER` 均使用非 Relace 提供商，且 (2) `MCP_RETRIEVAL_BACKEND` 为 `codanna`、`chunkhound` 或 `none`。否则必须设置。
+> **注意：** 即使 `MCP_RETRIEVAL_BACKEND=relace`，server 也可以在没有 `RELACE_API_KEY` 的情况下启动。此时 Relace 云端工具会以明确的配置错误快速返回，`agentic_retrieval` 也会在没有 Relace semantic hints 的情况下继续运行，直到补上 `RELACE_API_KEY`。
 
 > **警告：** `MCP_LOGGING=full` 会将**所有**内容以明文写入磁盘，包括源码片段、LLM 指令、工具参数、搜索查询、命令输出及含堆栈追踪的错误信息。请仅在可信环境调试时使用 `full` 模式。`safe` 模式会将敏感字段值替换为 `[REDACTED len=<N> sha256=<HEX12>]` 占位符——sha256 前缀可在不暴露内容的情况下跨事件关联被遮蔽的值。
 
@@ -149,7 +149,9 @@ SEARCH_MAX_TURNS=6
 
 ## 本地检索后端
 
-`agentic_retrieval` 会先用语义检索对文件做预排序，再回到 live code 进行确认。默认使用 Relace 云端索引（`relace` 后端，需要 `RELACE_API_KEY` 且已完成 sync）。如需离线使用，可切换为本地后端。
+`agentic_retrieval` 会先用语义检索对文件做预排序，再回到 live code 进行确认。默认使用 Relace 云端索引（`relace` 后端）。如果缺少 `RELACE_API_KEY`，工具仍会继续运行，但会跳过 Relace semantic hints，直接退回 agentic exploration。如需离线使用，可切换为本地后端。
+
+使用 MCP Roots 时，server 会在收到 `roots/list_changed` 后清掉缓存的 base directory，并在下一次 tool call 重新解析 roots。当前 pinned 的 `fastmcp 3.2.4` client 存在 live-session `Client.set_roots()` 限制，因此要做端到端验证时，应搭配可变的 roots handler 与 `send_roots_list_changed()`。
 
 ### Hint Freshness Policy
 

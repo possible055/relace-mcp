@@ -17,7 +17,6 @@ from ..repo.backends import (
     ExternalCLIError,
     chunkhound_search,
     codanna_search,
-    disable_backend,
     is_backend_disabled,
     schedule_bg_chunkhound_index,
     schedule_bg_codanna_full_index,
@@ -409,7 +408,7 @@ def _prepare_retrieval_preflight(
             )
 
         if not shutil.which(backend):
-            disable_backend(backend, f"{backend} CLI not found in PATH")
+            hints_index_freshness = "missing"
             _append_warning(
                 warnings_list,
                 f"{backend_name} CLI not found in PATH. Proceeding without hints.",
@@ -588,7 +587,7 @@ async def _run_semantic_retrieval(
                 )
         except ExternalCLIError as exc:
             if exc.kind == "cli_not_found":
-                disable_backend(exc.backend, f"{exc.kind}: {exc}")
+                task_result.hints_index_freshness = "missing"
             elif exc.kind == "index_missing":
                 task_result.hints_index_freshness = "missing"
                 if _schedule_local_refresh(base_dir, backend):

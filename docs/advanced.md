@@ -22,7 +22,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RELACE_API_KEY` | — | Required when using Relace providers or cloud tools |
+| `RELACE_API_KEY` | — | Required for Relace providers and to use Relace cloud tools |
 | `MCP_BASE_DIR` | auto | Restrict file access to this directory when you want to override auto-resolution |
 | `MCP_EXTRA_PATHS` | — | Additional allowed paths (comma-separated absolute/`~` paths) for file operations |
 | `MCP_DOTENV_PATH` | — | Path to a `.env` file to load at startup |
@@ -35,7 +35,7 @@ All environment variables can be set in your shell or in the `env` section of yo
 | `MCP_BACKGROUND_INDEX_INTERVAL_SECONDS` | `300` | Interval between periodic local index checks |
 | `MCP_BACKGROUND_INDEX_INITIAL_DELAY_SECONDS` | `30` | Startup delay before the first periodic local index check |
 
-> **Note:** `RELACE_API_KEY` can be omitted if **both**: (1) using non-Relace providers for `APPLY_PROVIDER` and `SEARCH_PROVIDER`, and (2) `MCP_RETRIEVAL_BACKEND` is `codanna`, `chunkhound`, or `none`. Otherwise it is required.
+> **Note:** The server can start without `RELACE_API_KEY` even when `MCP_RETRIEVAL_BACKEND=relace`. In that state, Relace cloud tools fail fast with a configuration error, and `agentic_retrieval` continues without Relace semantic hints until `RELACE_API_KEY` is set.
 
 > **Warning:** `MCP_LOGGING=full` writes **all** content to disk unredacted, including source code snippets, LLM instructions, tool arguments, search queries, command output, and error messages with stack traces. Use `full` only for debugging in trusted environments. `safe` mode replaces sensitive field values with `[REDACTED len=<N> sha256=<HEX12>]` placeholders — the sha256 prefix allows correlating redacted values across events without revealing content.
 
@@ -149,7 +149,9 @@ When git HEAD changes since last sync (e.g., branch switch, rebase), Safe Full m
 
 ## Local Retrieval Backends
 
-`agentic_retrieval` uses semantic search to pre-rank files before the agentic pass, then verifies those hints against live code. By default it uses the Relace cloud index (`relace` backend, requires `RELACE_API_KEY` and a synced repo). To run without cloud dependency, use a local backend.
+`agentic_retrieval` uses semantic search to pre-rank files before the agentic pass, then verifies those hints against live code. By default it uses the Relace cloud index (`relace` backend). If `RELACE_API_KEY` is missing, the tool still runs and falls back to agentic exploration without Relace semantic hints. To run without cloud dependency, use a local backend.
+
+When using MCP Roots, the server invalidates its cached base directory after `roots/list_changed` and resolves roots again on the next tool call. The pinned `fastmcp 3.2.4` client has a live-session `Client.set_roots()` limitation, so use `send_roots_list_changed()` with a mutable roots handler when verifying root changes end to end.
 
 ### Hint Freshness Policy
 

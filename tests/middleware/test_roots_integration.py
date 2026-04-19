@@ -2,10 +2,14 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastmcp import Client
+from mcp.types import Root
 
+from relace_mcp.config import RelaceConfig
 from relace_mcp.config import base_dir as base_dir_module
 from relace_mcp.middleware import roots as roots_module
 from relace_mcp.middleware.roots import ROOTS_LIST_CHANGED_METHOD, RootsMiddleware
+from relace_mcp.server import build_server
 
 
 @pytest.fixture(autouse=True)
@@ -312,3 +316,38 @@ class TestResolveBaseDirWithCache:
         assert source_2 == "MCP Root (cached 2)"
         ctx1.list_roots.assert_not_awaited()
         ctx2.list_roots.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_roots_list_changed_notification_refreshes_cached_base_dir_end_to_end(
+    tmp_path,
+) -> None:
+    first_root = tmp_path / "first"
+    second_root = tmp_path / "second"
+    first_root.mkdir()
+    second_root.mkdir()
+
+    roots_state = {
+        "roots": [Root(uri=first_root.as_uri(), name="First Root")],
+    }
+
+    def roots_handler(*_args, **_kwargs):
+        return roots_state["roots"]
+
+    config = RelaceConfig(api_key="rlc-test", base_dir=None)
+    server = build_server(config=config, run_health_check=False)
+
+    async with Client(server, roots=roots_handler) as client:
+        first = await client.call_tool("index_status", {})
+        first_payload = first.structured_content
+        assert first_payload is not None
+        assert first_payload["base_dir"] == str(first_root)
+
+        roots_state["roots"] = [Root(uri=second_root.as_uri(), name="Second Root")]
+        await client.send_roots_list_changed()
+        await client.ping()
+
+        second = await client.call_tool("index_status", {})
+        second_payload = second.structured_content
+        assert second_payload is not None
+        assert second_payload["base_dir"] == str(second_root)

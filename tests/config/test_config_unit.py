@@ -7,10 +7,10 @@ from relace_mcp.config import RelaceConfig
 
 class TestRelaceConfigFromEnv:
     @pytest.mark.usefixtures("clean_env")
-    def test_missing_api_key_raises_for_default_relace_backend(self) -> None:
-        """Default relace backend requires RELACE_API_KEY."""
-        with pytest.raises(RuntimeError, match="RELACE_API_KEY is required"):
-            RelaceConfig.from_env()
+    def test_missing_api_key_is_allowed_for_default_relace_backend(self) -> None:
+        """Default relace backend should still build config without RELACE_API_KEY."""
+        config = RelaceConfig.from_env()
+        assert config.api_key is None
 
     @pytest.mark.usefixtures("clean_env")
     def test_missing_api_key_allowed_for_none_backend(

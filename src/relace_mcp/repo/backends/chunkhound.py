@@ -21,7 +21,7 @@ from .index_state import (
     _write_indexed_head,
 )
 from .locking import BackendIndexRunResult, try_acquire_backend_index_lock
-from .registry import _bg_index_rerun, _bg_index_tasks, disable_backend, is_bg_index_running
+from .registry import _bg_index_rerun, _bg_index_tasks, is_bg_index_running
 
 logger = logging.getLogger(__name__)
 
@@ -557,8 +557,7 @@ async def _async_run_chunkhound_index(base_dir: str) -> BackendIndexRunResult:
             )
         except FileNotFoundError as exc:
             latency_ms = int((time.perf_counter() - started) * 1000)
-            logger.warning("chunkhound CLI not found in background index; disabling backend")
-            disable_backend("chunkhound", "cli_not_found: chunkhound not in PATH")
+            logger.warning("chunkhound CLI not found in background index")
             log_trace_event(
                 {
                     "kind": "cli_error",
