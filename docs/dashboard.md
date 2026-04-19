@@ -166,6 +166,10 @@ Logs are stored using `platformdirs`:
 | `retrieval_hints_skipped` | Semantic hints skipped because policy or backend state prevented them | `agentic_retrieval` |
 | `retrieval_hints_complete` | Semantic hints collected successfully | `agentic_retrieval` |
 | `retrieval_hints_error` | Semantic hints retrieval failed | `agentic_retrieval` |
+| `retrieval_task_started` | Background retrieval task started | `agentic_retrieval` |
+| `retrieval_task_completed` | Background retrieval task completed and guidance availability was resolved | `agentic_retrieval` |
+| `retrieval_guidance_injected` | Retrieval guidance was appended before a follow-up LLM turn | `agentic_retrieval` |
+| `retrieval_task_left_running` | Search finished before the background retrieval task completed | `agentic_retrieval` |
 | `backend_index_start` | CLI indexing started | `codanna` / `chunkhound` |
 | `backend_index_complete` | CLI indexing completed | `codanna` / `chunkhound` |
 | `backend_index_error` | CLI indexing failed | `codanna` / `chunkhound` |

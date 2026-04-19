@@ -166,6 +166,10 @@ Turn 2 [████████████████████████
 | `retrieval_hints_skipped` | 因 policy 或 backend 状态而跳过 semantic hints | `agentic_retrieval` |
 | `retrieval_hints_complete` | semantic hints 收集完成 | `agentic_retrieval` |
 | `retrieval_hints_error` | semantic hints 检索失败 | `agentic_retrieval` |
+| `retrieval_task_started` | 后台 retrieval task 已启动 | `agentic_retrieval` |
+| `retrieval_task_completed` | 后台 retrieval task 已完成，并已确定 guidance 是否可用 | `agentic_retrieval` |
+| `retrieval_guidance_injected` | retrieval guidance 已在后续 LLM 轮次前插入 | `agentic_retrieval` |
+| `retrieval_task_left_running` | 搜索已结束，但后台 retrieval task 尚未完成 | `agentic_retrieval` |
 | `backend_index_start` | CLI 索引开始 | `codanna` / `chunkhound` |
 | `backend_index_complete` | CLI 索引完成 | `codanna` / `chunkhound` |
 | `backend_index_error` | CLI 索引失败 | `codanna` / `chunkhound` |

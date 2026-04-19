@@ -9,6 +9,7 @@ from relace_mcp.clients import RelaceRepoClient, SearchLLMClient
 from relace_mcp.config import RelaceConfig
 from relace_mcp.config import settings as settings_mod
 from relace_mcp.repo.freshness import FreshnessStatus
+from relace_mcp.search import retrieval as _retrieval_mod
 from relace_mcp.search.retrieval import agentic_retrieval_logic
 
 _RETRIEVAL_MOD = "relace_mcp.search.retrieval"
@@ -127,6 +128,10 @@ class TestRetrievalMCPContract:
             "hint_policy",
             "hints_index_freshness",
             "background_refresh_scheduled",
+            "retrieval_task_completed",
+            "retrieval_guidance_available",
+            "retrieval_guidance_injected",
+            "retrieval_guidance_turn",
         ):
             assert key in result, f"Missing key: {key}"
 
@@ -220,6 +225,65 @@ class TestRetrievalOrchestration:
         assert call_order.index("harness_run_start") < call_order.index("cloud_search_finish")
         assert "turn2_guidance" in call_order
         assert result["semantic_hints_used"] == len(SEMANTIC_RESULTS)
+        assert result["retrieval_task_completed"] is True
+        assert result["retrieval_guidance_available"] is True
+        assert result["retrieval_guidance_injected"] is True
+        assert result["retrieval_guidance_turn"] == 2
+
+    @pytest.mark.asyncio
+    async def test_search_can_finish_before_retrieval_and_leave_task_running(
+        self, mock_config, mock_repo_client, mock_search_client
+    ):
+        release_retrieval = threading.Event()
+
+        def blocking_cloud_search(*_args, **_kwargs):
+            assert release_retrieval.wait(timeout=2)
+            return {"results": list(SEMANTIC_RESULTS)}
+
+        class ImmediateHarness:
+            def __init__(self, *_args, **kwargs) -> None:
+                self._provider = kwargs.get("runtime_user_messages_provider")
+
+            async def run_async(self, **_kwargs) -> dict[str, object]:
+                assert callable(self._provider)
+                assert self._provider(0) == []
+                assert self._provider(1) == []
+                return {
+                    "explanation": "done early",
+                    "files": {"src/main.py": [[1, 10]]},
+                    "turns_used": 1,
+                }
+
+        try:
+            with (
+                patch(
+                    f"{_RETRIEVAL_MOD}.classify_cloud_index_freshness",
+                    return_value=FreshnessStatus("fresh", True, False, "up_to_date"),
+                ),
+                patch(f"{_RETRIEVAL_MOD}.cloud_search_logic", side_effect=blocking_cloud_search),
+                patch(f"{_RETRIEVAL_MOD}.FastAgenticSearchHarness", ImmediateHarness),
+            ):
+                result = await agentic_retrieval_logic(
+                    mock_repo_client,
+                    mock_search_client,
+                    mock_config,
+                    mock_config.base_dir,
+                    "find auth",
+                )
+        finally:
+            release_retrieval.set()
+            pending = list(_retrieval_mod._background_retrieval_tasks)
+            if pending:
+                await asyncio.wait_for(
+                    asyncio.gather(*pending, return_exceptions=True),
+                    timeout=2,
+                )
+
+        assert result["retrieval_task_completed"] is False
+        assert result["retrieval_guidance_available"] is False
+        assert result["retrieval_guidance_injected"] is False
+        assert result["retrieval_guidance_turn"] is None
+        assert result["semantic_hints_used"] == 0
 
     @pytest.mark.asyncio
     async def test_relace_stale_prefer_stale_uses_hints_without_sync(

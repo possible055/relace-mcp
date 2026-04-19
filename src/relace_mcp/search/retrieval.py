@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ..config import RelaceConfig, load_prompt_file
 from ..config import settings as _settings
-from ..observability import get_trace_id, log_event, redact_value
+from ..observability import get_trace_id, log_event, log_trace_event, redact_value
 from ..observability import tool_name as tool_name_ctx
 from ..repo.backends import (
     ExternalCLIError,
@@ -79,6 +79,42 @@ def _track_background_task(task: asyncio.Task[Any]) -> asyncio.Task[Any]:
     _background_retrieval_tasks.add(task)
     task.add_done_callback(_background_retrieval_tasks.discard)
     return task
+
+
+def _log_retrieval_lifecycle_event(
+    kind: str,
+    *,
+    level: str = "info",
+    trace_id: str,
+    retrieval_backend: str,
+    hint_policy: str,
+    hints_index_freshness: str,
+    semantic_hints_count: int | None = None,
+    retrieval_latency_s: float | None = None,
+    turn: int | None = None,
+    guidance_available: bool | None = None,
+    guidance_injected: bool | None = None,
+) -> None:
+    event: dict[str, Any] = {
+        "kind": kind,
+        "level": level,
+        "trace_id": trace_id,
+        "retrieval_backend": retrieval_backend,
+        "hint_policy": hint_policy,
+        "hints_index_freshness": hints_index_freshness,
+    }
+    if semantic_hints_count is not None:
+        event["semantic_hints_count"] = semantic_hints_count
+    if retrieval_latency_s is not None:
+        event["retrieval_latency_s"] = retrieval_latency_s
+    if turn is not None:
+        event["turn"] = turn
+    if guidance_available is not None:
+        event["guidance_available"] = guidance_available
+    if guidance_injected is not None:
+        event["guidance_injected"] = guidance_injected
+    log_event(event)
+    log_trace_event(event)
 
 
 def _schedule_local_refresh(base_dir: str, backend: str) -> bool:
@@ -187,10 +223,16 @@ class RetrievalRuntimeState:
     freshness: str
     max_hints: int
     base_dir: str
+    trace_id: str
+    backend: str
+    hint_policy: str
     _task_result: RetrievalTaskResult | None = None
     _compact_hints: list[dict[str, Any]] | None = None
     _guidance_message: str | None = None
     _guidance_consumed: bool = False
+    _guidance_turn: int | None = None
+    _task_completed: bool = False
+    _task_completion_logged: bool = False
 
     def _build_guidance_message(self, compact_hints: list[dict[str, Any]]) -> str | None:
         if not compact_hints:
@@ -207,6 +249,8 @@ class RetrievalRuntimeState:
 
     def _materialize_task_result(self, task_result: RetrievalTaskResult) -> RetrievalTaskResult:
         self._task_result = task_result
+        if task_result.hints_index_freshness is not None:
+            self.freshness = task_result.hints_index_freshness
         compact_hints = _compact_semantic_hints(
             task_result.semantic_results,
             _hint_limit_for_freshness(self.max_hints, self.freshness),
@@ -216,19 +260,40 @@ class RetrievalRuntimeState:
         self._guidance_message = self._build_guidance_message(compact_hints)
         return task_result
 
+    def _log_task_completed(self, task_result: RetrievalTaskResult) -> None:
+        if self._task_completion_logged:
+            return
+        self._task_completion_logged = True
+        _log_retrieval_lifecycle_event(
+            "retrieval_task_completed",
+            trace_id=self.trace_id,
+            retrieval_backend=self.backend,
+            hint_policy=self.hint_policy,
+            hints_index_freshness=self.freshness,
+            semantic_hints_count=len(self._compact_hints or []),
+            retrieval_latency_s=task_result.retrieval_latency_s,
+            guidance_available=self.guidance_available(),
+            guidance_injected=self.guidance_injected(),
+        )
+
     def _resolve_ready_result(self) -> RetrievalTaskResult | None:
         if self._task_result is not None:
             return self._task_result
         if self.task is None or not self.task.done():
             return None
+        self._task_completed = True
         if self.task.cancelled():
-            return self._materialize_task_result(RetrievalTaskResult())
+            task_result = self._materialize_task_result(RetrievalTaskResult())
+            self._log_task_completed(task_result)
+            return task_result
         try:
             task_result = self.task.result()
         except Exception as exc:
             logger.warning("Retrieval task failed unexpectedly: %s", exc)
             task_result = RetrievalTaskResult()
-        return self._materialize_task_result(task_result)
+        materialized_result = self._materialize_task_result(task_result)
+        self._log_task_completed(materialized_result)
+        return materialized_result
 
     def poll_guidance_messages(self, turn: int) -> list[str]:
         if self._guidance_consumed:
@@ -240,6 +305,18 @@ class RetrievalRuntimeState:
         if not self._guidance_message:
             return []
         self._guidance_consumed = True
+        self._guidance_turn = turn + 1
+        _log_retrieval_lifecycle_event(
+            "retrieval_guidance_injected",
+            trace_id=self.trace_id,
+            retrieval_backend=self.backend,
+            hint_policy=self.hint_policy,
+            hints_index_freshness=self.freshness,
+            semantic_hints_count=len(self._compact_hints or []),
+            turn=self._guidance_turn,
+            guidance_available=True,
+            guidance_injected=True,
+        )
         return [self._guidance_message]
 
     async def finalize(self) -> RetrievalTaskResult:
@@ -254,12 +331,33 @@ class RetrievalRuntimeState:
         # __exit__ -> shutdown(wait=True) on the event loop thread and blocking the
         # loop until the worker thread's slow call (cloud_search / CLI) returns.
         # The task is tracked in _background_retrieval_tasks so it won't be GC'd.
+        _log_retrieval_lifecycle_event(
+            "retrieval_task_left_running",
+            trace_id=self.trace_id,
+            retrieval_backend=self.backend,
+            hint_policy=self.hint_policy,
+            hints_index_freshness=self.freshness,
+            guidance_available=self.guidance_available(),
+            guidance_injected=self.guidance_injected(),
+        )
         return self._materialize_task_result(RetrievalTaskResult())
 
     def injected_hints(self) -> list[dict[str, Any]]:
         if not self._guidance_consumed or self._compact_hints is None:
             return []
         return self._compact_hints
+
+    def task_completed(self) -> bool:
+        return self._task_completed
+
+    def guidance_available(self) -> bool:
+        return self._guidance_message is not None
+
+    def guidance_injected(self) -> bool:
+        return self._guidance_consumed
+
+    def guidance_turn(self) -> int | None:
+        return self._guidance_turn
 
 
 def _prepare_retrieval_preflight(
@@ -679,6 +777,13 @@ async def agentic_retrieval_logic(
                 name=f"relace-retrieval:{backend}",
             )
         )
+        _log_retrieval_lifecycle_event(
+            "retrieval_task_started",
+            trace_id=trace_id,
+            retrieval_backend=backend,
+            hint_policy=hint_policy,
+            hints_index_freshness=hints_index_freshness,
+        )
         await asyncio.sleep(0)
 
     retrieval_state = RetrievalRuntimeState(
@@ -687,6 +792,9 @@ async def agentic_retrieval_logic(
         freshness=hints_index_freshness,
         max_hints=max_hints,
         base_dir=base_dir,
+        trace_id=trace_id,
+        backend=backend,
+        hint_policy=hint_policy,
     )
 
     effective_config = replace(config, base_dir=base_dir)
@@ -726,6 +834,10 @@ async def agentic_retrieval_logic(
     result["background_refresh_scheduled"] = background_refresh_scheduled
     result["reindex_action"] = reindex_action
     result["retrieval_latency_s"] = task_result.retrieval_latency_s
+    result["retrieval_task_completed"] = retrieval_state.task_completed()
+    result["retrieval_guidance_available"] = retrieval_state.guidance_available()
+    result["retrieval_guidance_injected"] = retrieval_state.guidance_injected()
+    result["retrieval_guidance_turn"] = retrieval_state.guidance_turn()
     if warnings_list:
         result["warnings"] = warnings_list
 

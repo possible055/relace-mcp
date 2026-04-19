@@ -125,6 +125,9 @@ def register_search_tools(mcp: FastMCP, deps: ToolRegistryDeps) -> None:
             Returns file paths with line ranges and relevance-ranked results.
             Keys: explanation (str), files (dict[path → {lines, snippet}]),
                   semantic_hints_used (int), retrieval_backend (str), warnings (list[str]).
+                  Optional debug metadata: retrieval_task_completed (bool),
+                  retrieval_guidance_available (bool), retrieval_guidance_injected (bool),
+                  retrieval_guidance_turn (int | None).
             """
             if ctx is not None:
                 await ctx.info(f"Retrieval: {query[:100]}")

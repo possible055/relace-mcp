@@ -24,6 +24,10 @@ BACKEND_KINDS = frozenset(
         "retrieval_hints_skipped",
         "retrieval_hints_complete",
         "retrieval_hints_error",
+        "retrieval_task_started",
+        "retrieval_task_completed",
+        "retrieval_guidance_injected",
+        "retrieval_task_left_running",
         "background_index_monitor_started",
         "background_index_monitor_tick",
     }

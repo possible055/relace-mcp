@@ -298,6 +298,10 @@ Trace logs are also JSONL. Each line is one event.
 | `retrieval_hints_skipped` | Retrieval hints skipped because policy/backend freshness did not allow them |
 | `retrieval_hints_complete` | Retrieval hints completed |
 | `retrieval_hints_error` | Retrieval hints failed (fallback continues) |
+| `retrieval_task_started` | Background retrieval task started |
+| `retrieval_task_completed` | Background retrieval task completed and guidance availability was resolved |
+| `retrieval_guidance_injected` | Retrieval guidance was injected before a later LLM turn |
+| `retrieval_task_left_running` | Search completed while the retrieval task was still running |
 
 ### Tool Lifecycle Events
 

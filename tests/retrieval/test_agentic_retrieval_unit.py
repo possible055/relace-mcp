@@ -198,6 +198,10 @@ class TestAgenticRetrievalLogic:
                 {"filename": "/repo/src/auth.py", "score": 0.85},
                 {"filename": "/repo/src/login.py", "score": 0.72},
             ]
+            assert result["retrieval_task_completed"] is True
+            assert result["retrieval_guidance_available"] is True
+            assert result["retrieval_guidance_injected"] is True
+            assert result["retrieval_guidance_turn"] == 2
 
     @pytest.mark.asyncio
     async def test_happy_path(
@@ -243,7 +247,69 @@ class TestAgenticRetrievalLogic:
             assert "src/core.py" in result["files"]
             assert result["semantic_hints_used"] == 1
             assert result["background_refresh_scheduled"] is False
+            assert result["retrieval_task_completed"] is True
+            assert result["retrieval_guidance_available"] is True
+            assert result["retrieval_guidance_injected"] is True
+            assert result["retrieval_guidance_turn"] == 2
             assert "trace_id" in result
+
+    @pytest.mark.asyncio
+    async def test_logs_retrieval_lifecycle_events(
+        self,
+        mock_config: RelaceConfig,
+        mock_repo_client: MagicMock,
+        mock_search_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        class PollingHarness:
+            def __init__(self, *_args, **kwargs) -> None:
+                self._provider = kwargs.get("runtime_user_messages_provider")
+
+            async def run_async(self, **_kwargs) -> dict[str, object]:
+                assert callable(self._provider)
+                assert self._provider(0) == []
+                assert await _wait_for_guidance(self._provider, 1)
+                return {"explanation": "Found files", "files": {}, "turns_used": 2}
+
+        with (
+            patch(
+                "relace_mcp.search.retrieval.classify_cloud_index_freshness",
+                return_value=FreshnessStatus("fresh", True, False, "up_to_date"),
+            ),
+            patch("relace_mcp.search.retrieval.cloud_search_logic") as mock_cloud,
+            patch("relace_mcp.search.retrieval.FastAgenticSearchHarness", PollingHarness),
+            patch("relace_mcp.search.retrieval.log_event") as mock_log_event,
+            patch("relace_mcp.search.retrieval.log_trace_event") as mock_log_trace_event,
+        ):
+            mock_cloud.return_value = {
+                "results": [{"filename": "src/auth.py", "score": 0.85}],
+            }
+
+            await agentic_retrieval_logic(
+                mock_repo_client,
+                mock_search_client,
+                mock_config,
+                str(tmp_path),
+                "find authentication",
+            )
+
+        logged_events = [call.args[0] for call in mock_log_event.call_args_list]
+        traced_events = [call.args[0] for call in mock_log_trace_event.call_args_list]
+        expected_kinds = {
+            "retrieval_task_started",
+            "retrieval_task_completed",
+            "retrieval_guidance_injected",
+        }
+        assert expected_kinds.issubset({event["kind"] for event in logged_events})
+        assert expected_kinds.issubset({event["kind"] for event in traced_events})
+
+        guidance_event = next(
+            event for event in logged_events if event["kind"] == "retrieval_guidance_injected"
+        )
+        assert guidance_event["retrieval_backend"] == "relace"
+        assert guidance_event["hint_policy"] == "prefer-stale"
+        assert guidance_event["hints_index_freshness"] == "fresh"
+        assert guidance_event["turn"] == 2
 
     @pytest.mark.asyncio
     async def test_relace_stale_prefer_stale_uses_hints_without_sync(

@@ -298,6 +298,10 @@ Trace 日志也是 JSONL 格式，每行一个事件。
 | `retrieval_hints_skipped` | 因 policy 或 backend freshness 不允许而跳过 retrieval hints |
 | `retrieval_hints_complete` | 检索提示完成 |
 | `retrieval_hints_error` | 检索提示失败（兜底继续） |
+| `retrieval_task_started` | 后台 retrieval task 已启动 |
+| `retrieval_task_completed` | 后台 retrieval task 已完成，并已确定 guidance 是否可用 |
+| `retrieval_guidance_injected` | retrieval guidance 已在后续 LLM 轮次前注入 |
+| `retrieval_task_left_running` | 搜索结束时 retrieval task 仍在后台执行 |
 
 ### 工具生命周期事件
 
