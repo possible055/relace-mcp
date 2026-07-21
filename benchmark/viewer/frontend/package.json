@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",
-    "axios": "^1.15.0",
+    "axios": "^1.18.0",
     "clsx": "^2.1.1",
     "cytoscape": "^3.33.1",
     "cytoscape-dagre": "^2.5.0",
